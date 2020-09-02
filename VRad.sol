@@ -73,9 +73,7 @@ contract VRad is ERC20 {
     }
 
     /// Transfer Rad out of the contract, burning an equal amount of VRad.
-    function withdrawRadTo(address payable receiver, uint256 amount)
-        internal
-    {
+    function withdrawRadTo(address payable receiver, uint256 amount) internal {
         // Transfer out an equal amount of Rad from the contract to the receiver.
         require(
             rad.transfer(receiver, amount),
@@ -145,7 +143,8 @@ contract VRad is ERC20 {
             return vestingAmount;
         }
 
-        uint256 vestedAmount = elapsed * vestingAmount / alloc.vestingDuration;
+        uint256 vestedAmount = (elapsed * vestingAmount) /
+            alloc.vestingDuration;
 
         if (vestedAmount > vestingAmount) {
             vestedAmount = vestingAmount;
@@ -160,7 +159,9 @@ contract VRad is ERC20 {
     }
 
     /// Redeem vRad tokens for Rad tokens.
-    function redeemVestedTokens(address payable receiver, uint256 amount) public {
+    function redeemVestedTokens(address payable receiver, uint256 amount)
+        public
+    {
         require(amount > 0, "Redeem amount must be positive");
         require(
             vestedBalanceOf(msg.sender) >= amount,
