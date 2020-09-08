@@ -2,6 +2,7 @@
 pragma solidity ^0.6.12;
 
 interface PriceOracle {
-    /// Get the latest price known to the oracle.
-    function latestPrice() external view returns (int256);
+    function updatePrices() external;
+
+    function consultUsdEth(uint256 usdAmount) external view returns (uint256);
 }

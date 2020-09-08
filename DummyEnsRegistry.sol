@@ -30,22 +30,22 @@ contract DummyEnsRegistry is ENS {
     function setRecord(
         bytes32 node,
         address _owner,
-        address resolver,
+        address _resolver,
         uint64 _ttl
     ) external override {
         setOwner(node, _owner);
-        _setResolverAndTTL(node, resolver, _ttl);
+        _setResolverAndTTL(node, _resolver, _ttl);
     }
 
     function setSubnodeRecord(
         bytes32 node,
         bytes32 label,
         address _owner,
-        address resolver,
+        address _resolver,
         uint64 _ttl
     ) external override {
         bytes32 subnode = setSubnodeOwner(node, label, _owner);
-        _setResolverAndTTL(subnode, resolver, _ttl);
+        _setResolverAndTTL(subnode, _resolver, _ttl);
     }
 
     function setOwner(bytes32 node, address _owner)
@@ -68,13 +68,13 @@ contract DummyEnsRegistry is ENS {
         return subnode;
     }
 
-    function setResolver(bytes32 node, address resolver)
+    function setResolver(bytes32 node, address _resolver)
         public
         override
         authorised(node)
     {
-        emit NewResolver(node, resolver);
-        records[node].resolver = resolver;
+        emit NewResolver(node, _resolver);
+        records[node].resolver = _resolver;
     }
 
     function setTTL(bytes32 node, uint64 _ttl)
@@ -130,12 +130,12 @@ contract DummyEnsRegistry is ENS {
 
     function _setResolverAndTTL(
         bytes32 node,
-        address resolver,
+        address _resolver,
         uint64 _ttl
     ) internal {
-        if (resolver != records[node].resolver) {
-            records[node].resolver = resolver;
-            emit NewResolver(node, resolver);
+        if (_resolver != records[node].resolver) {
+            records[node].resolver = _resolver;
+            emit NewResolver(node, _resolver);
         }
 
         if (_ttl != records[node].ttl) {

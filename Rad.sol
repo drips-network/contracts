@@ -14,4 +14,9 @@ contract Rad is ERC20 {
     {
         _mint(account, initialSupply.mul(10**uint256(decimals())));
     }
+
+    /// Burn the given amount of tokens from the sender account.
+    function burn(uint256 amount) public {
+        _burn(msg.sender, amount);
+    }
 }

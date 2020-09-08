@@ -4,16 +4,24 @@ pragma solidity ^0.6.12;
 import "@ensdomains/ens/contracts/ENS.sol";
 
 import "./PriceOracle.sol";
+import "./Exchange.sol";
+import "./Rad.sol";
 
 contract Registrar {
     /// The ENS registry.
-    ENS public ens;
+    ENS public immutable ens;
 
     /// The price oracle.
-    PriceOracle public oracle;
+    PriceOracle public immutable oracle;
+
+    /// The Rad/Eth exchange.
+    Exchange public immutable exchange;
+
+    /// The Rad ERC20 token.
+    Rad public immutable rad;
 
     /// The namehash of the domain this registrar owns(eg. radicle.eth).
-    bytes32 public rootNode;
+    bytes32 public immutable rootNode;
 
     /// Registration fee in *USD*.
     uint256 public constant REGISTRATION_FEE = 10;
@@ -21,21 +29,34 @@ contract Registrar {
     constructor(
         address ensAddress,
         bytes32 _rootNode,
-        address oracleAddress
+        address oracleAddress,
+        address exchangeAddress,
+        address radAddress
     ) public {
         ens = ENS(ensAddress);
         oracle = PriceOracle(oracleAddress);
+        exchange = Exchange(exchangeAddress);
+        rad = Rad(radAddress);
         rootNode = _rootNode;
     }
 
     /// Register a subdomain.
     function register(string memory name, address owner) public payable {
+        // Make sure the oracle has up-to-date pricing information.
+        oracle.updatePrices();
+
         uint256 fee = registrationFee();
 
         require(msg.value >= fee, "Transaction includes registration fee");
         require(valid(name), "Name must be valid");
 
         _register(keccak256(bytes(name)), owner);
+
+        // Swap n' burn.
+        uint256 swapped = exchange.swapEthForRad{value: fee}(address(this));
+        require(swapped > 0, "Must burn a positive amount of Rad");
+
+        rad.burn(swapped);
 
         // Return change.
         if (msg.value > fee) {
@@ -76,10 +97,7 @@ contract Registrar {
 
     /// Registration fee in `wei`.
     function registrationFee() public view returns (uint256) {
-        int256 ethUsd = oracle.latestPrice();
-
-        require(ethUsd > 0, "Price of ether must be positive");
-
-        return REGISTRATION_FEE / uint256(ethUsd);
+        // Convert USD fee into ETH.
+        return oracle.consultUsdEth(REGISTRATION_FEE);
     }
 }
