@@ -6,9 +6,9 @@ import "./PriceOracle.sol";
 import "./Router.sol";
 
 contract Exchange {
-    Router private router;
-    PriceOracle private oracle;
-    address private rad;
+    Router public immutable router;
+    PriceOracle public immutable oracle;
+    address public immutable rad;
 
     constructor(
         address _rad,

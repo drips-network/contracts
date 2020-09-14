@@ -40,6 +40,10 @@ contract Registrar {
         rootNode = _rootNode;
     }
 
+    function initialize() public {
+        oracle.updatePrices();
+    }
+
     /// Register a subdomain.
     function register(string memory name, address owner) public payable {
         // Make sure the oracle has up-to-date pricing information.
