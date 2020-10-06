@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.6.2;
+pragma experimental ABIEncoderV2;
 
 /// @notice Funding pool contract. Automatically sends funds to a configurable set of receivers.
 ///
@@ -78,6 +79,11 @@ contract Pool {
         // The changes of collected amounts on specific cycle.
         // The keys are cycles, each cycle becomes collectable on block `C * cycleBlocks`
         mapping(uint64 => int256) amtDeltas;
+    }
+
+    struct ReceiverWeight {
+        address receiver;
+        uint32 weight;
     }
 
     /// @dev Details about all the senders, the key is the owner's address
@@ -176,6 +182,16 @@ contract Pool {
         senders[msg.sender].amtPerBlock = uint192(amount);
     }
 
+    /// @notice Gets the target amount sent on every block from the sender of the message.
+    /// On every block this amount is rounded down to the closest multiple of the sum of the weights
+    /// of the receivers and split between all sender's receivers proportionally to their weights.
+    /// Each receiver then receives their part from the sender's balance.
+    /// If zero, funding is stopped.
+    /// @return amount The target per-block amount
+    function getAmountPerBlock() public view returns (uint192 amount) {
+        return senders[msg.sender].amtPerBlock;
+    }
+
     /// @notice Sets the weight of a receiver of the sender of the message.
     /// The weight regulates the share of the amount being sent on every block in relation to
     /// other sender's receivers.
@@ -195,6 +211,23 @@ contract Pool {
         } else if (weight == 0 && oldWeight != 0) {
             sender.weightCount--;
         }
+    }
+
+    /// @notice Gets the receivers and their weights of the sender of the message.
+    /// The weight regulates the share of the amount being sent on every block in relation to
+    /// other sender's receivers.
+    /// Only receivers with non-zero weights are returned.
+    function getAllReceivers() public view returns (ReceiverWeight[] memory) {
+        Sender storage sender = senders[msg.sender];
+        ReceiverWeight[] memory allReceivers = new ReceiverWeight[](sender.weightCount);
+        // Iterating over receivers, see `ReceiverWeights` for details
+        address receiver = ReceiverWeightsImpl.ADDR_ROOT;
+        for (uint256 i = 0; i < sender.weightCount; i++) {
+            uint32 weight;
+            (receiver, weight) = sender.receiverWeights.nextWeight(receiver);
+            allReceivers[i] = ReceiverWeight(receiver, weight);
+        }
+        return allReceivers;
     }
 
     /// @notice Stops payments of `msg.sender` for the duration of the modified function.
@@ -256,7 +289,7 @@ contract Pool {
         // Iterating over receivers, see `ReceiverWeights` for details
         address receiverAddr = ReceiverWeightsImpl.ADDR_ROOT;
         while (true) {
-            uint32 weight = 0;
+            uint32 weight;
             (receiverAddr, weight) = sender.receiverWeights.nextWeightPruning(receiverAddr);
             if (weight == 0) break;
             Receiver storage receiver = receivers[receiverAddr];
