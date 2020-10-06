@@ -28,10 +28,7 @@ contract DummyRouter is Router {
         amounts[0] = msg.value;
         amounts[1] = tokenAmount;
 
-        require(
-            tokenAmount >= amountOutMin,
-            "Token amount swapped should be greater than minimum"
-        );
+        require(tokenAmount >= amountOutMin, "Token amount swapped should be greater than minimum");
 
         return amounts;
     }

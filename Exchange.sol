@@ -32,9 +32,12 @@ contract Exchange {
         // market volatility.
         uint256 minimumRad = 0;
 
-        uint256[] memory amounts = router.swapExactETHForTokens{
-            value: msg.value
-        }(minimumRad, path, receiver, block.timestamp);
+        uint256[] memory amounts = router.swapExactETHForTokens{value: msg.value}(
+            minimumRad,
+            path,
+            receiver,
+            block.timestamp
+        );
 
         // Return RAD amount exchanged.
         return amounts[1];

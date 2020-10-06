@@ -148,27 +148,19 @@ contract Pool {
         }
         uint256 amtPerWeight = sender.amtPerBlock / sender.weightSum;
         uint256 amtPerBlock = amtPerWeight * sender.weightSum;
-        uint256 endBlock = sender.startBlock +
-            sender.startBalance /
-            amtPerBlock;
+        uint256 endBlock = sender.startBlock + sender.startBalance / amtPerBlock;
         // The funding period has run out
         if (endBlock <= block.number) {
             return sender.startBalance % amtPerBlock;
         }
-        return
-            sender.startBalance -
-            (block.number - sender.startBlock) *
-            amtPerBlock;
+        return sender.startBalance - (block.number - sender.startBlock) * amtPerBlock;
     }
 
     /// @notice Withdraws unsent funds of the sender of the message and sends them to that sender
     /// @param amount The amount to be withdrawn, must not be higher than available funds
     function withdraw(uint256 amount) public suspendPayments {
         uint192 startBalance = senders[msg.sender].startBalance;
-        require(
-            amount <= startBalance,
-            "Not enough funds in the sender account"
-        );
+        require(amount <= startBalance, "Not enough funds in the sender account");
         senders[msg.sender].startBalance = startBalance - uint192(amount);
         msg.sender.transfer(amount);
     }
@@ -191,24 +183,15 @@ contract Pool {
     /// Setting the zero weight for a receiver, removes it from the list of sender's receivers.
     /// @param receiver The address of the receiver
     /// @param weight The weight of the receiver
-    function setReceiver(address receiver, uint32 weight)
-        public
-        suspendPayments
-    {
+    function setReceiver(address receiver, uint32 weight) public suspendPayments {
         Sender storage sender = senders[msg.sender];
         uint32 oldWeight = sender.receiverWeights.setWeight(receiver, weight);
         sender.weightSum -= oldWeight;
         sender.weightSum += weight;
-        require(
-            sender.weightSum <= SENDER_WEIGHTS_SUM_MAX,
-            "Too much total receivers weight"
-        );
+        require(sender.weightSum <= SENDER_WEIGHTS_SUM_MAX, "Too much total receivers weight");
         if (weight != 0 && oldWeight == 0) {
             sender.weightCount++;
-            require(
-                sender.weightSum <= SENDER_WEIGHTS_COUNT_MAX,
-                "Too many receivers"
-            );
+            require(sender.weightSum <= SENDER_WEIGHTS_COUNT_MAX, "Too many receivers");
         } else if (weight == 0 && oldWeight != 0) {
             sender.weightCount--;
         }
@@ -229,12 +212,10 @@ contract Pool {
         uint64 blockNumber = uint64(block.number);
         Sender storage sender = senders[msg.sender];
         // Hasn't been sending anything
-        if (sender.weightSum == 0 || sender.amtPerBlock < sender.weightSum)
-            return;
+        if (sender.weightSum == 0 || sender.amtPerBlock < sender.weightSum) return;
         uint192 amtPerWeight = sender.amtPerBlock / sender.weightSum;
         uint192 amtPerBlock = amtPerWeight * sender.weightSum;
-        uint256 endBlockUncapped = sender.startBlock +
-            uint256(sender.startBalance / amtPerBlock);
+        uint256 endBlockUncapped = sender.startBlock + uint256(sender.startBalance / amtPerBlock);
         uint64 endBlock = endBlockUncapped > MAX_BLOCK_NUMBER
             ? MAX_BLOCK_NUMBER
             : uint64(endBlockUncapped);
@@ -252,15 +233,13 @@ contract Pool {
         uint64 blockNumber = uint64(block.number);
         Sender storage sender = senders[msg.sender];
         // Won't be sending anything
-        if (sender.weightSum == 0 || sender.amtPerBlock < sender.weightSum)
-            return;
+        if (sender.weightSum == 0 || sender.amtPerBlock < sender.weightSum) return;
         uint192 amtPerWeight = sender.amtPerBlock / sender.weightSum;
         uint192 amtPerBlock = amtPerWeight * sender.weightSum;
         // Won't be sending anything
         if (sender.startBalance < amtPerBlock) return;
         sender.startBlock = blockNumber;
-        uint256 endBlockUncapped = blockNumber +
-            uint256(sender.startBalance / amtPerBlock);
+        uint256 endBlockUncapped = blockNumber + uint256(sender.startBalance / amtPerBlock);
         uint64 endBlock = endBlockUncapped > MAX_BLOCK_NUMBER
             ? MAX_BLOCK_NUMBER
             : uint64(endBlockUncapped);
@@ -271,25 +250,19 @@ contract Pool {
     /// proportionally to their weights
     /// @param amtPerWeightPerBlockDelta Amount of per-block delta applied per receiver weight
     /// @param blockEnd The block number from which the delta stops taking effect
-    function setDeltasFromNow(int256 amtPerWeightPerBlockDelta, uint64 blockEnd)
-        internal
-    {
+    function setDeltasFromNow(int256 amtPerWeightPerBlockDelta, uint64 blockEnd) internal {
         uint64 blockNumber = uint64(block.number);
         Sender storage sender = senders[msg.sender];
         // Iterating over receivers, see `ReceiverWeights` for details
         address receiverAddr = ReceiverWeightsImpl.ADDR_ROOT;
         while (true) {
             uint32 weight = 0;
-            (receiverAddr, weight) = sender.receiverWeights.nextWeight(
-                receiverAddr
-            );
+            (receiverAddr, weight) = sender.receiverWeights.nextWeight(receiverAddr);
             if (weight == 0) break;
             Receiver storage receiver = receivers[receiverAddr];
             // The receiver was never used, initialize it
-            if (
-                amtPerWeightPerBlockDelta > 0 &&
-                receiver.nextCollectedCycle == 0
-            ) receiver.nextCollectedCycle = blockNumber / cycleBlocks + 1;
+            if (amtPerWeightPerBlockDelta > 0 && receiver.nextCollectedCycle == 0)
+                receiver.nextCollectedCycle = blockNumber / cycleBlocks + 1;
             int256 perBlockDelta = int256(weight) * amtPerWeightPerBlockDelta;
             // Set delta in a block range from now to `blockEnd`
             setSingleDelta(receiver.amtDeltas, blockNumber, perBlockDelta);
@@ -337,10 +310,10 @@ library ReceiverWeightsImpl {
     /// @param current The previously returned receiver address or ADDR_ROOT to start iterating
     /// @return next The next receiver address
     /// @return weight The next receiver weight, ADDR_ROOT if the end of the list was reached
-    function nextWeight(
-        mapping(address => ReceiverWeight) storage self,
-        address current
-    ) internal returns (address next, uint32 weight) {
+    function nextWeight(mapping(address => ReceiverWeight) storage self, address current)
+        internal
+        returns (address next, uint32 weight)
+    {
         next = self[current].next;
         weight = 0;
         if (next != ADDR_END && next != ADDR_UNINITIALIZED) {
@@ -365,10 +338,11 @@ library ReceiverWeightsImpl {
     /// @notice Get weight for a specific receiver
     /// @param receiver The receiver to get weight
     /// @return weight The receinver weight
-    function getWeight(
-        mapping(address => ReceiverWeight) storage self,
-        address receiver
-    ) internal view returns (uint32 weight) {
+    function getWeight(mapping(address => ReceiverWeight) storage self, address receiver)
+        internal
+        view
+        returns (uint32 weight)
+    {
         weight = self[receiver].weight;
     }
 

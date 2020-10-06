@@ -17,12 +17,7 @@ contract DummyPriceOracle is PriceOracle {
 
     function updatePrices() public override {}
 
-    function consultUsdEth(uint256 usdAmount)
-        public
-        override
-        view
-        returns (uint256)
-    {
+    function consultUsdEth(uint256 usdAmount) public override view returns (uint256) {
         return usdAmount * price;
     }
 }

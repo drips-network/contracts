@@ -31,9 +31,7 @@ contract FixedWindowOracle {
         address tokenA,
         address tokenB
     ) public {
-        IUniswapV2Pair _pair = IUniswapV2Pair(
-            Uniswap.pairFor(factory, tokenA, tokenB)
-        );
+        IUniswapV2Pair _pair = IUniswapV2Pair(Uniswap.pairFor(factory, tokenA, tokenB));
         pair = _pair;
         token0 = _pair.token0();
         token1 = _pair.token1();
@@ -49,11 +47,8 @@ contract FixedWindowOracle {
     }
 
     function update() external {
-        (
-            uint256 price0Cumulative,
-            uint256 price1Cumulative,
-            uint32 blockTimestamp
-        ) = Uniswap.currentCumulativePrices(address(pair));
+        (uint256 price0Cumulative, uint256 price1Cumulative, uint32 blockTimestamp) = Uniswap
+            .currentCumulativePrices(address(pair));
 
         uint32 timeElapsed = blockTimestamp - blockTimestampLast; // overflow is desired
 

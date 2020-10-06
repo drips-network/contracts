@@ -64,10 +64,7 @@ contract VRad is ERC20 {
     /// by transfering Rad from the sender to the contract.
     function depositRadFrom(address sender, uint256 amount) public {
         // Transfer the Rad.
-        require(
-            rad.transferFrom(sender, address(this), amount),
-            "The transfer in should succeed"
-        );
+        require(rad.transferFrom(sender, address(this), amount), "The transfer in should succeed");
         // Mint an equal amount of vRad.
         _mint(address(this), amount);
     }
@@ -75,10 +72,7 @@ contract VRad is ERC20 {
     /// Transfer Rad out of the contract, burning an equal amount of VRad.
     function withdrawRadTo(address payable receiver, uint256 amount) internal {
         // Transfer out an equal amount of Rad from the contract to the receiver.
-        require(
-            rad.transfer(receiver, amount),
-            "The transfer out should succeed"
-        );
+        require(rad.transfer(receiver, amount), "The transfer out should succeed");
         // Burn an amount of vRad from the sender.
         _burn(msg.sender, amount);
     }
@@ -91,10 +85,7 @@ contract VRad is ERC20 {
         uint32 vestingCliffDuration,
         uint32 vestingDuration
     ) public {
-        require(
-            balanceOf(grantee) == 0,
-            "Grantee must not already have an allocation"
-        );
+        require(balanceOf(grantee) == 0, "Grantee must not already have an allocation");
         require(
             vestingDuration >= vestingCliffDuration,
             "Cliff must not be longer than total duration"
@@ -111,10 +102,7 @@ contract VRad is ERC20 {
 
     /// Increase the vesting token allocation of an address.
     function grantAdditionalTokens(address grantee, uint256 amount) public {
-        require(
-            balanceOf(grantee) > 0,
-            "Grantee must already have an allocation"
-        );
+        require(balanceOf(grantee) > 0, "Grantee must already have an allocation");
 
         _allocate(grantee, amount);
     }
@@ -143,8 +131,7 @@ contract VRad is ERC20 {
             return vestingAmount;
         }
 
-        uint256 vestedAmount = (elapsed * vestingAmount) /
-            alloc.vestingDuration;
+        uint256 vestedAmount = (elapsed * vestingAmount) / alloc.vestingDuration;
 
         if (vestedAmount > vestingAmount) {
             vestedAmount = vestingAmount;
@@ -159,14 +146,9 @@ contract VRad is ERC20 {
     }
 
     /// Redeem vRad tokens for Rad tokens.
-    function redeemVestedTokens(address payable receiver, uint256 amount)
-        public
-    {
+    function redeemVestedTokens(address payable receiver, uint256 amount) public {
         require(amount > 0, "Redeem amount must be positive");
-        require(
-            vestedBalanceOf(msg.sender) >= amount,
-            "Redeem amount should be vested"
-        );
+        require(vestedBalanceOf(msg.sender) >= amount, "Redeem amount should be vested");
 
         withdrawRadTo(receiver, amount);
 
@@ -179,21 +161,14 @@ contract VRad is ERC20 {
     function _allocate(address grantee, uint256 amount) internal {
         require(msg.sender == grantor, "Only the grantor can allocate tokens");
         require(grantee != address(0), "Grantee cannot be the zero address");
-        require(
-            amount <= balanceOf(address(this)),
-            "Cannot allocate more than the allowance"
-        );
+        require(amount <= balanceOf(address(this)), "Cannot allocate more than the allowance");
 
         // Make the actual transfer.
         _transfer(address(this), grantee, amount);
     }
 
     /// Transfer of vRad is only allowed by the grantor.
-    function transfer(address recipient, uint256 amount)
-        public
-        override
-        returns (bool)
-    {
+    function transfer(address recipient, uint256 amount) public override returns (bool) {
         require(msg.sender == grantor, "Only the grantor can transfer vRad");
 
         _transfer(msg.sender, recipient, amount);

@@ -48,11 +48,7 @@ contract DummyEnsRegistry is ENS {
         _setResolverAndTTL(subnode, _resolver, _ttl);
     }
 
-    function setOwner(bytes32 node, address _owner)
-        public
-        override
-        authorised(node)
-    {
+    function setOwner(bytes32 node, address _owner) public override authorised(node) {
         _setOwner(node, _owner);
         emit Transfer(node, _owner);
     }
@@ -68,28 +64,17 @@ contract DummyEnsRegistry is ENS {
         return subnode;
     }
 
-    function setResolver(bytes32 node, address _resolver)
-        public
-        override
-        authorised(node)
-    {
+    function setResolver(bytes32 node, address _resolver) public override authorised(node) {
         emit NewResolver(node, _resolver);
         records[node].resolver = _resolver;
     }
 
-    function setTTL(bytes32 node, uint64 _ttl)
-        public
-        override
-        authorised(node)
-    {
+    function setTTL(bytes32 node, uint64 _ttl) public override authorised(node) {
         emit NewTTL(node, _ttl);
         records[node].ttl = _ttl;
     }
 
-    function setApprovalForAll(address operator, bool approved)
-        external
-        override
-    {
+    function setApprovalForAll(address operator, bool approved) external override {
         operators[msg.sender][operator] = approved;
         emit ApprovalForAll(msg.sender, operator, approved);
     }

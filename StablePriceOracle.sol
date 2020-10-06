@@ -16,12 +16,7 @@ contract StablePriceOracle is PriceOracle {
         usdEthOracle.update();
     }
 
-    function consultUsdEth(uint256 usdAmount)
-        public
-        override
-        view
-        returns (uint256)
-    {
+    function consultUsdEth(uint256 usdAmount) public override view returns (uint256) {
         return usdEthOracle.consult(usdAmount);
     }
 }

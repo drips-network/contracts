@@ -50,24 +50,15 @@ contract ReceiverWeightsTest {
             (receiver, weight) = receiverWeights.nextWeight(receiver);
             iterationGasUsed += gasLeftBefore - gasleft();
             if (weight == 0) break;
-            receiverWeightsIterated.push(
-                ReceiverWeightIterated(receiver, weight)
-            );
+            receiverWeightsIterated.push(ReceiverWeightIterated(receiver, weight));
         }
         if (PRINT_GAS_USAGE) {
-            console.log(
-                "Iterated over weight list with gas used %d",
-                iterationGasUsed
-            );
+            console.log("Iterated over weight list with gas used %d", iterationGasUsed);
             console.log("Total gas used %d", totalGasUsed + iterationGasUsed);
         }
     }
 
-    function getReceiverWeightsIterated()
-        external
-        view
-        returns (ReceiverWeightIterated[] memory)
-    {
+    function getReceiverWeightsIterated() external view returns (ReceiverWeightIterated[] memory) {
         return receiverWeightsIterated;
     }
 }

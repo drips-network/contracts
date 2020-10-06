@@ -91,11 +91,7 @@ contract Registrar {
     }
 
     /// Get the "namehash" of a label.
-    function namehash(bytes32 parent, bytes32 label)
-        public
-        pure
-        returns (bytes32)
-    {
+    function namehash(bytes32 parent, bytes32 label) public pure returns (bytes32) {
         return keccak256(abi.encodePacked(parent, label));
     }
 
