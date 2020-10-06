@@ -257,7 +257,7 @@ contract Pool {
         address receiverAddr = ReceiverWeightsImpl.ADDR_ROOT;
         while (true) {
             uint32 weight = 0;
-            (receiverAddr, weight) = sender.receiverWeights.nextWeight(receiverAddr);
+            (receiverAddr, weight) = sender.receiverWeights.nextWeightPruning(receiverAddr);
             if (weight == 0) break;
             Receiver storage receiver = receivers[receiverAddr];
             // The receiver was never used, initialize it
@@ -310,12 +310,12 @@ library ReceiverWeightsImpl {
     address internal constant ADDR_END = address(1);
 
     /// @notice Return the next non-zero receiver weight and its address.
-    /// Removes all the zeroed items found between the current and the next receivers.
-    /// Iterating over the whole list removes all the zeroed items.
+    /// Prunes all the zeroed items found between the current and the next receivers.
+    /// Iterating over the whole list prunes all the zeroed items.
     /// @param current The previously returned receiver address or ADDR_ROOT to start iterating
     /// @return next The next receiver address
     /// @return weight The next receiver weight, 0 if the end of the list was reached
-    function nextWeight(ReceiverWeights storage self, address current)
+    function nextWeightPruning(ReceiverWeights storage self, address current)
         internal
         returns (address next, uint32 weight)
     {
@@ -336,6 +336,28 @@ library ReceiverWeightsImpl {
                 // link the previous non-zero element with the next non-zero element
                 // or ADDR_END if it became the last element on the list
                 self.data[current].next = next;
+            }
+        }
+    }
+
+    /// @notice Return the next receiver weight and its address.
+    /// @param current The previously returned receiver address or ADDR_ROOT to start iterating
+    /// @return next The next receiver address
+    /// @return weight The next receiver weight, 0 if the end of the list was reached
+    function nextWeight(ReceiverWeights storage self, address current)
+        internal
+        view
+        returns (address next, uint32 weight)
+    {
+        next = self.data[current].next;
+        weight = 0;
+        if (next != ADDR_END && next != ADDR_UNINITIALIZED) {
+            weight = self.data[next].weight;
+            // skip elements being zero
+            while (weight == 0) {
+                next = self.data[next].next;
+                if (next == ADDR_END) break;
+                weight = self.data[next].weight;
             }
         }
     }
