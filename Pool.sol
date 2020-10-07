@@ -37,7 +37,7 @@ pragma solidity ^0.6.2;
 /// The actual implementation emulates that behavior by calculating the results of the scheduled
 /// events based on how many blocks have been mined and only when a user needs their outcomes.
 contract Pool {
-    using ReceiverWeightsImpl for mapping(address => ReceiverWeight);
+    using ReceiverWeightsImpl for ReceiverWeights;
 
     /// @notice On every block `B`, which is a multiple of `cycleBlocks`, the receivers
     /// gain access to funds collected on all blocks from `B - cycleBlocks` to `B - 1`.
@@ -65,8 +65,8 @@ contract Pool {
         /// @notice The number of the receivers
         uint32 weightCount;
         // --- SLOT BOUNDARY
-        /// @notice The mapping of all the receivers to their weights, iterable
-        mapping(address => ReceiverWeight) receiverWeights;
+        /// @notice The receivers' addresses and their weights
+        ReceiverWeights receiverWeights;
     }
 
     struct Receiver {
@@ -291,15 +291,20 @@ contract Pool {
     }
 }
 
-struct ReceiverWeight {
-    address next;
-    uint32 weight;
+/// @notice A list of receivers to their weights, iterable and with random access
+struct ReceiverWeights {
+    mapping(address => ReceiverWeightsImpl.ReceiverWeightStored) data;
 }
 
 /// @notice Helper methods for receiver weights list.
 /// The list works optimally if after applying a series of changes it's iterated over.
 /// The list uses 1 word of storage per receiver with a non-zero weight.
 library ReceiverWeightsImpl {
+    struct ReceiverWeightStored {
+        address next;
+        uint32 weight;
+    }
+
     address internal constant ADDR_ROOT = address(0);
     address internal constant ADDR_UNINITIALIZED = address(0);
     address internal constant ADDR_END = address(1);
@@ -309,28 +314,28 @@ library ReceiverWeightsImpl {
     /// Iterating over the whole list removes all the zeroed items.
     /// @param current The previously returned receiver address or ADDR_ROOT to start iterating
     /// @return next The next receiver address
-    /// @return weight The next receiver weight, ADDR_ROOT if the end of the list was reached
-    function nextWeight(mapping(address => ReceiverWeight) storage self, address current)
+    /// @return weight The next receiver weight, 0 if the end of the list was reached
+    function nextWeight(ReceiverWeights storage self, address current)
         internal
         returns (address next, uint32 weight)
     {
-        next = self[current].next;
+        next = self.data[current].next;
         weight = 0;
         if (next != ADDR_END && next != ADDR_UNINITIALIZED) {
-            weight = self[next].weight;
+            weight = self.data[next].weight;
             // remove elements being zero
             if (weight == 0) {
                 do {
-                    address newNext = self[next].next;
+                    address newNext = self.data[next].next;
                     // Somehow it's ~1500 gas cheaper than `delete self[next]`
-                    self[next].next = ADDR_UNINITIALIZED;
+                    self.data[next].next = ADDR_UNINITIALIZED;
                     next = newNext;
                     if (next == ADDR_END) break;
-                    weight = self[next].weight;
+                    weight = self.data[next].weight;
                 } while (weight == 0);
                 // link the previous non-zero element with the next non-zero element
                 // or ADDR_END if it became the last element on the list
-                self[current].next = next;
+                self.data[current].next = next;
             }
         }
     }
@@ -338,12 +343,12 @@ library ReceiverWeightsImpl {
     /// @notice Get weight for a specific receiver
     /// @param receiver The receiver to get weight
     /// @return weight The receinver weight
-    function getWeight(mapping(address => ReceiverWeight) storage self, address receiver)
+    function getWeight(ReceiverWeights storage self, address receiver)
         internal
         view
         returns (uint32 weight)
     {
-        weight = self[receiver].weight;
+        return self.data[receiver].weight;
     }
 
     /// @notice Set weight for a specific receiver
@@ -351,19 +356,19 @@ library ReceiverWeightsImpl {
     /// @param weight The weight to set
     /// @return previousWeight The previously set weight, may be zero
     function setWeight(
-        mapping(address => ReceiverWeight) storage self,
+        ReceiverWeights storage self,
         address receiver,
         uint32 weight
     ) internal returns (uint32 previousWeight) {
-        previousWeight = self[receiver].weight;
-        self[receiver].weight = weight;
+        previousWeight = self.data[receiver].weight;
+        self.data[receiver].weight = weight;
         // Item not attached to the list
-        if (self[receiver].next == ADDR_UNINITIALIZED) {
-            address rootNext = self[ADDR_ROOT].next;
-            self[ADDR_ROOT].next = receiver;
+        if (self.data[receiver].next == ADDR_UNINITIALIZED) {
+            address rootNext = self.data[ADDR_ROOT].next;
+            self.data[ADDR_ROOT].next = receiver;
             // The first item ever added to the list, root item not initialized yet
             if (rootNext == ADDR_UNINITIALIZED) rootNext = ADDR_END;
-            self[receiver].next = rootNext;
+            self.data[receiver].next = rootNext;
         }
     }
 }

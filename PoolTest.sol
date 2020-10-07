@@ -8,9 +8,9 @@ import "@nomiclabs/buidler/console.sol";
 contract ReceiverWeightsTest {
     bool internal constant PRINT_GAS_USAGE = false;
 
-    using ReceiverWeightsImpl for mapping(address => ReceiverWeight);
+    using ReceiverWeightsImpl for ReceiverWeights;
 
-    mapping(address => ReceiverWeight) private receiverWeights;
+    ReceiverWeights private receiverWeights;
     ReceiverWeightIterated[] private receiverWeightsIterated;
     int256 public receiverWeightsSumDelta;
 
