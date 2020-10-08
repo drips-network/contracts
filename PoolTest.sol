@@ -23,7 +23,6 @@ contract ReceiverWeightsTest {
         int256 weightsSumDelta = 0;
         uint256 totalGasUsed = 0;
         for (uint256 i = 0; i < weights.length; i++) {
-            ReceiverWeightIterated calldata weight = weights[i];
             address receiver = weights[i].receiver;
             uint32 newWeight = weights[i].weight;
             uint256 gasUsed = gasleft();

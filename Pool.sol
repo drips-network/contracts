@@ -42,7 +42,7 @@ contract Pool {
     /// @notice On every block `B`, which is a multiple of `cycleBlocks`, the receivers
     /// gain access to funds collected on all blocks from `B - cycleBlocks` to `B - 1`.
     uint64 public immutable cycleBlocks;
-    /// @notice Block number at which all funding periods must be finished
+    /// @dev Block number at which all funding periods must be finished
     uint64 internal constant MAX_BLOCK_NUMBER = type(uint64).max - 2;
     /// @notice Maximum sum of all receiver weights of a single sender.
     /// Limits loss of per-block funding accuracy, they are always multiples of weights sum.
@@ -52,37 +52,37 @@ contract Pool {
     uint32 public constant SENDER_WEIGHTS_COUNT_MAX = 100;
 
     struct Sender {
-        /// @notice Block number at which the funding period has started
+        // Block number at which the funding period has started
         uint64 startBlock;
-        /// @notice The amount available when the funding period has started
+        // The amount available when the funding period has started
         uint192 startBalance;
         // --- SLOT BOUNDARY
-        /// @notice The target amount sent on each block.
-        /// The actual amount is rounded down to the closes multiple of `weightSum`.
+        // The target amount sent on each block.
+        // The actual amount is rounded down to the closes multiple of `weightSum`.
         uint192 amtPerBlock;
-        /// @notice The total weight of all the receivers
+        // The total weight of all the receivers
         uint32 weightSum;
-        /// @notice The number of the receivers
+        // The number of the receivers
         uint32 weightCount;
         // --- SLOT BOUNDARY
-        /// @notice The receivers' addresses and their weights
+        // The receivers' addresses and their weights
         ReceiverWeights receiverWeights;
     }
 
     struct Receiver {
-        /// @notice The next block to be collected
+        // The next block to be collected
         uint64 nextCollectedCycle;
-        /// @notice The amount of funds received for the last collected cycle
+        // The amount of funds received for the last collected cycle
         uint192 lastFundsPerCycle;
         // --- SLOT BOUNDARY
-        /// @notice The changes of collected amounts on specific cycle.
-        /// The keys are cycles, each cycle becomes collectable on block `C * cycleBlocks`
+        // The changes of collected amounts on specific cycle.
+        // The keys are cycles, each cycle becomes collectable on block `C * cycleBlocks`
         mapping(uint64 => int256) amtDeltas;
     }
 
-    /// @notice Details about all the senders, the key is the owner's address
+    /// @dev Details about all the senders, the key is the owner's address
     mapping(address => Sender) internal senders;
-    /// @notice Details about all the receivers, the key is the owner's address
+    /// @dev Details about all the receivers, the key is the owner's address
     mapping(address => Receiver) internal receivers;
 
     /// @param _cycleBlocks The length of cycleBlocks to be used in the contract instance.
