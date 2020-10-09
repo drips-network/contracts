@@ -208,7 +208,7 @@ contract Pool {
         require(sender.weightSum <= SENDER_WEIGHTS_SUM_MAX, "Too much total receivers weight");
         if (weight != 0 && oldWeight == 0) {
             sender.weightCount++;
-            require(sender.weightSum <= SENDER_WEIGHTS_COUNT_MAX, "Too many receivers");
+            require(sender.weightCount <= SENDER_WEIGHTS_COUNT_MAX, "Too many receivers");
         } else if (weight == 0 && oldWeight != 0) {
             sender.weightCount--;
         }
@@ -416,6 +416,7 @@ library ReceiverWeightsImpl {
         address receiver,
         uint32 weight
     ) internal returns (uint32 previousWeight) {
+        require(receiver > address(1), "Invalid receiver address");
         previousWeight = self.data[receiver].weight;
         self.data[receiver].weight = weight;
         // Item not attached to the list
