@@ -183,8 +183,9 @@ contract Pool {
     }
 
     /// @notice Gets the target amount sent on every block from the sender of the message.
-    /// On every block this amount is rounded down to the closest multiple of the sum of the weights
-    /// of the receivers and split between all sender's receivers proportionally to their weights.
+    /// The actual amount sent on every block may differ from the target value.
+    /// It's rounded down to the closest multiple of the sum of the weights of
+    /// the sender's receivers and split between them proportionally to their weights.
     /// Each receiver then receives their part from the sender's balance.
     /// If zero, funding is stopped.
     /// @return amount The target per-block amount
