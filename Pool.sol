@@ -37,6 +37,9 @@ pragma experimental ABIEncoderV2;
 /// only high-level abstractions for the user, Ethereum isn't really capable of scheduling work.
 /// The actual implementation emulates that behavior by calculating the results of the scheduled
 /// events based on how many blocks have been mined and only when a user needs their outcomes.
+///
+/// The contract assumes that all amounts in the system can be stored in signed 128-bit integers.
+/// It's guaranteed to be safe only when working with assets with supply lower than `2 ^ 127`.
 contract Pool {
     using ReceiverWeightsImpl for ReceiverWeights;
 
@@ -56,15 +59,15 @@ contract Pool {
         // Block number at which the funding period has started
         uint64 startBlock;
         // The amount available when the funding period has started
-        uint192 startBalance;
-        // --- SLOT BOUNDARY
-        // The target amount sent on each block.
-        // The actual amount is rounded down to the closes multiple of `weightSum`.
-        uint192 amtPerBlock;
+        uint128 startBalance;
         // The total weight of all the receivers
         uint32 weightSum;
         // The number of the receivers
         uint32 weightCount;
+        // --- SLOT BOUNDARY
+        // The target amount sent on each block.
+        // The actual amount is rounded down to the closes multiple of `weightSum`.
+        uint128 amtPerBlock;
         // --- SLOT BOUNDARY
         // The receivers' addresses and their weights
         ReceiverWeights receiverWeights;
@@ -73,12 +76,18 @@ contract Pool {
     struct Receiver {
         // The next block to be collected
         uint64 nextCollectedCycle;
-        // The amount of funds received for the last collected cycle
-        uint192 lastFundsPerCycle;
+        // The amount of funds received for the last collected cycle.
+        // It never is negative, it's a signed integer only for convenience of casting.
+        int128 lastFundsPerCycle;
         // --- SLOT BOUNDARY
         // The changes of collected amounts on specific cycle.
         // The keys are cycles, each cycle becomes collectable on block `C * cycleBlocks`
-        mapping(uint64 => int256) amtDeltas;
+        mapping(uint64 => AmtDelta) amtDeltas;
+    }
+
+    struct AmtDelta {
+        int128 thisCycle;
+        int128 nextCycle;
     }
 
     struct ReceiverWeight {
@@ -102,18 +111,20 @@ contract Pool {
     /// @notice Returns amount of received funds available for collection
     /// by the sender of the message
     /// @return collected The available amount
-    function collectable() public view returns (uint256) {
+    function collectable() public view returns (uint128) {
         Receiver storage receiver = receivers[msg.sender];
         uint64 collectedCycle = receiver.nextCollectedCycle;
         if (collectedCycle == 0) return 0;
-        uint256 collected = 0;
-        int256 lastFundsPerCycle = receiver.lastFundsPerCycle;
-        uint256 currFinishedCycle = block.number / cycleBlocks;
+        uint64 currFinishedCycle = uint64(block.number) / cycleBlocks;
+        if (collectedCycle > currFinishedCycle) return 0;
+        int128 collected = 0;
+        int128 lastFundsPerCycle = receiver.lastFundsPerCycle;
         for (; collectedCycle <= currFinishedCycle; collectedCycle++) {
-            lastFundsPerCycle += receiver.amtDeltas[collectedCycle];
-            collected += uint256(lastFundsPerCycle);
+            lastFundsPerCycle += receiver.amtDeltas[collectedCycle - 1].nextCycle;
+            lastFundsPerCycle += receiver.amtDeltas[collectedCycle].thisCycle;
+            collected += lastFundsPerCycle;
         }
-        return collected;
+        return uint128(collected);
     }
 
     /// @notice Collects all received funds available for collection
@@ -122,26 +133,24 @@ contract Pool {
         Receiver storage receiver = receivers[msg.sender];
         uint64 collectedCycle = receiver.nextCollectedCycle;
         if (collectedCycle == 0) return;
-        uint256 currFinishedCycle = block.number / cycleBlocks;
+        uint64 currFinishedCycle = uint64(block.number) / cycleBlocks;
         if (collectedCycle > currFinishedCycle) return;
-        uint256 collected = 0;
-        int256 lastFundsPerCycle = receiver.lastFundsPerCycle;
+        int128 collected = 0;
+        int128 lastFundsPerCycle = receiver.lastFundsPerCycle;
         for (; collectedCycle <= currFinishedCycle; collectedCycle++) {
-            int256 delta = receiver.amtDeltas[collectedCycle];
-            if (delta != 0) {
-                delete receiver.amtDeltas[collectedCycle];
-                lastFundsPerCycle += delta;
-            }
-            collected += uint256(lastFundsPerCycle);
+            lastFundsPerCycle += receiver.amtDeltas[collectedCycle - 1].nextCycle;
+            lastFundsPerCycle += receiver.amtDeltas[collectedCycle].thisCycle;
+            collected += lastFundsPerCycle;
+            delete receiver.amtDeltas[collectedCycle - 1];
         }
-        receiver.lastFundsPerCycle = uint192(lastFundsPerCycle);
+        receiver.lastFundsPerCycle = lastFundsPerCycle;
         receiver.nextCollectedCycle = collectedCycle;
-        if (collected > 0) msg.sender.transfer(collected);
+        if (collected > 0) msg.sender.transfer(uint256(collected));
     }
 
     /// @notice Tops up the sender balance of a sender of the message with the amount in the message
     function topUp() public payable suspendPayments {
-        senders[msg.sender].startBalance += uint192(msg.value);
+        senders[msg.sender].startBalance += uint128(msg.value);
     }
 
     /// @notice Returns amount of unsent funds available for withdrawal by the sender of the message
@@ -164,10 +173,10 @@ contract Pool {
 
     /// @notice Withdraws unsent funds of the sender of the message and sends them to that sender
     /// @param amount The amount to be withdrawn, must not be higher than available funds
-    function withdraw(uint256 amount) public suspendPayments {
-        uint192 startBalance = senders[msg.sender].startBalance;
+    function withdraw(uint128 amount) public suspendPayments {
+        uint128 startBalance = senders[msg.sender].startBalance;
         require(amount <= startBalance, "Not enough funds in the sender account");
-        senders[msg.sender].startBalance = startBalance - uint192(amount);
+        senders[msg.sender].startBalance = startBalance - amount;
         msg.sender.transfer(amount);
     }
 
@@ -177,9 +186,8 @@ contract Pool {
     /// Each receiver then receives their part from the sender's balance.
     /// If set to zero, stops funding.
     /// @param amount The target per-block amount
-    function setAmountPerBlock(uint256 amount) public suspendPayments {
-        require(type(uint192).max >= amount, "Amount too high");
-        senders[msg.sender].amtPerBlock = uint192(amount);
+    function setAmountPerBlock(uint128 amount) public suspendPayments {
+        senders[msg.sender].amtPerBlock = amount;
     }
 
     /// @notice Gets the target amount sent on every block from the sender of the message.
@@ -189,7 +197,7 @@ contract Pool {
     /// Each receiver then receives their part from the sender's balance.
     /// If zero, funding is stopped.
     /// @return amount The target per-block amount
-    function getAmountPerBlock() public view returns (uint192 amount) {
+    function getAmountPerBlock() public view returns (uint128 amount) {
         return senders[msg.sender].amtPerBlock;
     }
 
@@ -247,8 +255,8 @@ contract Pool {
         Sender storage sender = senders[msg.sender];
         // Hasn't been sending anything
         if (sender.weightSum == 0 || sender.amtPerBlock < sender.weightSum) return;
-        uint192 amtPerWeight = sender.amtPerBlock / sender.weightSum;
-        uint192 amtPerBlock = amtPerWeight * sender.weightSum;
+        uint128 amtPerWeight = sender.amtPerBlock / sender.weightSum;
+        uint128 amtPerBlock = amtPerWeight * sender.weightSum;
         uint256 endBlockUncapped = sender.startBlock + uint256(sender.startBalance / amtPerBlock);
         uint64 endBlock = endBlockUncapped > MAX_BLOCK_NUMBER
             ? MAX_BLOCK_NUMBER
@@ -259,7 +267,7 @@ contract Pool {
             return;
         }
         sender.startBalance -= (blockNumber - sender.startBlock) * amtPerBlock;
-        setDeltasFromNow(-int256(amtPerWeight), endBlock);
+        setDeltasFromNow(-int128(amtPerWeight), endBlock);
     }
 
     /// @notice Starts the sender's payments from the current block
@@ -268,8 +276,8 @@ contract Pool {
         Sender storage sender = senders[msg.sender];
         // Won't be sending anything
         if (sender.weightSum == 0 || sender.amtPerBlock < sender.weightSum) return;
-        uint192 amtPerWeight = sender.amtPerBlock / sender.weightSum;
-        uint192 amtPerBlock = amtPerWeight * sender.weightSum;
+        uint128 amtPerWeight = sender.amtPerBlock / sender.weightSum;
+        uint128 amtPerBlock = amtPerWeight * sender.weightSum;
         // Won't be sending anything
         if (sender.startBalance < amtPerBlock) return;
         sender.startBlock = blockNumber;
@@ -277,14 +285,14 @@ contract Pool {
         uint64 endBlock = endBlockUncapped > MAX_BLOCK_NUMBER
             ? MAX_BLOCK_NUMBER
             : uint64(endBlockUncapped);
-        setDeltasFromNow(int256(amtPerWeight), endBlock);
+        setDeltasFromNow(int128(amtPerWeight), endBlock);
     }
 
     /// @notice Sets deltas to all sender's receivers from current block to endBlock
     /// proportionally to their weights
     /// @param amtPerWeightPerBlockDelta Amount of per-block delta applied per receiver weight
     /// @param blockEnd The block number from which the delta stops taking effect
-    function setDeltasFromNow(int256 amtPerWeightPerBlockDelta, uint64 blockEnd) internal {
+    function setDeltasFromNow(int128 amtPerWeightPerBlockDelta, uint64 blockEnd) internal {
         uint64 blockNumber = uint64(block.number);
         Sender storage sender = senders[msg.sender];
         // Iterating over receivers, see `ReceiverWeights` for details
@@ -297,7 +305,7 @@ contract Pool {
             // The receiver was never used, initialize it
             if (amtPerWeightPerBlockDelta > 0 && receiver.nextCollectedCycle == 0)
                 receiver.nextCollectedCycle = blockNumber / cycleBlocks + 1;
-            int256 perBlockDelta = int256(weight) * amtPerWeightPerBlockDelta;
+            int128 perBlockDelta = weight * amtPerWeightPerBlockDelta;
             // Set delta in a block range from now to `blockEnd`
             setSingleDelta(receiver.amtDeltas, blockNumber, perBlockDelta);
             setSingleDelta(receiver.amtDeltas, blockEnd, -perBlockDelta);
@@ -309,19 +317,18 @@ contract Pool {
     /// @param blockNumber The block number from which the delta takes effect
     /// @param perBlockDelta Change of the per-block receiving rate
     function setSingleDelta(
-        mapping(uint64 => int256) storage amtDeltas,
+        mapping(uint64 => AmtDelta) storage amtDeltas,
         uint64 blockNumber,
-        int256 perBlockDelta
+        int128 perBlockDelta
     ) internal {
         // In order to set a delta on a specific block it must be introduced in two cycles.
-        // The cycle delta is split proportionally based on how much the first cycle is affected.
-        // The second cycle has the rest of the delta applied, so the update is fully completed.
-        uint64 cycle2Blocks = blockNumber % cycleBlocks;
-        uint64 cycle1Blocks = cycleBlocks - cycle2Blocks;
-        uint64 cycle1 = blockNumber / cycleBlocks + 1;
-        uint64 cycle2 = cycle1 + 1;
-        amtDeltas[cycle1] += cycle1Blocks * perBlockDelta;
-        amtDeltas[cycle2] += cycle2Blocks * perBlockDelta;
+        // The cycle delta is split proportionally based on how much this cycle is affected.
+        // The next cycle has the rest of the delta applied, so the update is fully completed.
+        uint64 thisCycle = blockNumber / cycleBlocks + 1;
+        uint64 nextCycleBlocks = blockNumber % cycleBlocks;
+        uint64 thisCycleBlocks = cycleBlocks - nextCycleBlocks;
+        amtDeltas[thisCycle].thisCycle += thisCycleBlocks * perBlockDelta;
+        amtDeltas[thisCycle].nextCycle += nextCycleBlocks * perBlockDelta;
     }
 }
 
