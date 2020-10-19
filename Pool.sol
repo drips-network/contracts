@@ -2,6 +2,8 @@
 pragma solidity ^0.6.2;
 pragma experimental ABIEncoderV2;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 /// @notice Funding pool contract. Automatically sends funds to a configurable set of receivers.
 ///
 /// The contract has 2 types of users: the senders and the receivers.
@@ -173,12 +175,18 @@ abstract contract Pool {
 
     /// @notice Withdraws unsent funds of the sender of the message and sends them to that sender
     /// @param amount The amount to be withdrawn, must not be higher than available funds
-    function withdraw(uint128 amount) public suspendPayments {
+    function withdraw(uint128 amount) public {
         if (amount == 0) return;
+        withdrawInternal(amount);
+        transferToSender(amount);
+    }
+
+    /// @notice Withdraws unsent funds of the sender of the message
+    /// @param amount The amount to be withdrawn, must not be higher than available funds
+    function withdrawInternal(uint128 amount) internal suspendPayments {
         uint128 startBalance = senders[msg.sender].startBalance;
         require(amount <= startBalance, "Not enough funds in the sender account");
         senders[msg.sender].startBalance = startBalance - amount;
-        transferToSender(amount);
     }
 
     /// @notice Sets the target amount sent on every block from the sender of the message.
@@ -337,41 +345,8 @@ abstract contract Pool {
     }
 }
 
-/// @notice Funding pool contract. Automatically sends Ether to a configurable set of receivers.
-///
-/// The contract has 2 types of users: the senders and the receivers.
-///
-/// A sender has some Ether and a set of addresses of receivers, to whom he wants to send funds.
-/// In order to send there are 3 conditions, which must be fulfilled:
-///
-/// 1. There must be Ether on his account in this contract.
-///    They can be added with `topUp` and removed with `withdraw`.
-/// 2. Total amount sent to the receivers on each block must be set to a non-zero value.
-///    This is done with `setAmountPerBlock`.
-/// 3. A set of receivers must be non-empty.
-///    Receivers can be added, removed and updated with `setReceiver`.
-///    Each receiver has a weight, which is used to calculate how the total sent amount is split.
-///
-/// Each of these functions can be called in any order and at any time, they have immediate effects.
-/// When all of these conditions are fulfilled, on each block the configured amount is being sent.
-/// It's extracted from the `withdraw`able balance and transferred to the receivers.
-/// The process continues automatically until the sender's balance is empty.
-///
-/// The receiver has an account, from which he can `collect` Ether sent by the senders.
-/// The available amount is updated every `cycleBlocks` blocks,
-/// so recently sent Ether may not be `collect`able immediately.
-/// `cycleBlocks` is a constant configured when the pool is deployed.
-///
-/// A single address can be used both as a sender and as a receiver.
-/// It will have 2 balances in the contract, one with Ether being sent and one with received,
-/// but with no connection between them and no shared configuration.
-/// In order to send received Ether, they must be first `collect`ed and then `topUp`ped
-/// if they are to be sent through the contract.
-///
-/// The concept of something happening periodically, e.g. every block or every `cycleBlocks` are
-/// only high-level abstractions for the user, Ethereum isn't really capable of scheduling work.
-/// The actual implementation emulates that behavior by calculating the results of the scheduled
-/// events based on how many blocks have been mined and only when a user needs their outcomes.
+/// @notice Funding pool contract for Ether.
+/// See the base `Pool` contract docs for more details.
 contract EthPool is Pool {
     /// @param cycleBlocks The length of cycleBlocks to be used in the contract instance.
     /// Low values make funds more available by shortening the average duration of Ether being
@@ -388,6 +363,36 @@ contract EthPool is Pool {
 
     function transferToSender(uint128 amount) internal override {
         msg.sender.transfer(amount);
+    }
+}
+
+/// @notice Funding pool contract for any ERC-20 token.
+/// See the base `Pool` contract docs for more details.
+contract Erc20Pool is Pool {
+    /// @notice The address of the ERC-20 contract which tokens the pool works with
+    IERC20 public immutable erc20;
+
+    /// @param cycleBlocks The length of cycleBlocks to be used in the contract instance.
+    /// Low values make funds more available by shortening the average duration of tokens being
+    /// frozen between being taken from senders' balances and being collectable by the receiver.
+    /// High values make collecting cheaper by making it process less cycles for a given time range.
+    /// @param _erc20 The address of an ERC-20 contract which tokens the pool will work with.
+    /// To guarantee safety the supply of the tokens must be lower than `2 ^ 127`.
+    constructor(uint64 cycleBlocks, IERC20 _erc20) public Pool(cycleBlocks) {
+        erc20 = _erc20;
+    }
+
+    /// @notice Tops up the sender balance of a sender of the message.
+    /// The sender must first grant the contract a sufficient allowance.
+    /// @param amount The amount to top up with
+    function topUp(uint128 amount) public {
+        if (amount == 0) return;
+        erc20.transferFrom(msg.sender, address(this), amount);
+        onTopUp(amount);
+    }
+
+    function transferToSender(uint128 amount) internal override {
+        erc20.transfer(msg.sender, amount);
     }
 }
 
