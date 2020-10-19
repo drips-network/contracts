@@ -155,20 +155,18 @@ contract Pool {
 
     /// @notice Returns amount of unsent funds available for withdrawal by the sender of the message
     /// @return balance The available balance
-    function withdrawable() public view returns (uint256) {
+    function withdrawable() public view returns (uint128) {
         Sender storage sender = senders[msg.sender];
         // Hasn't been sending anything
         if (sender.weightSum == 0 || sender.amtPerBlock < sender.weightSum) {
             return sender.startBalance;
         }
-        uint256 amtPerWeight = sender.amtPerBlock / sender.weightSum;
-        uint256 amtPerBlock = amtPerWeight * sender.weightSum;
-        uint256 endBlock = sender.startBlock + sender.startBalance / amtPerBlock;
-        // The funding period has run out
-        if (endBlock <= block.number) {
+        uint128 amtPerBlock = sender.amtPerBlock - (sender.amtPerBlock % sender.weightSum);
+        uint192 alreadySent = (uint64(block.number) - sender.startBlock) * amtPerBlock;
+        if (alreadySent > sender.startBalance) {
             return sender.startBalance % amtPerBlock;
         }
-        return sender.startBalance - (block.number - sender.startBlock) * amtPerBlock;
+        return sender.startBalance - uint128(alreadySent);
     }
 
     /// @notice Withdraws unsent funds of the sender of the message and sends them to that sender
