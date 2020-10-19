@@ -40,7 +40,7 @@ pragma experimental ABIEncoderV2;
 ///
 /// The contract assumes that all amounts in the system can be stored in signed 128-bit integers.
 /// It's guaranteed to be safe only when working with assets with supply lower than `2 ^ 127`.
-contract Pool {
+abstract contract Pool {
     using ReceiverWeightsImpl for ReceiverWeights;
 
     /// @notice On every block `B`, which is a multiple of `cycleBlocks`, the receivers
@@ -145,12 +145,14 @@ contract Pool {
         }
         receiver.lastFundsPerCycle = lastFundsPerCycle;
         receiver.nextCollectedCycle = collectedCycle;
-        if (collected > 0) msg.sender.transfer(uint256(collected));
+        if (collected > 0) transferToSender(uint128(collected));
     }
 
-    /// @notice Tops up the sender balance of a sender of the message with the amount in the message
-    function topUp() public payable suspendPayments {
-        senders[msg.sender].startBalance += uint128(msg.value);
+    /// @notice Must be called when funds have been transferred into the pool contract
+    /// in order to top up the message sender
+    /// @param amount The topped up amount
+    function onTopUp(uint128 amount) internal suspendPayments {
+        senders[msg.sender].startBalance += amount;
     }
 
     /// @notice Returns amount of unsent funds available for withdrawal by the sender of the message
@@ -172,10 +174,11 @@ contract Pool {
     /// @notice Withdraws unsent funds of the sender of the message and sends them to that sender
     /// @param amount The amount to be withdrawn, must not be higher than available funds
     function withdraw(uint128 amount) public suspendPayments {
+        if (amount == 0) return;
         uint128 startBalance = senders[msg.sender].startBalance;
         require(amount <= startBalance, "Not enough funds in the sender account");
         senders[msg.sender].startBalance = startBalance - amount;
-        msg.sender.transfer(amount);
+        transferToSender(amount);
     }
 
     /// @notice Sets the target amount sent on every block from the sender of the message.
@@ -236,6 +239,10 @@ contract Pool {
         }
         return allReceivers;
     }
+
+    /// @notice Called when funds need to be transferred out of the pool to the message sender
+    /// @param amount The transferred amount, never zero
+    function transferToSender(uint128 amount) internal virtual;
 
     /// @notice Stops payments of `msg.sender` for the duration of the modified function.
     /// This removes and then restores any effects of the sender on all of its receivers' futures.
@@ -327,6 +334,60 @@ contract Pool {
         uint64 thisCycleBlocks = cycleBlocks - nextCycleBlocks;
         amtDeltas[thisCycle].thisCycle += thisCycleBlocks * perBlockDelta;
         amtDeltas[thisCycle].nextCycle += nextCycleBlocks * perBlockDelta;
+    }
+}
+
+/// @notice Funding pool contract. Automatically sends Ether to a configurable set of receivers.
+///
+/// The contract has 2 types of users: the senders and the receivers.
+///
+/// A sender has some Ether and a set of addresses of receivers, to whom he wants to send funds.
+/// In order to send there are 3 conditions, which must be fulfilled:
+///
+/// 1. There must be Ether on his account in this contract.
+///    They can be added with `topUp` and removed with `withdraw`.
+/// 2. Total amount sent to the receivers on each block must be set to a non-zero value.
+///    This is done with `setAmountPerBlock`.
+/// 3. A set of receivers must be non-empty.
+///    Receivers can be added, removed and updated with `setReceiver`.
+///    Each receiver has a weight, which is used to calculate how the total sent amount is split.
+///
+/// Each of these functions can be called in any order and at any time, they have immediate effects.
+/// When all of these conditions are fulfilled, on each block the configured amount is being sent.
+/// It's extracted from the `withdraw`able balance and transferred to the receivers.
+/// The process continues automatically until the sender's balance is empty.
+///
+/// The receiver has an account, from which he can `collect` Ether sent by the senders.
+/// The available amount is updated every `cycleBlocks` blocks,
+/// so recently sent Ether may not be `collect`able immediately.
+/// `cycleBlocks` is a constant configured when the pool is deployed.
+///
+/// A single address can be used both as a sender and as a receiver.
+/// It will have 2 balances in the contract, one with Ether being sent and one with received,
+/// but with no connection between them and no shared configuration.
+/// In order to send received Ether, they must be first `collect`ed and then `topUp`ped
+/// if they are to be sent through the contract.
+///
+/// The concept of something happening periodically, e.g. every block or every `cycleBlocks` are
+/// only high-level abstractions for the user, Ethereum isn't really capable of scheduling work.
+/// The actual implementation emulates that behavior by calculating the results of the scheduled
+/// events based on how many blocks have been mined and only when a user needs their outcomes.
+contract EthPool is Pool {
+    /// @param cycleBlocks The length of cycleBlocks to be used in the contract instance.
+    /// Low values make funds more available by shortening the average duration of Ether being
+    /// frozen between being taken from senders' balances and being collectable by the receiver.
+    /// High values make collecting cheaper by making it process less cycles for a given time range.
+    constructor(uint64 cycleBlocks) public Pool(cycleBlocks) {
+        return;
+    }
+
+    /// @notice Tops up the sender balance of a sender of the message with the amount in the message
+    function topUp() public payable {
+        if (msg.value > 0) onTopUp(uint128(msg.value));
+    }
+
+    function transferToSender(uint128 amount) internal override {
+        msg.sender.transfer(amount);
     }
 }
 
