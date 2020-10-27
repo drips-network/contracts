@@ -313,7 +313,7 @@ abstract contract Pool {
         while (true) {
             uint32 weight;
             (receiverAddr, weight) = sender.receiverWeights.nextWeightPruning(receiverAddr);
-            if (weight == 0) break;
+            if (receiverAddr == ReceiverWeightsImpl.ADDR_ROOT) break;
             Receiver storage receiver = receivers[receiverAddr];
             // The receiver was never used, initialize it
             if (amtPerWeightPerBlockDelta > 0 && receiver.nextCollectedCycle == 0)
@@ -418,8 +418,8 @@ library ReceiverWeightsImpl {
     /// Prunes all the zeroed items found between the current and the next receivers.
     /// Iterating over the whole list prunes all the zeroed items.
     /// @param current The previously returned receiver address or ADDR_ROOT to start iterating
-    /// @return next The next receiver address
-    /// @return weight The next receiver weight, 0 if the end of the list was reached
+    /// @return next The next receiver address, ADDR_ROOT if the end of the list was reached
+    /// @return weight The next receiver weight
     function nextWeightPruning(ReceiverWeights storage self, address current)
         internal
         returns (address next, uint32 weight)
@@ -435,7 +435,11 @@ library ReceiverWeightsImpl {
                     // Somehow it's ~1500 gas cheaper than `delete self[next]`
                     self.data[next].next = ADDR_UNINITIALIZED;
                     next = newNext;
-                    if (next == ADDR_END) break;
+                    if (next == ADDR_END) {
+                        // Removing the last item on the list, clear the storage
+                        if (current == ADDR_ROOT) next = ADDR_UNINITIALIZED;
+                        break;
+                    }
                     weight = self.data[next].weight;
                 } while (weight == 0);
                 // link the previous non-zero element with the next non-zero element
@@ -443,28 +447,22 @@ library ReceiverWeightsImpl {
                 self.data[current].next = next;
             }
         }
+        if (next == ADDR_END) next = ADDR_ROOT;
     }
 
     /// @notice Return the next receiver weight and its address.
+    /// Requires that the iterated part of the list is pruned with `nextWeightPruning`.
     /// @param current The previously returned receiver address or ADDR_ROOT to start iterating
-    /// @return next The next receiver address
-    /// @return weight The next receiver weight, 0 if the end of the list was reached
+    /// @return next The next receiver address, ADDR_ROOT if the end of the list was reached
+    /// @return weight The next receiver weight
     function nextWeight(ReceiverWeights storage self, address current)
         internal
         view
         returns (address next, uint32 weight)
     {
         next = self.data[current].next;
-        weight = 0;
-        if (next != ADDR_END && next != ADDR_UNINITIALIZED) {
-            weight = self.data[next].weight;
-            // skip elements being zero
-            while (weight == 0) {
-                next = self.data[next].next;
-                if (next == ADDR_END) break;
-                weight = self.data[next].weight;
-            }
-        }
+        if (next == ADDR_END) next = ADDR_ROOT;
+        weight = (next == ADDR_ROOT) ? 0 : self.data[next].weight;
     }
 
     /// @notice Get weight for a specific receiver
