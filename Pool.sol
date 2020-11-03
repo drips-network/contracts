@@ -221,7 +221,7 @@ abstract contract Pool {
     /// @param weight The weight of the receiver
     function setReceiver(address receiver, uint32 weight) public suspendPayments {
         Sender storage sender = senders[msg.sender];
-        uint32 oldWeight = sender.receiverWeights.setWeight(receiver, weight);
+        uint32 oldWeight = sender.receiverWeights.setReceiverWeight(receiver, weight);
         sender.weightSum -= oldWeight;
         sender.weightSum += weight;
         require(sender.weightSum <= SENDER_WEIGHTS_SUM_MAX, "Too much total receivers weight");
@@ -244,7 +244,7 @@ abstract contract Pool {
         address receiver = ReceiverWeightsImpl.ADDR_ROOT;
         for (uint256 i = 0; i < sender.weightCount; i++) {
             uint32 weight;
-            (receiver, weight) = sender.receiverWeights.nextWeight(receiver);
+            (receiver, weight, ) = sender.receiverWeights.nextWeight(receiver);
             allReceivers[i] = ReceiverWeight(receiver, weight);
         }
         return allReceivers;
@@ -314,7 +314,7 @@ abstract contract Pool {
         address receiverAddr = ReceiverWeightsImpl.ADDR_ROOT;
         while (true) {
             uint32 weight;
-            (receiverAddr, weight) = sender.receiverWeights.nextWeightPruning(receiverAddr);
+            (receiverAddr, weight, ) = sender.receiverWeights.nextWeightPruning(receiverAddr);
             if (receiverAddr == ReceiverWeightsImpl.ADDR_ROOT) break;
             Receiver storage receiver = receivers[receiverAddr];
             // The receiver was never used, initialize it
@@ -407,31 +407,42 @@ struct ReceiverWeights {
 /// The list works optimally if after applying a series of changes it's iterated over.
 /// The list uses 1 word of storage per receiver with a non-zero weight.
 library ReceiverWeightsImpl {
+    using ReceiverWeightsImpl for ReceiverWeights;
+
     struct ReceiverWeightStored {
         address next;
-        uint32 weight;
+        uint32 weightReceiver;
+        uint32 weightProxy;
     }
 
     address internal constant ADDR_ROOT = address(0);
     address internal constant ADDR_UNINITIALIZED = address(0);
     address internal constant ADDR_END = address(1);
 
-    /// @notice Return the next non-zero receiver weight and its address.
-    /// Prunes all the zeroed items found between the current and the next receivers.
+    /// @notice Return the next non-zero receiver or proxy weight and its address.
+    /// Removes all the items that have zero receiver and proxy weights found
+    /// between the current and the next item from the list.
     /// Iterating over the whole list prunes all the zeroed items.
     /// @param current The previously returned receiver address or ADDR_ROOT to start iterating
     /// @return next The next receiver address, ADDR_ROOT if the end of the list was reached
-    /// @return weight The next receiver weight
+    /// @return weightReceiver The next receiver weight, may be zero if `weightProxy` is non-zero
+    /// @return weightProxy The next proxy weight, may be zero if `weightReceiver` is non-zero
     function nextWeightPruning(ReceiverWeights storage self, address current)
         internal
-        returns (address next, uint32 weight)
+        returns (
+            address next,
+            uint32 weightReceiver,
+            uint32 weightProxy
+        )
     {
         next = self.data[current].next;
-        weight = 0;
+        weightReceiver = 0;
+        weightProxy = 0;
         if (next != ADDR_END && next != ADDR_UNINITIALIZED) {
-            weight = self.data[next].weight;
+            weightReceiver = self.data[next].weightReceiver;
+            weightProxy = self.data[next].weightProxy;
             // remove elements being zero
-            if (weight == 0) {
+            if (weightReceiver == 0 && weightProxy == 0) {
                 do {
                     address newNext = self.data[next].next;
                     // Somehow it's ~1500 gas cheaper than `delete self[next]`
@@ -442,8 +453,9 @@ library ReceiverWeightsImpl {
                         if (current == ADDR_ROOT) next = ADDR_UNINITIALIZED;
                         break;
                     }
-                    weight = self.data[next].weight;
-                } while (weight == 0);
+                    weightReceiver = self.data[next].weightReceiver;
+                    weightProxy = self.data[next].weightProxy;
+                } while (weightReceiver == 0 && weightProxy == 0);
                 // link the previous non-zero element with the next non-zero element
                 // or ADDR_END if it became the last element on the list
                 self.data[current].next = next;
@@ -452,44 +464,61 @@ library ReceiverWeightsImpl {
         if (next == ADDR_END) next = ADDR_ROOT;
     }
 
-    /// @notice Return the next receiver weight and its address.
+    /// @notice Return the next non-zero receiver or proxy weight and its address.
     /// Requires that the iterated part of the list is pruned with `nextWeightPruning`.
     /// @param current The previously returned receiver address or ADDR_ROOT to start iterating
     /// @return next The next receiver address, ADDR_ROOT if the end of the list was reached
-    /// @return weight The next receiver weight
+    /// @return weightReceiver The next receiver weight, may be zero if `weightProxy` is non-zero
+    /// @return weightProxy The next proxy weight, may be zero if `weightReceiver` is non-zero
     function nextWeight(ReceiverWeights storage self, address current)
         internal
         view
-        returns (address next, uint32 weight)
+        returns (
+            address next,
+            uint32 weightReceiver,
+            uint32 weightProxy
+        )
     {
         next = self.data[current].next;
         if (next == ADDR_END) next = ADDR_ROOT;
-        weight = (next == ADDR_ROOT) ? 0 : self.data[next].weight;
-    }
-
-    /// @notice Get weight for a specific receiver
-    /// @param receiver The receiver to get weight
-    /// @return weight The receinver weight
-    function getWeight(ReceiverWeights storage self, address receiver)
-        internal
-        view
-        returns (uint32 weight)
-    {
-        return self.data[receiver].weight;
+        if (next != ADDR_ROOT) {
+            weightReceiver = self.data[next].weightReceiver;
+            weightProxy = self.data[next].weightProxy;
+        }
     }
 
     /// @notice Set weight for a specific receiver
     /// @param receiver The receiver to set weight
     /// @param weight The weight to set
     /// @return previousWeight The previously set weight, may be zero
-    function setWeight(
+    function setReceiverWeight(
         ReceiverWeights storage self,
         address receiver,
         uint32 weight
     ) internal returns (uint32 previousWeight) {
-        require(receiver > address(1), "Invalid receiver address");
-        previousWeight = self.data[receiver].weight;
-        self.data[receiver].weight = weight;
+        self.attachWeightToList(receiver);
+        previousWeight = self.data[receiver].weightReceiver;
+        self.data[receiver].weightReceiver = weight;
+    }
+
+    /// @notice Set weight for a specific proxy
+    /// @param proxy The proxy to set weight
+    /// @param weight The weight to set
+    /// @return previousWeight The previously set weight, may be zero
+    function setProxyWeight(
+        ReceiverWeights storage self,
+        address proxy,
+        uint32 weight
+    ) internal returns (uint32 previousWeight) {
+        self.attachWeightToList(proxy);
+        previousWeight = self.data[proxy].weightProxy;
+        self.data[proxy].weightProxy = weight;
+    }
+
+    /// @notice Ensures that weight for a specific receiver is attached to the list
+    /// @param receiver The receiver whose weight should be attached
+    function attachWeightToList(ReceiverWeights storage self, address receiver) internal {
+        require(receiver != ADDR_ROOT && receiver != ADDR_END, "Invalid receiver address");
         // Item not attached to the list
         if (self.data[receiver].next == ADDR_UNINITIALIZED) {
             address rootNext = self.data[ADDR_ROOT].next;

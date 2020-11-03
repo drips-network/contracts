@@ -10,51 +10,80 @@ contract ReceiverWeightsTest {
 
     using ReceiverWeightsImpl for ReceiverWeights;
 
+    /// @dev The tested data structure
     ReceiverWeights private receiverWeights;
+    /// @dev The values returned from the iteration after the last `setWeights` call
     ReceiverWeightIterated[] private receiverWeightsIterated;
-    int256 public receiverWeightsSumDelta;
+    /// @notice The change of sum of the stored receiver weights due to the last `setWeights` call
+    int256 public weightReceiverSumDelta;
+    /// @notice The change of sum of the stored proxy weights due to the last `setWeights` call
+    int256 public weightProxySumDelta;
 
     struct ReceiverWeightIterated {
         address receiver;
-        uint32 weight;
+        uint32 weightReceiver;
+        uint32 weightProxy;
     }
 
     function setWeights(ReceiverWeightIterated[] calldata weights) external {
-        int256 weightsSumDelta = 0;
+        weightReceiverSumDelta = 0;
+        weightProxySumDelta = 0;
         uint256 totalGasUsed = 0;
         for (uint256 i = 0; i < weights.length; i++) {
             address receiver = weights[i].receiver;
-            uint32 newWeight = weights[i].weight;
+            uint32 newWeightReceiver = weights[i].weightReceiver;
+            uint32 newWeightProxy = weights[i].weightProxy;
             uint256 gasUsed = gasleft();
-            uint256 oldWeight = receiverWeights.setWeight(receiver, newWeight);
+            uint32 oldWeightReceiver = receiverWeights.setReceiverWeight(
+                receiver,
+                newWeightReceiver
+            );
             gasUsed -= gasleft();
+            uint32 oldWeightProxy = receiverWeights.setProxyWeight(receiver, newWeightProxy);
             totalGasUsed += gasUsed;
-            weightsSumDelta -= int256(oldWeight);
-            weightsSumDelta += newWeight;
+            weightReceiverSumDelta -= oldWeightReceiver;
+            weightReceiverSumDelta += newWeightReceiver;
+            weightProxySumDelta -= oldWeightProxy;
+            weightProxySumDelta += newWeightProxy;
             if (PRINT_GAS_USAGE)
                 console.log(
                     "Setting for receiver %s weight %d with gas used %d",
                     receiver,
-                    newWeight,
+                    newWeightReceiver,
                     gasUsed
                 );
         }
-        receiverWeightsSumDelta = weightsSumDelta;
         delete receiverWeightsIterated;
-        address receiver = address(0);
+        address receiver = ReceiverWeightsImpl.ADDR_ROOT;
         uint256 iterationGasUsed = 0;
         while (true) {
             // Each step of the non-pruning iteration should yield the same items
             address oldReceiver = receiver;
-            uint32 weight;
+            uint32 weightReceiver;
+            uint32 weightProxy;
             uint256 gasLeftBefore = gasleft();
-            (receiver, weight) = receiverWeights.nextWeightPruning(oldReceiver);
+            (receiver, weightReceiver, weightProxy) = receiverWeights.nextWeightPruning(
+                oldReceiver
+            );
             iterationGasUsed += gasLeftBefore - gasleft();
-            (address receiverIter, uint32 weightIter) = receiverWeights.nextWeight(oldReceiver);
+            (
+                address receiverIter,
+                uint32 weightReceiverIter,
+                uint32 weightProxyIter
+            ) = receiverWeights.nextWeight(oldReceiver);
             require(receiverIter == receiver, "Non-pruning iterator yielded a different receiver");
-            require(weightIter == weight, "Non-pruning iterator yielded a different weight");
-            if (weight == 0) break;
-            receiverWeightsIterated.push(ReceiverWeightIterated(receiver, weight));
+            require(
+                weightReceiverIter == weightReceiver,
+                "Non-pruning iterator yielded a different receiver weight"
+            );
+            require(
+                weightProxyIter == weightProxy,
+                "Non-pruning iterator yielded a different proxy weight"
+            );
+            if (receiver == ReceiverWeightsImpl.ADDR_ROOT) break;
+            receiverWeightsIterated.push(
+                ReceiverWeightIterated(receiver, weightReceiver, weightProxy)
+            );
         }
         if (PRINT_GAS_USAGE) {
             console.log("Iterated over weight list with gas used %d", iterationGasUsed);
