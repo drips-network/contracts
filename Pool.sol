@@ -76,19 +76,21 @@ abstract contract Pool {
     }
 
     struct Receiver {
-        // The next block to be collected
+        // The next cycle to be collected
         uint64 nextCollectedCycle;
         // The amount of funds received for the last collected cycle.
         // It never is negative, it's a signed integer only for convenience of casting.
         int128 lastFundsPerCycle;
         // --- SLOT BOUNDARY
         // The changes of collected amounts on specific cycle.
-        // The keys are cycles, each cycle becomes collectable on block `C * cycleBlocks`
+        // The keys are cycles, each cycle becomes collectable on block `C * cycleBlocks`.
         mapping(uint64 => AmtDelta) amtDeltas;
     }
 
     struct AmtDelta {
+        // Amount delta applied on this cycle
         int128 thisCycle;
+        // Amount delta applied on the next cycle
         int128 nextCycle;
     }
 
@@ -213,8 +215,8 @@ abstract contract Pool {
     /// @notice Sets the weight of a receiver of the sender of the message.
     /// The weight regulates the share of the amount being sent on every block in relation to
     /// other sender's receivers.
-    /// Setting a non-zero weight for a new receiver, added it to the list of sender's receivers.
-    /// Setting the zero weight for a receiver, removes it from the list of sender's receivers.
+    /// Setting a non-zero weight for a new receiver adds it to the list of sender's receivers.
+    /// Setting the zero weight for a receiver removes it from the list of sender's receivers.
     /// @param receiver The address of the receiver
     /// @param weight The weight of the receiver
     function setReceiver(address receiver, uint32 weight) public suspendPayments {

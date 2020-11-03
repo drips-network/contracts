@@ -62,6 +62,8 @@ contract ReceiverWeightsTest {
         }
     }
 
+    /// @dev Making `receiverWeightsIterated` public would generate
+    /// a getter accepting an index parameter and returning a single item
     function getReceiverWeightsIterated() external view returns (ReceiverWeightIterated[] memory) {
         return receiverWeightsIterated;
     }
