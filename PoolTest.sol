@@ -2,7 +2,8 @@
 pragma solidity ^0.6.2;
 pragma experimental ABIEncoderV2;
 
-import "./Pool.sol";
+import "./libraries/ProxyDeltas.sol";
+import "./libraries/ReceiverWeights.sol";
 import "@nomiclabs/buidler/console.sol";
 
 contract ReceiverWeightsTest {
@@ -95,5 +96,74 @@ contract ReceiverWeightsTest {
     /// a getter accepting an index parameter and returning a single item
     function getReceiverWeightsIterated() external view returns (ReceiverWeightIterated[] memory) {
         return receiverWeightsIterated;
+    }
+}
+
+contract ProxyDeltasTest {
+    bool internal constant PRINT_GAS_USAGE = false;
+
+    using ProxyDeltasImpl for ProxyDeltas;
+
+    /// @dev The tested data structure
+    ProxyDeltas private proxyDeltas;
+    /// @dev The values returned from the iteration after the last `addToDeltas` call
+    ProxyDeltaIterated[] private proxyDeltasIterated;
+
+    struct ProxyDeltaIterated {
+        uint64 cycle;
+        int128 thisCycleDelta;
+        int128 nextCycleDelta;
+    }
+
+    function addToDeltas(uint64 finishedCycle, ProxyDeltaIterated[] calldata deltas) external {
+        uint256 totalGasUsed = 0;
+        for (uint256 i = 0; i < deltas.length; i++) {
+            ProxyDeltaIterated calldata delta = deltas[i];
+            uint256 gasUsed = gasleft();
+            proxyDeltas.addToDelta(delta.cycle, delta.thisCycleDelta, delta.nextCycleDelta);
+            gasUsed -= gasleft();
+            totalGasUsed += gasUsed;
+            if (PRINT_GAS_USAGE) {
+                if (delta.thisCycleDelta >= 0)
+                    console.log(
+                        "Adding to cycle %s delta %d with gas used %d",
+                        delta.cycle,
+                        uint128(delta.thisCycleDelta),
+                        gasUsed
+                    );
+                else
+                    console.log(
+                        "Adding to cycle %s delta -%d with gas used %d",
+                        delta.cycle,
+                        uint128(-delta.thisCycleDelta),
+                        gasUsed
+                    );
+            }
+        }
+        delete proxyDeltasIterated;
+        uint64 cycle = ProxyDeltasImpl.CYCLE_ROOT;
+        uint256 gasUsed = 0;
+        while (true) {
+            int128 thisCycleDelta;
+            int128 nextCycleDelta;
+            uint256 gasLeftBefore = gasleft();
+            (cycle, thisCycleDelta, nextCycleDelta) = proxyDeltas.nextDeltaPruning(
+                cycle,
+                finishedCycle
+            );
+            gasUsed += gasLeftBefore - gasleft();
+            if (cycle == ProxyDeltasImpl.CYCLE_ROOT) break;
+            proxyDeltasIterated.push(ProxyDeltaIterated(cycle, thisCycleDelta, nextCycleDelta));
+        }
+        if (PRINT_GAS_USAGE) {
+            console.log("Iterated over proxy deltas with gas used %d", gasUsed);
+            console.log("Total gas used %d", totalGasUsed + gasUsed);
+        }
+    }
+
+    /// @dev Making `proxyDeltasIterated` public would generate
+    /// a getter accepting an index parameter and returning a single item
+    function getProxyDeltasIterated() external view returns (ProxyDeltaIterated[] memory) {
+        return proxyDeltasIterated;
     }
 }
