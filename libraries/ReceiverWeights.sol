@@ -67,7 +67,6 @@ library ReceiverWeightsImpl {
     }
 
     /// @notice Return the next non-zero receiver or proxy weight and its address.
-    /// Requires that the iterated part of the list is pruned with `nextWeightPruning`.
     /// @param current The previously returned receiver address or ADDR_ROOT to start iterating
     /// @return next The next receiver address, ADDR_ROOT if the end of the list was reached
     /// @return weightReceiver The next receiver weight, may be zero if `weightProxy` is non-zero
@@ -82,11 +81,20 @@ library ReceiverWeightsImpl {
         )
     {
         next = self.data[current].next;
-        if (next == ADDR_END) next = ADDR_ROOT;
-        if (next != ADDR_ROOT) {
+        weightReceiver = 0;
+        weightProxy = 0;
+        if (next != ADDR_END && next != ADDR_ROOT) {
             weightReceiver = self.data[next].weightReceiver;
             weightProxy = self.data[next].weightProxy;
+            // skip elements being zero
+            while (weightReceiver == 0 && weightProxy == 0) {
+                next = self.data[next].next;
+                if (next == ADDR_END) break;
+                weightReceiver = self.data[next].weightReceiver;
+                weightProxy = self.data[next].weightProxy;
+            }
         }
+        if (next == ADDR_END) next = ADDR_ROOT;
     }
 
     /// @notice Set weight for a specific receiver
