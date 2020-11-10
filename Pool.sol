@@ -231,10 +231,12 @@ abstract contract Pool {
     /// @param weight The weight of the receiver
     function setReceiver(address receiver, uint32 weight) public suspendPayments {
         Sender storage sender = senders[msg.sender];
+        uint64 senderWeightSum = sender.weightSum;
         uint32 oldWeight = sender.receiverWeights.setReceiverWeight(receiver, weight);
-        sender.weightSum -= oldWeight;
-        sender.weightSum += weight;
-        require(sender.weightSum <= SENDER_WEIGHTS_SUM_MAX, "Too much total receivers weight");
+        senderWeightSum -= oldWeight;
+        senderWeightSum += weight;
+        require(senderWeightSum <= SENDER_WEIGHTS_SUM_MAX, "Too much total receivers weight");
+        sender.weightSum = uint32(senderWeightSum);
         if (weight != 0 && oldWeight == 0) {
             sender.weightCount++;
             require(sender.weightCount <= SENDER_WEIGHTS_COUNT_MAX, "Too many receivers");
