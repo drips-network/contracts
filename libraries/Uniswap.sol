@@ -1,6 +1,6 @@
 // Nb. The code in this file was adapted from the Uniswap libraries.
 
-pragma solidity ^0.6.12;
+pragma solidity ^0.7.5;
 
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
 import "@uniswap/lib/contracts/libraries/FixedPoint.sol";
@@ -66,8 +66,8 @@ library Uniswap {
         price1Cumulative = IUniswapV2Pair(pair).price1CumulativeLast();
 
         // if time has elapsed since the last update on the pair, mock the accumulated price values
-        (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast) = IUniswapV2Pair(pair)
-            .getReserves();
+        (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast) =
+            IUniswapV2Pair(pair).getReserves();
 
         if (blockTimestampLast != blockTimestamp) {
             // subtraction overflow is desired

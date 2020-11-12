@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.6.12;
+pragma solidity ^0.7.5;
 
 import "@ensdomains/ens/contracts/ENS.sol";
 
@@ -15,15 +15,15 @@ contract DummyEnsRegistry is ENS {
     mapping(address => mapping(address => bool)) private operators;
 
     modifier authorised(bytes32 node) {
-        address owner = records[node].owner;
+        address nodeOwner = records[node].owner;
         require(
-            owner == msg.sender || operators[owner][msg.sender],
+            nodeOwner == msg.sender || operators[nodeOwner][msg.sender],
             "Only the owner is allowed to perform this operation"
         );
         _;
     }
 
-    constructor() public {
+    constructor() {
         records[0x0].owner = msg.sender;
     }
 
@@ -79,7 +79,7 @@ contract DummyEnsRegistry is ENS {
         emit ApprovalForAll(msg.sender, operator, approved);
     }
 
-    function owner(bytes32 node) public override view returns (address) {
+    function owner(bytes32 node) public view override returns (address) {
         address addr = records[node].owner;
         if (addr == address(this)) {
             return address(0x0);
@@ -88,22 +88,22 @@ contract DummyEnsRegistry is ENS {
         return addr;
     }
 
-    function resolver(bytes32 node) public override view returns (address) {
+    function resolver(bytes32 node) public view override returns (address) {
         return records[node].resolver;
     }
 
-    function ttl(bytes32 node) public override view returns (uint64) {
+    function ttl(bytes32 node) public view override returns (uint64) {
         return records[node].ttl;
     }
 
-    function recordExists(bytes32 node) public override view returns (bool) {
+    function recordExists(bytes32 node) public view override returns (bool) {
         return records[node].owner != address(0x0);
     }
 
     function isApprovedForAll(address _owner, address operator)
         external
-        override
         view
+        override
         returns (bool)
     {
         return operators[_owner][operator];

@@ -1,6 +1,6 @@
 // spdx-license-identifier: gpl-3.0-only
 // solhint-disable func-name-mixedcase
-pragma solidity ^0.6.12;
+pragma solidity ^0.7.5;
 
 import "./Rad.sol";
 import "./Router.sol";
@@ -8,7 +8,7 @@ import "./Router.sol";
 contract DummyRouter is Router {
     Rad private rad;
 
-    constructor(address _rad) public {
+    constructor(address _rad) {
         rad = Rad(_rad);
     }
 
@@ -17,7 +17,7 @@ contract DummyRouter is Router {
         address[] calldata,
         address to,
         uint256
-    ) external override payable returns (uint256[] memory) {
+    ) external payable override returns (uint256[] memory) {
         require(msg.value > 0, "Swap amount should be positive");
 
         uint256 tokenAmount = msg.value;
@@ -33,7 +33,7 @@ contract DummyRouter is Router {
         return amounts;
     }
 
-    function WETH() external override pure returns (address) {
+    function WETH() external pure override returns (address) {
         return address(0x123456789abcdef);
     }
 }

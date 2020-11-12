@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity ^0.6.12;
+pragma solidity ^0.7.5;
 
 import "./Rad.sol";
 import "./PriceOracle.sol";
@@ -14,7 +14,7 @@ contract Exchange {
         address _rad,
         address _router,
         address _oracle
-    ) public {
+    ) {
         rad = _rad;
         oracle = PriceOracle(_oracle);
         router = Router(_router);
@@ -32,12 +32,13 @@ contract Exchange {
         // market volatility.
         uint256 minimumRad = 0;
 
-        uint256[] memory amounts = router.swapExactETHForTokens{value: msg.value}(
-            minimumRad,
-            path,
-            receiver,
-            block.timestamp
-        );
+        uint256[] memory amounts =
+            router.swapExactETHForTokens{value: msg.value}(
+                minimumRad,
+                path,
+                receiver,
+                block.timestamp
+            );
 
         // Return RAD amount exchanged.
         return amounts[1];

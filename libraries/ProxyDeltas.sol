@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity ^0.6.2;
+pragma solidity ^0.7.5;
 
 /// @notice A list of cycles and their deltas of amounts received by a proxy.
 /// For each cycle there are stored two deltas, one for the cycle itself

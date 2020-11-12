@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity ^0.6.2;
+pragma solidity ^0.7.5;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract Rad is ERC20 {
+    using SafeMath for uint256;
+
     /// Construct a new Rad token.
     ///
     /// @param account The initial account to grant all the tokens
     /// @param initialSupply The initial amount of Rad tokens.
-    constructor(address account, uint256 initialSupply) public ERC20("Rad", "RAD") {
+    constructor(address account, uint256 initialSupply) ERC20("Rad", "RAD") {
         _mint(account, initialSupply.mul(10**uint256(decimals())));
     }
 

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity ^0.6.2;
+pragma solidity ^0.7.5;
 pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -149,7 +149,7 @@ abstract contract Pool {
     /// Low values make funds more available by shortening the average duration of funds being
     /// frozen between being taken from senders' balances and being collectable by the receiver.
     /// High values make collecting cheaper by making it process less cycles for a given time range.
-    constructor(uint64 _cycleBlocks) public {
+    constructor(uint64 _cycleBlocks) {
         cycleBlocks = _cycleBlocks;
     }
 
@@ -413,9 +413,8 @@ abstract contract Pool {
         uint128 amtPerWeight = sender.amtPerBlock / sender.weightSum;
         uint128 amtPerBlock = amtPerWeight * sender.weightSum;
         uint256 endBlockUncapped = sender.startBlock + uint256(sender.startBalance / amtPerBlock);
-        uint64 endBlock = endBlockUncapped > MAX_BLOCK_NUMBER
-            ? MAX_BLOCK_NUMBER
-            : uint64(endBlockUncapped);
+        uint64 endBlock =
+            endBlockUncapped > MAX_BLOCK_NUMBER ? MAX_BLOCK_NUMBER : uint64(endBlockUncapped);
         // The funding period has run out
         if (endBlock <= blockNumber) {
             sender.startBalance %= amtPerBlock;
@@ -437,9 +436,8 @@ abstract contract Pool {
         if (sender.startBalance < amtPerBlock) return;
         sender.startBlock = blockNumber;
         uint256 endBlockUncapped = blockNumber + uint256(sender.startBalance / amtPerBlock);
-        uint64 endBlock = endBlockUncapped > MAX_BLOCK_NUMBER
-            ? MAX_BLOCK_NUMBER
-            : uint64(endBlockUncapped);
+        uint64 endBlock =
+            endBlockUncapped > MAX_BLOCK_NUMBER ? MAX_BLOCK_NUMBER : uint64(endBlockUncapped);
         setDeltasFromNow(int128(amtPerWeight), endBlock);
     }
 
@@ -636,7 +634,7 @@ contract EthPool is Pool {
     /// Low values make funds more available by shortening the average duration of Ether being
     /// frozen between being taken from senders' balances and being collectable by the receiver.
     /// High values make collecting cheaper by making it process less cycles for a given time range.
-    constructor(uint64 cycleBlocks) public Pool(cycleBlocks) {
+    constructor(uint64 cycleBlocks) Pool(cycleBlocks) {
         return;
     }
 
@@ -662,7 +660,7 @@ contract Erc20Pool is Pool {
     /// High values make collecting cheaper by making it process less cycles for a given time range.
     /// @param _erc20 The address of an ERC-20 contract which tokens the pool will work with.
     /// To guarantee safety the supply of the tokens must be lower than `2 ^ 127`.
-    constructor(uint64 cycleBlocks, IERC20 _erc20) public Pool(cycleBlocks) {
+    constructor(uint64 cycleBlocks, IERC20 _erc20) Pool(cycleBlocks) {
         erc20 = _erc20;
     }
 

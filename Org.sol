@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity ^0.6.12;
+pragma solidity ^0.7.5;
 
 contract Org {
     /// A project anchor under an org.
@@ -16,7 +16,7 @@ contract Org {
     mapping(bytes32 => Project) public projects;
 
     /// Construct a new org instance, by providing an owner address.
-    constructor(address _owner) public {
+    constructor(address _owner) {
         owner = _owner;
     }
 

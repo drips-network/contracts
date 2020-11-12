@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity ^0.6.12;
+pragma solidity ^0.7.5;
 
 import "@ensdomains/ens/contracts/ENS.sol";
 
@@ -32,7 +32,7 @@ contract Registrar {
         address oracleAddress,
         address exchangeAddress,
         address radAddress
-    ) public {
+    ) {
         ens = ENS(ensAddress);
         oracle = PriceOracle(oracleAddress);
         exchange = Exchange(exchangeAddress);

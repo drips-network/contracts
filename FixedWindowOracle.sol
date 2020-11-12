@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Nb. The code in this file was taken & adapted from Uniswap.
-pragma solidity ^0.6.12;
+pragma solidity ^0.7.5;
 
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
@@ -30,7 +30,7 @@ contract FixedWindowOracle {
         address factory,
         address tokenA,
         address tokenB
-    ) public {
+    ) {
         IUniswapV2Pair _pair = IUniswapV2Pair(Uniswap.pairFor(factory, tokenA, tokenB));
         pair = _pair;
         token0 = _pair.token0();
@@ -47,8 +47,8 @@ contract FixedWindowOracle {
     }
 
     function update() external {
-        (uint256 price0Cumulative, uint256 price1Cumulative, uint32 blockTimestamp) = Uniswap
-            .currentCumulativePrices(address(pair));
+        (uint256 price0Cumulative, uint256 price1Cumulative, uint32 blockTimestamp) =
+            Uniswap.currentCumulativePrices(address(pair));
 
         uint32 timeElapsed = blockTimestamp - blockTimestampLast; // overflow is desired
 

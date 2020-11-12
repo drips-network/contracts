@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity ^0.6.2;
+pragma solidity ^0.7.5;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
@@ -55,7 +55,7 @@ contract VRad is ERC20 {
     ///
     /// @param _rad The address of the Rad ERC20 contract.
     /// @param _grantor The initial account to grant all the tokens to.
-    constructor(address _rad, address _grantor) public ERC20("vRad", "vRAD") {
+    constructor(address _rad, address _grantor) ERC20("vRad", "vRAD") {
         rad = Rad(_rad);
         grantor = _grantor;
     }

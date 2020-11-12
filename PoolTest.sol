@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity ^0.6.2;
+pragma solidity ^0.7.5;
 pragma experimental ABIEncoderV2;
 
 import "./libraries/ProxyDeltas.sol";
 import "./libraries/ReceiverWeights.sol";
-import "@nomiclabs/buidler/console.sol";
+import "hardhat/console.sol";
 
 contract ReceiverWeightsTest {
     bool internal constant PRINT_GAS_USAGE = false;
@@ -35,16 +35,14 @@ contract ReceiverWeightsTest {
         weightProxySumDelta = 0;
         uint256 totalGasUsed = 0;
         for (uint256 i = 0; i < weights.length; i++) {
-            address receiver = weights[i].receiver;
+            address setReceiver = weights[i].receiver;
             uint32 newWeightReceiver = weights[i].weightReceiver;
             uint32 newWeightProxy = weights[i].weightProxy;
             uint256 gasUsed = gasleft();
-            uint32 oldWeightReceiver = receiverWeights.setReceiverWeight(
-                receiver,
-                newWeightReceiver
-            );
+            uint32 oldWeightReceiver =
+                receiverWeights.setReceiverWeight(setReceiver, newWeightReceiver);
             gasUsed -= gasleft();
-            uint32 oldWeightProxy = receiverWeights.setProxyWeight(receiver, newWeightProxy);
+            uint32 oldWeightProxy = receiverWeights.setProxyWeight(setReceiver, newWeightProxy);
             totalGasUsed += gasUsed;
             weightReceiverSumDelta -= oldWeightReceiver;
             weightReceiverSumDelta += newWeightReceiver;
@@ -53,7 +51,7 @@ contract ReceiverWeightsTest {
             if (PRINT_GAS_USAGE)
                 console.log(
                     "Setting for receiver %s weight %d with gas used %d",
-                    receiver,
+                    setReceiver,
                     newWeightReceiver,
                     gasUsed
                 );
@@ -63,11 +61,8 @@ contract ReceiverWeightsTest {
         uint256 iterationGasUsed = 0;
         while (true) {
             // Each step of the non-pruning iteration should yield the same items
-            (
-                address receiverIter,
-                uint32 weightReceiverIter,
-                uint32 weightProxyIter
-            ) = receiverWeights.nextWeight(receiver);
+            (address receiverIter, uint32 weightReceiverIter, uint32 weightProxyIter) =
+                receiverWeights.nextWeight(receiver);
             uint32 weightReceiver;
             uint32 weightProxy;
             uint256 gasLeftBefore = gasleft();
@@ -120,24 +115,24 @@ contract ProxyDeltasTest {
         uint256 totalGasUsed = 0;
         for (uint256 i = 0; i < deltas.length; i++) {
             ProxyDeltaIterated calldata delta = deltas[i];
-            uint256 gasUsed = gasleft();
+            uint256 addToDeltaGasUsed = gasleft();
             proxyDeltas.addToDelta(delta.cycle, delta.thisCycleDelta, delta.nextCycleDelta);
-            gasUsed -= gasleft();
-            totalGasUsed += gasUsed;
+            addToDeltaGasUsed -= gasleft();
+            totalGasUsed += addToDeltaGasUsed;
             if (PRINT_GAS_USAGE) {
                 if (delta.thisCycleDelta >= 0)
                     console.log(
                         "Adding to cycle %s delta %d with gas used %d",
                         delta.cycle,
                         uint128(delta.thisCycleDelta),
-                        gasUsed
+                        addToDeltaGasUsed
                     );
                 else
                     console.log(
                         "Adding to cycle %s delta -%d with gas used %d",
                         delta.cycle,
                         uint128(-delta.thisCycleDelta),
-                        gasUsed
+                        addToDeltaGasUsed
                     );
             }
         }
