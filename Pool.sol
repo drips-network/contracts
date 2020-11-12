@@ -58,6 +58,8 @@ abstract contract Pool {
     /// @notice Maximum number of receivers of a single sender.
     /// Limits costs of changes in sender's configuration.
     uint32 public constant SENDER_WEIGHTS_COUNT_MAX = 100;
+    /// @notice The amount passed to `withdraw` to withdraw all the funds
+    uint128 public constant WITHDRAW_ALL = type(uint128).max;
 
     struct Sender {
         // Block number at which the funding period has started
@@ -179,18 +181,24 @@ abstract contract Pool {
 
     /// @notice Withdraws unsent funds of the sender of the message and sends them to that sender
     /// @param amount The amount to be withdrawn, must not be higher than available funds
+    /// Can be `WITHDRAW_ALL` to withdraw everything.
     function withdraw(uint128 amount) public {
         if (amount == 0) return;
-        withdrawInternal(amount);
-        transferToSender(amount);
+        uint128 withdrawn = withdrawInternal(amount);
+        transferToSender(withdrawn);
     }
 
     /// @notice Withdraws unsent funds of the sender of the message
-    /// @param amount The amount to be withdrawn, must not be higher than available funds
-    function withdrawInternal(uint128 amount) internal suspendPayments {
+    /// @param amount The amount to be withdrawn, must not be higher than available funds.
+    /// Can be `WITHDRAW_ALL` to withdraw everything.
+    /// @return withdrawn The actually withdrawn amount.
+    /// Equal to `amount` unless `WITHDRAW_ALL` is used.
+    function withdrawInternal(uint128 amount) internal suspendPayments returns (uint128 withdrawn) {
         uint128 startBalance = senders[msg.sender].startBalance;
+        if (amount == WITHDRAW_ALL) amount = startBalance;
         require(amount <= startBalance, "Not enough funds in the sender account");
         senders[msg.sender].startBalance = startBalance - amount;
+        return amount;
     }
 
     /// @notice Sets the target amount sent on every block from the sender of the message.
