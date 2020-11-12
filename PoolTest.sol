@@ -27,6 +27,10 @@ contract ReceiverWeightsTest {
     }
 
     function setWeights(ReceiverWeightIterated[] calldata weights) external {
+        require(
+            receiverWeights.isZeroed() == (receiverWeightsIterated.length == 0),
+            "Invalid result of isZeroed"
+        );
         weightReceiverSumDelta = 0;
         weightProxySumDelta = 0;
         uint256 totalGasUsed = 0;

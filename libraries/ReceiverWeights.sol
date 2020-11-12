@@ -97,6 +97,14 @@ library ReceiverWeightsImpl {
         if (next == ADDR_END) next = ADDR_ROOT;
     }
 
+    /// @notice Checks if the list is fully zeroed and takes no storage space.
+    /// It means that either it was never used or that
+    /// it's been pruned after removal of all the elements.
+    /// @return True if the list is zeroed
+    function isZeroed(ReceiverWeights storage self) internal view returns (bool) {
+        return self.data[ADDR_ROOT].next == ADDR_ROOT;
+    }
+
     /// @notice Set weight for a specific receiver
     /// @param receiver The receiver to set weight
     /// @param weight The weight to set
