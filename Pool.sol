@@ -259,14 +259,57 @@ abstract contract Pool {
         return senders[msg.sender].amtPerBlock;
     }
 
-    /// @notice Sets the weight of a receiver of the sender of the message.
-    /// The weight regulates the share of the amount being sent on every block in relation to
-    /// other sender's receivers.
-    /// Setting a non-zero weight for a new receiver adds it to the list of sender's receivers.
-    /// Setting the zero weight for a receiver removes it from the list of sender's receivers.
+    /// @notice Sets the weight of the provided receivers and proxies of the sender of the message.
+    /// The weight regulates the share of the amount sent on every block
+    /// that each of the sender's receivers and proxies get.
+    /// Setting a non-zero weight for a new receiver or
+    /// a new proxy adds it to the list of the sender's receivers.
+    /// Setting zero as the weight for a receiver or a proxy
+    /// removes it from the list of the sender's receivers.
+    /// @param updatedReceivers The list of the updated receivers and their new weights
+    /// @param updatedProxies The list of the updated proxies and their new weights
+    function setReceivers(
+        ReceiverWeight[] calldata updatedReceivers,
+        ReceiverWeight[] calldata updatedProxies
+    ) public suspendPayments {
+        for (uint256 i = 0; i < updatedReceivers.length; i++) {
+            setReceiverInternal(updatedReceivers[i].receiver, updatedReceivers[i].weight);
+        }
+        for (uint256 i = 0; i < updatedProxies.length; i++) {
+            setProxyInternal(updatedProxies[i].receiver, updatedProxies[i].weight);
+        }
+    }
+
+    /// @notice Sets the weight of the provided receiver of the sender of the message.
+    /// The weight regulates the share of the amount sent on every block
+    /// that each of the sender's receivers and proxies get.
+    /// Setting a non-zero weight for a new receiver adds it to the list of the sender's receivers.
+    /// Setting zero as the weight for a receiver removes it from the list of the sender's receivers.
     /// @param receiver The address of the receiver
     /// @param weight The weight of the receiver
     function setReceiver(address receiver, uint32 weight) public suspendPayments {
+        setReceiverInternal(receiver, weight);
+    }
+
+    /// @notice Sets the weight of the provided proxy of the sender of the message.
+    /// The weight regulates the share of the amount sent on every block
+    /// that each of the sender's receivers and proxies get.
+    /// Setting a non-zero weight for a new proxy adds it to the list of the sender's receivers.
+    /// Setting zero as the weight for a proxy removes it from the list of the sender's receivers.
+    /// @param proxy The address of the proxy
+    /// @param weight The weight of the proxy, must be a multiple of `PROXY_WEIGHTS_SUM`
+    function setProxy(address proxy, uint32 weight) public suspendPayments {
+        setProxyInternal(proxy, weight);
+    }
+
+    /// @notice Sets the weight of the provided receiver of the sender of the message.
+    /// The weight regulates the share of the amount sent on every block
+    /// that each of the sender's receivers and proxies get.
+    /// Setting a non-zero weight for a new receiver adds it to the list of the sender's receivers.
+    /// Setting zero as the weight for a receiver removes it from the list of the sender's receivers.
+    /// @param receiver The address of the receiver
+    /// @param weight The weight of the receiver
+    function setReceiverInternal(address receiver, uint32 weight) internal {
         Sender storage sender = senders[msg.sender];
         uint64 senderWeightSum = sender.weightSum;
         uint32 oldWeight = sender.receiverWeights.setReceiverWeight(receiver, weight);
@@ -282,15 +325,14 @@ abstract contract Pool {
         }
     }
 
-    /// @notice Sets the weight of a proxy receiver of the sender of the message.
-    /// The weight regulates the share of the amount being sent on every block in relation to
-    /// other sender's receivers.
-    /// The amount sent to a proxy will be split and passed further to the receivers of the proxy.
-    /// Setting a non-zero weight for a new proxy adds it to the list of sender's receivers.
-    /// Setting the zero weight for a proxy removes it from the list of sender's receivers.
+    /// @notice Sets the weight of the provided proxy of the sender of the message.
+    /// The weight regulates the share of the amount sent on every block
+    /// that each of the sender's receivers and proxies get.
+    /// Setting a non-zero weight for a new proxy adds it to the list of the sender's receivers.
+    /// Setting zero as the weight for a proxy removes it from the list of the sender's receivers.
     /// @param proxy The address of the proxy
     /// @param weight The weight of the proxy, must be a multiple of `PROXY_WEIGHTS_SUM`
-    function setProxy(address proxy, uint32 weight) public suspendPayments {
+    function setProxyInternal(address proxy, uint32 weight) internal {
         require(proxies[proxy].receiverWeights.isZeroed() == false, "Proxy doesn't exist");
         require(
             weight % PROXY_WEIGHTS_SUM == 0,
