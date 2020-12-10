@@ -6,11 +6,11 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 contract Rad is ERC20 {
     using SafeMath for uint256;
 
-    /// Construct a new Rad token.
+    /// Construct a new Radicle token.
     ///
     /// @param account The initial account to grant all the tokens
-    /// @param initialSupply The initial amount of Rad tokens.
-    constructor(address account, uint256 initialSupply) ERC20("Rad", "RAD") {
+    /// @param initialSupply The initial amount of Radicle tokens.
+    constructor(address account, uint256 initialSupply) ERC20("Radicle", "RADICLE") {
         _mint(account, initialSupply.mul(10**uint256(decimals())));
     }
 
