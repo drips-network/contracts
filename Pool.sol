@@ -192,13 +192,13 @@ abstract contract Pool {
         }
         receiver.lastFundsPerCycle = lastFundsPerCycle;
         receiver.nextCollectedCycle = collectedCycle;
-        if (collected > 0) transferToSender(uint128(collected));
+        transferToSender(uint128(collected));
     }
 
     /// @notice Must be called when funds have been transferred into the pool contract
     /// in order to top up the message sender
     /// @param amount The topped up amount
-    function onTopUp(uint128 amount) internal suspendPayments {
+    function topUpSuspending(uint128 amount) internal suspendPayments {
         senders[msg.sender].startBalance += amount;
     }
 
@@ -435,7 +435,7 @@ abstract contract Pool {
     }
 
     /// @notice Called when funds need to be transferred out of the pool to the message sender
-    /// @param amount The transferred amount, never zero
+    /// @param amount The transferred amount
     function transferToSender(uint128 amount) internal virtual;
 
     /// @notice Stops payments of `msg.sender` for the duration of the modified function.
@@ -684,11 +684,11 @@ contract EthPool is Pool {
 
     /// @notice Tops up the sender balance of a sender of the message with the amount in the message
     function topUp() public payable {
-        if (msg.value > 0) onTopUp(uint128(msg.value));
+        if (msg.value > 0) topUpSuspending(uint128(msg.value));
     }
 
     function transferToSender(uint128 amount) internal override {
-        msg.sender.transfer(amount);
+        if (amount != 0) msg.sender.transfer(amount);
     }
 }
 
@@ -713,11 +713,15 @@ contract Erc20Pool is Pool {
     /// @param amount The amount to top up with
     function topUp(uint128 amount) public {
         if (amount == 0) return;
-        erc20.transferFrom(msg.sender, address(this), amount);
-        onTopUp(amount);
+        transferToContract(amount);
+        topUpSuspending(amount);
+    }
+
+    function transferToContract(uint128 amount) internal {
+        if (amount != 0) erc20.transferFrom(msg.sender, address(this), amount);
     }
 
     function transferToSender(uint128 amount) internal override {
-        erc20.transfer(msg.sender, amount);
+        if (amount != 0) erc20.transfer(msg.sender, amount);
     }
 }
