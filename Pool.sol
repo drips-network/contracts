@@ -78,6 +78,8 @@ abstract contract Pool {
     uint32 public constant PROXY_WEIGHTS_COUNT_MAX = 10;
     /// @notice The amount passed to `withdraw` to withdraw all the funds
     uint128 public constant WITHDRAW_ALL = type(uint128).max;
+    /// @notice The amount passed as the amount per block to keep the parameter unchanged
+    uint128 public constant AMOUNT_PER_BLOCK_UNCHANGED = type(uint128).max;
 
     struct Sender {
         // Block number at which the funding period has started
@@ -243,9 +245,9 @@ abstract contract Pool {
     /// of the receivers and proxies and split between them proportionally to their weights.
     /// Each receiver and proxy then receives their part from the sender's balance.
     /// If set to zero, stops funding.
-    /// @param amount The target per-block amount
+    /// @param amount The target amount to be sent on every block
     function setAmountPerBlock(uint128 amount) public suspendPayments {
-        senders[msg.sender].amtPerBlock = amount;
+        if (amount != AMOUNT_PER_BLOCK_UNCHANGED) senders[msg.sender].amtPerBlock = amount;
     }
 
     /// @notice Gets the target amount sent on every block from the sender of the message.
@@ -254,7 +256,7 @@ abstract contract Pool {
     /// the sender's receivers and proxies and split between them proportionally to their weights.
     /// Each receiver and proxy then receives their part from the sender's balance.
     /// If zero, funding is stopped.
-    /// @return amount The target per-block amount
+    /// @return amount The target amount to be sent on every block
     function getAmountPerBlock() public view returns (uint128 amount) {
         return senders[msg.sender].amtPerBlock;
     }
