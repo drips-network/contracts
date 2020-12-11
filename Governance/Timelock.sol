@@ -54,7 +54,12 @@ contract Timelock {
         delay = delay_;
     }
 
+    // solhint-disable no-empty-blocks
     receive() external payable {}
+
+    function gracePeriod() public pure returns (uint256) {
+        return GRACE_PERIOD;
+    }
 
     function setDelay(uint256 delay_) public {
         require(msg.sender == address(this), "Timelock::setDelay: Call must come from Timelock.");
@@ -157,7 +162,7 @@ contract Timelock {
             callData = abi.encodePacked(bytes4(keccak256(bytes(signature))), data);
         }
 
-        // solium-disable-next-line security/no-call-value
+        // solhint-disable avoid-low-level-calls
         (bool success, bytes memory returnData) = target.call{value: value}(callData);
         require(success, "Timelock::executeTransaction: Transaction execution reverted.");
 

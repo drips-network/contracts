@@ -29,7 +29,7 @@ pragma experimental ABIEncoderV2;
 
 contract Governor {
     /// @notice The name of this contract
-    string public constant name = "Radicle Governor";
+    string public constant NAME = "Radicle Governor";
 
     /// @notice The number of votes in support of a proposal required in order for a quorum to be reached and for a vote to succeed
     function quorumVotes() public pure returns (uint256) {
@@ -352,7 +352,7 @@ contract Governor {
             return ProposalState.Succeeded;
         } else if (proposal.executed) {
             return ProposalState.Executed;
-        } else if (block.timestamp >= add256(proposal.eta, timelock.GRACE_PERIOD())) {
+        } else if (block.timestamp >= add256(proposal.eta, timelock.gracePeriod())) {
             return ProposalState.Expired;
         } else {
             return ProposalState.Queued;
@@ -372,7 +372,7 @@ contract Governor {
     ) public {
         bytes32 domainSeparator =
             keccak256(
-                abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), getChainId(), address(this))
+                abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(NAME)), getChainId(), address(this))
             );
         bytes32 structHash = keccak256(abi.encode(BALLOT_TYPEHASH, proposalId, support));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
@@ -456,6 +456,7 @@ contract Governor {
 
     function getChainId() internal pure returns (uint256) {
         uint256 chainId;
+        // solhint-disable no-inline-assembly
         assembly {
             chainId := chainid()
         }
@@ -466,7 +467,7 @@ contract Governor {
 interface TimelockInterface {
     function delay() external view returns (uint256);
 
-    function GRACE_PERIOD() external view returns (uint256);
+    function gracePeriod() external view returns (uint256);
 
     function acceptAdmin() external;
 

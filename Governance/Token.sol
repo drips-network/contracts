@@ -29,16 +29,16 @@ pragma experimental ABIEncoderV2;
 
 contract Token {
     /// @notice EIP-20 token name for this token
-    string public constant name = "Radicle";
+    string public constant NAME = "Radicle";
 
     /// @notice EIP-20 token symbol for this token
-    string public constant symbol = "RADICLE";
+    string public constant SYMBOL = "RADICLE";
 
     /// @notice EIP-20 token decimals for this token
-    uint8 public constant decimals = 18;
+    uint8 public constant DECIMALS = 18;
 
     /// @notice Total number of tokens in circulation
-    uint256 public constant totalSupply = 10000000e18; // 10 million Token
+    uint256 public constant TOTAL_SUPPLY = 10000000e18; // 10 million Token
 
     // Allowance amounts on behalf of others
     mapping(address => mapping(address => uint96)) internal allowances;
@@ -97,8 +97,8 @@ contract Token {
      * @param account The initial account to grant all the tokens
      */
     constructor(address account) {
-        balances[account] = uint96(totalSupply);
-        emit Transfer(address(0), account, totalSupply);
+        balances[account] = uint96(TOTAL_SUPPLY);
+        emit Transfer(address(0), account, TOTAL_SUPPLY);
     }
 
     /**
@@ -213,7 +213,7 @@ contract Token {
     ) public {
         bytes32 domainSeparator =
             keccak256(
-                abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), getChainId(), address(this))
+                abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(NAME)), getChainId(), address(this))
             );
         bytes32 structHash = keccak256(abi.encode(DELEGATION_TYPEHASH, delegatee, nonce, expiry));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
@@ -382,6 +382,7 @@ contract Token {
 
     function getChainId() internal pure returns (uint256) {
         uint256 chainId;
+        // solhint-disable no-inline-assembly
         assembly {
             chainId := chainid()
         }
