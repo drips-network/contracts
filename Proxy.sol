@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) OpenZeppelin
-// Copyright (c) Compound Labs
+// Copyright (c) 2016 zOS Global Limited
+// Copyright (c) 2020 Compound Labs, Inc.
 
 pragma solidity ^0.7.5;
 
@@ -150,6 +150,10 @@ contract Proxy is ProxyAdminStorage, ErrorReporter {
             return fail(Error.UNAUTHORIZED, FailureInfo.ADMIN_FALLBACK_CHECK);
         }
 
+        // This assembly code was taken from OpenZeppelin's "Proxy" contract,
+        // as the original code from Compound isn't compatible with solidity
+        // 0.7.
+
         // solhint-disable-next-line no-inline-assembly
         assembly {
             // Copy msg.data. We take full control of memory in this inline assembly
@@ -176,16 +180,16 @@ contract Proxy is ProxyAdminStorage, ErrorReporter {
     }
 
     /**
-     * @dev Fallback function that delegates calls to the address returned by `_implementation()`. Will run if no other
-     * function in the contract matches the call data.
+     * @dev Fallback function that delegates calls to the address in `implementation`.
+     * Will run if no other function in the contract matches the call data.
      */
     fallback() external payable {
         _delegate(implementation);
     }
 
     /**
-     * @dev Fallback function that delegates calls to the address returned by `_implementation()`. Will run if call data
-     * is empty.
+     * @dev Fallback function that delegates calls to the address in `implementation`.
+     * Will run if call data is empty.
      */
     receive() external payable {
         _delegate(implementation);
