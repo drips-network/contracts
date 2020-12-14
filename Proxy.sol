@@ -1,21 +1,30 @@
-pragma solidity ^0.5.16;
+// SPDX-License-Identifier: MIT
+// Copyright (c) OpenZeppelin
+// Copyright (c) Compound Labs
+
+pragma solidity ^0.7.5;
 
 import "./ErrorReporter.sol";
-import "./ComptrollerStorage.sol";
+import "./ProxyAdminStorage.sol";
+
 /**
- * @title ComptrollerCore
- * @dev Storage for the comptroller is at this address, while execution is delegated to the `comptrollerImplementation`.
- * CTokens should reference this contract as their comptroller.
+ * @dev This abstract contract provides a fallback function that delegates all calls to another contract using the EVM
+ * instruction `delegatecall`. We refer to the second contract as the _implementation_ behind the proxy.
+ *
+ * Additionally, delegation to the implementation can be triggered manually through the {_fallback} function, or to a
+ * different contract through the {_delegate} function.
+ *
+ * The success and return data of the delegated call will be returned back to the caller of the proxy.
  */
-contract Unitroller is UnitrollerAdminStorage, ComptrollerErrorReporter {
+contract Proxy is ProxyAdminStorage, ErrorReporter {
 
     /**
-      * @notice Emitted when pendingComptrollerImplementation is changed
+      * @notice Emitted when pendingImplementation is changed
       */
     event NewPendingImplementation(address oldPendingImplementation, address newPendingImplementation);
 
     /**
-      * @notice Emitted when pendingComptrollerImplementation is accepted, which means comptroller implementation is updated
+      * @notice Emitted when pendingImplementation is accepted, which means comptroller implementation is updated
       */
     event NewImplementation(address oldImplementation, address newImplementation);
 
@@ -29,23 +38,22 @@ contract Unitroller is UnitrollerAdminStorage, ComptrollerErrorReporter {
       */
     event NewAdmin(address oldAdmin, address newAdmin);
 
-    constructor() public {
+    constructor() {
         // Set admin to caller
         admin = msg.sender;
     }
 
     /*** Admin Functions ***/
     function _setPendingImplementation(address newPendingImplementation) public returns (uint) {
-
         if (msg.sender != admin) {
             return fail(Error.UNAUTHORIZED, FailureInfo.SET_PENDING_IMPLEMENTATION_OWNER_CHECK);
         }
 
-        address oldPendingImplementation = pendingComptrollerImplementation;
+        address oldPendingImplementation = pendingImplementation;
 
-        pendingComptrollerImplementation = newPendingImplementation;
+        pendingImplementation = newPendingImplementation;
 
-        emit NewPendingImplementation(oldPendingImplementation, pendingComptrollerImplementation);
+        emit NewPendingImplementation(oldPendingImplementation, pendingImplementation);
 
         return uint(Error.NO_ERROR);
     }
@@ -57,20 +65,20 @@ contract Unitroller is UnitrollerAdminStorage, ComptrollerErrorReporter {
     */
     function _acceptImplementation() public returns (uint) {
         // Check caller is pendingImplementation and pendingImplementation ≠ address(0)
-        if (msg.sender != pendingComptrollerImplementation || pendingComptrollerImplementation == address(0)) {
+        if (msg.sender != pendingImplementation || pendingImplementation == address(0)) {
             return fail(Error.UNAUTHORIZED, FailureInfo.ACCEPT_PENDING_IMPLEMENTATION_ADDRESS_CHECK);
         }
 
         // Save current values for inclusion in log
-        address oldImplementation = comptrollerImplementation;
-        address oldPendingImplementation = pendingComptrollerImplementation;
+        address oldImplementation = implementation;
+        address oldPendingImplementation = pendingImplementation;
 
-        comptrollerImplementation = pendingComptrollerImplementation;
+        implementation = pendingImplementation;
 
-        pendingComptrollerImplementation = address(0);
+        pendingImplementation = address(0);
 
-        emit NewImplementation(oldImplementation, comptrollerImplementation);
-        emit NewPendingImplementation(oldPendingImplementation, pendingComptrollerImplementation);
+        emit NewImplementation(oldImplementation, implementation);
+        emit NewPendingImplementation(oldPendingImplementation, pendingImplementation);
 
         return uint(Error.NO_ERROR);
     }
@@ -128,21 +136,52 @@ contract Unitroller is UnitrollerAdminStorage, ComptrollerErrorReporter {
     }
 
     /**
-     * @dev Delegates execution to an implementation contract.
-     * It returns to the external caller whatever the implementation returns
-     * or forwards reverts.
+     * @dev Delegates the current call to `implementation`.
+     *
+     * This function does not return to its internall call site, it will return directly to the external caller.
      */
-    function () payable external {
-        // delegate all other functions to current implementation
-        (bool success, ) = comptrollerImplementation.delegatecall(msg.data);
-
-        assembly {
-              let free_mem_ptr := mload(0x40)
-              returndatacopy(free_mem_ptr, 0, returndatasize)
-
-              switch success
-              case 0 { revert(free_mem_ptr, returndatasize) }
-              default { return(free_mem_ptr, returndatasize) }
+    function _delegate(address impl) internal {
+        // Prevents potential attacks when the target contract methods clash
+        // with the proxy contract. The admin should never need to call into
+        // the target contract.
+        if (msg.sender == admin) {
+            return fail(Error.UNAUTHORIZED, FailureInfo.ADMIN_FALLBACK_CHECK);
         }
+
+        // solhint-disable-next-line no-inline-assembly
+        assembly {
+            // Copy msg.data. We take full control of memory in this inline assembly
+            // block because it will not return to Solidity code. We overwrite the
+            // Solidity scratch pad at memory position 0.
+            calldatacopy(0, 0, calldatasize())
+
+            // Call the implementation.
+            // out and outsize are 0 because we don't know the size yet.
+            let result := delegatecall(gas(), impl, 0, calldatasize(), 0, 0)
+
+            // Copy the returned data.
+            returndatacopy(0, 0, returndatasize())
+
+            switch result
+            // delegatecall returns 0 on error.
+            case 0 { revert(0, returndatasize()) }
+            default { return(0, returndatasize()) }
+        }
+    }
+
+    /**
+     * @dev Fallback function that delegates calls to the address returned by `_implementation()`. Will run if no other
+     * function in the contract matches the call data.
+     */
+    fallback () external payable {
+        _delegate(implementation);
+    }
+
+    /**
+     * @dev Fallback function that delegates calls to the address returned by `_implementation()`. Will run if call data
+     * is empty.
+     */
+    receive () external payable {
+        _delegate(implementation);
     }
 }
