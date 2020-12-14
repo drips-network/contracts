@@ -61,8 +61,8 @@ contract Proxy is ProxyAdminStorage, ErrorReporter {
     }
 
     /**
-     * @notice Accepts new implementation of comptroller. msg.sender must be pendingImplementation
-     * @dev Admin function for new implementation to accept it's role as implementation
+     * @notice Accepts new implementation. `msg.sender` must be pendingImplementation
+     * @dev Admin function for new implementation to accept its role as implementation
      * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
      */
     function _acceptImplementation() public returns (uint256) {
@@ -148,32 +148,15 @@ contract Proxy is ProxyAdminStorage, ErrorReporter {
         // the target contract.
         require(msg.sender != admin, "Proxy: admin cannot fallback to proxy target");
 
-        // This assembly code was taken from OpenZeppelin's "Proxy" contract,
-        // as the original code from Compound isn't compatible with solidity
-        // 0.7.
+        (bool success, ) = impl.delegatecall(msg.data);
 
         // solhint-disable-next-line no-inline-assembly
         assembly {
-            // Copy msg.data. We take full control of memory in this inline assembly
-            // block because it will not return to Solidity code. We overwrite the
-            // Solidity scratch pad at memory position 0.
-            calldatacopy(0, 0, calldatasize())
+              returndatacopy(0, 0, returndatasize())
 
-            // Call the implementation.
-            // out and outsize are 0 because we don't know the size yet.
-            let result := delegatecall(gas(), impl, 0, calldatasize(), 0, 0)
-
-            // Copy the returned data.
-            returndatacopy(0, 0, returndatasize())
-
-            switch result
-                // delegatecall returns 0 on error.
-                case 0 {
-                    revert(0, returndatasize())
-                }
-                default {
-                    return(0, returndatasize())
-                }
+              switch success
+                  case 0 { revert(0, returndatasize()) }
+                  default { return(0, returndatasize()) }
         }
     }
 
