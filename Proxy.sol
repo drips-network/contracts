@@ -146,9 +146,7 @@ contract Proxy is ProxyAdminStorage, ErrorReporter {
         // Prevents potential attacks when the target contract methods clash
         // with the proxy contract. The admin should never need to call into
         // the target contract.
-        if (msg.sender == admin) {
-            return fail(Error.UNAUTHORIZED, FailureInfo.ADMIN_FALLBACK_CHECK);
-        }
+        require(msg.sender != admin, "Proxy: admin cannot fallback to proxy target");
 
         // This assembly code was taken from OpenZeppelin's "Proxy" contract,
         // as the original code from Compound isn't compatible with solidity
