@@ -58,17 +58,26 @@ contract ReceiverWeightsTest {
         }
         delete receiverWeightsIterated;
         address receiver = ReceiverWeightsImpl.ADDR_ROOT;
+        address hint = ReceiverWeightsImpl.ADDR_ROOT;
         uint256 iterationGasUsed = 0;
         while (true) {
             // Each step of the non-pruning iteration should yield the same items
-            (address receiverIter, uint32 weightReceiverIter, uint32 weightProxyIter) =
-                receiverWeights.nextWeight(receiver);
+            (
+                address receiverIter,
+                address hintIter,
+                uint32 weightReceiverIter,
+                uint32 weightProxyIter
+            ) = receiverWeights.nextWeight(receiver, hint);
             uint32 weightReceiver;
             uint32 weightProxy;
             uint256 gasLeftBefore = gasleft();
-            (receiver, weightReceiver, weightProxy) = receiverWeights.nextWeightPruning(receiver);
+            (receiver, hint, weightReceiver, weightProxy) = receiverWeights.nextWeightPruning(
+                receiver,
+                hint
+            );
             iterationGasUsed += gasLeftBefore - gasleft();
             require(receiverIter == receiver, "Non-pruning iterator yielded a different receiver");
+            require(hintIter == hint, "Non-pruning iterator yielded a different next receiver");
             require(
                 weightReceiverIter == weightReceiver,
                 "Non-pruning iterator yielded a different receiver weight"

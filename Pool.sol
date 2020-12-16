@@ -451,10 +451,14 @@ abstract contract Pool {
         uint32 weightsCount = 0;
         // Iterating over receivers, see `ReceiverWeights` for details
         address receiver = ReceiverWeightsImpl.ADDR_ROOT;
+        address hint = ReceiverWeightsImpl.ADDR_ROOT;
         while (true) {
             uint32 receiverWeight;
             uint32 proxyWeight;
-            (receiver, receiverWeight, proxyWeight) = sender.receiverWeights.nextWeight(receiver);
+            (receiver, hint, receiverWeight, proxyWeight) = sender.receiverWeights.nextWeight(
+                receiver,
+                hint
+            );
             if (receiver == ReceiverWeightsImpl.ADDR_ROOT) break;
             weightsSparse[weightsCount++] = ReceiverProxyWeight(
                 receiver,
@@ -506,9 +510,10 @@ abstract contract Pool {
         uint32 weightsCount = 0;
         // Iterating over receivers, see `ReceiverWeights` for details
         address receiver = ReceiverWeightsImpl.ADDR_ROOT;
+        address hint = ReceiverWeightsImpl.ADDR_ROOT;
         while (true) {
             uint32 weight;
-            (receiver, weight, ) = proxy.receiverWeights.nextWeight(receiver);
+            (receiver, hint, weight, ) = proxy.receiverWeights.nextWeight(receiver, hint);
             if (receiver == ReceiverWeightsImpl.ADDR_ROOT) break;
             weightsSparse[weightsCount++] = ReceiverWeight(receiver, weight);
         }
@@ -579,12 +584,13 @@ abstract contract Pool {
         Sender storage sender = senders[msg.sender];
         // Iterating over receivers, see `ReceiverWeights` for details
         address receiverAddr = ReceiverWeightsImpl.ADDR_ROOT;
+        address hint = ReceiverWeightsImpl.ADDR_ROOT;
         while (true) {
             uint32 receiverWeight;
             uint32 proxyWeight;
-            (receiverAddr, receiverWeight, proxyWeight) = sender.receiverWeights.nextWeightPruning(
-                receiverAddr
-            );
+            (receiverAddr, hint, receiverWeight, proxyWeight) = sender
+                .receiverWeights
+                .nextWeightPruning(receiverAddr, hint);
             if (receiverAddr == ReceiverWeightsImpl.ADDR_ROOT) break;
             if (receiverWeight != 0) {
                 int128 perBlockDelta = receiverWeight * amtPerWeightPerBlockDelta;
@@ -615,9 +621,10 @@ abstract contract Pool {
         updateSingleProxyDelta(proxy.amtPerWeightDeltas, blockEnd, -perBlockPerProxyWeightDelta);
         // Iterating over receivers, see `ReceiverWeights` for details
         address receiver = ReceiverWeightsImpl.ADDR_ROOT;
+        address hint = ReceiverWeightsImpl.ADDR_ROOT;
         while (true) {
             uint32 weight;
-            (receiver, weight, ) = proxy.receiverWeights.nextWeightPruning(receiver);
+            (receiver, hint, weight, ) = proxy.receiverWeights.nextWeightPruning(receiver, hint);
             if (receiver == ReceiverWeightsImpl.ADDR_ROOT) break;
             setReceiverDeltaFromNow(receiver, perBlockPerProxyWeightDelta * weight, blockEnd);
         }
@@ -707,9 +714,13 @@ abstract contract Pool {
         ReceiverWeight[] memory receiversList = new ReceiverWeight[](PROXY_WEIGHTS_COUNT_MAX);
         // Iterating over receivers, see `ReceiverWeights` for details
         address receiverAddr = ReceiverWeightsImpl.ADDR_ROOT;
+        address receiverHint = ReceiverWeightsImpl.ADDR_ROOT;
         while (true) {
             uint32 weight;
-            (receiverAddr, weight, ) = proxy.receiverWeights.nextWeightPruning(receiverAddr);
+            (receiverAddr, receiverHint, weight, ) = proxy.receiverWeights.nextWeightPruning(
+                receiverAddr,
+                receiverHint
+            );
             if (receiverAddr == ReceiverWeightsImpl.ADDR_ROOT) break;
             require(receiversCount < PROXY_WEIGHTS_COUNT_MAX, "Too many proxy receivers");
             receiversList[receiversCount++] = ReceiverWeight(receiverAddr, weight);

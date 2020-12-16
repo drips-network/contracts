@@ -16,85 +16,81 @@ library ReceiverWeightsImpl {
         address next;
         uint32 weightReceiver;
         uint32 weightProxy;
+        bool isAttached;
+        // Unused. Hints the compiler that it has full control over the content
+        // of the whole storage slot and allows it to optimize more aggressively.
+        uint24 slotFiller;
     }
 
     address internal constant ADDR_ROOT = address(0);
-    address internal constant ADDR_END = address(1);
 
     /// @notice Return the next non-zero receiver or proxy weight and its address.
     /// Removes all the items that have zero receiver and proxy weights found
     /// between the current and the next item from the list.
     /// Iterating over the whole list prunes all the zeroed items.
-    /// @param current The previously returned receiver address or ADDR_ROOT to start iterating
-    /// @return next The next receiver address, ADDR_ROOT if the end of the list was reached
-    /// @return weightReceiver The next receiver weight, may be zero if `weightProxy` is non-zero
-    /// @return weightProxy The next proxy weight, may be zero if `weightReceiver` is non-zero
-    function nextWeightPruning(ReceiverWeights storage self, address current)
+    /// @param prevReceiver The previously returned `receiver` or ADDR_ROOT to start iterating
+    /// @param prevReceiverHint The previously returned `receiverHint`
+    /// or ADDR_ROOT to start iterating
+    /// @return receiver The receiver address, ADDR_ROOT if the end of the list was reached
+    /// @return receiverHint A value passed as `prevReceiverHint` on the next call
+    /// @return weightReceiver The receiver weight, may be zero if `weightProxy` is non-zero
+    /// @return weightProxy The proxy weight, may be zero if `weightReceiver` is non-zero
+    function nextWeightPruning(
+        ReceiverWeights storage self,
+        address prevReceiver,
+        address prevReceiverHint
+    )
         internal
         returns (
-            address next,
+            address receiver,
+            address receiverHint,
             uint32 weightReceiver,
             uint32 weightProxy
         )
     {
-        next = self.data[current].next;
-        weightReceiver = 0;
-        weightProxy = 0;
-        if (next != ADDR_END && next != ADDR_ROOT) {
-            weightReceiver = self.data[next].weightReceiver;
-            weightProxy = self.data[next].weightProxy;
-            // remove elements being zero
-            if (weightReceiver == 0 && weightProxy == 0) {
-                do {
-                    address newNext = self.data[next].next;
-                    // Somehow it's ~1500 gas cheaper than `delete self[next]`
-                    self.data[next].next = ADDR_ROOT;
-                    next = newNext;
-                    if (next == ADDR_END) {
-                        // Removing the last item on the list, clear the storage
-                        if (current == ADDR_ROOT) next = ADDR_ROOT;
-                        break;
-                    }
-                    weightReceiver = self.data[next].weightReceiver;
-                    weightProxy = self.data[next].weightProxy;
-                } while (weightReceiver == 0 && weightProxy == 0);
-                // link the previous non-zero element with the next non-zero element
-                // or ADDR_END if it became the last element on the list
-                self.data[current].next = next;
-            }
+        if (prevReceiver == ADDR_ROOT) prevReceiverHint = self.data[ADDR_ROOT].next;
+        receiver = prevReceiverHint;
+        while (receiver != ADDR_ROOT) {
+            weightReceiver = self.data[receiver].weightReceiver;
+            weightProxy = self.data[receiver].weightProxy;
+            receiverHint = self.data[receiver].next;
+            if (weightReceiver != 0 || weightProxy != 0) break;
+            delete self.data[receiver];
+            receiver = receiverHint;
         }
-        if (next == ADDR_END) next = ADDR_ROOT;
+        if (receiver != prevReceiverHint) self.data[prevReceiver].next = receiver;
     }
 
-    /// @notice Return the next non-zero receiver or proxy weight and its address.
-    /// @param current The previously returned receiver address or ADDR_ROOT to start iterating
-    /// @return next The next receiver address, ADDR_ROOT if the end of the list was reached
-    /// @return weightReceiver The next receiver weight, may be zero if `weightProxy` is non-zero
-    /// @return weightProxy The next proxy weight, may be zero if `weightReceiver` is non-zero
-    function nextWeight(ReceiverWeights storage self, address current)
+    /// @notice Return the next non-zero receiver or proxy weight and its address
+    /// @param prevReceiver The previously returned `receiver` or ADDR_ROOT to start iterating
+    /// @param prevReceiverHint The previously returned `receiverHint`
+    /// or ADDR_ROOT to start iterating
+    /// @return receiver The receiver address, ADDR_ROOT if the end of the list was reached
+    /// @return receiverHint A value passed as `prevReceiverHint` on the next call
+    /// @return weightReceiver The receiver weight, may be zero if `weightProxy` is non-zero
+    /// @return weightProxy The proxy weight, may be zero if `weightReceiver` is non-zero
+    function nextWeight(
+        ReceiverWeights storage self,
+        address prevReceiver,
+        address prevReceiverHint
+    )
         internal
         view
         returns (
-            address next,
+            address receiver,
+            address receiverHint,
             uint32 weightReceiver,
             uint32 weightProxy
         )
     {
-        next = self.data[current].next;
-        weightReceiver = 0;
-        weightProxy = 0;
-        if (next != ADDR_END && next != ADDR_ROOT) {
-            weightReceiver = self.data[next].weightReceiver;
-            weightProxy = self.data[next].weightProxy;
-            // skip elements being zero
-            while (weightReceiver == 0 && weightProxy == 0) {
-                next = self.data[next].next;
-                if (next == ADDR_END) break;
-                weightReceiver = self.data[next].weightReceiver;
-                weightProxy = self.data[next].weightProxy;
-            }
+        receiver = (prevReceiver == ADDR_ROOT) ? self.data[ADDR_ROOT].next : prevReceiverHint;
+        while (receiver != ADDR_ROOT) {
+            weightReceiver = self.data[receiver].weightReceiver;
+            weightProxy = self.data[receiver].weightProxy;
+            receiverHint = self.data[receiver].next;
+            if (weightReceiver != 0 || weightProxy != 0) break;
+            receiver = receiverHint;
         }
-        if (next == ADDR_END) next = ADDR_ROOT;
     }
 
     /// @notice Checks if the list is fully zeroed and takes no storage space.
@@ -114,7 +110,7 @@ library ReceiverWeightsImpl {
         address receiver,
         uint32 weight
     ) internal returns (uint32 previousWeight) {
-        self.attachWeightToList(receiver);
+        self.attachToList(receiver);
         previousWeight = self.data[receiver].weightReceiver;
         self.data[receiver].weightReceiver = weight;
     }
@@ -128,22 +124,20 @@ library ReceiverWeightsImpl {
         address proxy,
         uint32 weight
     ) internal returns (uint32 previousWeight) {
-        self.attachWeightToList(proxy);
+        self.attachToList(proxy);
         previousWeight = self.data[proxy].weightProxy;
         self.data[proxy].weightProxy = weight;
     }
 
-    /// @notice Ensures that weight for a specific receiver is attached to the list
+    /// @notice Ensures that the weight for a specific receiver is attached to the list
     /// @param receiver The receiver whose weight should be attached
-    function attachWeightToList(ReceiverWeights storage self, address receiver) internal {
-        require(receiver != ADDR_ROOT && receiver != ADDR_END, "Invalid receiver address");
-        // Item not attached to the list
-        if (self.data[receiver].next == ADDR_ROOT) {
+    function attachToList(ReceiverWeights storage self, address receiver) internal {
+        require(receiver != ADDR_ROOT, "Invalid receiver address");
+        if (!self.data[receiver].isAttached) {
             address rootNext = self.data[ADDR_ROOT].next;
             self.data[ADDR_ROOT].next = receiver;
-            // The first item ever added to the list, root item not initialized yet
-            if (rootNext == ADDR_ROOT) rootNext = ADDR_END;
             self.data[receiver].next = rootNext;
+            self.data[receiver].isAttached = true;
         }
     }
 }
