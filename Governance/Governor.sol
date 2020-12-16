@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Copyright 2020 Compound Labs, Inc.
 //
 // Redistribution and use in source and binary forms, with or without
