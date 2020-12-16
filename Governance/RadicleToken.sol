@@ -291,8 +291,14 @@ contract RadicleToken {
         address dst,
         uint96 amount
     ) internal {
-        require(src != address(0), "RadicleToken::_transferTokens: cannot transfer from the zero address");
-        require(dst != address(0), "RadicleToken::_transferTokens: cannot transfer to the zero address");
+        require(
+            src != address(0),
+            "RadicleToken::_transferTokens: cannot transfer from the zero address"
+        );
+        require(
+            dst != address(0),
+            "RadicleToken::_transferTokens: cannot transfer to the zero address"
+        );
 
         balances[src] = sub96(
             balances[src],
