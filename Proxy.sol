@@ -152,11 +152,15 @@ contract Proxy is ProxyAdminStorage, ErrorReporter {
 
         // solhint-disable-next-line no-inline-assembly
         assembly {
-              returndatacopy(0, 0, returndatasize())
+            returndatacopy(0, 0, returndatasize())
 
-              switch success
-                  case 0 { revert(0, returndatasize()) }
-                  default { return(0, returndatasize()) }
+            switch success
+                case 0 {
+                    revert(0, returndatasize())
+                }
+                default {
+                    return(0, returndatasize())
+                }
         }
     }
 
