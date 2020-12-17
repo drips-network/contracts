@@ -148,6 +148,7 @@ contract Proxy is ProxyAdminStorage, ErrorReporter {
         // the target contract.
         require(msg.sender != admin, "Proxy: admin cannot fallback to proxy target");
 
+        // solhint-disable-next-line avoid-low-level-calls
         (bool success, ) = impl.delegatecall(msg.data);
 
         // solhint-disable-next-line no-inline-assembly
