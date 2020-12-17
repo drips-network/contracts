@@ -147,13 +147,15 @@ contract ProxyDeltasTest {
         }
         delete proxyDeltasIterated;
         uint64 cycle = ProxyDeltasImpl.CYCLE_ROOT;
+        uint64 hint = ProxyDeltasImpl.CYCLE_ROOT;
         uint256 gasUsed = 0;
         while (true) {
             int128 thisCycleDelta;
             int128 nextCycleDelta;
             uint256 gasLeftBefore = gasleft();
-            (cycle, thisCycleDelta, nextCycleDelta) = proxyDeltas.nextDeltaPruning(
+            (cycle, hint, thisCycleDelta, nextCycleDelta) = proxyDeltas.nextDeltaPruning(
                 cycle,
+                hint,
                 finishedCycle
             );
             gasUsed += gasLeftBefore - gasleft();

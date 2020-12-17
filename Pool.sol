@@ -730,6 +730,7 @@ abstract contract Pool {
 
         // Iterating over deltas, see `ProxyDeltas` for details
         uint64 cycle = ProxyDeltasImpl.CYCLE_ROOT;
+        uint64 cycleHint = ProxyDeltasImpl.CYCLE_ROOT;
         uint64 finishedCycle = blockNumber / cycleBlocks;
         uint64 currCycle = finishedCycle + 1;
         // The sum of all the future changes to the per-block amount the proxy receives.
@@ -740,10 +741,9 @@ abstract contract Pool {
         while (true) {
             int128 thisCycleDelta;
             int128 nextCycleDelta;
-            (cycle, thisCycleDelta, nextCycleDelta) = proxy.amtPerWeightDeltas.nextDeltaPruning(
-                cycle,
-                finishedCycle
-            );
+            (cycle, cycleHint, thisCycleDelta, nextCycleDelta) = proxy
+                .amtPerWeightDeltas
+                .nextDeltaPruning(cycle, cycleHint, finishedCycle);
             if (cycle == ProxyDeltasImpl.CYCLE_ROOT) break;
             // `thisCycleDelta` from the previously finished cycle is irrelevant
             if (cycle == finishedCycle) thisCycleDelta = 0;
