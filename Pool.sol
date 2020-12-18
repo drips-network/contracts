@@ -212,7 +212,7 @@ abstract contract Pool {
     /// a new proxy adds it to the list of the sender's receivers.
     /// Setting zero as the weight for a receiver or a proxy
     /// removes it from the list of the sender's receivers.
-    /// @param topUp The topped up amount
+    /// @param topUpAmt The topped up amount
     /// @param withdrawAmt The amount to be withdrawn, must not be higher than available funds.
     /// Can be `WITHDRAW_ALL` to withdraw everything.
     /// @param amountPerBlock The target amount to be sent on every block.
@@ -222,28 +222,26 @@ abstract contract Pool {
     /// @return withdrawn The withdrawn amount which should be sent to the sender of the message.
     /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
     function updateSenderInternal(
-        uint128 topUp,
+        uint128 topUpAmt,
         uint128 withdrawAmt,
         uint128 amountPerBlock,
         ReceiverWeight[] calldata updatedReceivers,
         ReceiverWeight[] calldata updatedProxies
     ) internal suspendPayments returns (uint128 withdrawn) {
-        topUpInternal(topUp);
-        withdrawn = withdrawInternal(withdrawAmt);
-        setAmountPerBlockInternal(amountPerBlock);
-        setReceiversInternal(updatedReceivers, updatedProxies);
-    }
-
-    /// @notice Adds the given amount to the senders pool balance
-    /// and recalculates the funding period
-    /// @param amount The topped up amount
-    function topUpSuspending(uint128 amount) internal suspendPayments {
-        topUpInternal(amount);
+        topUp(topUpAmt);
+        withdrawn = withdraw(withdrawAmt);
+        setAmountPerBlock(amountPerBlock);
+        for (uint256 i = 0; i < updatedReceivers.length; i++) {
+            setReceiver(updatedReceivers[i].receiver, updatedReceivers[i].weight);
+        }
+        for (uint256 i = 0; i < updatedProxies.length; i++) {
+            setProxy(updatedProxies[i].receiver, updatedProxies[i].weight);
+        }
     }
 
     /// @notice Adds the given amount to the senders pool balance
     /// @param amount The topped up amount
-    function topUpInternal(uint128 amount) internal {
+    function topUp(uint128 amount) internal {
         if (amount != 0) senders[msg.sender].startBalance += amount;
     }
 
@@ -263,33 +261,12 @@ abstract contract Pool {
         return sender.startBalance - uint128(alreadySent);
     }
 
-    /// @notice Withdraws unsent funds of the sender of the message and sends them to that sender
-    /// @param amount The amount to be withdrawn, must not be higher than available funds.
-    /// Can be `WITHDRAW_ALL` to withdraw everything.
-    function withdraw(uint128 amount) public {
-        uint128 withdrawn = withdrawSuspending(amount);
-        transferToSender(withdrawn);
-    }
-
     /// @notice Withdraws unsent funds of the sender of the message
     /// @param amount The amount to be withdrawn, must not be higher than available funds.
     /// Can be `WITHDRAW_ALL` to withdraw everything.
     /// @return withdrawn The actually withdrawn amount.
     /// Equal to `amount` unless `WITHDRAW_ALL` is used.
-    function withdrawSuspending(uint128 amount)
-        internal
-        suspendPayments
-        returns (uint128 withdrawn)
-    {
-        return withdrawInternal(amount);
-    }
-
-    /// @notice Withdraws unsent funds of the sender of the message
-    /// @param amount The amount to be withdrawn, must not be higher than available funds.
-    /// Can be `WITHDRAW_ALL` to withdraw everything.
-    /// @return withdrawn The actually withdrawn amount.
-    /// Equal to `amount` unless `WITHDRAW_ALL` is used.
-    function withdrawInternal(uint128 amount) internal returns (uint128 withdrawn) {
+    function withdraw(uint128 amount) internal returns (uint128 withdrawn) {
         if (amount == 0) return 0;
         uint128 startBalance = senders[msg.sender].startBalance;
         if (amount == WITHDRAW_ALL) amount = startBalance;
@@ -305,17 +282,7 @@ abstract contract Pool {
     /// Each receiver and proxy then receives their part from the sender's balance.
     /// If set to zero, stops funding.
     /// @param amount The target amount to be sent on every block
-    function setAmountPerBlock(uint128 amount) public suspendPayments {
-        setAmountPerBlockInternal(amount);
-    }
-
-    /// @notice Sets the target amount sent on every block from the sender of the message.
-    /// On every block this amount is rounded down to the closest multiple of the sum of the weights
-    /// of the receivers and proxies and split between them proportionally to their weights.
-    /// Each receiver and proxy then receives their part from the sender's balance.
-    /// If set to zero, stops funding.
-    /// @param amount The target amount to be sent on every block
-    function setAmountPerBlockInternal(uint128 amount) internal {
+    function setAmountPerBlock(uint128 amount) internal {
         if (amount != AMOUNT_PER_BLOCK_UNCHANGED) senders[msg.sender].amtPerBlock = amount;
     }
 
@@ -330,43 +297,6 @@ abstract contract Pool {
         return senders[msg.sender].amtPerBlock;
     }
 
-    /// @notice Sets the weight of the provided receivers and proxies of the sender of the message.
-    /// The weight regulates the share of the amount sent on every block
-    /// that each of the sender's receivers and proxies get.
-    /// Setting a non-zero weight for a new receiver or
-    /// a new proxy adds it to the list of the sender's receivers.
-    /// Setting zero as the weight for a receiver or a proxy
-    /// removes it from the list of the sender's receivers.
-    /// @param updatedReceivers The list of the updated receivers and their new weights
-    /// @param updatedProxies The list of the updated proxies and their new weights
-    function setReceivers(
-        ReceiverWeight[] calldata updatedReceivers,
-        ReceiverWeight[] calldata updatedProxies
-    ) public suspendPayments {
-        setReceiversInternal(updatedReceivers, updatedProxies);
-    }
-
-    /// @notice Sets the weight of the provided receivers and proxies of the sender of the message.
-    /// The weight regulates the share of the amount sent on every block
-    /// that each of the sender's receivers and proxies get.
-    /// Setting a non-zero weight for a new receiver or
-    /// a new proxy adds it to the list of the sender's receivers.
-    /// Setting zero as the weight for a receiver or a proxy
-    /// removes it from the list of the sender's receivers.
-    /// @param updatedReceivers The list of the updated receivers and their new weights
-    /// @param updatedProxies The list of the updated proxies and their new weights
-    function setReceiversInternal(
-        ReceiverWeight[] calldata updatedReceivers,
-        ReceiverWeight[] calldata updatedProxies
-    ) internal {
-        for (uint256 i = 0; i < updatedReceivers.length; i++) {
-            setReceiverInternal(updatedReceivers[i].receiver, updatedReceivers[i].weight);
-        }
-        for (uint256 i = 0; i < updatedProxies.length; i++) {
-            setProxyInternal(updatedProxies[i].receiver, updatedProxies[i].weight);
-        }
-    }
-
     /// @notice Sets the weight of the provided receiver of the sender of the message.
     /// The weight regulates the share of the amount sent on every block
     /// that each of the sender's receivers and proxies get.
@@ -374,29 +304,7 @@ abstract contract Pool {
     /// Setting zero as the weight for a receiver removes it from the list of the sender's receivers.
     /// @param receiver The address of the receiver
     /// @param weight The weight of the receiver
-    function setReceiver(address receiver, uint32 weight) public suspendPayments {
-        setReceiverInternal(receiver, weight);
-    }
-
-    /// @notice Sets the weight of the provided proxy of the sender of the message.
-    /// The weight regulates the share of the amount sent on every block
-    /// that each of the sender's receivers and proxies get.
-    /// Setting a non-zero weight for a new proxy adds it to the list of the sender's receivers.
-    /// Setting zero as the weight for a proxy removes it from the list of the sender's receivers.
-    /// @param proxy The address of the proxy
-    /// @param weight The weight of the proxy, must be a multiple of `PROXY_WEIGHTS_SUM`
-    function setProxy(address proxy, uint32 weight) public suspendPayments {
-        setProxyInternal(proxy, weight);
-    }
-
-    /// @notice Sets the weight of the provided receiver of the sender of the message.
-    /// The weight regulates the share of the amount sent on every block
-    /// that each of the sender's receivers and proxies get.
-    /// Setting a non-zero weight for a new receiver adds it to the list of the sender's receivers.
-    /// Setting zero as the weight for a receiver removes it from the list of the sender's receivers.
-    /// @param receiver The address of the receiver
-    /// @param weight The weight of the receiver
-    function setReceiverInternal(address receiver, uint32 weight) internal {
+    function setReceiver(address receiver, uint32 weight) internal {
         Sender storage sender = senders[msg.sender];
         uint64 senderWeightSum = sender.weightSum;
         uint32 oldWeight = sender.receiverWeights.setReceiverWeight(receiver, weight);
@@ -419,7 +327,7 @@ abstract contract Pool {
     /// Setting zero as the weight for a proxy removes it from the list of the sender's receivers.
     /// @param proxy The address of the proxy
     /// @param weight The weight of the proxy, must be a multiple of `PROXY_WEIGHTS_SUM`
-    function setProxyInternal(address proxy, uint32 weight) internal {
+    function setProxy(address proxy, uint32 weight) internal {
         require(proxies[proxy].receiverWeights.isZeroed() == false, "Proxy doesn't exist");
         require(
             weight % PROXY_WEIGHTS_SUM == 0,
@@ -778,11 +686,6 @@ contract EthPool is Pool {
         return;
     }
 
-    /// @notice Tops up the sender balance of a sender of the message with the amount in the message
-    function topUp() public payable {
-        if (msg.value > 0) topUpSuspending(uint128(msg.value));
-    }
-
     /// @notice Updates all the sender parameters of the sender of the message.
     ///
     /// Tops up and withdraws unsent funds from the balance of the sender.
@@ -844,15 +747,6 @@ contract Erc20Pool is Pool {
     /// To guarantee safety the supply of the tokens must be lower than `2 ^ 127`.
     constructor(uint64 cycleBlocks, IERC20 _erc20) Pool(cycleBlocks) {
         erc20 = _erc20;
-    }
-
-    /// @notice Tops up the sender balance of a sender of the message.
-    /// The sender must first grant the contract a sufficient allowance.
-    /// @param amount The amount to top up with
-    function topUp(uint128 amount) public {
-        if (amount == 0) return;
-        transferToContract(amount);
-        topUpSuspending(amount);
     }
 
     /// @notice Updates all the sender parameters of the sender of the message.
