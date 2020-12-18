@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2016 zOS Global Limited
 // Copyright (c) 2020 Compound Labs, Inc.
 
 pragma solidity ^0.7.5;
@@ -8,13 +7,15 @@ import "./ErrorReporter.sol";
 import "./ProxyAdminStorage.sol";
 
 /**
- * @dev This abstract contract provides a fallback function that delegates all calls to another contract using the EVM
- * instruction `delegatecall`. We refer to the second contract as the _implementation_ behind the proxy.
+ * @dev This abstract contract provides a fallback function that delegates all calls to another
+ * contract using the EVM instruction `delegatecall`. We refer to the second contract as the
+ * _implementation_ behind the proxy.
  *
- * Additionally, delegation to the implementation can be triggered manually through the {_fallback} function, or to a
- * different contract through the {_delegate} function.
+ * Additionally, delegation to the implementation can be triggered manually through the {_fallback}
+ * function, or to a different contract through the {_delegate} function.
  *
- * The success and return data of the delegated call will be returned back to the caller of the proxy.
+ * The success and return data of the delegated call will be returned back to the caller of the
+ * proxy.
  */
 contract Proxy is ProxyAdminStorage, ErrorReporter {
     /**
@@ -26,7 +27,8 @@ contract Proxy is ProxyAdminStorage, ErrorReporter {
     );
 
     /**
-     * @notice Emitted when pendingImplementation is accepted, which means comptroller implementation is updated
+     * @notice Emitted when pendingImplementation is accepted, which means comptroller
+     * implementation is updated
      */
     event NewImplementation(address oldImplementation, address newImplementation);
 
@@ -87,8 +89,10 @@ contract Proxy is ProxyAdminStorage, ErrorReporter {
     }
 
     /**
-     * @notice Begins transfer of admin rights. The newPendingAdmin must call `_acceptAdmin` to finalize the transfer.
-     * @dev Admin function to begin change of admin. The newPendingAdmin must call `_acceptAdmin` to finalize the transfer.
+     * @notice Begins transfer of admin rights. The newPendingAdmin must call `_acceptAdmin` to
+     * finalize the transfer.
+     * @dev Admin function to begin change of admin. The newPendingAdmin must call `_acceptAdmin` to
+     * finalize the transfer.
      * @param newPendingAdmin New pending admin.
      * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
      */
