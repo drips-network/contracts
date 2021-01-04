@@ -3,7 +3,7 @@ pragma solidity ^0.7.5;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-import "./Rad.sol";
+import "./Governance/RadicleToken.sol";
 
 /// A token allocation of vRad.
 ///
@@ -19,7 +19,7 @@ struct Allocation {
 /// The vRad token.
 ///
 /// This contract implements a simple vesting token (vRad) that can be redeemed
-/// for an equal amount of Rad when the vesting period is over.
+/// for an equal amount of Radicle when the vesting period is over.
 ///
 /// The general idea is the following:
 ///
@@ -27,23 +27,23 @@ struct Allocation {
 ///    to grant vRad to an address. The contract starts out with a zero
 ///    balance.
 /// 2. The contract supply is expanded via `expandTokenSupply`. With this
-///    method, the sender can transfer Rad to mint an equal amount of vRad
+///    method, the sender can transfer Radicle to mint an equal amount of vRad
 ///    into the contract's supply. The contract now holds an equal amount of
-///    Rad and vRad.
+///    Radicle and vRad.
 /// 3. When the grantor wants to grant tokens to an address, they call
 ///    `allocateTokens`. This simply transfers vRad from the contract
 ///    to the "grantee", and records the vesting rules for that allocation.
 /// 4. The grantee can then call `getVestedAmount` at all times to check their
 ///    amount of vested tokens.
-/// 5. When this amount is non-zero, the grantee can redeem vRad for Rad, by
+/// 5. When this amount is non-zero, the grantee can redeem vRad for Radicle, by
 ///    calling `redeemTokens` with an amount. As long as this amount isn't
 ///    greater than the vested amount, the contract supply is shrunk via
 ///    `shrinkTokenSupply`: the specified amount of vRad is burned, and an
-///    equal amount of Rad is transfered from the contract to the redeemer.
+///    equal amount of Radicle is transfered from the contract to the redeemer.
 ///
 contract VRad is ERC20 {
-    /// @dev The Rad token.
-    Rad private immutable rad;
+    /// @dev The Radicle token.
+    RadicleToken private immutable rad;
 
     /// Token allocations.
     mapping(address => Allocation) public allocations;
@@ -53,25 +53,25 @@ contract VRad is ERC20 {
 
     /// Construct a new VRad token.
     ///
-    /// @param _rad The address of the Rad ERC20 contract.
+    /// @param _rad The address of the Radicle ERC20 contract.
     /// @param _grantor The initial account to grant all the tokens to.
     constructor(address _rad, address _grantor) ERC20("vRad", "vRAD") {
-        rad = Rad(_rad);
+        rad = RadicleToken(_rad);
         grantor = _grantor;
     }
 
-    /// Expand the supply of Rad and vRad held by this contract equally,
-    /// by transfering Rad from the sender to the contract.
+    /// Expand the supply of Radicle and vRad held by this contract equally,
+    /// by transfering Radicle from the sender to the contract.
     function depositRadFrom(address sender, uint256 amount) public {
-        // Transfer the Rad.
+        // Transfer the Radicle.
         require(rad.transferFrom(sender, address(this), amount), "The transfer in should succeed");
         // Mint an equal amount of vRad.
         _mint(address(this), amount);
     }
 
-    /// Transfer Rad out of the contract, burning an equal amount of VRad.
+    /// Transfer Radicle out of the contract, burning an equal amount of VRad.
     function withdrawRadTo(address payable receiver, uint256 amount) internal {
-        // Transfer out an equal amount of Rad from the contract to the receiver.
+        // Transfer out an equal amount of Radicle from the contract to the receiver.
         require(rad.transfer(receiver, amount), "The transfer out should succeed");
         // Burn an amount of vRad from the sender.
         _burn(msg.sender, amount);
@@ -145,7 +145,7 @@ contract VRad is ERC20 {
         return block.timestamp;
     }
 
-    /// Redeem vRad tokens for Rad tokens.
+    /// Redeem vRad tokens for Radicle tokens.
     function redeemVestedTokens(address payable receiver, uint256 amount) public {
         require(amount > 0, "Redeem amount must be positive");
         require(vestedBalanceOf(msg.sender) >= amount, "Redeem amount should be vested");
