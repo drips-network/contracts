@@ -39,7 +39,7 @@ contract RadicleToken {
     uint8 public constant DECIMALS = 18;
 
     /// @notice Total number of tokens in circulation
-    uint256 public constant TOTAL_SUPPLY = 10000000e18; // 10 million tokens
+    uint256 public constant TOTAL_SUPPLY = 100000000e18; // 100 million tokens
 
     // Allowance amounts on behalf of others
     mapping(address => mapping(address => uint96)) internal allowances;
