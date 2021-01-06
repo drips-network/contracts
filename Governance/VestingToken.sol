@@ -1,12 +1,12 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.7.5;
 
-/// @title Math operations with safety checks
-/// @author Melonport AG <team@melonport.com>
-/// @notice From https://github.com/status-im/status-network-token/blob/master/contracts/safeMath.sol
+/// Token vesting contract.
+/// Adapted from Melonport AG <team@melonport.com>
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-contract Vesting {
+contract VestingToken {
     using SafeMath for uint256;
 
     ERC20 public token; // Radicle ERC20 contract
@@ -40,6 +40,12 @@ contract Vesting {
         _;
     }
 
+    /// @param _token Address of token being vested
+    constructor(address _token, address _owner) {
+        token = ERC20(_token);
+        owner = _owner;
+    }
+
     /// @notice Returns the token amount that is currently withdrawable
     /// @return withdrawable Quantity of withdrawable Radicle asset
     function withdrawableBalance() public view returns (uint256 withdrawable) {
@@ -51,12 +57,6 @@ contract Vesting {
         } else {
             withdrawable = totalVestingAmount.sub(withdrawn);
         }
-    }
-
-    /// @param _token Address of token being vested
-    constructor(address _token, address _owner) {
-        token = ERC20(_token);
-        owner = _owner;
     }
 
     /// @notice Grant vesting tokens to the beneficiary.
