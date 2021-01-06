@@ -1,142 +1,13 @@
-pragma solidity >=0.4.23;
+pragma solidity ^0.7.5;
 
 /// @title Math operations with safety checks
 /// @author Melonport AG <team@melonport.com>
 /// @notice From https://github.com/status-im/status-network-token/blob/master/contracts/safeMath.sol
 
-library safeMath {
-    function mul(uint256 a, uint256 b) internal returns (uint256) {
-        uint256 c = a * b;
-        assert(a == 0 || c / a == b);
-        return c;
-    }
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-    function div(uint256 a, uint256 b) internal returns (uint256) {
-        uint256 c = a / b;
-        return c;
-    }
-
-    function sub(uint256 a, uint256 b) internal returns (uint256) {
-        assert(b <= a);
-        return a - b;
-    }
-
-    function add(uint256 a, uint256 b) internal returns (uint256) {
-        uint256 c = a + b;
-        assert(c >= a);
-        return c;
-    }
-
-    function max64(uint64 a, uint64 b) internal constant returns (uint64) {
-        return a >= b ? a : b;
-    }
-
-    function min64(uint64 a, uint64 b) internal constant returns (uint64) {
-        return a < b ? a : b;
-    }
-
-    function max256(uint256 a, uint256 b) internal constant returns (uint256) {
-        return a >= b ? a : b;
-    }
-
-    function min256(uint256 a, uint256 b) internal constant returns (uint256) {
-        return a < b ? a : b;
-    }
-}
-
-/// @title ERC20 Token Interface
-/// @author Melonport AG <team@melonport.com>
-/// @notice See https://github.com/ethereum/EIPs/issues/20
-contract ERC20Interface {
-    // EVENTS
-
-    event Transfer(address indexed _from, address indexed _to, uint256 _value);
-    event Approval(address indexed _owner, address indexed _spender, uint256 _value);
-
-    // CONSTANT METHODS
-
-    function totalSupply() constant returns (uint256 totalSupply) {}
-
-    function balanceOf(address _owner) constant returns (uint256 balance) {}
-
-    function allowance(address _owner, address _spender) constant returns (uint256 remaining) {}
-
-    // NON-CONSTANT METHODS
-
-    function transfer(address _to, uint256 _value) returns (bool success) {}
-
-    function transferFrom(
-        address _from,
-        address _to,
-        uint256 _value
-    ) returns (bool success) {}
-
-    function approve(address _spender, uint256 _value) returns (bool success) {}
-}
-
-/// @title ERC20 Token
-/// @author Melonport AG <team@melonport.com>
-/// @notice Original taken from https://github.com/ethereum/EIPs/issues/20
-/// @notice Checked against integer overflow
-contract ERC20 is ERC20Interface {
-    function transfer(address _to, uint256 _value) returns (bool success) {
-        if (balances[msg.sender] >= _value && balances[_to] + _value > balances[_to]) {
-            balances[msg.sender] -= _value;
-            balances[_to] += _value;
-            Transfer(msg.sender, _to, _value);
-            return true;
-        } else {
-            throw;
-        }
-    }
-
-    function transferFrom(
-        address _from,
-        address _to,
-        uint256 _value
-    ) returns (bool success) {
-        if (
-            balances[_from] >= _value &&
-            allowed[_from][msg.sender] >= _value &&
-            balances[_to] + _value > balances[_to]
-        ) {
-            balances[_to] += _value;
-            balances[_from] -= _value;
-            allowed[_from][msg.sender] -= _value;
-            Transfer(_from, _to, _value);
-            return true;
-        } else {
-            throw;
-        }
-    }
-
-    function balanceOf(address _owner) constant returns (uint256 balance) {
-        return balances[_owner];
-    }
-
-    function approve(address _spender, uint256 _value) returns (bool success) {
-        // See: https://github.com/ethereum/EIPs/issues/20#issuecomment-263555598
-        if (_value > 0) {
-            require(allowed[msg.sender][_spender] == 0);
-        }
-        allowed[msg.sender][_spender] = _value;
-        Approval(msg.sender, _spender, _value);
-        return true;
-    }
-
-    function allowance(address _owner, address _spender) constant returns (uint256 remaining) {
-        return allowed[_owner][_spender];
-    }
-
-    mapping(address => uint256) balances;
-
-    mapping(address => mapping(address => uint256)) allowed;
-
-    uint256 public totalSupply;
-}
-
-contract CouncilVesting {
-    using safeMath for uint256;
+contract Vesting {
+    using SafeMath for uint256;
 
     // FIELDS
 
@@ -185,14 +56,12 @@ contract CouncilVesting {
         uint256 timePassed = block.timestamp.sub(vestingStartTime);
 
         if (timePassed < vestingPeriod) {
-            uint256 vested = totalVestingAmount.mul(timePassed).div(vestingPeriod);
+            uint256 vested = totalVestingAmount.mul(timePassed) / vestingPeriod;
             withdrawable = vested.sub(withdrawn);
         } else {
             withdrawable = totalVestingAmount.sub(withdrawn);
         }
     }
-
-    // NON-CONSTANT METHODS
 
     /// @param ofMelonAsset Address of Melon asset
     constructor(address ofMelonAsset, address ofOwner) {
@@ -210,7 +79,7 @@ contract CouncilVesting {
     ) external only_owner not_interrupted vesting_not_started {
         require(ofMelonQuantity > 0, "Must vest some MLN");
         require(
-            MELON_CONTRACT.transferFrom(msg.sender, this, ofMelonQuantity),
+            MELON_CONTRACT.transferFrom(msg.sender, address(this), ofMelonQuantity),
             "MLN deposit failed"
         );
         isVestingStarted = true;
