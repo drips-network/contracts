@@ -84,7 +84,7 @@ contract Registrar {
 
     /// Register a subdomain using radicle tokens.
     function registerRad(string memory name, address owner) public payable {
-        uint256 fee = registrationFeeRad;
+        uint256 fee = registrationFeeRad * (10 ** rad.decimals());
 
         require(rad.balanceOf(msg.sender) >= fee, "Transaction includes registration fee");
         require(valid(name), "Name must be valid");
