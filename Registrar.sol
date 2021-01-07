@@ -26,8 +26,8 @@ contract Registrar {
     /// Registration fee in *USD*.
     uint256 public registrationFeeUsd = 10;
 
-    /// Registration fee in *Radicle*.
-    uint256 public registrationFeeRad = 1;
+    /// Registration fee in *Radicle* (uRads).
+    uint256 public registrationFeeRad = 1e18;
 
     /// The contract admin who can set fees.
     address public admin;
@@ -84,7 +84,7 @@ contract Registrar {
 
     /// Register a subdomain using radicle tokens.
     function registerRad(string memory name, address owner) public payable {
-        uint256 fee = registrationFeeRad * (10 ** rad.decimals());
+        uint256 fee = registrationFeeRad;
 
         require(rad.balanceOf(msg.sender) >= fee, "Transaction includes registration fee");
         require(valid(name), "Name must be valid");
@@ -104,8 +104,8 @@ contract Registrar {
 
     /// Check whether a name is valid.
     function valid(string memory name) public pure returns (bool) {
-        // FIXME(cloudhead): This is only correct for ASCII.
-        return bytes(name).length >= 3;
+        uint256 len = bytes(name).length;
+        return len > 0 && len <= 32;
     }
 
     /// Check whether a name is available for registration.
