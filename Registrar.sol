@@ -24,7 +24,10 @@ contract Registrar {
     bytes32 public immutable rootNode;
 
     /// Registration fee in *USD*.
-    uint256 public constant REGISTRATION_FEE = 10;
+    uint256 public constant REGISTRATION_FEE_USD = 10;
+
+    /// Registration fee in *Radicle*.
+    uint256 public constant REGISTRATION_FEE_RAD = 1;
 
     constructor(
         address ensAddress,
@@ -44,8 +47,8 @@ contract Registrar {
         oracle.updatePrices();
     }
 
-    /// Register a subdomain.
-    function register(string memory name, address owner) public payable {
+    /// Register a subdomain using ether.
+    function registerEth(string memory name, address owner) public payable {
         // Make sure the oracle has up-to-date pricing information.
         oracle.updatePrices();
 
@@ -66,6 +69,18 @@ contract Registrar {
         if (msg.value > fee) {
             msg.sender.transfer(msg.value - fee);
         }
+    }
+
+    /// Register a subdomain using radicle tokens.
+    function registerRad(string memory name, address owner) public payable {
+        uint256 fee = REGISTRATION_FEE_RAD;
+
+        require(rad.balanceOf(msg.sender) >= fee, "Transaction includes registration fee");
+        require(valid(name), "Name must be valid");
+
+        _register(keccak256(bytes(name)), owner);
+
+        rad.burn(fee);
     }
 
     function _register(bytes32 label, address owner) private {
@@ -98,6 +113,6 @@ contract Registrar {
     /// Registration fee in `wei`.
     function registrationFee() public view returns (uint256) {
         // Convert USD fee into ETH.
-        return oracle.consultUsdEth(REGISTRATION_FEE);
+        return oracle.consultUsdEth(REGISTRATION_FEE_USD);
     }
 }
