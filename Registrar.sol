@@ -24,23 +24,34 @@ contract Registrar {
     bytes32 public immutable rootNode;
 
     /// Registration fee in *USD*.
-    uint256 public constant REGISTRATION_FEE_USD = 10;
+    uint256 public registrationFeeUsd = 10;
 
     /// Registration fee in *Radicle*.
-    uint256 public constant REGISTRATION_FEE_RAD = 1;
+    uint256 public registrationFeeRad = 1;
+
+    /// The contract admin who can set fees.
+    address public admin;
+
+    /// Protects admin-only functions.
+    modifier adminOnly {
+        require(msg.sender == admin, "Only the admin can perform this action");
+        _;
+    }
 
     constructor(
         address ensAddress,
         bytes32 _rootNode,
         address oracleAddress,
         address exchangeAddress,
-        address radAddress
+        address radAddress,
+        address adminAddress
     ) {
         ens = ENS(ensAddress);
         oracle = PriceOracle(oracleAddress);
         exchange = Exchange(exchangeAddress);
         rad = Rad(radAddress);
         rootNode = _rootNode;
+        admin = adminAddress;
     }
 
     function initialize() public {
@@ -52,7 +63,7 @@ contract Registrar {
         // Make sure the oracle has up-to-date pricing information.
         oracle.updatePrices();
 
-        uint256 fee = registrationFee();
+        uint256 fee = registrationFeeEth();
 
         require(msg.value >= fee, "Transaction includes registration fee");
         require(valid(name), "Name must be valid");
@@ -73,7 +84,7 @@ contract Registrar {
 
     /// Register a subdomain using radicle tokens.
     function registerRad(string memory name, address owner) public payable {
-        uint256 fee = REGISTRATION_FEE_RAD;
+        uint256 fee = registrationFeeRad;
 
         require(rad.balanceOf(msg.sender) >= fee, "Transaction includes registration fee");
         require(valid(name), "Name must be valid");
@@ -110,9 +121,19 @@ contract Registrar {
         return keccak256(abi.encodePacked(parent, label));
     }
 
+    /// Set the USD registration fee.
+    function setUsdRegistrationFee(uint256 fee) public adminOnly {
+        registrationFeeUsd = fee;
+    }
+
+    /// Set the radicle registration fee.
+    function setRadRegistrationFee(uint256 fee) public adminOnly {
+        registrationFeeRad = fee;
+    }
+
     /// Registration fee in `wei`.
-    function registrationFee() public view returns (uint256) {
+    function registrationFeeEth() public view returns (uint256) {
         // Convert USD fee into ETH.
-        return oracle.consultUsdEth(REGISTRATION_FEE_USD);
+        return oracle.consultUsdEth(registrationFeeUsd);
     }
 }
