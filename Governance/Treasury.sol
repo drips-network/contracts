@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// solhint-disable no-empty-blocks
 pragma solidity ^0.7.5;
 
 /// A simple treasury controlled by an admin account.
