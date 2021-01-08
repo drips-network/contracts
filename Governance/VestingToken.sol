@@ -15,6 +15,7 @@ contract VestingToken {
     uint256 public immutable totalVestingAmount; // quantity of vested token in total
     uint256 public immutable vestingStartTime; // timestamp when vesting is set
     uint256 public immutable vestingPeriod; // total vesting period in seconds
+    uint256 public immutable cliffPeriod; // cliff period
     address public immutable beneficiary; // address of the beneficiary
 
     bool public interrupted; // whether vesting is still possible
@@ -48,11 +49,14 @@ contract VestingToken {
         address _beneficiary,
         uint256 _amount,
         uint256 _vestingStartTime,
-        uint256 _vestingPeriod
+        uint256 _vestingPeriod,
+        uint256 _cliffPeriod
     ) {
+        require(_beneficiary != address(0), "Beneficiary cannot be the zero address");
         require(_vestingStartTime < block.timestamp, "Vesting start time must be in the past");
         require(_vestingPeriod > 0, "Vesting period must be positive");
         require(_amount > 0, "VestingToken::constructor: amount must be positive");
+
         ERC20 erc20 = ERC20(_token);
         require(
             erc20.transferFrom(msg.sender, address(this), _amount),
@@ -65,6 +69,7 @@ contract VestingToken {
         beneficiary = _beneficiary;
         vestingStartTime = _vestingStartTime;
         vestingPeriod = _vestingPeriod;
+        cliffPeriod = _cliffPeriod;
     }
 
     /// @notice Returns the token amount that is currently withdrawable
@@ -72,7 +77,9 @@ contract VestingToken {
     function withdrawableBalance() public view returns (uint256 withdrawable) {
         uint256 timePassed = block.timestamp.sub(vestingStartTime);
 
-        if (timePassed < vestingPeriod) {
+        if (timePassed < cliffPeriod) {
+            withdrawable = 0;
+        } else if (timePassed < vestingPeriod) {
             uint256 vested = totalVestingAmount.mul(timePassed) / vestingPeriod;
             withdrawable = vested.sub(withdrawn);
         } else {
