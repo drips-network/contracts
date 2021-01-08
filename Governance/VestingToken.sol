@@ -9,7 +9,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 contract VestingToken {
     using SafeMath for uint256;
 
-    ERC20 public token; // Radicle ERC20 contract
+    ERC20 public immutable token; // Radicle ERC20 contract
 
     address public immutable owner; // deployer; can interrupt vesting
     uint256 public immutable totalVestingAmount; // quantity of vested token in total
@@ -52,12 +52,13 @@ contract VestingToken {
     ) {
         require(_vestingStartTime < block.timestamp, "Vesting start time must be in the past");
         require(_amount > 0, "VestingToken::constructor: amount must be positive");
+        ERC20 erc20 = ERC20(_token);
         require(
-            token.transferFrom(msg.sender, address(this), _amount),
+            erc20.transferFrom(msg.sender, address(this), _amount),
             "VestingToken::constructor: token deposit failed"
         );
 
-        token = ERC20(_token);
+        token = erc20;
         owner = _owner;
         totalVestingAmount = _amount;
         beneficiary = _beneficiary;
