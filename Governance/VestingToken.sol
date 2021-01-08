@@ -50,9 +50,11 @@ contract VestingToken {
         uint256 _vestingStartTime,
         uint256 _vestingPeriod
     ) {
+        require(_beneficiary != address(0), "Beneficiary cannot be the zero address");
         require(_vestingStartTime < block.timestamp, "Vesting start time must be in the past");
         require(_vestingPeriod > 0, "Vesting period must be positive");
         require(_amount > 0, "VestingToken::constructor: amount must be positive");
+
         ERC20 erc20 = ERC20(_token);
         require(
             erc20.transferFrom(msg.sender, address(this), _amount),
