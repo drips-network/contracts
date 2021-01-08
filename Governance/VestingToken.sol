@@ -13,7 +13,6 @@ contract VestingToken {
     address public owner; // deployer; can interrupt vesting
 
     bool public interrupted; // whether vesting is still possible
-    bool public isVestingStarted; // whether vesting period has begun
     uint256 public totalVestingAmount; // quantity of vested token in total
     uint256 public vestingStartTime; // timestamp when vesting is set
     uint256 public vestingPeriod; // total vesting period in seconds
@@ -35,15 +34,34 @@ contract VestingToken {
         _;
     }
 
-    modifier vestingStarted() {
-        require(isVestingStarted, "Vesting must be started");
-        _;
-    }
-
+    /// @notice Create a vesting allocation of tokens.
+    ///
     /// @param _token Address of token being vested
-    constructor(address _token, address _owner) {
+    /// @param _beneficiary Address of beneficiary
+    /// @param _amount Amount of tokens
+    /// @param _vestingPeriod Vesting period in seconds from vestingStartTime
+    /// @param _vestingStartTime Vesting start time in seconds since Epoch
+    constructor(
+        address _token,
+        address _owner,
+        address _beneficiary,
+        uint256 _amount,
+        uint256 _vestingStartTime,
+        uint256 _vestingPeriod
+    ) {
+        require(_vestingStartTime < block.timestamp, "Vesting start time must be in the past");
+        require(_amount > 0, "VestingToken::constructor: amount must be positive");
+        require(
+            token.transferFrom(msg.sender, address(this), _amount),
+            "VestingToken::constructor: token deposit failed"
+        );
+
         token = ERC20(_token);
         owner = _owner;
+        totalVestingAmount = _amount;
+        beneficiary = _beneficiary;
+        vestingStartTime = _vestingStartTime;
+        vestingPeriod = _vestingPeriod;
     }
 
     /// @notice Returns the token amount that is currently withdrawable
@@ -59,32 +77,8 @@ contract VestingToken {
         }
     }
 
-    /// @notice Grant vesting tokens to the beneficiary.
-    ///
-    /// @param ofBeneficiary Address of beneficiary
-    /// @param ofTokenAmount Amount of tokens
-    /// @param ofVestingPeriod Vesting period in seconds from vestingStartTime
-    function grantTokens(
-        address ofBeneficiary,
-        uint256 ofTokenAmount,
-        uint256 ofVestingPeriod
-    ) external onlyOwner notInterrupted {
-        require(!isVestingStarted, "VestingToken::grantTokens: vesting already started");
-        require(ofTokenAmount > 0, "VestingToken::grantTokens: amount must be positive");
-        require(
-            token.transferFrom(msg.sender, address(this), ofTokenAmount),
-            "VestingToken::grantTokens: token deposit failed"
-        );
-
-        isVestingStarted = true;
-        vestingStartTime = block.timestamp;
-        totalVestingAmount = ofTokenAmount;
-        vestingPeriod = ofVestingPeriod;
-        beneficiary = ofBeneficiary;
-    }
-
     /// @notice Withdraw vested tokens
-    function withdrawVested() external onlyBeneficiary vestingStarted notInterrupted {
+    function withdrawVested() external onlyBeneficiary notInterrupted {
         uint256 withdrawable = withdrawableBalance();
 
         withdrawn = withdrawn.add(withdrawable);
@@ -98,7 +92,7 @@ contract VestingToken {
     /// @notice Force withdrawal of vested tokens to beneficiary
     /// @notice Send remainder back to owner
     /// @notice Prevent further vesting
-    function terminateVesting() external onlyOwner vestingStarted notInterrupted {
+    function terminateVesting() external onlyOwner notInterrupted {
         interrupted = true;
 
         uint256 remainingVested = withdrawableBalance();
