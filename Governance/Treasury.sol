@@ -5,7 +5,7 @@ pragma solidity ^0.7.5;
 /// A simple treasury controlled by an admin account.
 contract Treasury {
     /// The contract admin.
-    address public admin;
+    address public immutable admin;
 
     /// Construct a new treasury with an admin.
     constructor(address _admin) {
