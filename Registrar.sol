@@ -24,32 +24,46 @@ contract Registrar {
     bytes32 public immutable rootNode;
 
     /// Registration fee in *USD*.
-    uint256 public constant REGISTRATION_FEE = 10;
+    uint256 public registrationFeeUsd = 10;
+
+    /// Registration fee in *Radicle* (uRads).
+    uint256 public registrationFeeRad = 1e18;
+
+    /// The contract admin who can set fees.
+    address public admin;
+
+    /// Protects admin-only functions.
+    modifier adminOnly {
+        require(msg.sender == admin, "Only the admin can perform this action");
+        _;
+    }
 
     constructor(
         address ensAddress,
         bytes32 _rootNode,
         address oracleAddress,
         address exchangeAddress,
-        address radAddress
+        address radAddress,
+        address adminAddress
     ) {
         ens = ENS(ensAddress);
         oracle = PriceOracle(oracleAddress);
         exchange = Exchange(exchangeAddress);
         rad = Rad(radAddress);
         rootNode = _rootNode;
+        admin = adminAddress;
     }
 
     function initialize() public {
         oracle.updatePrices();
     }
 
-    /// Register a subdomain.
-    function register(string memory name, address owner) public payable {
+    /// Register a subdomain using ether.
+    function registerEth(string memory name, address owner) public payable {
         // Make sure the oracle has up-to-date pricing information.
         oracle.updatePrices();
 
-        uint256 fee = registrationFee();
+        uint256 fee = registrationFeeEth();
 
         require(msg.value >= fee, "Transaction includes registration fee");
         require(valid(name), "Name must be valid");
@@ -68,6 +82,18 @@ contract Registrar {
         }
     }
 
+    /// Register a subdomain using radicle tokens.
+    function registerRad(string memory name, address owner) public payable {
+        uint256 fee = registrationFeeRad;
+
+        require(rad.balanceOf(msg.sender) >= fee, "Transaction includes registration fee");
+        require(valid(name), "Name must be valid");
+
+        _register(keccak256(bytes(name)), owner);
+
+        rad.burn(fee);
+    }
+
     function _register(bytes32 label, address owner) private {
         bytes32 node = namehash(rootNode, label);
 
@@ -78,8 +104,8 @@ contract Registrar {
 
     /// Check whether a name is valid.
     function valid(string memory name) public pure returns (bool) {
-        // FIXME(cloudhead): This is only correct for ASCII.
-        return bytes(name).length >= 3;
+        uint256 len = bytes(name).length;
+        return len > 0 && len <= 32;
     }
 
     /// Check whether a name is available for registration.
@@ -95,9 +121,19 @@ contract Registrar {
         return keccak256(abi.encodePacked(parent, label));
     }
 
+    /// Set the USD registration fee.
+    function setUsdRegistrationFee(uint256 fee) public adminOnly {
+        registrationFeeUsd = fee;
+    }
+
+    /// Set the radicle registration fee.
+    function setRadRegistrationFee(uint256 fee) public adminOnly {
+        registrationFeeRad = fee;
+    }
+
     /// Registration fee in `wei`.
-    function registrationFee() public view returns (uint256) {
+    function registrationFeeEth() public view returns (uint256) {
         // Convert USD fee into ETH.
-        return oracle.consultUsdEth(REGISTRATION_FEE);
+        return oracle.consultUsdEth(registrationFeeUsd);
     }
 }
