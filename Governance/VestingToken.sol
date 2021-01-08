@@ -10,7 +10,7 @@ contract VestingToken {
     using SafeMath for uint256;
 
     ERC20 public token; // Radicle ERC20 contract
-    address public owner; // deployer; can interrupt vesting
+    address public immutable owner; // deployer; can interrupt vesting
 
     bool public interrupted; // whether vesting is still possible
     uint256 public totalVestingAmount; // quantity of vested token in total
