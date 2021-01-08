@@ -10,13 +10,14 @@ contract VestingToken {
     using SafeMath for uint256;
 
     ERC20 public token; // Radicle ERC20 contract
+
     address public immutable owner; // deployer; can interrupt vesting
+    uint256 public immutable totalVestingAmount; // quantity of vested token in total
+    uint256 public immutable vestingStartTime; // timestamp when vesting is set
+    uint256 public immutable vestingPeriod; // total vesting period in seconds
+    address public immutable beneficiary; // address of the beneficiary
 
     bool public interrupted; // whether vesting is still possible
-    uint256 public totalVestingAmount; // quantity of vested token in total
-    uint256 public vestingStartTime; // timestamp when vesting is set
-    uint256 public vestingPeriod; // total vesting period in seconds
-    address public beneficiary; // address of the beneficiary
     uint256 public withdrawn; // quantity of token withdrawn so far
 
     modifier notInterrupted() {
