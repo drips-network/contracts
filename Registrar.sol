@@ -12,10 +12,10 @@ contract Registrar {
     ENS public immutable ens;
 
     /// The price oracle.
-    PriceOracle public immutable oracle;
+    PriceOracle public oracle;
 
     /// The Rad/Eth exchange.
-    Exchange public immutable exchange;
+    Exchange public exchange;
 
     /// The Rad ERC20 token.
     Rad public immutable rad;
@@ -121,6 +121,14 @@ contract Registrar {
         return keccak256(abi.encodePacked(parent, label));
     }
 
+    /// Registration fee in `wei`.
+    function registrationFeeEth() public view returns (uint256) {
+        // Convert USD fee into ETH.
+        return oracle.consultUsdEth(registrationFeeUsd);
+    }
+
+    // ADMIN FUNCTIONS
+
     /// Set the USD registration fee.
     function setUsdRegistrationFee(uint256 fee) public adminOnly {
         registrationFeeUsd = fee;
@@ -131,9 +139,26 @@ contract Registrar {
         registrationFeeRad = fee;
     }
 
-    /// Registration fee in `wei`.
-    function registrationFeeEth() public view returns (uint256) {
-        // Convert USD fee into ETH.
-        return oracle.consultUsdEth(registrationFeeUsd);
+    /// Set the price oracle.
+    function setPriceOracle(address oracleAddress) public adminOnly {
+        require(
+            oracleAddress != address(0),
+            "Registrar::setPriceOracle: oracle address cannot be zero"
+        );
+        oracle = PriceOracle(oracleAddress);
+    }
+
+    /// Set the exchange.
+    function setExchange(address exchangeAddress) public adminOnly {
+        require(
+            exchangeAddress != address(0),
+            "Registrar::setExchange: exchange address cannot be zero"
+        );
+        exchange = Exchange(exchangeAddress);
+    }
+
+    /// Set a new admin
+    function setAdmin(address _admin) public adminOnly {
+        admin = _admin;
     }
 }
