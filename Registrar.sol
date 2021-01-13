@@ -15,8 +15,8 @@ contract Registrar {
     /// The Rad/Eth exchange.
     address public exchangeAddress;
 
-    /// The Rad ERC20 token.
-    address public immutable radAddress;
+    /// The Radicle ERC20 token.
+    ERC20Burnable public immutable rad;
 
     /// The parent node namehash, eg. namehash("eth").
     bytes32 public immutable parentNode;
@@ -54,7 +54,7 @@ contract Registrar {
         ens = ENS(ensAddress);
         oracleAddress = _oracleAddress;
         exchangeAddress = _exchangeAddress;
-        radAddress = _radAddress;
+        rad = ERC20Burnable(_radAddress);
         baseLabel = _baseLabel;
         parentNode = _parentNode;
         domain = namehash(_parentNode, _baseLabel);
@@ -68,7 +68,6 @@ contract Registrar {
 
     /// Register a subdomain using radicle tokens.
     function registerRad(string memory name, address owner) public {
-        ERC20Burnable rad = ERC20Burnable(radAddress);
         uint256 fee = registrationFeeRad;
 
         require(rad.balanceOf(msg.sender) >= fee, "Transaction includes registration fee");
