@@ -61,10 +61,6 @@ contract Registrar {
         admin = adminAddress;
     }
 
-    function initialize() public {
-        // This can be used in the future to initialize the exchange and oracle.
-    }
-
     /// Register a subdomain using ether.
     function registerEth(string memory, address) public payable {
         revert("Registrar::registerEth: Registration using ETH is not yet available");
