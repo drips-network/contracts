@@ -39,7 +39,7 @@ contract RadicleToken {
     uint8 public constant DECIMALS = 18;
 
     /// @notice Total number of tokens in circulation
-    uint256 public constant TOTAL_SUPPLY = 100000000e18; // 100 million tokens
+    uint256 public totalSupply = 100000000e18; // 100 million tokens
 
     // Allowance amounts on behalf of others
     mapping(address => mapping(address => uint96)) internal allowances;
@@ -98,8 +98,8 @@ contract RadicleToken {
      * @param account The initial account to grant all the tokens
      */
     constructor(address account) {
-        balances[account] = uint96(TOTAL_SUPPLY);
-        emit Transfer(address(0), account, TOTAL_SUPPLY);
+        balances[account] = uint96(totalSupply);
+        emit Transfer(address(0), account, totalSupply);
     }
 
     /**
@@ -185,6 +185,35 @@ contract RadicleToken {
 
         _transferTokens(src, dst, amount);
         return true;
+    }
+
+    function burnFrom(address account, uint256 rawAmount) public virtual {
+        require(account != address(0), "RadicleToken::burnFrom: cannot burn from the zero address");
+        uint96 amount = safe96(rawAmount, "RadicleToken::burnFrom: amount exceeds 96 bits");
+
+        address spender = msg.sender;
+        uint96 spenderAllowance = allowances[account][spender];
+        if (spender != account && spenderAllowance != uint96(-1)) {
+            uint96 newAllowance =
+                sub96(
+                    spenderAllowance,
+                    amount,
+                    "RadicleToken::burnFrom: burn amount exceeds allowance"
+                );
+            allowances[account][spender] = newAllowance;
+            emit Approval(account, spender, newAllowance);
+        }
+
+        balances[account] = sub96(
+            balances[account],
+            amount,
+            "RadicleToken::burnTokens: burn amount exceeds balance"
+        );
+        emit Transfer(account, address(0), amount);
+
+        _moveDelegates(delegates[account], address(0), amount);
+
+        totalSupply -= rawAmount;
     }
 
     /**
