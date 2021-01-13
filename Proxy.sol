@@ -42,9 +42,9 @@ contract Proxy is ProxyAdminStorage, ErrorReporter {
      */
     event NewAdmin(address oldAdmin, address newAdmin);
 
-    constructor() {
+    constructor(address _admin) {
         // Set admin to caller
-        admin = msg.sender;
+        admin = _admin;
     }
 
     /*** Admin Functions ***/
