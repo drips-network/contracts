@@ -2,14 +2,14 @@
 // solhint-disable func-name-mixedcase
 pragma solidity ^0.7.5;
 
-import "./Rad.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./Router.sol";
 
 contract DummyRouter is Router {
-    Rad private rad;
+    IERC20 private rad;
 
     constructor(address _rad) {
-        rad = Rad(_rad);
+        rad = IERC20(_rad);
     }
 
     function swapExactETHForTokens(
