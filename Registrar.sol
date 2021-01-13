@@ -1,24 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// solhint-disable no-empty-blocks
 pragma solidity ^0.7.5;
 
 import "@ensdomains/ens/contracts/ENS.sol";
-
-import "./PriceOracle.sol";
-import "./Exchange.sol";
-import "./Rad.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20Burnable.sol";
 
 contract Registrar {
     /// The ENS registry.
     ENS public immutable ens;
 
     /// The price oracle.
-    PriceOracle public oracle;
+    address public oracleAddress;
 
     /// The Rad/Eth exchange.
-    Exchange public exchange;
+    address public exchangeAddress;
 
-    /// The Rad ERC20 token.
-    Rad public immutable rad;
+    /// The Radicle ERC20 token.
+    ERC20Burnable public immutable rad;
 
     /// The parent node namehash, eg. namehash("eth").
     bytes32 public immutable parentNode;
@@ -48,51 +46,28 @@ contract Registrar {
         address ensAddress,
         bytes32 _parentNode,
         bytes32 _baseLabel,
-        address oracleAddress,
-        address exchangeAddress,
-        address radAddress,
+        address _oracleAddress,
+        address _exchangeAddress,
+        address _radAddress,
         address adminAddress
     ) {
         ens = ENS(ensAddress);
-        oracle = PriceOracle(oracleAddress);
-        exchange = Exchange(exchangeAddress);
-        rad = Rad(radAddress);
+        oracleAddress = _oracleAddress;
+        exchangeAddress = _exchangeAddress;
+        rad = ERC20Burnable(_radAddress);
         baseLabel = _baseLabel;
         parentNode = _parentNode;
         domain = namehash(_parentNode, _baseLabel);
         admin = adminAddress;
     }
 
-    function initialize() public {
-        oracle.updatePrices();
-    }
-
     /// Register a subdomain using ether.
-    function registerEth(string memory name, address owner) public payable {
-        // Make sure the oracle has up-to-date pricing information.
-        oracle.updatePrices();
-
-        uint256 fee = registrationFeeEth();
-
-        require(msg.value >= fee, "Transaction includes registration fee");
-        require(valid(name), "Name must be valid");
-
-        _register(keccak256(bytes(name)), owner);
-
-        // Swap n' burn.
-        uint256 swapped = exchange.swapEthForRad{value: fee}(address(this));
-        require(swapped > 0, "Must burn a positive amount of Rad");
-
-        rad.burn(swapped);
-
-        // Return change.
-        if (msg.value > fee) {
-            msg.sender.transfer(msg.value - fee);
-        }
+    function registerEth(string memory, address) public payable {
+        revert("Registrar::registerEth: Registration using ETH is not yet available");
     }
 
     /// Register a subdomain using radicle tokens.
-    function registerRad(string memory name, address owner) public payable {
+    function registerRad(string memory name, address owner) public {
         uint256 fee = registrationFeeRad;
 
         require(rad.balanceOf(msg.sender) >= fee, "Transaction includes registration fee");
@@ -100,13 +75,13 @@ contract Registrar {
 
         _register(keccak256(bytes(name)), owner);
 
-        rad.burn(fee);
+        rad.burnFrom(msg.sender, fee);
     }
 
     function _register(bytes32 label, address owner) private {
         bytes32 node = namehash(domain, label);
 
-        require(!ens.recordExists(node), "Record must not already exist");
+        require(!ens.recordExists(node), "Registrar::_register: name must be available");
 
         ens.setSubnodeOwner(domain, label, owner);
     }
@@ -130,10 +105,9 @@ contract Registrar {
         return keccak256(abi.encodePacked(parent, label));
     }
 
-    /// Registration fee in `wei`.
-    function registrationFeeEth() public view returns (uint256) {
-        // Convert USD fee into ETH.
-        return oracle.consultUsdEth(registrationFeeUsd);
+    /// Registration fee in ether.
+    function registrationFeeEth() public pure returns (uint256) {
+        revert("Registrar::registrationFeeEth: Registration using ETH is not yet available");
     }
 
     // ADMIN FUNCTIONS
@@ -149,21 +123,21 @@ contract Registrar {
     }
 
     /// Set the price oracle.
-    function setPriceOracle(address oracleAddress) public adminOnly {
+    function setPriceOracle(address _oracleAddress) public adminOnly {
         require(
             oracleAddress != address(0),
             "Registrar::setPriceOracle: oracle address cannot be zero"
         );
-        oracle = PriceOracle(oracleAddress);
+        oracleAddress = _oracleAddress;
     }
 
     /// Set the exchange.
-    function setExchange(address exchangeAddress) public adminOnly {
+    function setExchange(address _exchangeAddress) public adminOnly {
         require(
             exchangeAddress != address(0),
             "Registrar::setExchange: exchange address cannot be zero"
         );
-        exchange = Exchange(exchangeAddress);
+        exchangeAddress = _exchangeAddress;
     }
 
     /// Set the owner of the domain.
