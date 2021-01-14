@@ -187,7 +187,7 @@ contract RadicleToken {
         return true;
     }
 
-    function burnFrom(address account, uint256 rawAmount) public virtual {
+    function burnFrom(address account, uint256 rawAmount) public {
         require(account != address(0), "RadicleToken::burnFrom: cannot burn from the zero address");
         uint96 amount = safe96(rawAmount, "RadicleToken::burnFrom: amount exceeds 96 bits");
 
@@ -207,7 +207,7 @@ contract RadicleToken {
         balances[account] = sub96(
             balances[account],
             amount,
-            "RadicleToken::burnTokens: burn amount exceeds balance"
+            "RadicleToken::burnFrom: burn amount exceeds balance"
         );
         emit Transfer(account, address(0), amount);
 
