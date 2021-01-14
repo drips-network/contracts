@@ -18,12 +18,6 @@ contract Registrar {
     /// The Radicle ERC20 token.
     ERC20Burnable public immutable rad;
 
-    /// The parent node namehash, eg. namehash("eth").
-    bytes32 public immutable parentNode;
-
-    /// The base label, eg. hash("radicle").
-    bytes32 public immutable baseLabel;
-
     /// The namehash of the node, eg. namehash("radicle.eth").
     bytes32 public immutable domain;
 
@@ -46,21 +40,18 @@ contract Registrar {
     }
 
     constructor(
-        address ensAddress,
-        bytes32 _parentNode,
-        bytes32 _baseLabel,
+        ENS _ens,
+        bytes32 domainNameHash,
         address _oracleAddress,
         address _exchangeAddress,
-        address _radAddress,
+        ERC20Burnable _rad,
         address adminAddress
     ) {
-        ens = ENS(ensAddress);
+        ens = _ens;
         oracleAddress = _oracleAddress;
         exchangeAddress = _exchangeAddress;
-        rad = ERC20Burnable(_radAddress);
-        baseLabel = _baseLabel;
-        parentNode = _parentNode;
-        domain = namehash(_parentNode, _baseLabel);
+        rad = _rad;
+        domain = domainNameHash;
         admin = adminAddress;
     }
 
@@ -147,7 +138,7 @@ contract Registrar {
 
     /// Set the owner of the domain.
     function setDomainOwner(address newOwner) public adminOnly {
-        ens.setOwner(namehash(parentNode, baseLabel), newOwner);
+        ens.setOwner(domain, newOwner);
     }
 
     /// Set a new admin
