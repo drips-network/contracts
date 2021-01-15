@@ -36,6 +36,9 @@ contract Registrar {
     /// The contract admin who can set fees.
     address public admin;
 
+    /// @notice A name was registered.
+    event NameRegistered(bytes32 indexed label, address indexed owner);
+
     /// Protects admin-only functions.
     modifier adminOnly {
         require(msg.sender == admin, "Only the admin can perform this action");
@@ -84,6 +87,8 @@ contract Registrar {
         require(!ens.recordExists(node), "Registrar::_register: name must be available");
 
         ens.setSubnodeOwner(domain, label, owner);
+
+        emit NameRegistered(label, owner);
     }
 
     /// Check whether a name is valid.
