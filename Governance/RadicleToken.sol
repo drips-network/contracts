@@ -102,6 +102,21 @@ contract RadicleToken {
         emit Transfer(address(0), account, totalSupply);
     }
 
+    /* @notice Token name */
+    function name() public pure returns (string memory) {
+        return NAME;
+    }
+
+    /* @notice Token symbol */
+    function symbol() public pure returns (string memory) {
+        return SYMBOL;
+    }
+
+    /* @notice Token decimals */
+    function decimals() public pure returns (uint8) {
+        return DECIMALS;
+    }
+
     /**
      * @notice Get the number of tokens `spender` is approved to spend on behalf of `account`
      * @param account The address of the account holding the funds
