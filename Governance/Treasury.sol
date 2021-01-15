@@ -5,7 +5,7 @@ pragma solidity ^0.7.5;
 /// A simple treasury controlled by an admin account.
 contract Treasury {
     /// The contract admin.
-    address public immutable admin;
+    address public admin;
 
     /// Construct a new treasury with an admin.
     constructor(address _admin) {
@@ -18,6 +18,14 @@ contract Treasury {
         require(amount <= address(this).balance, "Treasury::withdraw: insufficient balance");
 
         recipient.transfer(amount);
+    }
+
+    /// Set a new admin.
+    function setAdmin(address _admin) public {
+        require(msg.sender == admin, "Treasury::setAdmin: only the admin can set a new admin");
+        require(_admin != address(0), "Treasury::setAdmin: admin address cannot be zero");
+
+        admin = _admin;
     }
 
     /// Receive ETH through here.
