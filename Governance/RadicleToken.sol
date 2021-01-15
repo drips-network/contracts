@@ -202,6 +202,11 @@ contract RadicleToken {
         return true;
     }
 
+    /**
+     * @notice Burn `rawAmount` tokens from `account`
+     * @param account The address of the account to burn
+     * @param rawAmount The number of tokens to burn
+     */
     function burnFrom(address account, uint256 rawAmount) public {
         require(account != address(0), "RadicleToken::burnFrom: cannot burn from the zero address");
         uint96 amount = safe96(rawAmount, "RadicleToken::burnFrom: amount exceeds 96 bits");
