@@ -4,6 +4,7 @@ pragma solidity ^0.7.5;
 
 import "@ensdomains/ens/contracts/ENS.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20Burnable.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 contract Registrar {
     /// The ENS registry.
@@ -18,8 +19,11 @@ contract Registrar {
     /// The Radicle ERC20 token.
     ERC20Burnable public immutable rad;
 
-    /// The namehash of the node, eg. namehash("radicle.eth").
+    /// The namehash of the node in the `eth` TLD, eg. namehash("radicle.eth").
     bytes32 public immutable domain;
+
+    /// The token ID for the node in the `eth` TLD, eg. sha256("radicle").
+    uint256 public immutable tokenId;
 
     /// Registration fee in *USD*.
     uint256 public registrationFeeUsd = 10;
@@ -41,7 +45,8 @@ contract Registrar {
 
     constructor(
         ENS _ens,
-        bytes32 domainNameHash,
+        bytes32 ethDomainNameHash,
+        uint256 ethDomainTokenId,
         address _oracleAddress,
         address _exchangeAddress,
         ERC20Burnable _rad,
@@ -51,7 +56,8 @@ contract Registrar {
         oracleAddress = _oracleAddress;
         exchangeAddress = _exchangeAddress;
         rad = _rad;
-        domain = domainNameHash;
+        domain = ethDomainNameHash;
+        tokenId = ethDomainTokenId;
         admin = adminAddress;
     }
 
@@ -138,7 +144,16 @@ contract Registrar {
 
     /// Set the owner of the domain.
     function setDomainOwner(address newOwner) public adminOnly {
-        ens.setOwner(domain, newOwner);
+        // The name hash of 'eth'
+        bytes32 ethNode = 0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae;
+        address ethRegistrarAddr = ens.owner(ethNode);
+        require(
+            ethRegistrarAddr != address(0),
+            "Registrar::setDomainOwner: no registrar found on ENS for the 'eth' domain"
+        );
+        ens.setRecord(domain, newOwner, newOwner, 0);
+        IERC721 ethRegistrar = IERC721(ethRegistrarAddr);
+        ethRegistrar.transferFrom(address(this), newOwner, tokenId);
     }
 
     /// Set a new admin
