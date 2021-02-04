@@ -21,6 +21,11 @@ contract VestingToken {
     bool public interrupted; // whether vesting is still possible
     uint256 public withdrawn; // quantity of token withdrawn so far
 
+    /// Vesting was terminated.
+    event VestingTerminated(uint256 remainingVested, uint256 remainingUnvested);
+    /// Vesting tokens were withdrawn
+    event VestedWithdrawn(uint256 amount);
+
     modifier notInterrupted() {
         require(!interrupted, "The contract has been interrupted");
         _;
@@ -99,6 +104,7 @@ contract VestingToken {
             token.transfer(beneficiary, withdrawable),
             "VestingToken::withdrawVested: transfer to beneficiary failed"
         );
+        emit VestedWithdrawn(withdrawable);
     }
 
     /// @notice Force withdrawal of vested tokens to beneficiary
@@ -120,5 +126,6 @@ contract VestingToken {
             token.transfer(owner, remainingUnvested),
             "VestingToken::terminateVesting: transfer to owner failed"
         );
+        emit VestingTerminated(remainingVested, remainingUnvested);
     }
 }
