@@ -75,6 +75,8 @@ contract VestingToken {
     /// @notice Returns the token amount that is currently withdrawable
     /// @return withdrawable Quantity of withdrawable Radicle asset
     function withdrawableBalance() public view returns (uint256 withdrawable) {
+        if (interrupted) return 0;
+
         uint256 timePassed = block.timestamp.sub(vestingStartTime);
 
         if (timePassed < cliffPeriod) {
@@ -103,12 +105,11 @@ contract VestingToken {
     /// @notice Send remainder back to owner
     /// @notice Prevent further vesting
     function terminateVesting() external onlyOwner notInterrupted {
-        interrupted = true;
-
         uint256 remainingVested = withdrawableBalance();
         uint256 totalToBeVested = withdrawn.add(remainingVested);
         uint256 remainingUnvested = totalVestingAmount.sub(totalToBeVested);
 
+        interrupted = true;
         withdrawn = totalVestingAmount;
 
         require(
