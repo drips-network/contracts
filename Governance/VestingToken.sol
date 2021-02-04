@@ -110,7 +110,7 @@ contract VestingToken {
         uint256 remainingUnvested = totalVestingAmount.sub(totalToBeVested);
 
         interrupted = true;
-        withdrawn = totalVestingAmount;
+        withdrawn = totalToBeVested;
 
         require(
             token.transfer(beneficiary, remainingVested),
