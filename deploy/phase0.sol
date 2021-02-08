@@ -6,7 +6,6 @@ import {ERC20Burnable} from "@openzeppelin/contracts/token/ERC20/ERC20Burnable.s
 import {Governor} from "../Governance/Governor.sol";
 import {RadicleToken} from "../Governance/RadicleToken.sol";
 import {Timelock} from "../Governance/Timelock.sol";
-import {Treasury} from "../Governance/Treasury.sol";
 import {Registrar} from "../Registrar.sol";
 
 contract Phase0 {
