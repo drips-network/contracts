@@ -71,8 +71,6 @@ contract Governor {
 
     /// @notice Change proposal
     struct Proposal {
-        // Unique id for looking up a proposal
-        uint256 id;
         // Creator of the proposal
         address proposer;
         // The timestamp that the proposal will be available for execution, set once the vote succeeds
@@ -201,7 +199,8 @@ contract Governor {
         proposalCount++;
         Proposal storage newProposal = proposals[proposalCount];
 
-        newProposal.id = proposalCount;
+        uint256 proposalId = proposalCount;
+
         newProposal.proposer = msg.sender;
         newProposal.eta = 0;
         newProposal.targets = targets;
@@ -215,10 +214,10 @@ contract Governor {
         newProposal.canceled = false;
         newProposal.executed = false;
 
-        latestProposalIds[newProposal.proposer] = newProposal.id;
+        latestProposalIds[newProposal.proposer] = proposalId;
 
         emit ProposalCreated(
-            newProposal.id,
+            proposalId,
             msg.sender,
             targets,
             values,
@@ -228,7 +227,7 @@ contract Governor {
             endBlock,
             description
         );
-        return newProposal.id;
+        return proposalId;
     }
 
     function queue(uint256 proposalId) public {
