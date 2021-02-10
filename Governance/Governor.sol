@@ -168,7 +168,7 @@ contract Governor {
         string memory description
     ) public returns (uint256) {
         require(
-            token.getPriorVotes(msg.sender, sub256(block.number, 1)) > proposalThreshold(),
+            token.getPriorVotes(msg.sender, sub256(block.number, 1)) >= proposalThreshold(),
             "Governor::propose: proposer votes below proposal threshold"
         );
         require(
