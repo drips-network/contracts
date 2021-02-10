@@ -297,7 +297,7 @@ contract Governor {
             msg.sender == guardian ||
                 token.getPriorVotes(proposal.proposer, sub256(block.number, 1)) <
                 proposalThreshold(),
-            "Governor::cancel: proposer above threshold"
+            "Governor::cancel: cannot cancel unless proposer is below threhsold"
         );
 
         proposal.canceled = true;
