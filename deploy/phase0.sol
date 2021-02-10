@@ -45,12 +45,11 @@ contract Phase0 {
         Registrar _registrar =
             new Registrar(
                 _ens,
+                _token,
+                address(_timelock),
+                10,
                 _namehash,
-                uint256(keccak256(bytes(_label))),
-                address(0), // oracle not used yet
-                address(0), // exchange not used yet
-                ERC20Burnable(address(_token)),
-                address(_timelock)
+                uint256(keccak256(bytes(_label)))
             );
 
         token = _token;

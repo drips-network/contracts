@@ -70,6 +70,9 @@ contract RadicleToken {
     bytes32 public constant DELEGATION_TYPEHASH =
         keccak256("Delegation(address delegatee,uint256 nonce,uint256 expiry)");
 
+    /// @notice The EIP-712 typehash for EIP-2612 permit
+    bytes32 public constant PERMIT_TYPEHASH =
+        keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
     /// @notice A record of states for signing / validating signatures
     mapping(address => uint256) public nonces;
 
@@ -117,6 +120,13 @@ contract RadicleToken {
         return DECIMALS;
     }
 
+    /* @notice DOMAIN_SEPARATOR */
+    function DOMAIN_SEPARATOR() public view returns (bytes32) {
+        return keccak256(
+            abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(NAME)), getChainId(), address(this))
+        );
+    }
+
     /**
      * @notice Get the number of tokens `spender` is approved to spend on behalf of `account`
      * @param account The address of the account holding the funds
@@ -136,6 +146,11 @@ contract RadicleToken {
      * @return Whether or not the approval succeeded
      */
     function approve(address spender, uint256 rawAmount) external returns (bool) {
+        _approve(msg.sender, spender, rawAmount);
+        return true;
+    }
+
+    function _approve(address owner, address spender, uint256 rawAmount) internal {
         uint96 amount;
         if (rawAmount == uint256(-1)) {
             amount = uint96(-1);
@@ -143,10 +158,9 @@ contract RadicleToken {
             amount = safe96(rawAmount, "RadicleToken::approve: amount exceeds 96 bits");
         }
 
-        allowances[msg.sender][spender] = amount;
+        allowances[owner][spender] = amount;
 
-        emit Approval(msg.sender, spender, amount);
-        return true;
+        emit Approval(owner, spender, amount);
     }
 
     /**
@@ -261,17 +275,39 @@ contract RadicleToken {
         bytes32 r,
         bytes32 s
     ) public {
-        bytes32 domainSeparator =
-            keccak256(
-                abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(NAME)), getChainId(), address(this))
-            );
         bytes32 structHash = keccak256(abi.encode(DELEGATION_TYPEHASH, delegatee, nonce, expiry));
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR(), structHash));
         address signatory = ecrecover(digest, v, r, s);
         require(signatory != address(0), "RadicleToken::delegateBySig: invalid signature");
         require(nonce == nonces[signatory]++, "RadicleToken::delegateBySig: invalid nonce");
         require(block.timestamp <= expiry, "RadicleToken::delegateBySig: signature expired");
-        return _delegate(signatory, delegatee);
+        _delegate(signatory, delegatee);
+    }
+
+    /**
+     * @notice Approves spender to spend on behalf of owner.
+     * @param owner The signer of the permit
+     * @param spender The address to approve
+     * @param deadline The time at which the signature expires
+     * @param v The recovery byte of the signature
+     * @param r Half of the ECDSA signature pair
+     * @param s Half of the ECDSA signature pair
+     */
+    function permit(
+        address owner,
+        address spender,
+        uint256 value,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) public {
+        bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, nonces[owner]++, deadline));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR(), structHash));
+        require(owner == ecrecover(digest, v, r, s), "RadicleToken::permit: invalid signature");
+        require(owner != address(0), "RadicleToken::permit: invalid signature");
+        require(block.timestamp <= deadline, "RadicleToken::permit: signature expired");
+        _approve(owner, spender, value);
     }
 
     /**
