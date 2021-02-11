@@ -10,11 +10,14 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 // between different versions of the registrar
 contract Commitments {
     address public owner;
-    modifier auth { require(msg.sender == owner, "Commitments: unauthorized"); _; }
+    modifier auth {
+        require(msg.sender == owner, "Commitments: unauthorized");
+        _;
+    }
     event SetOwner(address usr);
 
     /// Mapping from the commitment to the block number in which the commitment was made
-    mapping(bytes32 => uint) public commited;
+    mapping(bytes32 => uint256) public commited;
 
     constructor() {
         owner = msg.sender;
@@ -31,7 +34,6 @@ contract Commitments {
 }
 
 contract Registrar {
-
     // --- DATA ---
 
     /// The ENS registry.
@@ -47,7 +49,7 @@ contract Registrar {
     Commitments public immutable commitments = new Commitments();
 
     /// The namehash of the `eth` TLD in the ENS registry, eg. namehash("eth").
-    bytes32 public constant ethNode = keccak256(abi.encodePacked(bytes32(0), keccak256("eth")));
+    bytes32 public constant ETH_NODE = keccak256(abi.encodePacked(bytes32(0), keccak256("eth")));
 
     /// The namehash of the node in the `eth` TLD, eg. namehash("radicle.eth").
     bytes32 public immutable radNode;
@@ -78,13 +80,13 @@ contract Registrar {
     event NameRegistered(string indexed name, bytes32 indexed label, address indexed owner);
 
     /// @notice A commitment was made
-    event CommitmentMade(bytes32 commitment, uint blockNumber);
+    event CommitmentMade(bytes32 commitment, uint256 blockNumber);
 
     /// @notice The contract admin was changed
     event AdminChanged(address newAdmin);
 
     /// @notice The registration fee was changed
-    event RegistrationRadFeeChanged(uint amt);
+    event RegistrationRadFeeChanged(uint256 amt);
 
     /// @notice The ownership of the domain was changed
     event DomainOwnershipChanged(address newOwner);
@@ -115,9 +117,9 @@ contract Registrar {
         ENS _ens,
         RadicleToken _rad,
         address _admin,
-        uint _minCommitmentAge,
+        uint256 _minCommitmentAge,
         bytes32 _radNode,
-        uint _tokenId
+        uint256 _tokenId
     ) {
         ens = _ens;
         rad = _rad;
@@ -135,19 +137,35 @@ contract Registrar {
     }
 
     /// Commit to a future name and submit permit in the same transaction
-    function commitWithPermit(bytes32 commitment, address owner, uint256 value,
-                              uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
+    function commitWithPermit(
+        bytes32 commitment,
+        address owner,
+        uint256 value,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external {
         rad.permit(owner, address(this), value, deadline, v, r, s);
         _commit(msg.sender, commitment);
     }
 
     /// Commit to a future name with a 712-signed message
-    function commitBySig(bytes32 commitment, uint256 nonce, uint256 expiry, uint256 submissionFee, uint8 v, bytes32 r, bytes32 s) public {
+    function commitBySig(
+        bytes32 commitment,
+        uint256 nonce,
+        uint256 expiry,
+        uint256 submissionFee,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) public {
         bytes32 domainSeparator =
             keccak256(
                 abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(NAME)), getChainId(), address(this))
             );
-        bytes32 structHash = keccak256(abi.encode(COMMIT_TYPEHASH, commitment, nonce, expiry, submissionFee));
+        bytes32 structHash =
+            keccak256(abi.encode(COMMIT_TYPEHASH, commitment, nonce, expiry, submissionFee));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
         address signatory = ecrecover(digest, v, r, s);
         require(signatory != address(0), "Registrar::commitBySig: invalid signature");
@@ -158,9 +176,22 @@ contract Registrar {
     }
 
     /// Commit to a future name with a 712-signed message and submit permit in the same transaction
-    function commitBySigWithPermit(bytes32 commitment, uint256 nonce, uint256 expiry, uint256 submissionFee, uint8 v, bytes32 r, bytes32 s,
-                                   address owner, uint256 value, uint256 deadline, uint8 permit_v, bytes32 permit_r, bytes32 permit_s) public {
-        rad.permit(owner, address(this), value, deadline, permit_v, permit_r, permit_s);
+    function commitBySigWithPermit(
+        bytes32 commitment,
+        uint256 nonce,
+        uint256 expiry,
+        uint256 submissionFee,
+        uint8 v,
+        bytes32 r,
+        bytes32 s,
+        address owner,
+        uint256 value,
+        uint256 deadline,
+        uint8 permitV,
+        bytes32 permitR,
+        bytes32 permitS
+    ) public {
+        rad.permit(owner, address(this), value, deadline, permitV, permitR, permitS);
         commitBySig(commitment, nonce, expiry, submissionFee, v, r, s);
     }
 
@@ -174,7 +205,11 @@ contract Registrar {
     }
 
     /// Register a subdomain
-    function register(string calldata name, address owner, uint salt) external {
+    function register(
+        string calldata name,
+        address owner,
+        uint256 salt
+    ) external {
         bytes32 label = keccak256(bytes(name));
         bytes32 commitment = keccak256(abi.encodePacked(name, owner, salt));
         uint256 commited = commitments.commited(commitment);
@@ -182,7 +217,10 @@ contract Registrar {
         require(valid(name), "Registrar::register: invalid name");
         require(available(name), "Registrar::register: name has already been registered");
         require(commited != 0, "Registrar::register: must commit before registration");
-        require(commited + minCommitmentAge < block.number, "Registrar::register: commitment too new");
+        require(
+            commited + minCommitmentAge < block.number,
+            "Registrar::register: commitment too new"
+        );
 
         ens.setSubnodeRecord(radNode, label, owner, ens.resolver(radNode), ens.ttl(radNode));
 
@@ -211,7 +249,7 @@ contract Registrar {
 
     /// Set the owner of the domain.
     function setDomainOwner(address newOwner) public adminOnly {
-        IERC721 ethRegistrar = IERC721(ens.owner(ethNode));
+        IERC721 ethRegistrar = IERC721(ens.owner(ETH_NODE));
 
         ens.setOwner(radNode, newOwner);
         ethRegistrar.transferFrom(address(this), newOwner, tokenId);
