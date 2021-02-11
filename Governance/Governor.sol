@@ -295,9 +295,9 @@ contract Governor {
         Proposal storage proposal = proposals[proposalId];
         require(
             msg.sender == guardian ||
-            // Allows anyone to cancel a proposal if the voting power of the
-            // proposer dropped below the threshold after the proposal was
-            // submitted.
+                // Allows anyone to cancel a proposal if the voting power of the
+                // proposer dropped below the threshold after the proposal was
+                // submitted.
                 token.getPriorVotes(proposal.proposer, sub256(block.number, 1)) <
                 proposalThreshold(),
             "Governor::cancel: cannot cancel unless proposer is below threhsold"
