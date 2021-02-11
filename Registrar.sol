@@ -61,7 +61,7 @@ contract Registrar {
     uint256 public minCommitmentAge;
 
     /// Registration fee in *Radicle* (uRads).
-    uint256 public registrationFeeRad = 1e18;
+    uint256 public registrationFeeRad = 10e18;
 
     /// @notice The EIP-712 typehash for the contract's domain
     bytes32 public constant DOMAIN_TYPEHASH =
@@ -230,7 +230,7 @@ contract Registrar {
     /// Check whether a name is valid.
     function valid(string memory name) public pure returns (bool) {
         uint256 len = bytes(name).length;
-        return len > 0 && len <= 32;
+        return len >= 2 && len <= 128;
     }
 
     /// Check whether a name is available for registration.
