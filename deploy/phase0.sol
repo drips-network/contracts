@@ -1,4 +1,4 @@
-// spdx-license-identifier: gpl-3.0-only
+// spdx-license-identifier: MIT
 pragma solidity ^0.7.5;
 
 import {ENS} from "@ensdomains/ens/contracts/ENS.sol";

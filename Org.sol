@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-only
+// spdx-license-identifier: MIT
 pragma solidity ^0.7.5;
 
 contract Org {

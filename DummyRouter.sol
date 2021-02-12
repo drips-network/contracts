@@ -1,4 +1,4 @@
-// spdx-license-identifier: gpl-3.0-only
+// spdx-license-identifier: MIT
 // solhint-disable func-name-mixedcase
 pragma solidity ^0.7.5;
 

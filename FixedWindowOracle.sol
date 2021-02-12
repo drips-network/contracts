@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-only
+// spdx-license-identifier: MIT
 // Nb. The code in this file was taken & adapted from Uniswap.
 pragma solidity ^0.7.5;
 

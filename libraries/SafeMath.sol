@@ -1,3 +1,4 @@
+// spdx-license-identifier: MIT
 pragma solidity ^0.7.5;
 
 // a library for performing overflow-safe math, courtesy of DappHub (https://github.com/dapphub/ds-math)
