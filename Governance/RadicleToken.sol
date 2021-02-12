@@ -123,7 +123,7 @@ contract RadicleToken {
     }
 
     /* @notice domainSeparator */
-    function domainSeparator() public view returns (bytes32) {
+    function DOMAIN_SEPARATOR() public view returns (bytes32) {
         return
             keccak256(
                 abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(NAME)), getChainId(), address(this))
@@ -283,7 +283,7 @@ contract RadicleToken {
         bytes32 s
     ) public {
         bytes32 structHash = keccak256(abi.encode(DELEGATION_TYPEHASH, delegatee, nonce, expiry));
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator(), structHash));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR(), structHash));
         address signatory = ecrecover(digest, v, r, s);
         require(signatory != address(0), "RadicleToken::delegateBySig: invalid signature");
         require(nonce == nonces[signatory]++, "RadicleToken::delegateBySig: invalid nonce");
@@ -313,7 +313,7 @@ contract RadicleToken {
             keccak256(
                 abi.encode(PERMIT_TYPEHASH, owner, spender, value, nonces[owner]++, deadline)
             );
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator(), structHash));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR(), structHash));
         require(owner == ecrecover(digest, v, r, s), "RadicleToken::permit: invalid signature");
         require(owner != address(0), "RadicleToken::permit: invalid signature");
         require(block.timestamp <= deadline, "RadicleToken::permit: signature expired");
