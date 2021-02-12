@@ -58,10 +58,10 @@ contract Governor {
     } // ~3 days in blocks (assuming 15s blocks)
 
     /// @notice The address of the Radicle Protocol Timelock
-    TimelockInterface public timelock;
+    TimelockInterface public immutable timelock;
 
     /// @notice The address of the Radicle governance token
-    TokenInterface public token;
+    TokenInterface public immutable token;
 
     /// @notice The address of the Governor Guardian
     address public guardian;
