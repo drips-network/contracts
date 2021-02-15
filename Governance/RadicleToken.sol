@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-only
 // Copyright 2020 Compound Labs, Inc.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -123,6 +123,7 @@ contract RadicleToken {
     }
 
     /* @notice domainSeparator */
+    // solhint-disable func-name-mixedcase
     function DOMAIN_SEPARATOR() public view returns (bytes32) {
         return
             keccak256(
