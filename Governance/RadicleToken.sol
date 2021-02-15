@@ -33,7 +33,7 @@ contract RadicleToken {
     string public constant NAME = "Radicle";
 
     /// @notice EIP-20 token symbol for this token
-    string public constant SYMBOL = "RADICLE";
+    string public constant SYMBOL = "RAD";
 
     /// @notice EIP-20 token decimals for this token
     uint8 public constant DECIMALS = 18;
