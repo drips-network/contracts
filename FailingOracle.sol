@@ -10,7 +10,8 @@ contract FailingOracle is PriceOracle {
 
     function updatePrices() public override {}
 
-    function consultUsdEth(uint256 _usdAmount) public view override returns (uint256) {
+    function consultUsdEth(uint256 _usdAmount) public pure override returns (uint256) {
+        _usdAmount; // Silent an unused variable warning
         revert("FailingOracle::consultUsdEth: ETH oracle disabled, please use RADICLE");
     }
 }

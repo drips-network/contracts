@@ -123,6 +123,7 @@ contract RadicleToken {
     }
 
     /* @notice domainSeparator */
+    // solhint-disable func-name-mixedcase
     function DOMAIN_SEPARATOR() public view returns (bytes32) {
         return
             keccak256(
