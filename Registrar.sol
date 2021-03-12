@@ -3,7 +3,6 @@
 pragma solidity ^0.7.5;
 
 import "@ensdomains/ens/contracts/ENS.sol";
-import "./Governance/RadicleToken.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 // commitments are kept in a seperate contract to allow the state to be reused
@@ -40,7 +39,7 @@ contract Registrar {
     ENS public immutable ens;
 
     /// The Radicle ERC20 token.
-    RadicleToken public immutable rad;
+    RadicleTokenI public immutable rad;
 
     /// @notice EIP-712 name for this contract
     string public constant NAME = "Registrar";
@@ -115,7 +114,7 @@ contract Registrar {
 
     constructor(
         ENS _ens,
-        RadicleToken _rad,
+        RadicleTokenI _rad,
         address _admin,
         uint256 _minCommitmentAge,
         bytes32 _radNode,
@@ -296,4 +295,24 @@ contract Registrar {
         }
         return chainId;
     }
+}
+
+interface RadicleTokenI {
+    function transferFrom(
+        address src,
+        address dst,
+        uint256 rawAmount
+    ) external returns (bool);
+
+    function burnFrom(address account, uint256 rawAmount) external;
+
+    function permit(
+        address owner,
+        address spender,
+        uint256 value,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
 }

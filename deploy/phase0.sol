@@ -6,7 +6,7 @@ import {ERC20Burnable} from "@openzeppelin/contracts/token/ERC20/ERC20Burnable.s
 import {Governor} from "../Governance/Governor.sol";
 import {RadicleToken} from "../Governance/RadicleToken.sol";
 import {Timelock} from "../Governance/Timelock.sol";
-import {Registrar} from "../Registrar.sol";
+import {Registrar, RadicleTokenI} from "../Registrar.sol";
 
 contract Phase0 {
     RadicleToken public immutable token;
@@ -63,7 +63,7 @@ contract Phase0 {
         Registrar _registrar =
             new Registrar(
                 _ens,
-                _token,
+                RadicleTokenI(address(_token)),
                 address(_timelock),
                 10,
                 _namehash,
