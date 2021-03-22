@@ -15,6 +15,17 @@ contract Org {
     /// The values represent offsets into the `projects` array.
     mapping(bytes32 => Project) public projects;
 
+    // ~ Events ~
+
+    /// A project was anchored.
+    event ProjectAnchored(bytes32 id, bytes32 rev, bytes32 hash);
+
+    /// A project was removed.
+    event ProjectRemoved(bytes32 id);
+
+    /// The org owner changed.
+    event OwnerChanged(address newOwner);
+
     /// Construct a new org instance, by providing an owner address.
     constructor(address _owner) {
         owner = _owner;
@@ -34,8 +45,9 @@ contract Org {
     }
 
     /// Set the org owner.
-    function setOwner(address _owner) public ownerOnly {
-        owner = _owner;
+    function setOwner(address newOwner) public ownerOnly {
+        owner = newOwner;
+        emit OwnerChanged(newOwner);
     }
 
     /// Anchor a project state on chain, by providing a revision and hash. This method
@@ -52,10 +64,13 @@ contract Org {
 
         proj.rev = rev;
         proj.hash = hash;
+
+        emit ProjectAnchored(id, rev, hash);
     }
 
     /// Remove a project from the org.
     function removeProject(bytes32 id) public ownerOnly {
         delete projects[id];
+        emit ProjectRemoved(id);
     }
 }
