@@ -81,6 +81,23 @@ abstract contract Pool {
     /// @notice The amount passed as the amount per second to keep the parameter unchanged
     uint128 public constant AMT_PER_SEC_UNCHANGED = type(uint128).max;
 
+    /// @notice Emitted when a direct stream of funds between a sender and a receiver is updated.
+    /// This is caused by a sender updating their parameters.
+    /// Funds are being sent on every second between the event block's timestamp (inclusively) and
+    /// `endTime` (exclusively) or until the timestamp of the next stream update (exclusively).
+    /// @param sender The sender of the updated stream
+    /// @param receiver The receiver of the updated stream
+    /// @param amtPerSec The new amount per second sent from the sender to the receiver
+    /// or 0 if sending is stopped
+    /// @param endTime The timestamp when the funds stop being sent,
+    /// always larger than the block timestamp or equal to it if sending is stopped
+    event SenderToReceiverUpdated(
+        address indexed sender,
+        address indexed receiver,
+        uint128 amtPerSec,
+        uint64 endTime
+    );
+
     struct Sender {
         // Timestamp at which the funding period has started
         uint64 startTime;
@@ -497,6 +514,14 @@ abstract contract Pool {
             if (receiverWeight != 0) {
                 int128 amtPerSecDelta = receiverWeight * amtPerWeightPerSecDelta;
                 setReceiverDeltaFromNow(receiverAddr, amtPerSecDelta, timeEnd);
+                if (amtPerSecDelta > 0) {
+                    // Sending is starting
+                    uint128 amtPerSec = uint128(amtPerSecDelta);
+                    emit SenderToReceiverUpdated(msg.sender, receiverAddr, amtPerSec, timeEnd);
+                } else {
+                    // Sending is stopping
+                    emit SenderToReceiverUpdated(msg.sender, receiverAddr, 0, now());
+                }
             }
             if (proxyWeight != 0) {
                 int128 amtPerSecDelta = proxyWeight * amtPerWeightPerSecDelta;
