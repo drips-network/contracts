@@ -227,7 +227,8 @@ abstract contract Pool {
         uint128 amtPerSec,
         ReceiverWeight[] calldata updatedReceivers,
         ReceiverWeight[] calldata updatedProxies
-    ) internal suspendPayments returns (uint128 withdrawn) {
+    ) internal returns (uint128 withdrawn) {
+        stopSending();
         topUp(topUpAmt);
         withdrawn = withdraw(withdrawAmt);
         setAmtPerSec(amtPerSec);
@@ -237,6 +238,7 @@ abstract contract Pool {
         for (uint256 i = 0; i < updatedProxies.length; i++) {
             setProxy(updatedProxies[i].receiver, updatedProxies[i].weight);
         }
+        startSending();
     }
 
     /// @notice Adds the given amount to the senders pool balance
@@ -436,17 +438,12 @@ abstract contract Pool {
     /// @param amt The transferred amount
     function transferToSender(uint128 amt) internal virtual;
 
-    /// @notice Stops payments of `msg.sender` for the duration of the modified function.
-    /// This removes and then restores any effects of the sender on all of its receivers' futures.
-    /// It allows the function to safely modify any properties of the sender
-    /// without having to updating the state of its receivers.
-    modifier suspendPayments {
-        stopPayments();
-        _;
-        startPayments();
-    }
-
-    function stopPayments() internal {
+    /// @notice Makes `msg.sender` stop sending funds.
+    /// It removes any effects of the sender from all of its receivers.
+    /// It doesn't modify the sender.
+    /// It allows the properties of the sender to be safely modified
+    /// without having to update the state of its receivers.
+    function stopSending() internal {
         Sender storage sender = senders[msg.sender];
         // Hasn't been sending anything
         if (sender.weightSum == 0 || sender.amtPerSec < sender.weightSum) return;
@@ -463,7 +460,10 @@ abstract contract Pool {
         setDeltasFromNow(-int128(amtPerWeight), endTime);
     }
 
-    function startPayments() internal {
+    /// @notice Makes `msg.sender` start sending funds.
+    /// It applies effects of the sender on all of its receivers.
+    /// It doesn't modify the sender.
+    function startSending() internal {
         Sender storage sender = senders[msg.sender];
         // Won't be sending anything
         if (sender.weightSum == 0 || sender.amtPerSec < sender.weightSum) return;
