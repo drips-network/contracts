@@ -98,6 +98,23 @@ abstract contract Pool {
         uint64 endTime
     );
 
+    /// @notice Emitted when a stream of funds between a sender and a proxy is updated.
+    /// This is caused by a sender updating their parameters.
+    /// Funds are being sent on every second between the event block's timestamp (inclusively) and
+    /// `endTime` (exclusively) or until the timestamp of the next stream update (exclusively).
+    /// @param sender The sender of the updated stream
+    /// @param proxy The proxy receiver of the updated stream
+    /// @param amtPerSec The new amount per second sent from the sender to the proxy
+    /// or 0 if sending is stopped
+    /// @param endTime The timestamp when the funds stop being sent,
+    /// always larger than the block timestamp or equal to it if sending is stopped
+    event SenderToProxyUpdated(
+        address indexed sender,
+        address indexed proxy,
+        uint128 amtPerSec,
+        uint64 endTime
+    );
+
     struct Sender {
         // Timestamp at which the funding period has started
         uint64 startTime;
@@ -526,6 +543,14 @@ abstract contract Pool {
             if (proxyWeight != 0) {
                 int128 amtPerSecDelta = proxyWeight * amtPerWeightPerSecDelta;
                 updateProxyReceiversDeltaFromNow(receiverAddr, amtPerSecDelta, timeEnd);
+                if (amtPerSecDelta > 0) {
+                    // Sending is starting
+                    uint128 amtPerSec = uint128(amtPerSecDelta);
+                    emit SenderToProxyUpdated(msg.sender, receiverAddr, amtPerSec, timeEnd);
+                } else {
+                    // Sending is stopping
+                    emit SenderToProxyUpdated(msg.sender, receiverAddr, 0, now());
+                }
             }
         }
     }
