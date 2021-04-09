@@ -115,6 +115,19 @@ abstract contract Pool {
         uint64 endTime
     );
 
+    /// @notice Emitted when a stream of funds between a proxy and a sender is updated.
+    /// This is caused by a proxy updating the receiver's weight.
+    /// Funds are being sent between the event block's timestamp (exclusively) and
+    /// the timestamp of the next stream update (inclusively).
+    /// During the sending period on every timestamp `T` which is a multiple of `cycleSecs`
+    /// the receiver gets a share of all funds sent to the proxy
+    /// during timestamps from `T - cycleSecs` (inclusively) to `T` (exclusively).
+    /// @param proxy The sender proxy of the updated stream
+    /// @param receiver The receiver of the updated stream
+    /// @param weight The weight of the receiver or 0 if sending is stopped.
+    /// The receiver will be getting `weight / PROXY_WEIGHTS_SUM` of funds sent to the proxy.
+    event ProxyToReceiverUpdated(address indexed proxy, address indexed receiver, uint32 weight);
+
     struct Sender {
         // Timestamp at which the funding period has started
         uint64 startTime;
@@ -440,6 +453,7 @@ abstract contract Pool {
             if (weight != 0 && oldWeight == 0 && receivers[receiverAddr].nextCollectedCycle == 0) {
                 receivers[receiverAddr].nextCollectedCycle = now() / cycleSecs + 1;
             }
+            emit ProxyToReceiverUpdated(msg.sender, receiverAddr, weight);
         }
         require(weightSum == PROXY_WEIGHTS_SUM, "Proxy doesn't have the constant weight sum");
     }
