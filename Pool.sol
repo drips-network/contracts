@@ -128,6 +128,13 @@ abstract contract Pool {
     /// The receiver will be getting `weight / PROXY_WEIGHTS_SUM` of funds sent to the proxy.
     event ProxyToReceiverUpdated(address indexed proxy, address indexed receiver, uint32 weight);
 
+    /// @notice Emitted when a sender is updated
+    /// @param sender The updated sender
+    /// @param balance The sender's balance since the event block's timestamp
+    /// @param amtPerSec The target amount sent per second after the update.
+    /// Takes effect on the event block's timestamp (inclusively).
+    event SenderUpdated(address indexed sender, uint128 balance, uint128 amtPerSec);
+
     struct Sender {
         // Timestamp at which the funding period has started
         uint64 startTime;
@@ -285,6 +292,8 @@ abstract contract Pool {
         for (uint256 i = 0; i < updatedProxies.length; i++) {
             setProxy(updatedProxies[i].receiver, updatedProxies[i].weight);
         }
+        Sender storage sender = senders[msg.sender];
+        emit SenderUpdated(msg.sender, sender.startBalance, sender.amtPerSec);
         startSending();
     }
 
