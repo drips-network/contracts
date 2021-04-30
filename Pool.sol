@@ -135,6 +135,11 @@ abstract contract Pool {
     /// Takes effect on the event block's timestamp (inclusively).
     event SenderUpdated(address indexed sender, uint128 balance, uint128 amtPerSec);
 
+    /// @notice Emitted when a receiver collects funds
+    /// @param receiver The collecting receiver
+    /// @param amt The collected amount
+    event Collected(address indexed receiver, uint128 amt);
+
     struct Sender {
         // Timestamp at which the funding period has started
         uint64 startTime;
@@ -229,24 +234,33 @@ abstract contract Pool {
     }
 
     /// @notice Collects all received funds available for collection
-    /// by a sender of the message and sends them to that sender
+    /// by the sender of the message and sends them to that sender
     function collect() public {
+        uint128 collected = collectInternal();
+        if (collected > 0) {
+            transferToSender(collected);
+        }
+        emit Collected(msg.sender, collected);
+    }
+
+    /// @notice Removes from the history and returns the amount of received
+    /// funds available for collection by the sender of the message
+    /// @return collected The collected amount
+    function collectInternal() internal returns (uint128 collected) {
         Receiver storage receiver = receivers[msg.sender];
         uint64 collectedCycle = receiver.nextCollectedCycle;
-        if (collectedCycle == 0) return;
+        if (collectedCycle == 0) return 0;
         uint64 currFinishedCycle = now() / cycleSecs;
-        if (collectedCycle > currFinishedCycle) return;
-        int128 collected = 0;
+        if (collectedCycle > currFinishedCycle) return 0;
         int128 lastFundsPerCycle = receiver.lastFundsPerCycle;
         for (; collectedCycle <= currFinishedCycle; collectedCycle++) {
             lastFundsPerCycle += receiver.amtDeltas[collectedCycle - 1].nextCycle;
             lastFundsPerCycle += receiver.amtDeltas[collectedCycle].thisCycle;
-            collected += lastFundsPerCycle;
+            collected += uint128(lastFundsPerCycle);
             delete receiver.amtDeltas[collectedCycle - 1];
         }
         receiver.lastFundsPerCycle = lastFundsPerCycle;
         receiver.nextCollectedCycle = collectedCycle;
-        transferToSender(uint128(collected));
     }
 
     /// @notice Updates all the sender parameters of the sender of the message.
