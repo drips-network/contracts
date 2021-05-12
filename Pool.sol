@@ -631,12 +631,12 @@ abstract contract Pool {
         // The cycle delta is split proportionally based on how much this cycle is affected.
         // The next cycle has the rest of the delta applied, so the update is fully completed.
         uint64 thisCycle = timestamp / cycleSecs + 1;
-        uint64 nextCycleBlocks = timestamp % cycleSecs;
-        uint64 thisCycleBlocks = cycleSecs - nextCycleBlocks;
+        uint64 nextCycleSecs = timestamp % cycleSecs;
+        uint64 thisCycleSecs = cycleSecs - nextCycleSecs;
         proxyDeltas.addToDelta(
             thisCycle,
-            thisCycleBlocks * amtPerSecDelta,
-            nextCycleBlocks * amtPerSecDelta
+            thisCycleSecs * amtPerSecDelta,
+            nextCycleSecs * amtPerSecDelta
         );
     }
 
@@ -673,10 +673,10 @@ abstract contract Pool {
         // The cycle delta is split proportionally based on how much this cycle is affected.
         // The next cycle has the rest of the delta applied, so the update is fully completed.
         uint64 thisCycle = timestamp / cycleSecs + 1;
-        uint64 nextCycleBlocks = timestamp % cycleSecs;
-        uint64 thisCycleBlocks = cycleSecs - nextCycleBlocks;
-        amtDeltas[thisCycle].thisCycle += thisCycleBlocks * amtPerSecDelta;
-        amtDeltas[thisCycle].nextCycle += nextCycleBlocks * amtPerSecDelta;
+        uint64 nextCycleSecs = timestamp % cycleSecs;
+        uint64 thisCycleSecs = cycleSecs - nextCycleSecs;
+        amtDeltas[thisCycle].thisCycle += thisCycleSecs * amtPerSecDelta;
+        amtDeltas[thisCycle].nextCycle += nextCycleSecs * amtPerSecDelta;
     }
 
     /// @notice Stops proxy of `msg.sender` for the duration of the modified function.
