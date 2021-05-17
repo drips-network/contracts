@@ -5,6 +5,7 @@ pragma experimental ABIEncoderV2;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./libraries/ProxyDeltas.sol";
 import "./libraries/ReceiverWeights.sol";
+import "./TestDai.sol";
 
 /// @notice Funding pool contract. Automatically sends funds to a configurable set of receivers.
 ///
@@ -863,7 +864,7 @@ contract Erc20Pool is Pool {
         uint128 amtPerSec,
         ReceiverWeight[] calldata updatedReceivers,
         ReceiverWeight[] calldata updatedProxies
-    ) public payable {
+    ) public {
         transferToContract(topUpAmt);
         uint128 withdrawn =
             updateSenderInternal(topUpAmt, withdraw, amtPerSec, updatedReceivers, updatedProxies);
@@ -876,5 +877,37 @@ contract Erc20Pool is Pool {
 
     function transferToSender(uint128 amt) internal override {
         if (amt != 0) erc20.transfer(msg.sender, amt);
+    }
+}
+
+/// @notice Funding pool contract for DAI token.
+/// See the base `Pool` contract docs for more details.
+contract DaiPool is Erc20Pool {
+    // solhint-disable no-empty-blocks
+    /// @notice See `Erc20Pool` constructor documentation for more details.
+    constructor(uint64 cycleSecs, Dai dai) Erc20Pool(cycleSecs, dai) {}
+
+    /// @notice Updates all the sender parameters of the sender of the message
+    /// and permits spending sender's Dai by the pool.
+    /// This function is an extension of `updateSender`, see its documentation for more details.
+    ///
+    /// The sender must sign a Dai permission document allowing the pool to spend their funds.
+    /// The document's `nonce` and `expiry` must be passed here along the parts of its signature.
+    /// These parameters will be passed to the Dai contract by this function.
+    function updateSenderAndPermit(
+        uint128 topUpAmt,
+        uint128 withdraw,
+        uint128 amtPerSec,
+        ReceiverWeight[] calldata updatedReceivers,
+        ReceiverWeight[] calldata updatedProxies,
+        uint256 nonce,
+        uint256 expiry,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) public {
+        Dai dai = Dai(address(erc20));
+        dai.permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
+        updateSender(topUpAmt, withdraw, amtPerSec, updatedReceivers, updatedProxies);
     }
 }
