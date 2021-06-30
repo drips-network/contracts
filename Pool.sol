@@ -222,7 +222,7 @@ abstract contract Pool {
         Receiver storage receiver = receivers[msg.sender];
         uint64 collectedCycle = receiver.nextCollectedCycle;
         if (collectedCycle == 0) return 0;
-        uint64 currFinishedCycle = now() / cycleSecs;
+        uint64 currFinishedCycle = currTimestamp() / cycleSecs;
         if (collectedCycle > currFinishedCycle) return 0;
         int128 collected = 0;
         int128 lastFundsPerCycle = receiver.lastFundsPerCycle;
@@ -251,7 +251,7 @@ abstract contract Pool {
         Receiver storage receiver = receivers[msg.sender];
         uint64 collectedCycle = receiver.nextCollectedCycle;
         if (collectedCycle == 0) return 0;
-        uint64 currFinishedCycle = now() / cycleSecs;
+        uint64 currFinishedCycle = currTimestamp() / cycleSecs;
         if (collectedCycle > currFinishedCycle) return 0;
         int128 lastFundsPerCycle = receiver.lastFundsPerCycle;
         for (; collectedCycle <= currFinishedCycle; collectedCycle++) {
@@ -327,7 +327,7 @@ abstract contract Pool {
             return sender.startBalance;
         }
         uint128 amtPerSec = sender.amtPerSec - (sender.amtPerSec % sender.weightSum);
-        uint192 alreadySent = (now() - sender.startTime) * amtPerSec;
+        uint192 alreadySent = (currTimestamp() - sender.startTime) * amtPerSec;
         if (alreadySent > sender.startBalance) {
             return sender.startBalance % amtPerSec;
         }
@@ -475,7 +475,7 @@ abstract contract Pool {
             weightSum += weight;
             // Initialize the receiver
             if (weight != 0 && oldWeight == 0 && receivers[receiverAddr].nextCollectedCycle == 0) {
-                receivers[receiverAddr].nextCollectedCycle = now() / cycleSecs + 1;
+                receivers[receiverAddr].nextCollectedCycle = currTimestamp() / cycleSecs + 1;
             }
             emit ProxyToReceiverUpdated(msg.sender, receiverAddr, weight);
         }
@@ -524,11 +524,11 @@ abstract contract Pool {
         uint256 endTimeUncapped = sender.startTime + uint256(sender.startBalance / amtPerSec);
         uint64 endTime = endTimeUncapped > MAX_TIMESTAMP ? MAX_TIMESTAMP : uint64(endTimeUncapped);
         // The funding period has run out
-        if (endTime <= now()) {
+        if (endTime <= currTimestamp()) {
             sender.startBalance %= amtPerSec;
             return;
         }
-        sender.startBalance -= (now() - sender.startTime) * amtPerSec;
+        sender.startBalance -= (currTimestamp() - sender.startTime) * amtPerSec;
         setDeltasFromNow(-int128(amtPerWeight), endTime);
     }
 
@@ -543,8 +543,8 @@ abstract contract Pool {
         uint128 amtPerSec = amtPerWeight * sender.weightSum;
         // Won't be sending anything
         if (sender.startBalance < amtPerSec) return;
-        sender.startTime = now();
-        uint256 endTimeUncapped = now() + uint256(sender.startBalance / amtPerSec);
+        sender.startTime = currTimestamp();
+        uint256 endTimeUncapped = currTimestamp() + uint256(sender.startBalance / amtPerSec);
         uint64 endTime = endTimeUncapped > MAX_TIMESTAMP ? MAX_TIMESTAMP : uint64(endTimeUncapped);
         setDeltasFromNow(int128(amtPerWeight), endTime);
     }
@@ -575,7 +575,7 @@ abstract contract Pool {
                     emit SenderToReceiverUpdated(msg.sender, receiverAddr, amtPerSec, timeEnd);
                 } else {
                     // Sending is stopping
-                    emit SenderToReceiverUpdated(msg.sender, receiverAddr, 0, now());
+                    emit SenderToReceiverUpdated(msg.sender, receiverAddr, 0, currTimestamp());
                 }
             }
             if (proxyWeight != 0) {
@@ -587,7 +587,7 @@ abstract contract Pool {
                     emit SenderToProxyUpdated(msg.sender, receiverAddr, amtPerSec, timeEnd);
                 } else {
                     // Sending is stopping
-                    emit SenderToProxyUpdated(msg.sender, receiverAddr, 0, now());
+                    emit SenderToProxyUpdated(msg.sender, receiverAddr, 0, currTimestamp());
                 }
             }
         }
@@ -606,7 +606,11 @@ abstract contract Pool {
     ) internal {
         int128 amtPerSecPerProxyWeightDelta = amtPerSecDelta / PROXY_WEIGHTS_SUM;
         Proxy storage proxy = proxies[proxyAddr];
-        updateSingleProxyDelta(proxy.amtPerWeightDeltas, now(), amtPerSecPerProxyWeightDelta);
+        updateSingleProxyDelta(
+            proxy.amtPerWeightDeltas,
+            currTimestamp(),
+            amtPerSecPerProxyWeightDelta
+        );
         updateSingleProxyDelta(proxy.amtPerWeightDeltas, timeEnd, -amtPerSecPerProxyWeightDelta);
         // Iterating over receivers, see `ReceiverWeights` for details
         address receiver = ReceiverWeightsImpl.ADDR_ROOT;
@@ -655,9 +659,9 @@ abstract contract Pool {
         // The first usage of a receiver is always setting a positive delta to start sending.
         // If the delta is negative, the receiver must've been used before and now is being cleared.
         if (amtPerSecDelta > 0 && receiver.nextCollectedCycle == 0)
-            receiver.nextCollectedCycle = now() / cycleSecs + 1;
+            receiver.nextCollectedCycle = currTimestamp() / cycleSecs + 1;
         // Set delta in a time range from now to `timeEnd`
-        setSingleDelta(receiver.amtDeltas, now(), amtPerSecDelta);
+        setSingleDelta(receiver.amtDeltas, currTimestamp(), amtPerSecDelta);
         setSingleDelta(receiver.amtDeltas, timeEnd, -amtPerSecDelta);
     }
 
@@ -718,7 +722,7 @@ abstract contract Pool {
         // Iterating over deltas, see `ProxyDeltas` for details
         uint64 cycle = ProxyDeltasImpl.CYCLE_ROOT;
         uint64 cycleHint = ProxyDeltasImpl.CYCLE_ROOT;
-        uint64 finishedCycle = now() / cycleSecs;
+        uint64 finishedCycle = currTimestamp() / cycleSecs;
         uint64 currCycle = finishedCycle + 1;
         // The sum of all the future changes to the per-second amount the proxy receives.
         // This is also the per-second amount the proxy receives per weight in the current cycle,
@@ -753,7 +757,7 @@ abstract contract Pool {
         }
     }
 
-    function now() internal view returns (uint64) {
+    function currTimestamp() internal view returns (uint64) {
         return uint64(block.timestamp);
     }
 }
