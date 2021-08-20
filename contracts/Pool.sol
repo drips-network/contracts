@@ -2,7 +2,7 @@
 pragma solidity ^0.7.5;
 pragma experimental ABIEncoderV2;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import "./libraries/ProxyDeltas.sol";
 import "./libraries/ReceiverWeights.sol";
 import "./TestDai.sol";
@@ -53,6 +53,12 @@ import "./TestDai.sol";
 ///
 /// The contract assumes that all amounts in the system can be stored in signed 128-bit integers.
 /// It's guaranteed to be safe only when working with assets with supply lower than `2 ^ 127`.
+
+struct ReceiverWeight {
+    address receiver;
+    uint32 weight;
+}
+
 abstract contract Pool {
     using ReceiverWeightsImpl for ReceiverWeights;
     using ProxyDeltasImpl for ProxyDeltas;
@@ -189,10 +195,6 @@ abstract contract Pool {
         int128 nextCycle;
     }
 
-    struct ReceiverWeight {
-        address receiver;
-        uint32 weight;
-    }
 
     struct ReceiverProxyWeight {
         address receiver;
