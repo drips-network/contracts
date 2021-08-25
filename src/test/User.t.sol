@@ -15,11 +15,11 @@ contract User {
     }
 
     function withdraw(uint withdrawAmount) public {
-        pool.updateSender(0, uint128(withdrawAmount), 0,  new ReceiverWeight[](0), new ReceiverWeight[](0));
+        pool.updateSender(0, uint128(withdrawAmount), 0,  new ReceiverWeight[](0));
     }
 
     function withdraw(address nftRegistry, uint tokenId, uint withdrawAmount) public {
-        pool.updateSender(nftRegistry, uint128(tokenId), 0, uint128(withdrawAmount), 0,  new ReceiverWeight[](0), new ReceiverWeight[](0));
+        pool.updateSender(nftRegistry, uint128(tokenId), 0, uint128(withdrawAmount), 0, new ReceiverWeight[](0));
     }
 
     function collect() public {
@@ -35,7 +35,7 @@ contract User {
         receivers[0] = ReceiverWeight({receiver:to, weight:pool.SENDER_WEIGHTS_SUM_MAX()});
 
         dai.approve(address(pool), type(uint).max);
-        pool.updateSender(uint128(lockAmount), 0, uint128(daiPerSecond), receivers, new ReceiverWeight[](0));
+        pool.updateSender(uint128(lockAmount), 0, uint128(daiPerSecond), receivers);
     }
 
     function streamWithNFT(address nftRegistry, uint tokenId, address to, uint daiPerSecond, uint lockAmount) public {
@@ -43,7 +43,7 @@ contract User {
         receivers[0] = ReceiverWeight({receiver:to, weight:pool.SENDER_WEIGHTS_SUM_MAX()});
 
         dai.approve(address(pool), type(uint).max);
-        pool.updateSender(nftRegistry, uint128(tokenId), uint128(lockAmount), 0, uint128(daiPerSecond), receivers, new ReceiverWeight[](0));
+        pool.updateSender(nftRegistry, uint128(tokenId), uint128(lockAmount), 0, uint128(daiPerSecond), receivers);
     }
 
     function transferNFT(address nftRegistry,address to, uint tokenId) public {

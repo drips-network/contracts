@@ -43,14 +43,12 @@ contract NFTPool is DaiPool {
         uint128 topUpAmt,
         uint128 withdraw,
         uint128 amtPerSec,
-        ReceiverWeight[] calldata updatedReceivers,
-        ReceiverWeight[] calldata updatedProxies
+        ReceiverWeight[] calldata updatedReceivers
     ) internal {
         // msg.sender === nft owner
         _transferToContract(msg.sender, topUpAmt);
         uint128 withdrawn =
-        _updateSenderInternal(to, topUpAmt, withdraw, amtPerSec,
-            updatedReceivers, updatedProxies);
+        _updateSenderInternal(to, topUpAmt, withdraw, amtPerSec, updatedReceivers);
         _transferToSender(msg.sender, withdrawn);
     }
 
@@ -63,11 +61,9 @@ contract NFTPool is DaiPool {
         uint128 topUpAmt,
         uint128 withdraw,
         uint128 amtPerSec,
-        ReceiverWeight[] calldata updatedReceivers,
-        ReceiverWeight[] calldata updatedProxies
+        ReceiverWeight[] calldata updatedReceivers
     ) public nftOwner(nftRegistry, tokenId) {
-        _sendFromNFT(nftID(nftRegistry, tokenId),
-            topUpAmt, withdraw, amtPerSec, updatedReceivers, updatedProxies);
+        _sendFromNFT(nftID(nftRegistry, tokenId), topUpAmt, withdraw, amtPerSec, updatedReceivers);
     }
 
     // todo implement update sender with permit after proxies are removed
