@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity ^0.7.5;
+pragma solidity ^0.8.6;
 pragma experimental ABIEncoderV2;
 
 import "ds-test/test.sol";
 import "./../Pool.sol";
-import "openzeppelin-contracts/math/SafeMath.sol";
 
 interface Hevm {
     function warp(uint256) external;
@@ -30,14 +29,12 @@ contract User {
         ReceiverWeight[] memory receivers = new ReceiverWeight[](1);
         receivers[0] = ReceiverWeight({receiver:to, weight:pool.SENDER_WEIGHTS_SUM_MAX()});
 
-        dai.approve(address(pool), uint(-1));
+        dai.approve(address(pool), type(uint).max);
         pool.updateSender(uint128(lockAmount), 0, uint128(daiPerSecond), receivers, new ReceiverWeight[](0));
     }
 }
 
 contract PoolTest is DSTest {
-    using SafeMath for uint;
-
     Hevm public hevm;
     DaiPool pool;
     Dai dai;
@@ -61,9 +58,9 @@ contract PoolTest is DSTest {
     function assertEqTol(uint actual, uint expected, bytes32 msg_) public {
         uint diff;
         if (actual > expected) {
-            diff = actual.sub(expected);
+            diff = actual - expected;
         } else {
-            diff = expected.sub(actual);
+            diff = expected - actual;
         }
         if (diff > TOLERANCE) {
             emit log_named_bytes32(string(abi.encodePacked(msg_)), "Assert Equal Failed");

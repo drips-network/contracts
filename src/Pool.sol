@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity ^0.7.5;
+pragma solidity ^0.8.6;
 pragma experimental ABIEncoderV2;
 
 import "openzeppelin-contracts/token/ERC20/IERC20.sol";
@@ -569,7 +569,7 @@ abstract contract Pool {
                 .nextWeightPruning(receiverAddr, hint);
             if (receiverAddr == ReceiverWeightsImpl.ADDR_ROOT) break;
             if (receiverWeight != 0) {
-                int128 amtPerSecDelta = receiverWeight * amtPerWeightPerSecDelta;
+                int128 amtPerSecDelta = int128(uint128(receiverWeight)) * amtPerWeightPerSecDelta;
                 setReceiverDeltaFromNow(receiverAddr, amtPerSecDelta, timeEnd);
                 if (amtPerSecDelta > 0) {
                     // Sending is starting
@@ -581,7 +581,7 @@ abstract contract Pool {
                 }
             }
             if (proxyWeight != 0) {
-                int128 amtPerSecDelta = proxyWeight * amtPerWeightPerSecDelta;
+                int128 amtPerSecDelta = int128(uint128(proxyWeight)) * amtPerWeightPerSecDelta;
                 updateProxyReceiversDeltaFromNow(receiverAddr, amtPerSecDelta, timeEnd);
                 if (amtPerSecDelta > 0) {
                     // Sending is starting
@@ -606,7 +606,7 @@ abstract contract Pool {
         int128 amtPerSecDelta,
         uint64 timeEnd
     ) internal {
-        int128 amtPerSecPerProxyWeightDelta = amtPerSecDelta / PROXY_WEIGHTS_SUM;
+        int128 amtPerSecPerProxyWeightDelta = amtPerSecDelta / int128(uint128(PROXY_WEIGHTS_SUM));
         Proxy storage proxy = proxies[proxyAddr];
         updateSingleProxyDelta(
             proxy.amtPerWeightDeltas,
@@ -621,7 +621,8 @@ abstract contract Pool {
             uint32 weight;
             (receiver, hint, weight, ) = proxy.receiverWeights.nextWeightPruning(receiver, hint);
             if (receiver == ReceiverWeightsImpl.ADDR_ROOT) break;
-            setReceiverDeltaFromNow(receiver, amtPerSecPerProxyWeightDelta * weight, timeEnd);
+            int128 delta = amtPerSecPerProxyWeightDelta * int128(uint128(weight));
+            setReceiverDeltaFromNow(receiver, delta, timeEnd);
         }
     }
 
@@ -642,8 +643,8 @@ abstract contract Pool {
         uint64 thisCycleSecs = cycleSecs - nextCycleSecs;
         proxyDeltas.addToDelta(
             thisCycle,
-            thisCycleSecs * amtPerSecDelta,
-            nextCycleSecs * amtPerSecDelta
+            int128(uint128(thisCycleSecs)) * amtPerSecDelta,
+            int128(uint128(nextCycleSecs)) * amtPerSecDelta
         );
     }
 
@@ -682,8 +683,8 @@ abstract contract Pool {
         uint64 thisCycle = timestamp / cycleSecs + 1;
         uint64 nextCycleSecs = timestamp % cycleSecs;
         uint64 thisCycleSecs = cycleSecs - nextCycleSecs;
-        amtDeltas[thisCycle].thisCycle += thisCycleSecs * amtPerSecDelta;
-        amtDeltas[thisCycle].nextCycle += nextCycleSecs * amtPerSecDelta;
+        amtDeltas[thisCycle].thisCycle += int128(uint128(thisCycleSecs)) * amtPerSecDelta;
+        amtDeltas[thisCycle].nextCycle += int128(uint128(nextCycleSecs)) * amtPerSecDelta;
     }
 
     /// @notice Stops proxy of `msg.sender` for the duration of the modified function.
@@ -746,15 +747,16 @@ abstract contract Pool {
             for (uint32 i = 0; i < receiversCount; i++) {
                 Receiver storage receiver = receivers[receiversList[i].receiver];
                 uint32 weight = receiversList[i].weight;
-                receiver.amtDeltas[cycle].thisCycle += weight * thisCycleDelta;
-                receiver.amtDeltas[cycle].nextCycle += weight * nextCycleDelta;
+                receiver.amtDeltas[cycle].thisCycle += int128(uint128(weight)) * thisCycleDelta;
+                receiver.amtDeltas[cycle].nextCycle += int128(uint128(weight)) * nextCycleDelta;
             }
         }
         // Set the delta for the current cycle, which balances all the applied deltas
         if (totalDelta != 0) {
             for (uint32 i = 0; i < receiversCount; i++) {
                 Receiver storage receiver = receivers[receiversList[i].receiver];
-                receiver.amtDeltas[currCycle].thisCycle -= totalDelta * receiversList[i].weight;
+                int128 weight = int128(uint128(receiversList[i].weight));
+                receiver.amtDeltas[currCycle].thisCycle -= totalDelta * weight;
             }
         }
     }
@@ -818,7 +820,7 @@ contract EthPool is Pool {
     }
 
     function transferToSender(uint128 amt) internal override {
-        if (amt != 0) msg.sender.transfer(amt);
+        if (amt != 0) payable(msg.sender).transfer(amt);
     }
 }
 

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity ^0.7.5;
+pragma solidity ^0.8.6;
 
 /// @notice A list of receivers to their weights, iterable and with random access
 struct ReceiverWeights {
