@@ -239,9 +239,9 @@ abstract contract Pool {
     /// @notice Collects all received funds available for collection
     /// by the sender of the message and sends them to that sender
     function collect() public {
-        uint128 collected = collectInternal();
+        uint128 collected = _collectInternal(msg.sender);
         if (collected > 0) {
-            transferToSender(collected);
+            _transferToSender(msg.sender, collected);
         }
         emit Collected(msg.sender, collected);
     }
@@ -249,8 +249,8 @@ abstract contract Pool {
     /// @notice Removes from the history and returns the amount of received
     /// funds available for collection by the sender of the message
     /// @return collected The collected amount
-    function collectInternal() internal returns (uint128 collected) {
-        Receiver storage receiver = receivers[msg.sender];
+    function _collectInternal(address id) internal returns (uint128 collected) {
+        Receiver storage receiver = receivers[id];
         uint64 collectedCycle = receiver.nextCollectedCycle;
         if (collectedCycle == 0) return 0;
         uint64 currFinishedCycle = currTimestamp() / cycleSecs;
@@ -292,32 +292,33 @@ abstract contract Pool {
     /// @param updatedProxies The list of the updated proxies and their new weights
     /// @return withdrawn The withdrawn amount which should be sent to the sender of the message.
     /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
-    function updateSenderInternal(
+    function _updateSenderInternal(
+        address id,
         uint128 topUpAmt,
         uint128 withdrawAmt,
         uint128 amtPerSec,
         ReceiverWeight[] calldata updatedReceivers,
         ReceiverWeight[] calldata updatedProxies
     ) internal returns (uint128 withdrawn) {
-        stopSending();
-        topUp(topUpAmt);
-        withdrawn = withdraw(withdrawAmt);
-        setAmtPerSec(amtPerSec);
+        _stopSending(id);
+        _topUp(id, topUpAmt);
+        withdrawn = _withdraw(id, withdrawAmt);
+        _setAmtPerSec(id, amtPerSec);
         for (uint256 i = 0; i < updatedReceivers.length; i++) {
-            setReceiver(updatedReceivers[i].receiver, updatedReceivers[i].weight);
+            _setReceiver(id, updatedReceivers[i].receiver, updatedReceivers[i].weight);
         }
         for (uint256 i = 0; i < updatedProxies.length; i++) {
-            setProxy(updatedProxies[i].receiver, updatedProxies[i].weight);
+            _setProxy(id, updatedProxies[i].receiver, updatedProxies[i].weight);
         }
-        Sender storage sender = senders[msg.sender];
-        emit SenderUpdated(msg.sender, sender.startBalance, sender.amtPerSec);
-        startSending();
+        Sender storage sender = senders[id];
+        emit SenderUpdated(id, sender.startBalance, sender.amtPerSec);
+        _startSending(id);
     }
 
     /// @notice Adds the given amount to the senders pool balance
     /// @param amt The topped up amount
-    function topUp(uint128 amt) internal {
-        if (amt != 0) senders[msg.sender].startBalance += amt;
+    function _topUp(address id, uint128 amt) internal {
+        if (amt != 0) senders[id].startBalance += amt;
     }
 
     /// @notice Returns amount of unsent funds available for withdrawal by the sender of the message
@@ -341,13 +342,13 @@ abstract contract Pool {
     /// Can be `WITHDRAW_ALL` to withdraw everything.
     /// @return withdrawn The actually withdrawn amount.
     /// Equal to `amt` unless `WITHDRAW_ALL` is used.
-    function withdraw(uint128 amt) internal returns (uint128 withdrawn) {
+    function _withdraw(address id, uint128 amt) internal returns (uint128 withdrawn) {
         if (amt == 0) return 0;
-        uint128 startBalance = senders[msg.sender].startBalance;
+        uint128 startBalance = senders[id].startBalance;
         if (amt == WITHDRAW_ALL) amt = startBalance;
         if (amt == 0) return 0;
         require(amt <= startBalance, "Not enough funds in the sender account");
-        senders[msg.sender].startBalance = startBalance - amt;
+        senders[id].startBalance = startBalance - amt;
         return amt;
     }
 
@@ -357,8 +358,8 @@ abstract contract Pool {
     /// Each receiver and proxy then receives their part from the sender's balance.
     /// If set to zero, stops funding.
     /// @param amtPerSec The target amount to be sent every second
-    function setAmtPerSec(uint128 amtPerSec) internal {
-        if (amtPerSec != AMT_PER_SEC_UNCHANGED) senders[msg.sender].amtPerSec = amtPerSec;
+    function _setAmtPerSec(address id, uint128 amtPerSec) internal {
+        if (amtPerSec != AMT_PER_SEC_UNCHANGED) senders[id].amtPerSec = amtPerSec;
     }
 
     /// @notice Gets the target amount sent every second from the sender of the message.
@@ -379,8 +380,8 @@ abstract contract Pool {
     /// Setting zero as the weight for a receiver removes it from the list of the sender's receivers.
     /// @param receiver The address of the receiver
     /// @param weight The weight of the receiver
-    function setReceiver(address receiver, uint32 weight) internal {
-        Sender storage sender = senders[msg.sender];
+    function _setReceiver(address id, address receiver, uint32 weight) internal {
+        Sender storage sender = senders[id];
         uint64 senderWeightSum = sender.weightSum;
         uint32 oldWeight = sender.receiverWeights.setReceiverWeight(receiver, weight);
         senderWeightSum -= oldWeight;
@@ -402,13 +403,13 @@ abstract contract Pool {
     /// Setting zero as the weight for a proxy removes it from the list of the sender's receivers.
     /// @param proxy The address of the proxy
     /// @param weight The weight of the proxy, must be a multiple of `PROXY_WEIGHTS_SUM`
-    function setProxy(address proxy, uint32 weight) internal {
+    function _setProxy(address id, address proxy, uint32 weight) internal {
         require(proxies[proxy].receiverWeights.isZeroed() == false, "Proxy doesn't exist");
         require(
             weight % PROXY_WEIGHTS_SUM == 0,
             "Proxy weight not a multiple of PROXY_WEIGHTS_SUM"
         );
-        Sender storage sender = senders[msg.sender];
+        Sender storage sender = senders[id];
         uint64 senderWeightSum = sender.weightSum;
         uint32 oldWeight = sender.receiverWeights.setProxyWeight(proxy, weight);
         senderWeightSum -= oldWeight;
@@ -510,15 +511,15 @@ abstract contract Pool {
 
     /// @notice Called when funds need to be transferred out of the pool to the message sender
     /// @param amt The transferred amount
-    function transferToSender(uint128 amt) internal virtual;
+    function _transferToSender(address usr, uint128 amt) internal virtual;
 
     /// @notice Makes `msg.sender` stop sending funds.
     /// It removes any effects of the sender from all of its receivers.
     /// It doesn't modify the sender.
     /// It allows the properties of the sender to be safely modified
     /// without having to update the state of its receivers.
-    function stopSending() internal {
-        Sender storage sender = senders[msg.sender];
+    function _stopSending(address id) internal {
+        Sender storage sender = senders[id];
         // Hasn't been sending anything
         if (sender.weightSum == 0 || sender.amtPerSec < sender.weightSum) return;
         uint128 amtPerWeight = sender.amtPerSec / sender.weightSum;
@@ -531,14 +532,14 @@ abstract contract Pool {
             return;
         }
         sender.startBalance -= (currTimestamp() - sender.startTime) * amtPerSec;
-        setDeltasFromNow(-int128(amtPerWeight), endTime);
+        _setDeltasFromNow(id, -int128(amtPerWeight), endTime);
     }
 
     /// @notice Makes `msg.sender` start sending funds.
     /// It applies effects of the sender on all of its receivers.
     /// It doesn't modify the sender.
-    function startSending() internal {
-        Sender storage sender = senders[msg.sender];
+    function _startSending(address id) internal {
+        Sender storage sender = senders[id];
         // Won't be sending anything
         if (sender.weightSum == 0 || sender.amtPerSec < sender.weightSum) return;
         uint128 amtPerWeight = sender.amtPerSec / sender.weightSum;
@@ -548,7 +549,7 @@ abstract contract Pool {
         sender.startTime = currTimestamp();
         uint256 endTimeUncapped = currTimestamp() + uint256(sender.startBalance / amtPerSec);
         uint64 endTime = endTimeUncapped > MAX_TIMESTAMP ? MAX_TIMESTAMP : uint64(endTimeUncapped);
-        setDeltasFromNow(int128(amtPerWeight), endTime);
+        _setDeltasFromNow(id, int128(amtPerWeight), endTime);
     }
 
     /// @notice Sets deltas to all sender's receivers and proxies from now to `timeEnd`
@@ -556,8 +557,8 @@ abstract contract Pool {
     /// Effects are applied as if the change was made on the beginning of the current cycle.
     /// @param amtPerWeightPerSecDelta Amount of per-second delta applied per receiver weight
     /// @param timeEnd The timestamp from which the delta stops taking effect
-    function setDeltasFromNow(int128 amtPerWeightPerSecDelta, uint64 timeEnd) internal {
-        Sender storage sender = senders[msg.sender];
+    function _setDeltasFromNow(address id, int128 amtPerWeightPerSecDelta, uint64 timeEnd) internal {
+        Sender storage sender = senders[id];
         // Iterating over receivers, see `ReceiverWeights` for details
         address receiverAddr = ReceiverWeightsImpl.ADDR_ROOT;
         address hint = ReceiverWeightsImpl.ADDR_ROOT;
@@ -570,26 +571,26 @@ abstract contract Pool {
             if (receiverAddr == ReceiverWeightsImpl.ADDR_ROOT) break;
             if (receiverWeight != 0) {
                 int128 amtPerSecDelta = int128(uint128(receiverWeight)) * amtPerWeightPerSecDelta;
-                setReceiverDeltaFromNow(receiverAddr, amtPerSecDelta, timeEnd);
+                _setReceiverDeltaFromNow(receiverAddr, amtPerSecDelta, timeEnd);
                 if (amtPerSecDelta > 0) {
                     // Sending is starting
                     uint128 amtPerSec = uint128(amtPerSecDelta);
-                    emit SenderToReceiverUpdated(msg.sender, receiverAddr, amtPerSec, timeEnd);
+                    emit SenderToReceiverUpdated(id, receiverAddr, amtPerSec, timeEnd);
                 } else {
                     // Sending is stopping
-                    emit SenderToReceiverUpdated(msg.sender, receiverAddr, 0, currTimestamp());
+                    emit SenderToReceiverUpdated(id, receiverAddr, 0, currTimestamp());
                 }
             }
             if (proxyWeight != 0) {
                 int128 amtPerSecDelta = int128(uint128(proxyWeight)) * amtPerWeightPerSecDelta;
-                updateProxyReceiversDeltaFromNow(receiverAddr, amtPerSecDelta, timeEnd);
+                _updateProxyReceiversDeltaFromNow(receiverAddr, amtPerSecDelta, timeEnd);
                 if (amtPerSecDelta > 0) {
                     // Sending is starting
                     uint128 amtPerSec = uint128(amtPerSecDelta);
-                    emit SenderToProxyUpdated(msg.sender, receiverAddr, amtPerSec, timeEnd);
+                    emit SenderToProxyUpdated(id, receiverAddr, amtPerSec, timeEnd);
                 } else {
                     // Sending is stopping
-                    emit SenderToProxyUpdated(msg.sender, receiverAddr, 0, currTimestamp());
+                    emit SenderToProxyUpdated(id, receiverAddr, 0, currTimestamp());
                 }
             }
         }
@@ -601,19 +602,19 @@ abstract contract Pool {
     /// @param proxyAddr The address of the proxy
     /// @param amtPerSecDelta Change of the per-second receiving rate of the proxy
     /// @param timeEnd The timestamp from which the delta stops taking effect
-    function updateProxyReceiversDeltaFromNow(
+    function _updateProxyReceiversDeltaFromNow(
         address proxyAddr,
         int128 amtPerSecDelta,
         uint64 timeEnd
     ) internal {
         int128 amtPerSecPerProxyWeightDelta = amtPerSecDelta / int128(uint128(PROXY_WEIGHTS_SUM));
         Proxy storage proxy = proxies[proxyAddr];
-        updateSingleProxyDelta(
+        _updateSingleProxyDelta(
             proxy.amtPerWeightDeltas,
             currTimestamp(),
             amtPerSecPerProxyWeightDelta
         );
-        updateSingleProxyDelta(proxy.amtPerWeightDeltas, timeEnd, -amtPerSecPerProxyWeightDelta);
+        _updateSingleProxyDelta(proxy.amtPerWeightDeltas, timeEnd, -amtPerSecPerProxyWeightDelta);
         // Iterating over receivers, see `ReceiverWeights` for details
         address receiver = ReceiverWeightsImpl.ADDR_ROOT;
         address hint = ReceiverWeightsImpl.ADDR_ROOT;
@@ -622,7 +623,7 @@ abstract contract Pool {
             (receiver, hint, weight, ) = proxy.receiverWeights.nextWeightPruning(receiver, hint);
             if (receiver == ReceiverWeightsImpl.ADDR_ROOT) break;
             int128 delta = amtPerSecPerProxyWeightDelta * int128(uint128(weight));
-            setReceiverDeltaFromNow(receiver, delta, timeEnd);
+            _setReceiverDeltaFromNow(receiver, delta, timeEnd);
         }
     }
 
@@ -630,7 +631,7 @@ abstract contract Pool {
     /// @param proxyDeltas The deltas of the per-cycle receiving rate
     /// @param timestamp The timestamp from which the delta takes effect
     /// @param amtPerSecDelta Change of the per-second receiving rate
-    function updateSingleProxyDelta(
+    function _updateSingleProxyDelta(
         ProxyDeltas storage proxyDeltas,
         uint64 timestamp,
         int128 amtPerSecDelta
@@ -652,7 +653,7 @@ abstract contract Pool {
     /// @param receiverAddr The address of the receiver
     /// @param amtPerSecDelta Change of the per-second receiving rate
     /// @param timeEnd The timestamp from which the delta stops taking effect
-    function setReceiverDeltaFromNow(
+    function _setReceiverDeltaFromNow(
         address receiverAddr,
         int128 amtPerSecDelta,
         uint64 timeEnd
@@ -664,15 +665,15 @@ abstract contract Pool {
         if (amtPerSecDelta > 0 && receiver.nextCollectedCycle == 0)
             receiver.nextCollectedCycle = currTimestamp() / cycleSecs + 1;
         // Set delta in a time range from now to `timeEnd`
-        setSingleDelta(receiver.amtDeltas, currTimestamp(), amtPerSecDelta);
-        setSingleDelta(receiver.amtDeltas, timeEnd, -amtPerSecDelta);
+        _setSingleDelta(receiver.amtDeltas, currTimestamp(), amtPerSecDelta);
+        _setSingleDelta(receiver.amtDeltas, timeEnd, -amtPerSecDelta);
     }
 
     /// @notice Sets delta of a single receiver on a given timestamp
     /// @param amtDeltas The deltas of the per-cycle receiving rate
     /// @param timestamp The timestamp from which the delta takes effect
     /// @param amtPerSecDelta Change of the per-second receiving rate
-    function setSingleDelta(
+    function _setSingleDelta(
         mapping(uint64 => AmtDelta) storage amtDeltas,
         uint64 timestamp,
         int128 amtPerSecDelta
@@ -692,16 +693,16 @@ abstract contract Pool {
     /// It allows the function to safely modify any properties of the proxy
     /// without having to updating the state of its receivers.
     modifier suspendProxy {
-        applyProxyDeltasOnReceivers(-1);
+        _applyProxyDeltasOnReceivers(-1);
         _;
-        applyProxyDeltasOnReceivers(1);
+        _applyProxyDeltasOnReceivers(1);
     }
 
     /// @notice Applies the effects of the proxy on all of its receivers' futures.
     /// Effects are applied as if the change was made on the beginning of the current cycle.
     /// @param multiplier The multiplier of the deltas applied on the receivers.
     /// `-1` to remove the effects of the proxy, `1` to reapply after removal.
-    function applyProxyDeltasOnReceivers(int8 multiplier) internal {
+    function _applyProxyDeltasOnReceivers(int8 multiplier) internal {
         Proxy storage proxy = proxies[msg.sender];
         uint32 receiversCount = 0;
         // Create an in-memory copy of the receivers list to reduce storage access
@@ -761,7 +762,7 @@ abstract contract Pool {
         }
     }
 
-    function currTimestamp() internal view returns (uint64) {
+    function currTimestamp() public view returns (uint64) {
         return uint64(block.timestamp);
     }
 }
@@ -809,18 +810,19 @@ contract EthPool is Pool {
         ReceiverWeight[] calldata updatedProxies
     ) public payable {
         uint128 withdrawn =
-            updateSenderInternal(
+            _updateSenderInternal(
+                msg.sender,
                 uint128(msg.value),
                 withdraw,
                 amtPerSec,
                 updatedReceivers,
                 updatedProxies
             );
-        transferToSender(withdrawn);
+        _transferToSender(msg.sender, withdrawn);
     }
 
-    function transferToSender(uint128 amt) internal override {
-        if (amt != 0) payable(msg.sender).transfer(amt);
+    function _transferToSender(address usr, uint128 amt) internal override {
+        if (amt != 0) payable(usr).transfer(amt);
     }
 }
 
@@ -873,18 +875,18 @@ contract Erc20Pool is Pool {
         ReceiverWeight[] calldata updatedReceivers,
         ReceiverWeight[] calldata updatedProxies
     ) public {
-        transferToContract(topUpAmt);
+        _transferToContract(msg.sender, topUpAmt);
         uint128 withdrawn =
-            updateSenderInternal(topUpAmt, withdraw, amtPerSec, updatedReceivers, updatedProxies);
-        transferToSender(withdrawn);
+            _updateSenderInternal(msg.sender, topUpAmt, withdraw, amtPerSec, updatedReceivers, updatedProxies);
+        _transferToSender(msg.sender, withdrawn);
     }
 
-    function transferToContract(uint128 amt) internal {
-        if (amt != 0) erc20.transferFrom(msg.sender, address(this), amt);
+    function _transferToContract(address usr, uint128 amt) internal {
+        if (amt != 0) erc20.transferFrom(usr, address(this), amt);
     }
 
-    function transferToSender(uint128 amt) internal override {
-        if (amt != 0) erc20.transfer(msg.sender, amt);
+    function _transferToSender(address usr, uint128 amt) internal override {
+        if (amt != 0) erc20.transfer(usr, amt);
     }
 }
 
