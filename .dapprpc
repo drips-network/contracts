@@ -1,6 +1,0 @@
-export DAPP_TEST_TIMESTAMP=0
-export DAPP_SOLC_VERSION=0.7.6
-export DAPP_BUILD_OPTIMIZE=1
-export DAPP_SRC="contracts"
-DAPP_REMAPPINGS="\
-ds-test/=lib/ds-test/src/

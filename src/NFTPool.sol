@@ -3,17 +3,18 @@
 pragma solidity ^0.8.6;
 pragma experimental ABIEncoderV2;
 
-import {DaiPool, Erc20Pool, ReceiverWeight, Dai} from "./Pool.sol";
+import {DaiPool, ReceiverWeight, Dai} from "./Pool.sol";
 import {IERC721} from "openzeppelin-contracts/token/ERC721/IERC721.sol";
 
 /// @notice NFT pool contract to support streaming based on NFT ownership
 /// A NFT can be a sender or a receiver, a unique id is generated based on
 /// NFT registry address and the tokenId
-contract NFTPool is Erc20Pool {
+contract NFTPool is DaiPool {
     modifier nftOwner (address nftRegistry, uint tokenId) {
-        require(IERC721(nftRegistry).ownerOf(tokenId) == msg.sender, "not-NFT-owner"); _;
+        require(IERC721(nftRegistry).ownerOf(tokenId) == msg.sender, "not-NFT-owner");
+        _;
     }
-    constructor(uint64 cycleSecs, Dai dai) Erc20Pool(cycleSecs, dai) {}
+    constructor(uint64 cycleSecs, Dai dai) DaiPool(cycleSecs, dai) {}
 
     /// @notice generates a unique 20 bytes by hashing the nft registry  and tokenId
     /// @param nftRegistry address of the NFT specific registry
@@ -37,6 +38,22 @@ contract NFTPool is Erc20Pool {
         emit Collected(msg.sender, collected);
     }
 
+    function _sendFromNFT(
+        address to,
+        uint128 topUpAmt,
+        uint128 withdraw,
+        uint128 amtPerSec,
+        ReceiverWeight[] calldata updatedReceivers,
+        ReceiverWeight[] calldata updatedProxies
+    ) internal {
+        // msg.sender === nft owner
+        _transferToContract(msg.sender, topUpAmt);
+        uint128 withdrawn =
+        _updateSenderInternal(to, topUpAmt, withdraw, amtPerSec,
+            updatedReceivers, updatedProxies);
+        _transferToSender(msg.sender, withdrawn);
+    }
+
     /// @notice updateSender based on the ownership of an NFT
     /// @param nftRegistry address of the NFT specific registry
     /// @param tokenId the unique token id for the NFT registry
@@ -49,11 +66,9 @@ contract NFTPool is Erc20Pool {
         ReceiverWeight[] calldata updatedReceivers,
         ReceiverWeight[] calldata updatedProxies
     ) public nftOwner(nftRegistry, tokenId) {
-        // msg.sender === nft owner
-        _transferToContract(msg.sender, topUpAmt);
-        uint128 withdrawn =
-        _updateSenderInternal(nftID(nftRegistry, tokenId), topUpAmt, withdraw, amtPerSec,
-            updatedReceivers, updatedProxies);
-        _transferToSender(msg.sender, withdrawn);
+        _sendFromNFT(nftID(nftRegistry, tokenId),
+            topUpAmt, withdraw, amtPerSec, updatedReceivers, updatedProxies);
     }
+
+    // todo implement update sender with permit after proxies are removed
 }
