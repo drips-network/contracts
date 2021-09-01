@@ -10,12 +10,6 @@ contract Dai is ERC20 {
     mapping(address => uint256) public nonces;
 
     constructor() ERC20("DAI Stablecoin", "DAI") {
-        // TODO replace with `block.chainid` after upgrade to Solidity 0.8
-        uint256 chainId;
-        // solhint-disable no-inline-assembly
-        assembly {
-            chainId := chainid()
-        }
         domainSeparator = keccak256(
             abi.encode(
                 keccak256(
@@ -23,7 +17,7 @@ contract Dai is ERC20 {
                 ),
                 keccak256(bytes(name())),
                 keccak256(bytes("1")),
-                chainId,
+                block.chainid,
                 address(this)
             )
         );

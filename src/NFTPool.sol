@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 pragma solidity ^0.8.6;
-pragma experimental ABIEncoderV2;
 
 import {DaiPool, ReceiverWeight, Dai} from "./Pool.sol";
 import {IERC721} from "openzeppelin-contracts/token/ERC721/IERC721.sol";
