@@ -45,7 +45,7 @@ contract NFTPoolTest is BaseTest {
         hevm = Hevm(HEVM_ADDRESS);
 
         dai = new Dai();
-        pool = new NFTPool(CYCLE_SECS, address(dai));
+        pool = new NFTPool(CYCLE_SECS, IDai(address(dai)));
 
         alice = new User(pool, dai);
         alice_ = address(alice);

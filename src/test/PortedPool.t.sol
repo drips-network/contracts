@@ -444,7 +444,7 @@ contract Erc20PoolTest is EthPoolTest {
 
     function setUp() public override {
         IERC20 erc20 = new ERC20PresetFixedSupply("test", "test", 10 ** 6 * 1 ether, address(this));
-        pool = new Erc20Pool(CYCLE_SECS, address(erc20));
+        pool = new Erc20Pool(CYCLE_SECS, erc20);
         super.setUp();
     }
 

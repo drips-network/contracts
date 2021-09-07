@@ -533,8 +533,8 @@ contract Erc20Pool is Pool {
     /// High values make collecting cheaper by making it process less cycles for a given time range.
     /// @param _erc20 The address of an ERC-20 contract which tokens the pool will work with.
     /// To guarantee safety the supply of the tokens must be lower than `2 ^ 127`.
-    constructor(uint64 cycleSecs, address _erc20) Pool(cycleSecs) {
-        erc20 = IERC20(_erc20);
+    constructor(uint64 cycleSecs, IERC20 _erc20) Pool(cycleSecs) {
+        erc20 = _erc20;
     }
 
     /// @notice Updates all the sender parameters of the sender of the message.
@@ -586,7 +586,7 @@ contract Erc20Pool is Pool {
 contract DaiPool is Erc20Pool {
     // solhint-disable no-empty-blocks
     /// @notice See `Erc20Pool` constructor documentation for more details.
-    constructor(uint64 cycleSecs, address dai) Erc20Pool(cycleSecs, dai) {}
+    constructor(uint64 cycleSecs, IDai dai) Erc20Pool(cycleSecs, dai) {}
 
     /// @notice Updates all the sender parameters of the sender of the message
     /// and permits spending sender's Dai by the pool.
