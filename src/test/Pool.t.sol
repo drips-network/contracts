@@ -20,7 +20,7 @@ contract PoolTest is BaseTest {
         emit log_named_uint("block.timestamp start", block.timestamp);
 
         dai = new Dai();
-        pool = new NFTPool(CYCLE_SECS, IDai(address(dai)));
+        pool = new NFTPool(CYCLE_SECS, dai);
 
         alice = new User(pool, dai);
         alice_ = address(alice);
