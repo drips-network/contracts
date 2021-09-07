@@ -3,11 +3,23 @@ pragma solidity ^0.8.6;
 
 import "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import "./libraries/ReceiverWeights.sol";
-import "./TestDai.sol";
 
 struct ReceiverWeight {
     address receiver;
     uint32 weight;
+}
+
+interface IDai is IERC20 {
+    function permit(
+        address holder,
+        address spender,
+        uint256 nonce,
+        uint256 expiry,
+        bool allowed,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
 }
 
 /// @notice Funding pool contract. Automatically sends funds to a configurable set of receivers.
@@ -521,8 +533,8 @@ contract Erc20Pool is Pool {
     /// High values make collecting cheaper by making it process less cycles for a given time range.
     /// @param _erc20 The address of an ERC-20 contract which tokens the pool will work with.
     /// To guarantee safety the supply of the tokens must be lower than `2 ^ 127`.
-    constructor(uint64 cycleSecs, IERC20 _erc20) Pool(cycleSecs) {
-        erc20 = _erc20;
+    constructor(uint64 cycleSecs, address _erc20) Pool(cycleSecs) {
+        erc20 = IERC20(_erc20);
     }
 
     /// @notice Updates all the sender parameters of the sender of the message.
@@ -574,7 +586,7 @@ contract Erc20Pool is Pool {
 contract DaiPool is Erc20Pool {
     // solhint-disable no-empty-blocks
     /// @notice See `Erc20Pool` constructor documentation for more details.
-    constructor(uint64 cycleSecs, Dai dai) Erc20Pool(cycleSecs, dai) {}
+    constructor(uint64 cycleSecs, address dai) Erc20Pool(cycleSecs, dai) {}
 
     /// @notice Updates all the sender parameters of the sender of the message
     /// and permits spending sender's Dai by the pool.
@@ -594,8 +606,7 @@ contract DaiPool is Erc20Pool {
         bytes32 r,
         bytes32 s
     ) public {
-        Dai dai = Dai(address(erc20));
-        dai.permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
+        IDai(address(erc20)).permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
         updateSender(topUpAmt, withdraw, amtPerSec, updatedReceivers);
     }
 }

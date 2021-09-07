@@ -2,7 +2,8 @@
 
 pragma solidity ^0.8.6;
 
-import {DaiPool, ReceiverWeight, Dai} from "./Pool.sol";
+import {DaiPool, ReceiverWeight} from "./Pool.sol";
+
 import {IERC721} from "openzeppelin-contracts/token/ERC721/IERC721.sol";
 
 /// @notice NFT pool contract to support streaming based on NFT ownership
@@ -13,7 +14,7 @@ contract NFTPool is DaiPool {
         require(IERC721(nftRegistry).ownerOf(tokenId) == msg.sender, "not-NFT-owner");
         _;
     }
-    constructor(uint64 cycleSecs, Dai dai) DaiPool(cycleSecs, dai) {}
+    constructor(uint64 cycleSecs, address dai) DaiPool(cycleSecs, dai) {}
 
     /// @notice generates a unique 20 bytes by hashing the nft registry  and tokenId
     /// @param nftRegistry address of the NFT specific registry
