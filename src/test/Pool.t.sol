@@ -41,13 +41,14 @@ contract PoolTest is BaseTest {
         dai.transfer(bob_, lockAmount);
 
         bob.streamWithAddress(alice_, daiPerSecond, lockAmount);
+        uint actualDaiPerSecond = daiPerSecond - daiPerSecond % pool.SENDER_WEIGHTS_SUM_MAX();
 
         // two cycles
         uint t = 60 days;
         hevm.warp(block.timestamp + t);
 
         alice.collect();
-        assertEqTol(dai.balanceOf(alice_), t * daiPerSecond, "incorrect received amount");
+        assertEq(dai.balanceOf(alice_), t * actualDaiPerSecond, "incorrect received amount");
     }
 
     function testSendFuzzTime(uint48 t) public {
@@ -67,13 +68,14 @@ contract PoolTest is BaseTest {
         hevm.warp(block.timestamp + t);
 
         uint passedCycles = t/CYCLE_SECS;
-        uint daiPerCycle = daiPerSecond * CYCLE_SECS;
+        uint actualDaiPerSecond = daiPerSecond - daiPerSecond % pool.SENDER_WEIGHTS_SUM_MAX();
+        uint daiPerCycle = actualDaiPerSecond * CYCLE_SECS;
 
         uint receivedAmount = daiPerCycle * passedCycles;
 
         assertEq(dai.balanceOf(alice_), 0);
         alice.collect();
-        assertEqTol(dai.balanceOf(alice_), receivedAmount, "incorrect received amount");
+        assertEq(dai.balanceOf(alice_), receivedAmount, "incorrect received amount");
         emit log_named_uint("block.timestamp end", block.timestamp);
     }
 }
