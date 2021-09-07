@@ -49,7 +49,6 @@ contract NFTPool is DaiPool {
         withdrawn =
         _updateSenderInternal(to, topUpAmt, withdraw, amtPerSec, updatedReceivers);
         _transferToSender(msg.sender, withdrawn);
-        return withdrawn;
     }
 
     /// @notice updateSender based on the ownership of an NFT
