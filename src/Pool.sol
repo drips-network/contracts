@@ -19,7 +19,7 @@ interface IDai is IERC20 {
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) virtual external;
+    ) external;
 }
 
 /// @notice Funding pool contract. Automatically sends funds to a configurable set of receivers.
