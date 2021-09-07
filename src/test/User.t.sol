@@ -32,7 +32,7 @@ contract User {
 
     function streamWithAddress(address to, uint daiPerSecond, uint lockAmount) public {
         ReceiverWeight[] memory receivers = new ReceiverWeight[](1);
-        receivers[0] = ReceiverWeight({receiver:to, weight:pool.SENDER_WEIGHTS_SUM_MAX()});
+        receivers[0] = ReceiverWeight({receiver:to, weight:1});
 
         dai.approve(address(pool), type(uint).max);
         pool.updateSender(uint128(lockAmount), 0, uint128(daiPerSecond), receivers);

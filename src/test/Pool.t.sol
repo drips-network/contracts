@@ -47,7 +47,7 @@ contract PoolTest is BaseTest {
         hevm.warp(block.timestamp + t);
 
         alice.collect();
-        assertEqTol(dai.balanceOf(alice_), t * daiPerSecond, "incorrect received amount");
+        assertEq(dai.balanceOf(alice_), t * daiPerSecond, "incorrect received amount");
     }
 
     function testSendFuzzTime(uint48 t) public {
@@ -73,7 +73,7 @@ contract PoolTest is BaseTest {
 
         assertEq(dai.balanceOf(alice_), 0);
         alice.collect();
-        assertEqTol(dai.balanceOf(alice_), receivedAmount, "incorrect received amount");
+        assertEq(dai.balanceOf(alice_), receivedAmount, "incorrect received amount");
         emit log_named_uint("block.timestamp end", block.timestamp);
     }
 }
