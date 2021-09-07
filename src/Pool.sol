@@ -492,8 +492,8 @@ contract EthPool is Pool {
         uint128 withdraw,
         uint128 amtPerSec,
         ReceiverWeight[] calldata updatedReceivers
-    ) public payable {
-        uint128 withdrawn =
+    ) public payable returns(uint128 withdrawn) {
+        withdrawn =
             _updateSenderInternal(
                 msg.sender,
                 uint128(msg.value),
@@ -553,9 +553,9 @@ contract Erc20Pool is Pool {
         uint128 withdraw,
         uint128 amtPerSec,
         ReceiverWeight[] calldata updatedReceivers
-    ) public {
+    ) public returns(uint128 withdrawn) {
         _transferToContract(msg.sender, topUpAmt);
-        uint128 withdrawn =
+        withdrawn =
             _updateSenderInternal(msg.sender, topUpAmt, withdraw, amtPerSec, updatedReceivers);
         _transferToSender(msg.sender, withdrawn);
     }
@@ -593,9 +593,9 @@ contract DaiPool is Erc20Pool {
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) public {
+    ) public returns(uint128 withdrawn) {
         Dai dai = Dai(address(erc20));
         dai.permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
-        updateSender(topUpAmt, withdraw, amtPerSec, updatedReceivers);
+        return updateSender(topUpAmt, withdraw, amtPerSec, updatedReceivers);
     }
 }

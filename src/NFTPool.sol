@@ -43,12 +43,13 @@ contract NFTPool is DaiPool {
         uint128 withdraw,
         uint128 amtPerSec,
         ReceiverWeight[] calldata updatedReceivers
-    ) internal {
+    ) internal returns(uint128 withdrawn) {
         // msg.sender === nft owner
         _transferToContract(msg.sender, topUpAmt);
-        uint128 withdrawn =
+        withdrawn =
         _updateSenderInternal(to, topUpAmt, withdraw, amtPerSec, updatedReceivers);
         _transferToSender(msg.sender, withdrawn);
+        return withdrawn;
     }
 
     /// @notice updateSender based on the ownership of an NFT
