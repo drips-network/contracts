@@ -176,6 +176,18 @@ contract EthPoolTest is DSTest {
         collect(receiver, 15);
     }
 
+    function testAllowsSendingToASingleReceiverForFuzzyTime(uint8 cycles, uint8 timeInCycle) public {
+        uint128 time = cycles / 10 * pool.cycleSecs() + timeInCycle % pool.cycleSecs();
+        uint128 balance = 25 * pool.cycleSecs() + 256;
+        updateSender(sender, 0, balance, 1, Weight(receiver, 1));
+        warpBy(time);
+        // Sender had `time` seconds paying 1 per second
+        changeBalance(sender, balance - time, 0);
+        warpToCycleEnd();
+        // Sender had `time` seconds paying 1 per second
+        collect(receiver, time);
+}
+
     function testAllowsSendingToMultipleReceivers() public {
         updateSender(sender, 0, 6, 3, Weight(receiver1, 1), Weight(receiver2, 2));
         warpToCycleEnd();
