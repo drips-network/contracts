@@ -8,6 +8,7 @@ import {NFTPool} from "./../NFTPool.sol";
 import {IERC721} from "openzeppelin-contracts/token/ERC721/IERC721.sol";
 
 abstract contract PoolUser {
+
     function getPool() internal virtual view returns (Pool);
 
     function balance() public virtual view returns (uint);
@@ -15,8 +16,14 @@ abstract contract PoolUser {
     function updateSender(uint128 toppedUp, uint128 withdraw, uint128 amtPerSec,
          ReceiverWeight[] calldata updatedReceivers) public virtual returns(uint128 withdrawn);
 
+    function topUp(address id, uint128 toppedUp) public virtual;
+
     function collect() public {
-        getPool().collect();
+        collect(address(this));
+    }
+
+    function collect(address id) public {
+        getPool().collect(id);
     }
 
     function collectable() public view returns (uint128) {
@@ -57,6 +64,11 @@ contract Erc20PoolUser is PoolUser {
         pool.erc20().approve(address(pool), toppedUp);
         return pool.updateSender(toppedUp, withdraw, amtPerSec, updatedReceivers);
     }
+
+    function topUp(address id, uint128 toppedUp) override public {
+        pool.erc20().approve(address(pool), toppedUp);
+        pool.topUp(id, toppedUp);
+    }
 }
 
 contract EthPoolUser is PoolUser {
@@ -81,6 +93,10 @@ contract EthPoolUser is PoolUser {
             ReceiverWeight[] calldata updatedReceivers) override public returns(uint128 withdrawn) {
         return pool.updateSender{value: toppedUp}(withdraw, amtPerSec, updatedReceivers);
     }
+
+    function topUp(address id, uint128 toppedUp) override public {
+        pool.topUp{value: toppedUp}(id);
+    }
 }
 
 contract NFTPoolUser is PoolUser {
@@ -104,6 +120,11 @@ contract NFTPoolUser is PoolUser {
             ReceiverWeight[] calldata updatedReceivers) override public returns(uint128 withdrawn) {
         pool.erc20().approve(address(pool), toppedUp);
         return pool.updateSender(toppedUp, withdrawAmt, amtPerSec, updatedReceivers);
+    }
+
+    function topUp(address id, uint128 toppedUp) override public {
+        pool.erc20().approve(address(pool), toppedUp);
+        pool.topUp(id, toppedUp);
     }
 
     function withdraw(uint withdrawAmount) public {

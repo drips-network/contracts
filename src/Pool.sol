@@ -178,14 +178,14 @@ abstract contract Pool {
         return uint128(collected);
     }
 
-    /// @notice Collects all received funds available for collection
-    /// by the sender of the message and sends them to that sender
-    function collect() public virtual {
-        uint128 collected = _collectInternal(msg.sender);
+    /// @notice Collects all received funds available for the user and sends them to that user
+    /// @param id The id of the user.
+    function collect(address id) public virtual {
+        uint128 collected = _collectInternal(id);
         if (collected > 0) {
-            _transfer(msg.sender, collected);
+            _transfer(id, collected);
         }
-        emit Collected(msg.sender, collected);
+        emit Collected(id, collected);
     }
 
     /// @notice Removes from the history and returns the amount of received
@@ -238,7 +238,7 @@ abstract contract Pool {
         uint128 topUpAmt,
         uint128 withdrawAmt,
         uint128 amtPerSec,
-        ReceiverWeight[] calldata updatedReceivers
+        ReceiverWeight[] memory updatedReceivers
     ) internal returns (uint128 withdrawn) {
         _stopSending(id);
         _topUp(id, topUpAmt);
@@ -530,6 +530,15 @@ contract EthPool is Pool {
         _transfer(msg.sender, withdrawn);
     }
 
+    /// @notice Tops up the sender balance of the user.
+    /// @param id The id of the user.
+    function topUp(address id) public virtual payable {
+        if (msg.value == 0) {
+            return;
+        }
+        _updateSenderInternal(id, uint128(msg.value), 0, AMT_PER_SEC_UNCHANGED, new ReceiverWeight[](0));
+    }
+
     function _transfer(address to, uint128 amt) internal override {
         if (amt != 0) payable(to).transfer(amt);
     }
@@ -587,6 +596,18 @@ contract Erc20Pool is Pool {
         _transfer(msg.sender, withdrawn);
     }
 
+    /// @notice Tops up the sender balance of the user.
+    /// The sender must first grant the contract a sufficient allowance to top up.
+    /// @param id The id of the user.
+    /// @param topUpAmt The topped up amount.
+    function topUp(address id, uint128 topUpAmt) public virtual {
+        if (topUpAmt == 0) {
+            return;
+        }
+        _transferToContract(msg.sender, topUpAmt);
+        _updateSenderInternal(id, topUpAmt, 0, AMT_PER_SEC_UNCHANGED, new ReceiverWeight[](0));
+    }
+
     function _transferToContract(address from, uint128 amt) internal {
         if (amt != 0) erc20.transferFrom(from, address(this), amt);
     }
@@ -623,5 +644,25 @@ contract DaiPool is Erc20Pool {
     ) public virtual returns(uint128 withdrawn) {
         IDai(address(erc20)).permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
         return updateSender(topUpAmt, withdraw, amtPerSec, updatedReceivers);
+    }
+
+    /// @notice Tops up the sender balance of the user
+    /// and permits spending sender's Dai by the pool.
+    /// This function is an extension of `topUp`, see its documentation for more details.
+    ///
+    /// The sender must sign a Dai permission document allowing the pool to spend their funds.
+    /// The document's `nonce` and `expiry` must be passed here along the parts of its signature.
+    /// These parameters will be passed to the Dai contract by this function.
+    function topUpAndPermit(
+        address id,
+        uint128 topUpAmt,
+        uint256 nonce,
+        uint256 expiry,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) public virtual {
+        IDai(address(erc20)).permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
+        topUp(id, topUpAmt);
     }
 }
