@@ -62,7 +62,7 @@ contract NFTPool is DaiPool {
         uint128 withdraw,
         uint128 amtPerSec,
         ReceiverWeight[] calldata updatedReceivers
-    ) public nftOwner(nftRegistry, tokenId) {
+    ) public virtual nftOwner(nftRegistry, tokenId) {
         _sendFromNFT(nftID(nftRegistry, tokenId), topUpAmt, withdraw, amtPerSec, updatedReceivers);
     }
 
