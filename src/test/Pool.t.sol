@@ -77,12 +77,12 @@ contract EthPoolTest is DSTest {
     function updateSender(PoolUser user, uint128 balanceFrom, uint128 balanceTo, uint128 amtPerSec, ReceiverWeight[] memory updatedReceivers) internal {
         assertWithdrawable(user, balanceFrom);
         uint128 toppedUp = balanceTo > balanceFrom ? balanceTo - balanceFrom : 0;
-        uint128 withdrawn = balanceTo < balanceFrom ? balanceFrom - balanceTo : 0;
-        uint expectedBalance = user.balance() + withdrawn - toppedUp;
+        uint128 withdraw = balanceTo < balanceFrom ? balanceFrom - balanceTo : 0;
+        uint expectedBalance = user.balance() + withdraw - toppedUp;
         uint128 expectedAmtPerSec = amtPerSec == pool.AMT_PER_SEC_UNCHANGED() ? user.getAmtPerSec() : amtPerSec;
 
-        user.updateSender(toppedUp, withdrawn, amtPerSec, updatedReceivers);
-
+        uint withdrawn = user.updateSender(toppedUp, withdraw, amtPerSec, updatedReceivers);
+        assertEq(withdrawn, withdraw, "expected amount not withdrawn");
         assertWithdrawable(user, balanceTo);
         assertEq(user.balance(), expectedBalance, "Invalid balance after updateSender");
         assertEq(user.getAmtPerSec(), expectedAmtPerSec, "Invalid amtPerSec after updateSender");
