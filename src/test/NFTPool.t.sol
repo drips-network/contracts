@@ -4,6 +4,9 @@ pragma solidity ^0.8.6;
 
 import "ds-test/test.sol";
 import "./BaseTest.t.sol";
+import {NFTPoolUser} from "./User.t.sol";
+import {NFTPool} from "./../NFTPool.sol";
+import {Dai} from "./TestDai.sol";
 
 import {ERC721} from "openzeppelin-contracts/token/ERC721/ERC721.sol";
 import "openzeppelin-contracts/token/ERC721/ERC721.sol";
@@ -32,10 +35,10 @@ contract NFTPoolTest is BaseTest {
     Dai dai;
 
     // test user
-    User public alice;
+    NFTPoolUser public alice;
     address public alice_;
 
-    User public bob;
+    NFTPoolUser public bob;
     address public bob_;
 
     TestNFT public nftRegistry;
@@ -47,17 +50,17 @@ contract NFTPoolTest is BaseTest {
         dai = new Dai();
         pool = new NFTPool(CYCLE_SECS, dai);
 
-        alice = new User(pool, dai);
+        alice = new NFTPoolUser(pool, dai);
         alice_ = address(alice);
 
-        bob = new User(pool, dai);
+        bob = new NFTPoolUser(pool, dai);
         bob_ = address(bob);
 
         nftRegistry = new TestNFT();
         nftRegistry_ = address(nftRegistry);
     }
 
-    function setupNFTStreaming(User from, address to, uint lockAmount, uint daiPerSecond) public returns (uint tokenId) {
+    function setupNFTStreaming(NFTPoolUser from, address to, uint lockAmount, uint daiPerSecond) public returns (uint tokenId) {
         dai.transfer(address(from), lockAmount);
 
         tokenId = nftRegistry.mint(address(from));
@@ -72,7 +75,7 @@ contract NFTPoolTest is BaseTest {
         // 1000 DAI per month
         uint daiPerSecond = 0.000001 ether;
         address to = alice_;
-        User from = bob;
+        NFTPoolUser from = bob;
 
         // bob streams to alice
         uint tokenId = setupNFTStreaming(from, to, lockAmount, daiPerSecond);
@@ -82,7 +85,7 @@ contract NFTPoolTest is BaseTest {
         hevm.warp(block.timestamp + t);
 
         alice.collect();
-        assertEqTol(dai.balanceOf(alice_), t * daiPerSecond, "incorrect received amount");
+        assertEq(dai.balanceOf(alice_), t * daiPerSecond, "incorrect received amount");
 
         // withdraw
         uint withdrawAmount = 30 ether;
@@ -96,7 +99,7 @@ contract NFTPoolTest is BaseTest {
         // 1000 DAI per month
         uint daiPerSecond = 0.000001 ether;
         address to = alice_;
-        User from = bob;
+        NFTPoolUser from = bob;
 
         // bob streams to alice
         uint tokenId = setupNFTStreaming(from, to, lockAmount, daiPerSecond);
@@ -112,12 +115,12 @@ contract NFTPoolTest is BaseTest {
         // 1000 DAI per month
         uint daiPerSecond = 0.000001 ether;
         address to = alice_;
-        User from = bob;
+        NFTPoolUser from = bob;
 
         // bob streams to alice
         uint tokenId = setupNFTStreaming(from, to, lockAmount, daiPerSecond);
 
-        User charly = new User(pool, dai);
+        NFTPoolUser charly = new NFTPoolUser(pool, dai);
         address charly_ = address(charly);
 
         // transfer nft to charly address
@@ -153,7 +156,7 @@ contract NFTPoolTest is BaseTest {
         // alice collects with her NFT
         alice.collect(nftRegistry_, aliceNFT);
 
-        assertEqTol(dai.balanceOf(alice_), t * daiPerSecond, "incorrect received amount");
+        assertEq(dai.balanceOf(alice_), t * daiPerSecond, "incorrect received amount");
     }
 
     function testBasicAddressToNFT() public {
@@ -179,6 +182,6 @@ contract NFTPoolTest is BaseTest {
         // alice collects with her NFT
         alice.collect(nftRegistry_, aliceNFT);
 
-        assertEqTol(dai.balanceOf(alice_), t * daiPerSecond, "incorrect received amount");
+        assertEq(dai.balanceOf(alice_), t * daiPerSecond, "incorrect received amount");
     }
 }
