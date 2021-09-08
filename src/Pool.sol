@@ -500,6 +500,7 @@ contract EthPool is Pool {
     /// @param amtPerSec The target amount to be sent every second.
     /// Can be `AMT_PER_SEC_UNCHANGED` to keep the amount unchanged.
     /// @param updatedReceivers The list of the updated receivers and their new weights
+    /// @return withdrawn The actually withdrawn amount.
     function updateSender(
         uint128 withdraw,
         uint128 amtPerSec,
@@ -560,6 +561,7 @@ contract Erc20Pool is Pool {
     /// @param amtPerSec The target amount to be sent every second.
     /// Can be `AMT_PER_SEC_UNCHANGED` to keep the amount unchanged.
     /// @param updatedReceivers The list of the updated receivers and their new weights
+    /// @return withdrawn The actually withdrawn amount.
     function updateSender(
         uint128 topUpAmt,
         uint128 withdraw,
@@ -605,8 +607,8 @@ contract DaiPool is Erc20Pool {
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) public {
+    ) public returns(uint128 withdrawn) {
         IDai(address(erc20)).permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
-        updateSender(topUpAmt, withdraw, amtPerSec, updatedReceivers);
+        return updateSender(topUpAmt, withdraw, amtPerSec, updatedReceivers);
     }
 }
