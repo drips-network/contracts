@@ -3,6 +3,7 @@
 pragma solidity ^0.8.6;
 
 import "./../NFTPool.sol";
+import {Dai} from "./TestDai.sol";
 import {IERC721} from "openzeppelin-contracts/token/ERC721/IERC721.sol";
 
 contract User {
