@@ -159,7 +159,8 @@ abstract contract Pool {
     }
 
     /// @notice Returns amount of received funds available for collection
-    /// by the sender of the message
+    /// by for the pool user id
+    /// @param id The id of the pool user.
     /// @return collected The available amount
     function collectable(address id) public view returns (uint128) {
         Receiver storage receiver = receivers[id];
@@ -255,7 +256,8 @@ abstract contract Pool {
         if (amt != 0) senders[id].startBalance += amt;
     }
 
-    /// @notice Returns amount of unsent funds available for withdrawal by the sender of the message
+    /// @notice Returns amount of unsent funds available for withdrawal for the pool user id
+    /// @param id The id of the pool user.
     /// @return balance The available balance
     function withdrawable(address id) public view returns (uint128) {
         Sender storage sender = senders[id];
@@ -296,12 +298,13 @@ abstract contract Pool {
         if (amtPerSec != AMT_PER_SEC_UNCHANGED) senders[id].amtPerSec = amtPerSec;
     }
 
-    /// @notice Gets the target amount sent every second from the sender of the message.
+    /// @notice Gets the target amount sent every second for the provided pool user id
     /// The actual amount sent every second may differ from the target value.
     /// It's rounded down to the closest multiple of the sum of the weights of
     /// the sender's receivers and split between them proportionally to their weights.
     /// Each receiver then receives their part from the sender's balance.
     /// If zero, funding is stopped.
+    /// @param id The id of the pool user.
     /// @return amt The target amount to be sent every second
     function getAmtPerSec(address id) public view returns (uint128 amt) {
         return senders[id].amtPerSec;
