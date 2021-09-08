@@ -179,7 +179,7 @@ abstract contract Pool {
 
     /// @notice Collects all received funds available for collection
     /// by the sender of the message and sends them to that sender
-    function collect() public {
+    function collect() public virtual {
         uint128 collected = _collectInternal(msg.sender);
         if (collected > 0) {
             _transferToSender(msg.sender, collected);
@@ -505,7 +505,7 @@ contract EthPool is Pool {
         uint128 withdraw,
         uint128 amtPerSec,
         ReceiverWeight[] calldata updatedReceivers
-    ) public payable returns(uint128 withdrawn) {
+    ) public virtual payable returns(uint128 withdrawn) {
         withdrawn =
             _updateSenderInternal(
                 msg.sender,
@@ -567,7 +567,7 @@ contract Erc20Pool is Pool {
         uint128 withdraw,
         uint128 amtPerSec,
         ReceiverWeight[] calldata updatedReceivers
-    ) public returns(uint128 withdrawn) {
+    ) public virtual returns(uint128 withdrawn) {
         _transferToContract(msg.sender, topUpAmt);
         withdrawn =
             _updateSenderInternal(msg.sender, topUpAmt, withdraw, amtPerSec, updatedReceivers);
@@ -607,7 +607,7 @@ contract DaiPool is Erc20Pool {
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) public returns(uint128 withdrawn) {
+    ) public virtual returns(uint128 withdrawn) {
         IDai(address(erc20)).permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
         return updateSender(topUpAmt, withdraw, amtPerSec, updatedReceivers);
     }
