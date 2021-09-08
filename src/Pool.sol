@@ -188,7 +188,8 @@ abstract contract Pool {
     }
 
     /// @notice Removes from the history and returns the amount of received
-    /// funds available for collection by the sender of the message
+    /// funds available for collection by the user
+    /// @param id The id of the user.
     /// @return collected The collected amount
     function _collectInternal(address id) internal returns (uint128 collected) {
         Receiver storage receiver = receivers[id];
@@ -207,28 +208,29 @@ abstract contract Pool {
         receiver.nextCollectedCycle = collectedCycle;
     }
 
-    /// @notice Updates all the sender parameters of the sender of the message.
+    /// @notice Updates all the sender parameters of the user.
     ///
     /// Tops up and withdraws unsent funds from the balance of the sender.
     ///
-    /// Sets the target amount sent every second from the sender of the message.
+    /// Sets the target amount sent every second from the user.
     /// Every second this amount is rounded down to the closest multiple of the sum of the weights
     /// of the receivers and split between them proportionally to their weights.
     /// Each receiver then receives their part from the sender's balance.
     /// If set to zero, stops funding.
     ///
-    /// Sets the weight of the provided receivers of the sender of the message.
+    /// Sets the weight of the provided receivers of the user.
     /// The weight regulates the share of the amount sent every second
     /// that each of the sender's receivers get.
     /// Setting a non-zero weight for a new receiver adds it to the set of the sender's receivers.
     /// Setting zero as the weight for a receiver removes it from the set of the sender's receivers.
-    /// @param topUpAmt The topped up amount
+    /// @param id The id of the user.
+    /// @param topUpAmt The topped up amount.
     /// @param withdrawAmt The amount to be withdrawn, must not be higher than available funds.
     /// Can be `WITHDRAW_ALL` to withdraw everything.
     /// @param amtPerSec The target amount to be sent every second.
     /// Can be `AMT_PER_SEC_UNCHANGED` to keep the amount unchanged.
     /// @param updatedReceivers The list of the updated receivers and their new weights
-    /// @return withdrawn The withdrawn amount which should be sent to the sender of the message.
+    /// @return withdrawn The withdrawn amount which should be sent to the user.
     /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
     function _updateSenderInternal(
         address id,
@@ -249,7 +251,8 @@ abstract contract Pool {
         _startSending(id);
     }
 
-    /// @notice Adds the given amount to the senders pool balance
+    /// @notice Adds the given amount to the senders balance of the user.
+    /// @param id The id of the user.
     /// @param amt The topped up amount
     function _topUp(address id, uint128 amt) internal {
         if (amt != 0) senders[id].startBalance += amt;
@@ -271,7 +274,8 @@ abstract contract Pool {
         return sender.startBalance - uint128(alreadySent);
     }
 
-    /// @notice Withdraws unsent funds of the sender of the message
+    /// @notice Withdraws unsent funds of the user.
+    /// @param id The id of the user.
     /// @param amt The amount to be withdrawn, must not be higher than available funds.
     /// Can be `WITHDRAW_ALL` to withdraw everything.
     /// @return withdrawn The actually withdrawn amount.
@@ -286,11 +290,12 @@ abstract contract Pool {
         return amt;
     }
 
-    /// @notice Sets the target amount sent every second from the sender of the message.
+    /// @notice Sets the target amount sent every second from the user.
     /// Every second this amount is rounded down to the closest multiple of the sum of the weights
     /// of the receivers and split between them proportionally to their weights.
     /// Each receiver then receives their part from the sender's balance.
     /// If set to zero, stops funding.
+    /// @param id The id of the user.
     /// @param amtPerSec The target amount to be sent every second
     function _setAmtPerSec(address id, uint128 amtPerSec) internal {
         if (amtPerSec != AMT_PER_SEC_UNCHANGED) senders[id].amtPerSec = amtPerSec;
@@ -307,11 +312,12 @@ abstract contract Pool {
         return senders[msg.sender].amtPerSec;
     }
 
-    /// @notice Sets the weight of the provided receiver of the sender of the message.
+    /// @notice Sets the weight of the provided receiver of the user.
     /// The weight regulates the share of the amount sent every second
     /// that each of the sender's receivers gets.
     /// Setting a non-zero weight for a new receiver adds it to the list of the sender's receivers.
     /// Setting zero as the weight for a receiver removes it from the list of the sender's receivers.
+    /// @param id The id of the user.
     /// @param receiver The address of the receiver
     /// @param weight The weight of the receiver
     function _setReceiver(address id, address receiver, uint32 weight) internal {
@@ -354,11 +360,12 @@ abstract contract Pool {
     /// @param amt The transferred amount
     function _transferToSender(address usr, uint128 amt) internal virtual;
 
-    /// @notice Makes `msg.sender` stop sending funds.
+    /// @notice Makes the user stop sending funds.
     /// It removes any effects of the sender from all of its receivers.
     /// It doesn't modify the sender.
     /// It allows the properties of the sender to be safely modified
     /// without having to update the state of its receivers.
+    /// @param id The id of the user.
     function _stopSending(address id) internal {
         Sender storage sender = senders[id];
         // Hasn't been sending anything
@@ -376,9 +383,10 @@ abstract contract Pool {
         _setDeltasFromNow(id, -int128(amtPerWeight), endTime);
     }
 
-    /// @notice Makes `msg.sender` start sending funds.
+    /// @notice Makes the user start sending funds.
     /// It applies effects of the sender on all of its receivers.
     /// It doesn't modify the sender.
+    /// @param id The id of the user.
     function _startSending(address id) internal {
         Sender storage sender = senders[id];
         // Won't be sending anything
@@ -396,6 +404,7 @@ abstract contract Pool {
     /// @notice Sets deltas to all sender's receivers from now to `timeEnd`
     /// proportionally to their weights.
     /// Effects are applied as if the change was made on the beginning of the current cycle.
+    /// @param id The id of the user.
     /// @param amtPerWeightPerSecDelta Amount of per-second delta applied per receiver weight
     /// @param timeEnd The timestamp from which the delta stops taking effect
     function _setDeltasFromNow(address id, int128 amtPerWeightPerSecDelta, uint64 timeEnd) internal {
