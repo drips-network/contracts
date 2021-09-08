@@ -182,7 +182,7 @@ abstract contract Pool {
     function collect() public virtual {
         uint128 collected = _collectInternal(msg.sender);
         if (collected > 0) {
-            _transferToSender(msg.sender, collected);
+            _transfer(msg.sender, collected);
         }
         emit Collected(msg.sender, collected);
     }
@@ -356,9 +356,10 @@ abstract contract Pool {
         }
     }
 
-    /// @notice Called when funds need to be transferred out of the pool to the message sender
+    /// @notice Called when user funds need to be transferred out of the pool
+    /// @param to The address of the transfer recipient.
     /// @param amt The transferred amount
-    function _transferToSender(address usr, uint128 amt) internal virtual;
+    function _transfer(address to, uint128 amt) internal virtual;
 
     /// @notice Makes the user stop sending funds.
     /// It removes any effects of the sender from all of its receivers.
@@ -523,11 +524,11 @@ contract EthPool is Pool {
                 amtPerSec,
                 updatedReceivers
             );
-        _transferToSender(msg.sender, withdrawn);
+        _transfer(msg.sender, withdrawn);
     }
 
-    function _transferToSender(address usr, uint128 amt) internal override {
-        if (amt != 0) payable(usr).transfer(amt);
+    function _transfer(address to, uint128 amt) internal override {
+        if (amt != 0) payable(to).transfer(amt);
     }
 }
 
@@ -580,15 +581,15 @@ contract Erc20Pool is Pool {
         _transferToContract(msg.sender, topUpAmt);
         withdrawn =
             _updateSenderInternal(msg.sender, topUpAmt, withdraw, amtPerSec, updatedReceivers);
-        _transferToSender(msg.sender, withdrawn);
+        _transfer(msg.sender, withdrawn);
     }
 
-    function _transferToContract(address usr, uint128 amt) internal {
-        if (amt != 0) erc20.transferFrom(usr, address(this), amt);
+    function _transferToContract(address from, uint128 amt) internal {
+        if (amt != 0) erc20.transferFrom(from, address(this), amt);
     }
 
-    function _transferToSender(address usr, uint128 amt) internal override {
-        if (amt != 0) erc20.transfer(usr, amt);
+    function _transfer(address to, uint128 amt) internal override {
+        if (amt != 0) erc20.transfer(to, amt);
     }
 }
 

@@ -33,7 +33,7 @@ contract NFTPool is DaiPool {
         uint128 collected = _collectInternal(nftID(nftRegistry, tokenId));
         if (collected > 0) {
             // msg.sender === nft owner
-            _transferToSender(msg.sender, collected);
+            _transfer(msg.sender, collected);
         }
         emit Collected(msg.sender, collected);
     }
@@ -49,7 +49,7 @@ contract NFTPool is DaiPool {
         _transferToContract(msg.sender, topUpAmt);
         withdrawn =
         _updateSenderInternal(to, topUpAmt, withdraw, amtPerSec, updatedReceivers);
-        _transferToSender(msg.sender, withdrawn);
+        _transfer(msg.sender, withdrawn);
     }
 
     /// @notice updateSender based on the ownership of an NFT
