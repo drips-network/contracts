@@ -159,10 +159,11 @@ abstract contract Pool {
     }
 
     /// @notice Returns amount of received funds available for collection
-    /// by the sender of the message
+    /// by for the pool user id
+    /// @param id The id of the pool user.
     /// @return collected The available amount
-    function collectable() public view returns (uint128) {
-        Receiver storage receiver = receivers[msg.sender];
+    function collectable(address id) public view returns (uint128) {
+        Receiver storage receiver = receivers[id];
         uint64 collectedCycle = receiver.nextCollectedCycle;
         if (collectedCycle == 0) return 0;
         uint64 currFinishedCycle = _currTimestamp() / cycleSecs;
@@ -258,10 +259,11 @@ abstract contract Pool {
         if (amt != 0) senders[id].startBalance += amt;
     }
 
-    /// @notice Returns amount of unsent funds available for withdrawal by the sender of the message
+    /// @notice Returns amount of unsent funds available for withdrawal for the pool user id
+    /// @param id The id of the pool user.
     /// @return balance The available balance
-    function withdrawable() public view returns (uint128) {
-        Sender storage sender = senders[msg.sender];
+    function withdrawable(address id) public view returns (uint128) {
+        Sender storage sender = senders[id];
         // Hasn't been sending anything
         if (sender.weightSum == 0 || sender.amtPerSec < sender.weightSum) {
             return sender.startBalance;
@@ -301,15 +303,16 @@ abstract contract Pool {
         if (amtPerSec != AMT_PER_SEC_UNCHANGED) senders[id].amtPerSec = amtPerSec;
     }
 
-    /// @notice Gets the target amount sent every second from the sender of the message.
+    /// @notice Gets the target amount sent every second for the provided pool user id
     /// The actual amount sent every second may differ from the target value.
     /// It's rounded down to the closest multiple of the sum of the weights of
     /// the sender's receivers and split between them proportionally to their weights.
     /// Each receiver then receives their part from the sender's balance.
     /// If zero, funding is stopped.
+    /// @param id The id of the pool user.
     /// @return amt The target amount to be sent every second
-    function getAmtPerSec() public view returns (uint128 amt) {
-        return senders[msg.sender].amtPerSec;
+    function getAmtPerSec(address id) public view returns (uint128 amt) {
+        return senders[id].amtPerSec;
     }
 
     /// @notice Sets the weight of the provided receiver of the user.
@@ -341,8 +344,8 @@ abstract contract Pool {
     /// being sent every second in relation to other sender's receivers.
     /// @return weights The list of receiver addresses and their weights.
     /// The weights are never zero.
-    function getAllReceivers() public view returns (ReceiverWeight[] memory weights) {
-        Sender storage sender = senders[msg.sender];
+    function getAllReceivers(address id) public view returns (ReceiverWeight[] memory weights) {
+        Sender storage sender = senders[id];
         weights = new ReceiverWeight[](sender.weightCount);
         uint32 weightsCount = 0;
         // Iterating over receivers, see `ReceiverWeights` for details

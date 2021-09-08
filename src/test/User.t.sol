@@ -20,19 +20,19 @@ abstract contract PoolUser {
     }
 
     function collectable() public view returns (uint128) {
-        return getPool().collectable();
+        return getPool().collectable(address(this));
     }
 
     function withdrawable() public view returns (uint128) {
-        return getPool().withdrawable();
+        return getPool().withdrawable(address(this));
     }
 
     function getAmtPerSec() public view returns (uint128) {
-        return getPool().getAmtPerSec();
+        return getPool().getAmtPerSec(address(this));
     }
 
     function getAllReceivers() public view returns (ReceiverWeight[] memory weights) {
-        return getPool().getAllReceivers();
+        return getPool().getAllReceivers(address(this));
     }
 }
 
