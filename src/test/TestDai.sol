@@ -3,8 +3,9 @@
 pragma solidity ^0.8.6;
 
 import "openzeppelin-contracts/token/ERC20/ERC20.sol";
+import {IDai} from "../Pool.sol";
 
-contract Dai is ERC20 {
+contract Dai is ERC20, IDai {
     bytes32 private immutable domainSeparator;
     bytes32 private immutable typehash;
     mapping(address => uint256) public nonces;
@@ -36,7 +37,7 @@ contract Dai is ERC20 {
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) external {
+    ) override external {
         bytes32 message = keccak256(abi.encode(typehash, holder, spender, nonce, expiry, allowed));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, message));
         address signer = ecrecover(digest, v, r, s);
