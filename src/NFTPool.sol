@@ -44,10 +44,10 @@ contract NFTPool is DaiPool {
         uint128 withdraw,
         uint128 amtPerSec,
         ReceiverWeight[] calldata updatedReceivers
-    ) internal {
+    ) internal returns(uint128 withdrawn) {
         // msg.sender === nft owner
         _transferToContract(msg.sender, topUpAmt);
-        uint128 withdrawn =
+        withdrawn =
         _updateSenderInternal(to, topUpAmt, withdraw, amtPerSec, updatedReceivers);
         _transferToSender(msg.sender, withdrawn);
     }
@@ -55,6 +55,7 @@ contract NFTPool is DaiPool {
     /// @notice updateSender based on the ownership of an NFT
     /// @param nftRegistry address of the NFT specific registry
     /// @param tokenId the unique token id for the NFT registry
+    /// @return withdrawn The actually withdrawn amount.
     function updateSender(
         address nftRegistry,
         uint128 tokenId,
@@ -62,8 +63,8 @@ contract NFTPool is DaiPool {
         uint128 withdraw,
         uint128 amtPerSec,
         ReceiverWeight[] calldata updatedReceivers
-    ) public virtual nftOwner(nftRegistry, tokenId) {
-        _sendFromNFT(nftID(nftRegistry, tokenId), topUpAmt, withdraw, amtPerSec, updatedReceivers);
+    ) public virtual nftOwner(nftRegistry, tokenId) returns(uint128 withdrawn) {
+        return _sendFromNFT(nftID(nftRegistry, tokenId), topUpAmt, withdraw, amtPerSec, updatedReceivers);
     }
 
     // todo implement update sender with permit after proxies are removed

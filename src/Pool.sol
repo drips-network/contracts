@@ -500,12 +500,13 @@ contract EthPool is Pool {
     /// @param amtPerSec The target amount to be sent every second.
     /// Can be `AMT_PER_SEC_UNCHANGED` to keep the amount unchanged.
     /// @param updatedReceivers The list of the updated receivers and their new weights
+    /// @return withdrawn The actually withdrawn amount.
     function updateSender(
         uint128 withdraw,
         uint128 amtPerSec,
         ReceiverWeight[] calldata updatedReceivers
-    ) public virtual payable {
-        uint128 withdrawn =
+    ) public virtual payable returns(uint128 withdrawn) {
+        withdrawn =
             _updateSenderInternal(
                 msg.sender,
                 uint128(msg.value),
@@ -560,14 +561,15 @@ contract Erc20Pool is Pool {
     /// @param amtPerSec The target amount to be sent every second.
     /// Can be `AMT_PER_SEC_UNCHANGED` to keep the amount unchanged.
     /// @param updatedReceivers The list of the updated receivers and their new weights
+    /// @return withdrawn The actually withdrawn amount.
     function updateSender(
         uint128 topUpAmt,
         uint128 withdraw,
         uint128 amtPerSec,
         ReceiverWeight[] calldata updatedReceivers
-    ) public virtual {
+    ) public virtual returns(uint128 withdrawn) {
         _transferToContract(msg.sender, topUpAmt);
-        uint128 withdrawn =
+        withdrawn =
             _updateSenderInternal(msg.sender, topUpAmt, withdraw, amtPerSec, updatedReceivers);
         _transferToSender(msg.sender, withdrawn);
     }
@@ -605,8 +607,8 @@ contract DaiPool is Erc20Pool {
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) public virtual {
+    ) public virtual returns(uint128 withdrawn) {
         IDai(address(erc20)).permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
-        updateSender(topUpAmt, withdraw, amtPerSec, updatedReceivers);
+        return updateSender(topUpAmt, withdraw, amtPerSec, updatedReceivers);
     }
 }

@@ -2,37 +2,10 @@
 pragma solidity ^0.8.6;
 
 import "ds-test/test.sol";
+import {PoolUser, Erc20PoolUser, EthPoolUser} from "./User.t.sol";
 import "./BaseTest.t.sol";
 import "./../Pool.sol";
 import "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
-
-abstract contract PoolUser {
-    function getPool() internal virtual view returns (Pool);
-
-    function balance() public virtual view returns (uint);
-
-    function updateSender(uint128 toppedUp, uint128 withdrawn, uint128 amtPerSec, ReceiverWeight[] calldata updatedReceivers) public virtual;
-
-    function collect() public {
-        getPool().collect();
-    }
-
-    function collectable() public view returns (uint128) {
-        return getPool().collectable();
-    }
-
-    function withdrawable() public view returns (uint128) {
-        return getPool().withdrawable();
-    }
-
-    function getAmtPerSec() public view returns (uint128) {
-        return getPool().getAmtPerSec();
-    }
-
-    function getAllReceivers() public view returns (ReceiverWeight[] memory weights) {
-        return getPool().getAllReceivers();
-    }
-}
 
 contract EthPoolTest is DSTest {
 
@@ -104,12 +77,12 @@ contract EthPoolTest is DSTest {
     function updateSender(PoolUser user, uint128 balanceFrom, uint128 balanceTo, uint128 amtPerSec, ReceiverWeight[] memory updatedReceivers) internal {
         assertWithdrawable(user, balanceFrom);
         uint128 toppedUp = balanceTo > balanceFrom ? balanceTo - balanceFrom : 0;
-        uint128 withdrawn = balanceTo < balanceFrom ? balanceFrom - balanceTo : 0;
-        uint expectedBalance = user.balance() + withdrawn - toppedUp;
+        uint128 withdraw = balanceTo < balanceFrom ? balanceFrom - balanceTo : 0;
+        uint expectedBalance = user.balance() + withdraw - toppedUp;
         uint128 expectedAmtPerSec = amtPerSec == pool.AMT_PER_SEC_UNCHANGED() ? user.getAmtPerSec() : amtPerSec;
 
-        user.updateSender(toppedUp, withdrawn, amtPerSec, updatedReceivers);
-
+        uint withdrawn = user.updateSender(toppedUp, withdraw, amtPerSec, updatedReceivers);
+        assertEq(withdrawn, withdraw, "expected amount not withdrawn");
         assertWithdrawable(user, balanceTo);
         assertEq(user.balance(), expectedBalance, "Invalid balance after updateSender");
         assertEq(user.getAmtPerSec(), expectedAmtPerSec, "Invalid amtPerSec after updateSender");
@@ -427,29 +400,6 @@ contract EthPoolTest is DSTest {
     }
 }
 
-contract EthPoolUser is PoolUser {
-
-    EthPool internal immutable pool;
-
-    constructor(EthPool pool_) payable {
-        pool = pool_;
-    }
-
-    receive() external payable {}
-
-    function getPool() internal override view returns (Pool) {
-        return Pool(pool);
-    }
-
-    function balance() public override view returns (uint) {
-        return address(this).balance;
-    }
-
-    function updateSender(uint128 toppedUp, uint128 withdrawn, uint128 amtPerSec, ReceiverWeight[] calldata updatedReceivers) override public {
-        pool.updateSender{value: toppedUp}(withdrawn, amtPerSec, updatedReceivers);
-    }
-}
-
 contract Erc20PoolTest is EthPoolTest {
 
     Erc20Pool private pool;
@@ -471,24 +421,3 @@ contract Erc20PoolTest is EthPoolTest {
     }
 }
 
-contract Erc20PoolUser is PoolUser {
-
-    Erc20Pool internal immutable pool;
-
-    constructor(Erc20Pool pool_) {
-        pool = pool_;
-    }
-
-    function getPool() internal override view returns (Pool) {
-        return Pool(pool);
-    }
-
-    function balance() public override view returns (uint) {
-        return pool.erc20().balanceOf(address(this));
-    }
-
-    function updateSender(uint128 toppedUp, uint128 withdrawn, uint128 amtPerSec, ReceiverWeight[] calldata updatedReceivers) override public {
-        pool.erc20().approve(address(pool), toppedUp);
-        pool.updateSender(toppedUp, withdrawn, amtPerSec, updatedReceivers);
-    }
-}
