@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.6;
 
-import {DaiPool, ReceiverWeight, IDai} from "./Pool.sol";
+import {DaiPool, ReceiverWeight, IDai} from "./DaiPool.sol";
 
 import {IERC721} from "openzeppelin-contracts/token/ERC721/IERC721.sol";
 

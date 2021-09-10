@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.6;
 
-import "ds-test/test.sol";
-import {PoolUser, Erc20PoolUser, EthPoolUser} from "./User.t.sol";
-import "./BaseTest.t.sol";
-import "./../Pool.sol";
-import "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
+import {DSTest} from "ds-test/test.sol";
+import {PoolUser, EthPoolUser} from "./User.t.sol";
+import {Hevm} from "./BaseTest.t.sol";
+import {EthPool, Pool, ReceiverWeight} from "../EthPool.sol";
 
+// TODO split into an abstract PoolTest and EthPoolTest
+// when https://github.com/dapphub/dapptools/issues/769 is fixed
 contract EthPoolTest is DSTest {
 
     struct Weight {
@@ -179,7 +180,7 @@ contract EthPoolTest is DSTest {
         warpToCycleEnd();
         // Sender had `time` seconds paying 1 per second
         collect(receiver, time);
-}
+    }
 
     function testAllowsSendingToMultipleReceivers() public {
         updateSender(sender, 0, 6, 3, Weight(receiver1, 1), Weight(receiver2, 2));
@@ -456,25 +457,3 @@ contract EthPoolTest is DSTest {
         collect(receiver1, 3);
     }
 }
-
-contract Erc20PoolTest is EthPoolTest {
-
-    Erc20Pool private pool;
-
-    function setUp() public override {
-        IERC20 erc20 = new ERC20PresetFixedSupply("test", "test", 10 ** 6 * 1 ether, address(this));
-        pool = new Erc20Pool(CYCLE_SECS, erc20);
-        super.setUp();
-    }
-
-    function getPool() internal override view returns (Pool) {
-        return Pool(pool);
-    }
-
-    function createUser() internal override returns (PoolUser) {
-        Erc20PoolUser user = new Erc20PoolUser(pool);
-        pool.erc20().transfer(address(user), 100 ether);
-        return PoolUser(user);
-    }
-}
-

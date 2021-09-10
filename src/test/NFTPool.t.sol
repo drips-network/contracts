@@ -2,16 +2,14 @@
 
 pragma solidity ^0.8.6;
 
-import "ds-test/test.sol";
-import "./BaseTest.t.sol";
+import {BaseTest, Hevm} from "./BaseTest.t.sol";
 import {NFTPoolUser} from "./User.t.sol";
 import {NFTPool} from "./../NFTPool.sol";
 import {Dai} from "./TestDai.sol";
 
 import {ERC721} from "openzeppelin-contracts/token/ERC721/ERC721.sol";
-import "openzeppelin-contracts/token/ERC721/ERC721.sol";
-import "openzeppelin-contracts/access/Ownable.sol";
-import "openzeppelin-contracts/utils/Counters.sol";
+import {Ownable} from "openzeppelin-contracts/access/Ownable.sol";
+import {Counters} from "openzeppelin-contracts/utils/Counters.sol";
 
 contract TestNFT is ERC721, Ownable {
     using Counters for Counters.Counter;

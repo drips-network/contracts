@@ -2,9 +2,9 @@
 
 pragma solidity ^0.8.6;
 
-import {Dai} from "./TestDai.sol";
-import {Pool, Erc20Pool, EthPool, ReceiverWeight, IDai} from "./../Pool.sol";
-import {NFTPool} from "./../NFTPool.sol";
+import {EthPool, Pool} from "../EthPool.sol";
+import {ERC20Pool, ReceiverWeight, IDai} from "../DaiPool.sol";
+import {NFTPool} from "../NFTPool.sol";
 import {IERC721} from "openzeppelin-contracts/token/ERC721/IERC721.sol";
 
 abstract contract PoolUser {
@@ -43,11 +43,11 @@ abstract contract PoolUser {
     }
 }
 
-contract Erc20PoolUser is PoolUser {
+contract ERC20PoolUser is PoolUser {
 
-    Erc20Pool internal immutable pool;
+    ERC20Pool internal immutable pool;
 
-    constructor(Erc20Pool pool_) {
+    constructor(ERC20Pool pool_) {
         pool = pool_;
     }
 
