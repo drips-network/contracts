@@ -26,18 +26,6 @@ contract NFTPool is DaiPool {
                 ))));
     }
 
-    /// @notice collect the funds of an NFT. Requires the msg.sender to own the NFT
-    /// @param nftRegistry address of the NFT specific registry
-    /// @param tokenId the unique token id for the NFT registry
-    function collect(address nftRegistry, uint128 tokenId) public nftOwner(nftRegistry, tokenId) {
-        uint128 collected = _collectInternal(nftID(nftRegistry, tokenId));
-        if (collected > 0) {
-            // msg.sender === nft owner
-            _transfer(msg.sender, collected);
-        }
-        emit Collected(msg.sender, collected);
-    }
-
     function _sendFromNFT(
         address to,
         uint128 topUpAmt,

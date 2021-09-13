@@ -135,10 +135,6 @@ contract NFTPoolUser is PoolUser {
         pool.updateSender(nftRegistry, uint128(tokenId), 0, uint128(withdrawAmount), 0, new ReceiverWeight[](0));
     }
 
-    function collect(address nftRegistry, uint tokenId) public {
-        pool.collect(nftRegistry, uint128(tokenId));
-    }
-
     function streamWithAddress(address to, uint daiPerSecond, uint lockAmount) public {
         ReceiverWeight[] memory receivers = new ReceiverWeight[](1);
         receivers[0] = ReceiverWeight({receiver:to, weight:1});
