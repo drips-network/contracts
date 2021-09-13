@@ -1,5 +1,6 @@
 export DAPP_SOLC_VERSION=0.8.7
 export DAPP_BUILD_OPTIMIZE=1
-export DAPP_REMAPPINGS="\
-ds-test/=lib/ds-test/src/
-openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/"
+export DAPP_BUILD_OPTIMIZE_RUNS=1000000
+export DAPP_TEST_VERBOSITY=1
+export DAPP_TEST_FUZZ_RUNS=5
+export DAPP_REMAPPINGS=$(cat remappings.txt)
