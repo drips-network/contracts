@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-pragma solidity ^0.8.6;
+pragma solidity ^0.8.7;
 
 import {BaseTest, Hevm} from "./BaseTest.t.sol";
 import {NFTPoolUser} from "./User.t.sol";

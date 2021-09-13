@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity ^0.8.6;
+pragma solidity ^0.8.7;
 
 import {PoolUser, ERC20PoolUser} from "./User.t.sol";
 import {EthPoolTest} from "./EthPool.t.sol";

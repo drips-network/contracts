@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-pragma solidity ^0.8.6;
+pragma solidity ^0.8.7;
 
 import {EthPool, Pool} from "../EthPool.sol";
 import {ERC20Pool, ReceiverWeight, IDai} from "../DaiPool.sol";

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity ^0.8.6;
+pragma solidity ^0.8.7;
 
 import {DSTest} from "ds-test/test.sol";
 import {PoolUser, EthPoolUser} from "./User.t.sol";
