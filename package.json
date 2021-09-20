@@ -1,0 +1,17 @@
+{
+    "name": "radicle-streaming",
+    "license": "GPL-3.0-only",
+    "devDependencies": {
+        "prettier": "^2.4.0",
+        "prettier-plugin-solidity": "^1.0.0-beta.18",
+        "solhint": "^3.3.6",
+        "solhint-plugin-prettier": "^0.0.5"
+    },
+    "scripts": {
+        "lint": "solhint --max-warnings=0 'src/**/*.sol'",
+        "prettier": "prettier --write 'src/**/*.sol'"
+    },
+    "prettier": {
+        "printWidth": 100
+    }
+}
