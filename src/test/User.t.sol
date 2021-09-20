@@ -84,6 +84,7 @@ contract EthPoolUser is PoolUser {
         pool = pool_;
     }
 
+    // solhint-disable-next-line no-empty-blocks
     receive() external payable {}
 
     function getPool() internal view override returns (Pool) {

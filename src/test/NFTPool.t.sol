@@ -15,6 +15,7 @@ contract TestNFT is ERC721, Ownable {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
+    // solhint-disable-next-line no-empty-blocks
     constructor() ERC721("Test NFT", "TNFT") {}
 
     function mint(address receiver) external onlyOwner returns (uint256) {
@@ -29,8 +30,8 @@ contract TestNFT is ERC721, Ownable {
 
 contract NFTPoolTest is BaseTest {
     Hevm public hevm;
-    NFTPool pool;
-    Dai dai;
+    NFTPool public pool;
+    Dai public dai;
 
     // test user
     NFTPoolUser public alice;

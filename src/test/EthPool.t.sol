@@ -14,7 +14,7 @@ contract EthPoolTest is DSTest {
         uint32 weight;
     }
 
-    uint64 constant CYCLE_SECS = 10;
+    uint64 public constant CYCLE_SECS = 10;
 
     Hevm internal immutable hevm;
 

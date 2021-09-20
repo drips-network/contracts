@@ -9,9 +9,9 @@ interface Hevm {
 }
 
 contract BaseTest is DSTest {
-    uint256 constant SECONDS_PER_YEAR = 31536000;
-    uint64 constant CYCLE_SECS = 30 days;
-    uint256 constant TOLERANCE = 10**10;
+    uint256 public constant SECONDS_PER_YEAR = 31536000;
+    uint64 public constant CYCLE_SECS = 30 days;
+    uint256 public constant TOLERANCE = 10**10;
 
     function fundingInSeconds(uint256 fundingPerCycle) public pure returns (uint256) {
         return fundingPerCycle / CYCLE_SECS;

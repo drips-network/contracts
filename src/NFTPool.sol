@@ -15,6 +15,7 @@ contract NFTPool is DaiPool {
         _;
     }
 
+    // solhint-disable-next-line no-empty-blocks
     constructor(uint64 cycleSecs, IDai dai) DaiPool(cycleSecs, dai) {}
 
     /// @notice generates a unique 20 bytes by hashing the nft registry  and tokenId
