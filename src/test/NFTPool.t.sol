@@ -58,7 +58,12 @@ contract NFTPoolTest is BaseTest {
         nftRegistry_ = address(nftRegistry);
     }
 
-    function setupNFTStreaming(NFTPoolUser from, address to, uint lockAmount, uint daiPerSecond) public returns (uint tokenId) {
+    function setupNFTStreaming(
+        NFTPoolUser from,
+        address to,
+        uint256 lockAmount,
+        uint256 daiPerSecond
+    ) public returns (uint256 tokenId) {
         dai.transfer(address(from), lockAmount);
 
         tokenId = nftRegistry.mint(address(from));
@@ -69,54 +74,54 @@ contract NFTPoolTest is BaseTest {
     }
 
     function testBasicStreamWithNFT() public {
-        uint lockAmount = 5_000 ether;
+        uint256 lockAmount = 5_000 ether;
         // 1000 DAI per month
-        uint daiPerSecond = 0.000001 ether;
+        uint256 daiPerSecond = 0.000001 ether;
         address to = alice_;
         NFTPoolUser from = bob;
 
         // bob streams to alice
-        uint tokenId = setupNFTStreaming(from, to, lockAmount, daiPerSecond);
+        uint256 tokenId = setupNFTStreaming(from, to, lockAmount, daiPerSecond);
 
         // two cycles
-        uint t = 60 days;
+        uint256 t = 60 days;
         hevm.warp(block.timestamp + t);
 
         alice.collect();
         assertEq(dai.balanceOf(alice_), t * daiPerSecond, "incorrect received amount");
 
         // withdraw
-        uint withdrawAmount = 30 ether;
+        uint256 withdrawAmount = 30 ether;
         assertEq(dai.balanceOf(bob_), 0, "non-zero-balance");
         bob.withdraw(nftRegistry_, tokenId, withdrawAmount);
         assertEq(dai.balanceOf(bob_), withdrawAmount, "withdraw-fail");
     }
 
     function testFailWithdraw() public {
-        uint lockAmount = 5_000 ether;
+        uint256 lockAmount = 5_000 ether;
         // 1000 DAI per month
-        uint daiPerSecond = 0.000001 ether;
+        uint256 daiPerSecond = 0.000001 ether;
         address to = alice_;
         NFTPoolUser from = bob;
 
         // bob streams to alice
-        uint tokenId = setupNFTStreaming(from, to, lockAmount, daiPerSecond);
+        uint256 tokenId = setupNFTStreaming(from, to, lockAmount, daiPerSecond);
 
         // transfer nft to random address
         bob.transferNFT(nftRegistry_, address(0x123), tokenId);
-        uint withdrawAmount = 30 ether;
+        uint256 withdrawAmount = 30 ether;
         bob.withdraw(nftRegistry_, tokenId, withdrawAmount);
     }
 
     function testTransferNFT() public {
-        uint lockAmount = 5_000 ether;
+        uint256 lockAmount = 5_000 ether;
         // 1000 DAI per month
-        uint daiPerSecond = 0.000001 ether;
+        uint256 daiPerSecond = 0.000001 ether;
         address to = alice_;
         NFTPoolUser from = bob;
 
         // bob streams to alice
-        uint tokenId = setupNFTStreaming(from, to, lockAmount, daiPerSecond);
+        uint256 tokenId = setupNFTStreaming(from, to, lockAmount, daiPerSecond);
 
         NFTPoolUser charly = new NFTPoolUser(pool, dai);
         address charly_ = address(charly);
@@ -125,7 +130,7 @@ contract NFTPoolTest is BaseTest {
         bob.transferNFT(nftRegistry_, address(charly), tokenId);
 
         // charly withdraw
-        uint withdrawAmount = 30 ether;
+        uint256 withdrawAmount = 30 ether;
         assertEq(dai.balanceOf(charly_), 0, "non-zero-balance");
         charly.withdraw(nftRegistry_, tokenId, withdrawAmount);
         assertEq(dai.balanceOf(charly_), withdrawAmount, "withdraw-fail");

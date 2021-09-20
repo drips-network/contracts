@@ -10,10 +10,11 @@ import {IERC721} from "openzeppelin-contracts/token/ERC721/IERC721.sol";
 /// A NFT can be a sender or a receiver, a unique id is generated based on
 /// NFT registry address and the tokenId
 contract NFTPool is DaiPool {
-    modifier nftOwner (address nftRegistry, uint tokenId) {
+    modifier nftOwner(address nftRegistry, uint256 tokenId) {
         require(IERC721(nftRegistry).ownerOf(tokenId) == msg.sender, "not-NFT-owner");
         _;
     }
+
     constructor(uint64 cycleSecs, IDai dai) DaiPool(cycleSecs, dai) {}
 
     /// @notice generates a unique 20 bytes by hashing the nft registry  and tokenId
@@ -21,9 +22,7 @@ contract NFTPool is DaiPool {
     /// @param tokenId the unique token id for the NFT registry
     function nftID(address nftRegistry, uint128 tokenId) public pure returns (address id) {
         // gas optimized without local variables
-        return address(uint160(uint256(
-                keccak256(abi.encodePacked(nftRegistry, tokenId)
-                ))));
+        return address(uint160(uint256(keccak256(abi.encodePacked(nftRegistry, tokenId)))));
     }
 
     function _sendFromNFT(
@@ -32,11 +31,10 @@ contract NFTPool is DaiPool {
         uint128 withdraw,
         uint128 amtPerSec,
         ReceiverWeight[] calldata updatedReceivers
-    ) internal returns(uint128 withdrawn) {
+    ) internal returns (uint128 withdrawn) {
         // msg.sender === nft owner
         _transferToContract(msg.sender, topUpAmt);
-        withdrawn =
-        _updateSenderInternal(to, topUpAmt, withdraw, amtPerSec, updatedReceivers);
+        withdrawn = _updateSenderInternal(to, topUpAmt, withdraw, amtPerSec, updatedReceivers);
         _transfer(msg.sender, withdrawn);
     }
 
@@ -51,8 +49,15 @@ contract NFTPool is DaiPool {
         uint128 withdraw,
         uint128 amtPerSec,
         ReceiverWeight[] calldata updatedReceivers
-    ) public virtual nftOwner(nftRegistry, tokenId) returns(uint128 withdrawn) {
-        return _sendFromNFT(nftID(nftRegistry, tokenId), topUpAmt, withdraw, amtPerSec, updatedReceivers);
+    ) public virtual nftOwner(nftRegistry, tokenId) returns (uint128 withdrawn) {
+        return
+            _sendFromNFT(
+                nftID(nftRegistry, tokenId),
+                topUpAmt,
+                withdraw,
+                amtPerSec,
+                updatedReceivers
+            );
     }
 
     // todo implement update sender with permit after proxies are removed

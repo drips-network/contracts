@@ -7,13 +7,13 @@ import "ds-test/test.sol";
 interface Hevm {
     function warp(uint256) external;
 }
+
 contract BaseTest is DSTest {
-
-    uint constant SECONDS_PER_YEAR = 31536000;
+    uint256 constant SECONDS_PER_YEAR = 31536000;
     uint64 constant CYCLE_SECS = 30 days;
-    uint constant TOLERANCE = 10 ** 10;
+    uint256 constant TOLERANCE = 10**10;
 
-    function fundingInSeconds(uint fundingPerCycle) public pure returns(uint) {
-        return fundingPerCycle/CYCLE_SECS;
+    function fundingInSeconds(uint256 fundingPerCycle) public pure returns (uint256) {
+        return fundingPerCycle / CYCLE_SECS;
     }
 }

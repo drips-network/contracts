@@ -49,10 +49,15 @@ contract ERC20Pool is Pool {
         uint128 withdraw,
         uint128 amtPerSec,
         ReceiverWeight[] calldata updatedReceivers
-    ) public virtual returns(uint128 withdrawn) {
+    ) public virtual returns (uint128 withdrawn) {
         _transferToContract(msg.sender, topUpAmt);
-        withdrawn =
-            _updateSenderInternal(msg.sender, topUpAmt, withdraw, amtPerSec, updatedReceivers);
+        withdrawn = _updateSenderInternal(
+            msg.sender,
+            topUpAmt,
+            withdraw,
+            amtPerSec,
+            updatedReceivers
+        );
         _transfer(msg.sender, withdrawn);
     }
 

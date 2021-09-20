@@ -9,7 +9,6 @@ import {EthPool, Pool, ReceiverWeight} from "../EthPool.sol";
 // TODO split into an abstract PoolTest and EthPoolTest
 // when https://github.com/dapphub/dapptools/issues/769 is fixed
 contract EthPoolTest is DSTest {
-
     struct Weight {
         PoolUser user;
         uint32 weight;
@@ -50,24 +49,50 @@ contract EthPoolTest is DSTest {
         return PoolUser(new EthPoolUser{value: 100 ether}(EthPool(address(pool))));
     }
 
-    function updateSender(PoolUser user, uint128 balanceFrom, uint128 balanceTo, uint128 amtPerSec) internal {
+    function updateSender(
+        PoolUser user,
+        uint128 balanceFrom,
+        uint128 balanceTo,
+        uint128 amtPerSec
+    ) internal {
         updateSender(user, balanceFrom, balanceTo, amtPerSec, new ReceiverWeight[](0));
     }
 
-    function updateSender(PoolUser user, uint128 balanceFrom, uint128 balanceTo, uint128 amtPerSec, Weight memory weight) internal {
+    function updateSender(
+        PoolUser user,
+        uint128 balanceFrom,
+        uint128 balanceTo,
+        uint128 amtPerSec,
+        Weight memory weight
+    ) internal {
         ReceiverWeight[] memory updatedReceivers = new ReceiverWeight[](1);
         updatedReceivers[0] = ReceiverWeight(address(weight.user), weight.weight);
         updateSender(user, balanceFrom, balanceTo, amtPerSec, updatedReceivers);
     }
 
-    function updateSender(PoolUser user, uint128 balanceFrom, uint128 balanceTo, uint128 amtPerSec, Weight memory weight1, Weight memory weight2) internal {
+    function updateSender(
+        PoolUser user,
+        uint128 balanceFrom,
+        uint128 balanceTo,
+        uint128 amtPerSec,
+        Weight memory weight1,
+        Weight memory weight2
+    ) internal {
         ReceiverWeight[] memory updatedReceivers = new ReceiverWeight[](2);
         updatedReceivers[0] = ReceiverWeight(address(weight1.user), weight1.weight);
         updatedReceivers[1] = ReceiverWeight(address(weight2.user), weight2.weight);
         updateSender(user, balanceFrom, balanceTo, amtPerSec, updatedReceivers);
     }
 
-    function updateSender(PoolUser user, uint128 balanceFrom, uint128 balanceTo, uint128 amtPerSec, Weight memory weight1, Weight memory weight2, Weight memory weight3) internal {
+    function updateSender(
+        PoolUser user,
+        uint128 balanceFrom,
+        uint128 balanceTo,
+        uint128 amtPerSec,
+        Weight memory weight1,
+        Weight memory weight2,
+        Weight memory weight3
+    ) internal {
         ReceiverWeight[] memory updatedReceivers = new ReceiverWeight[](3);
         updatedReceivers[0] = ReceiverWeight(address(weight1.user), weight1.weight);
         updatedReceivers[1] = ReceiverWeight(address(weight2.user), weight2.weight);
@@ -75,14 +100,22 @@ contract EthPoolTest is DSTest {
         updateSender(user, balanceFrom, balanceTo, amtPerSec, updatedReceivers);
     }
 
-    function updateSender(PoolUser user, uint128 balanceFrom, uint128 balanceTo, uint128 amtPerSec, ReceiverWeight[] memory updatedReceivers) internal {
+    function updateSender(
+        PoolUser user,
+        uint128 balanceFrom,
+        uint128 balanceTo,
+        uint128 amtPerSec,
+        ReceiverWeight[] memory updatedReceivers
+    ) internal {
         assertWithdrawable(user, balanceFrom);
         uint128 toppedUp = balanceTo > balanceFrom ? balanceTo - balanceFrom : 0;
         uint128 withdraw = balanceTo < balanceFrom ? balanceFrom - balanceTo : 0;
-        uint expectedBalance = user.balance() + withdraw - toppedUp;
-        uint128 expectedAmtPerSec = amtPerSec == pool.AMT_PER_SEC_UNCHANGED() ? user.getAmtPerSec() : amtPerSec;
+        uint256 expectedBalance = user.balance() + withdraw - toppedUp;
+        uint128 expectedAmtPerSec = amtPerSec == pool.AMT_PER_SEC_UNCHANGED()
+            ? user.getAmtPerSec()
+            : amtPerSec;
 
-        uint withdrawn = user.updateSender(toppedUp, withdraw, amtPerSec, updatedReceivers);
+        uint256 withdrawn = user.updateSender(toppedUp, withdraw, amtPerSec, updatedReceivers);
 
         assertEq(withdrawn, withdraw, "expected amount not withdrawn");
         assertWithdrawable(user, balanceTo);
@@ -95,14 +128,23 @@ contract EthPoolTest is DSTest {
         assertEq(user.withdrawable(), expected, "Invalid withdrawable");
     }
 
-    function changeBalance(PoolUser user, uint128 balanceFrom, uint128 balanceTo) internal {
+    function changeBalance(
+        PoolUser user,
+        uint128 balanceFrom,
+        uint128 balanceTo
+    ) internal {
         updateSender(user, balanceFrom, balanceTo, pool.AMT_PER_SEC_UNCHANGED());
     }
 
-    function topUp(PoolUser user, PoolUser toppedUp, uint128 balanceFrom, uint128 balanceTo) internal {
+    function topUp(
+        PoolUser user,
+        PoolUser toppedUp,
+        uint128 balanceFrom,
+        uint128 balanceTo
+    ) internal {
         assertWithdrawable(toppedUp, balanceFrom);
         uint128 topUpAmt = balanceTo - balanceFrom;
-        uint expectedBalance = user.balance() - topUpAmt;
+        uint256 expectedBalance = user.balance() - topUpAmt;
 
         user.topUp(address(toppedUp), topUpAmt);
 
@@ -120,7 +162,11 @@ contract EthPoolTest is DSTest {
         updateSender(user, withdrawable, withdrawable, pool.AMT_PER_SEC_UNCHANGED(), weight);
     }
 
-    function assertSetReceiverReverts(PoolUser user, Weight memory weight, string memory expectedReason) internal {
+    function assertSetReceiverReverts(
+        PoolUser user,
+        Weight memory weight,
+        string memory expectedReason
+    ) internal {
         ReceiverWeight[] memory updatedReceivers = new ReceiverWeight[](1);
         updatedReceivers[0] = ReceiverWeight(address(weight.user), weight.weight);
         try user.updateSender(0, 0, pool.AMT_PER_SEC_UNCHANGED(), updatedReceivers) {
@@ -134,9 +180,13 @@ contract EthPoolTest is DSTest {
         collect(user, user, expectedAmt);
     }
 
-    function collect(PoolUser user, PoolUser collected, uint128 expectedAmt) internal {
+    function collect(
+        PoolUser user,
+        PoolUser collected,
+        uint128 expectedAmt
+    ) internal {
         assertCollectable(collected, expectedAmt);
-        uint expectedBalance = collected.balance() + expectedAmt;
+        uint256 expectedBalance = collected.balance() + expectedAmt;
 
         user.collect(address(collected));
 
@@ -148,15 +198,15 @@ contract EthPoolTest is DSTest {
         assertEq(user.collectable(), expected, "Invalid collectable");
     }
 
-    function assertBalance(PoolUser user, uint expected) internal {
+    function assertBalance(PoolUser user, uint256 expected) internal {
         assertEq(user.balance(), expected, "Invalid balance");
     }
 
     function warpToCycleEnd() internal {
-        warpBy(CYCLE_SECS - block.timestamp % CYCLE_SECS);
+        warpBy(CYCLE_SECS - (block.timestamp % CYCLE_SECS));
     }
 
-    function warpBy(uint secs) internal {
+    function warpBy(uint256 secs) internal {
         hevm.warp(block.timestamp + secs);
     }
 
@@ -170,8 +220,10 @@ contract EthPoolTest is DSTest {
         collect(receiver, 15);
     }
 
-    function testAllowsSendingToASingleReceiverForFuzzyTime(uint8 cycles, uint8 timeInCycle) public {
-        uint128 time = cycles / 10 * pool.cycleSecs() + timeInCycle % pool.cycleSecs();
+    function testAllowsSendingToASingleReceiverForFuzzyTime(uint8 cycles, uint8 timeInCycle)
+        public
+    {
+        uint128 time = (cycles / 10) * pool.cycleSecs() + (timeInCycle % pool.cycleSecs());
         uint128 balance = 25 * pool.cycleSecs() + 256;
         updateSender(sender, 0, balance, 1, Weight(receiver, 1));
         warpBy(time);
@@ -336,7 +388,15 @@ contract EthPoolTest is DSTest {
     }
 
     function testAllowsRemovingTheLastReceiverWeightWhenAmountPerSecondIsZero() public {
-        updateSender(sender, 0, 100, 12, Weight(receiver1, 1), Weight(receiver2, 1), Weight(receiver2, 0));
+        updateSender(
+            sender,
+            0,
+            100,
+            12,
+            Weight(receiver1, 1),
+            Weight(receiver2, 1),
+            Weight(receiver2, 0)
+        );
         warpBy(1);
         // Sender had 1 seconds paying 12 per second
         changeBalance(sender, 88, 0);
@@ -384,12 +444,16 @@ contract EthPoolTest is DSTest {
 
     function testLimitsTheOverflowingTotalWeightsSum() public {
         setReceiver(sender, Weight(receiver1, 1));
-        assertSetReceiverReverts(sender, Weight(receiver2, type(uint32).max), "Too much total receivers weight");
+        assertSetReceiverReverts(
+            sender,
+            Weight(receiver2, type(uint32).max),
+            "Too much total receivers weight"
+        );
     }
 
     function testLimitsTheTotalReceiversCount() public {
         ReceiverWeight[] memory receivers = new ReceiverWeight[](pool.SENDER_WEIGHTS_COUNT_MAX());
-        for(uint160 i = 0; i < receivers.length; i++) {
+        for (uint160 i = 0; i < receivers.length; i++) {
             receivers[i] = ReceiverWeight(address(i + 1), 1);
         }
         sender.updateSender(0, 0, pool.AMT_PER_SEC_UNCHANGED(), receivers);
@@ -411,8 +475,13 @@ contract EthPoolTest is DSTest {
         warpBy(4);
         // Sender had 4 second paying 1 per second
         assertWithdrawable(sender, 6);
-        uint expectedBalance = sender.balance() + 6;
-        sender.updateSender(0, pool.WITHDRAW_ALL(), pool.AMT_PER_SEC_UNCHANGED(), new ReceiverWeight[](0));
+        uint256 expectedBalance = sender.balance() + 6;
+        sender.updateSender(
+            0,
+            pool.WITHDRAW_ALL(),
+            pool.AMT_PER_SEC_UNCHANGED(),
+            new ReceiverWeight[](0)
+        );
         assertWithdrawable(sender, 0);
         assertBalance(sender, expectedBalance);
         warpToCycleEnd();

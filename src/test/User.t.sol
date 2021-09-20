@@ -8,13 +8,16 @@ import {NFTPool} from "../NFTPool.sol";
 import {IERC721} from "openzeppelin-contracts/token/ERC721/IERC721.sol";
 
 abstract contract PoolUser {
+    function getPool() internal view virtual returns (Pool);
 
-    function getPool() internal virtual view returns (Pool);
+    function balance() public view virtual returns (uint256);
 
-    function balance() public virtual view returns (uint);
-
-    function updateSender(uint128 toppedUp, uint128 withdraw, uint128 amtPerSec,
-         ReceiverWeight[] calldata updatedReceivers) public virtual returns(uint128 withdrawn);
+    function updateSender(
+        uint128 toppedUp,
+        uint128 withdraw,
+        uint128 amtPerSec,
+        ReceiverWeight[] calldata updatedReceivers
+    ) public virtual returns (uint128 withdrawn);
 
     function topUp(address id, uint128 toppedUp) public virtual;
 
@@ -44,35 +47,37 @@ abstract contract PoolUser {
 }
 
 contract ERC20PoolUser is PoolUser {
-
     ERC20Pool internal immutable pool;
 
     constructor(ERC20Pool pool_) {
         pool = pool_;
     }
 
-    function getPool() internal override view returns (Pool) {
+    function getPool() internal view override returns (Pool) {
         return Pool(pool);
     }
 
-    function balance() public override view returns (uint) {
+    function balance() public view override returns (uint256) {
         return pool.erc20().balanceOf(address(this));
     }
 
-    function updateSender(uint128 toppedUp, uint128 withdraw, uint128 amtPerSec,
-            ReceiverWeight[] calldata updatedReceivers) override public returns(uint128 withdrawn) {
+    function updateSender(
+        uint128 toppedUp,
+        uint128 withdraw,
+        uint128 amtPerSec,
+        ReceiverWeight[] calldata updatedReceivers
+    ) public override returns (uint128 withdrawn) {
         pool.erc20().approve(address(pool), toppedUp);
         return pool.updateSender(toppedUp, withdraw, amtPerSec, updatedReceivers);
     }
 
-    function topUp(address id, uint128 toppedUp) override public {
+    function topUp(address id, uint128 toppedUp) public override {
         pool.erc20().approve(address(pool), toppedUp);
         pool.topUp(id, toppedUp);
     }
 }
 
 contract EthPoolUser is PoolUser {
-
     EthPool internal immutable pool;
 
     constructor(EthPool pool_) payable {
@@ -81,20 +86,24 @@ contract EthPoolUser is PoolUser {
 
     receive() external payable {}
 
-    function getPool() internal override view returns (Pool) {
+    function getPool() internal view override returns (Pool) {
         return Pool(pool);
     }
 
-    function balance() public override view returns (uint) {
+    function balance() public view override returns (uint256) {
         return address(this).balance;
     }
 
-    function updateSender(uint128 toppedUp, uint128 withdraw, uint128 amtPerSec,
-            ReceiverWeight[] calldata updatedReceivers) override public returns(uint128 withdrawn) {
+    function updateSender(
+        uint128 toppedUp,
+        uint128 withdraw,
+        uint128 amtPerSec,
+        ReceiverWeight[] calldata updatedReceivers
+    ) public override returns (uint128 withdrawn) {
         return pool.updateSender{value: toppedUp}(withdraw, amtPerSec, updatedReceivers);
     }
 
-    function topUp(address id, uint128 toppedUp) override public {
+    function topUp(address id, uint128 toppedUp) public override {
         pool.topUp{value: toppedUp}(id);
     }
 }
@@ -108,50 +117,86 @@ contract NFTPoolUser is PoolUser {
         dai = dai_;
     }
 
-    function getPool() internal override view returns (Pool) {
+    function getPool() internal view override returns (Pool) {
         return Pool(pool);
     }
 
-    function balance() public override view returns (uint) {
+    function balance() public view override returns (uint256) {
         return pool.erc20().balanceOf(address(this));
     }
 
-    function updateSender(uint128 toppedUp, uint128 withdrawAmt, uint128 amtPerSec,
-            ReceiverWeight[] calldata updatedReceivers) override public returns(uint128 withdrawn) {
+    function updateSender(
+        uint128 toppedUp,
+        uint128 withdrawAmt,
+        uint128 amtPerSec,
+        ReceiverWeight[] calldata updatedReceivers
+    ) public override returns (uint128 withdrawn) {
         pool.erc20().approve(address(pool), toppedUp);
         return pool.updateSender(toppedUp, withdrawAmt, amtPerSec, updatedReceivers);
     }
 
-    function topUp(address id, uint128 toppedUp) override public {
+    function topUp(address id, uint128 toppedUp) public override {
         pool.erc20().approve(address(pool), toppedUp);
         pool.topUp(id, toppedUp);
     }
 
-    function withdraw(uint withdrawAmount) public {
-        pool.updateSender(0, uint128(withdrawAmount), 0,  new ReceiverWeight[](0));
+    function withdraw(uint256 withdrawAmount) public {
+        pool.updateSender(0, uint128(withdrawAmount), 0, new ReceiverWeight[](0));
     }
 
-    function withdraw(address nftRegistry, uint tokenId, uint withdrawAmount) public {
-        pool.updateSender(nftRegistry, uint128(tokenId), 0, uint128(withdrawAmount), 0, new ReceiverWeight[](0));
+    function withdraw(
+        address nftRegistry,
+        uint256 tokenId,
+        uint256 withdrawAmount
+    ) public {
+        pool.updateSender(
+            nftRegistry,
+            uint128(tokenId),
+            0,
+            uint128(withdrawAmount),
+            0,
+            new ReceiverWeight[](0)
+        );
     }
 
-    function streamWithAddress(address to, uint daiPerSecond, uint lockAmount) public {
+    function streamWithAddress(
+        address to,
+        uint256 daiPerSecond,
+        uint256 lockAmount
+    ) public {
         ReceiverWeight[] memory receivers = new ReceiverWeight[](1);
-        receivers[0] = ReceiverWeight({receiver:to, weight:1});
+        receivers[0] = ReceiverWeight({receiver: to, weight: 1});
 
-        dai.approve(address(pool), type(uint).max);
+        dai.approve(address(pool), type(uint256).max);
         pool.updateSender(uint128(lockAmount), 0, uint128(daiPerSecond), receivers);
     }
 
-    function streamWithNFT(address nftRegistry, uint tokenId, address to, uint daiPerSecond, uint lockAmount) public {
+    function streamWithNFT(
+        address nftRegistry,
+        uint256 tokenId,
+        address to,
+        uint256 daiPerSecond,
+        uint256 lockAmount
+    ) public {
         ReceiverWeight[] memory receivers = new ReceiverWeight[](1);
-        receivers[0] = ReceiverWeight({receiver:to, weight:1});
+        receivers[0] = ReceiverWeight({receiver: to, weight: 1});
 
-        dai.approve(address(pool), type(uint).max);
-        pool.updateSender(nftRegistry, uint128(tokenId), uint128(lockAmount), 0, uint128(daiPerSecond), receivers);
+        dai.approve(address(pool), type(uint256).max);
+        pool.updateSender(
+            nftRegistry,
+            uint128(tokenId),
+            uint128(lockAmount),
+            0,
+            uint128(daiPerSecond),
+            receivers
+        );
     }
 
-    function transferNFT(address nftRegistry,address to, uint tokenId) public {
+    function transferNFT(
+        address nftRegistry,
+        address to,
+        uint256 tokenId
+    ) public {
         IERC721(nftRegistry).transferFrom(address(this), to, tokenId);
     }
 }

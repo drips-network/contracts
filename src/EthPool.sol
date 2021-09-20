@@ -41,25 +41,30 @@ contract EthPool is Pool {
         uint128 withdraw,
         uint128 amtPerSec,
         ReceiverWeight[] calldata updatedReceivers
-    ) public virtual payable returns(uint128 withdrawn) {
-        withdrawn =
-            _updateSenderInternal(
-                msg.sender,
-                uint128(msg.value),
-                withdraw,
-                amtPerSec,
-                updatedReceivers
-            );
+    ) public payable virtual returns (uint128 withdrawn) {
+        withdrawn = _updateSenderInternal(
+            msg.sender,
+            uint128(msg.value),
+            withdraw,
+            amtPerSec,
+            updatedReceivers
+        );
         _transfer(msg.sender, withdrawn);
     }
 
     /// @notice Tops up the sender balance of the user.
     /// @param id The id of the user.
-    function topUp(address id) public virtual payable {
+    function topUp(address id) public payable virtual {
         if (msg.value == 0) {
             return;
         }
-        _updateSenderInternal(id, uint128(msg.value), 0, AMT_PER_SEC_UNCHANGED, new ReceiverWeight[](0));
+        _updateSenderInternal(
+            id,
+            uint128(msg.value),
+            0,
+            AMT_PER_SEC_UNCHANGED,
+            new ReceiverWeight[](0)
+        );
     }
 
     function _transfer(address to, uint128 amt) internal override {

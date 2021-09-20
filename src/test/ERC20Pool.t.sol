@@ -7,16 +7,15 @@ import {ERC20Pool, Pool} from "../ERC20Pool.sol";
 import {IERC20, ERC20PresetFixedSupply} from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
 contract ERC20PoolTest is EthPoolTest {
-
     ERC20Pool private pool;
 
     function setUp() public override {
-        IERC20 erc20 = new ERC20PresetFixedSupply("test", "test", 10 ** 6 * 1 ether, address(this));
+        IERC20 erc20 = new ERC20PresetFixedSupply("test", "test", 10**6 * 1 ether, address(this));
         pool = new ERC20Pool(CYCLE_SECS, erc20);
         super.setUp();
     }
 
-    function getPool() internal override view returns (Pool) {
+    function getPool() internal view override returns (Pool) {
         return Pool(pool);
     }
 

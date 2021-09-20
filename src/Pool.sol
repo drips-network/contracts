@@ -309,7 +309,11 @@ abstract contract Pool {
     /// @param id The id of the user.
     /// @param receiver The address of the receiver
     /// @param weight The weight of the receiver
-    function _setReceiver(address id, address receiver, uint32 weight) internal {
+    function _setReceiver(
+        address id,
+        address receiver,
+        uint32 weight
+    ) internal {
         Sender storage sender = senders[id];
         uint64 senderWeightSum = sender.weightSum;
         uint32 oldWeight = sender.receiverWeights.setWeight(receiver, weight);
@@ -397,7 +401,11 @@ abstract contract Pool {
     /// @param id The id of the user.
     /// @param amtPerWeightPerSecDelta Amount of per-second delta applied per receiver weight
     /// @param timeEnd The timestamp from which the delta stops taking effect
-    function _setDeltasFromNow(address id, int128 amtPerWeightPerSecDelta, uint64 timeEnd) internal {
+    function _setDeltasFromNow(
+        address id,
+        int128 amtPerWeightPerSecDelta,
+        uint64 timeEnd
+    ) internal {
         Sender storage sender = senders[id];
         // Iterating over receivers, see `ReceiverWeights` for details
         address receiverAddr = ReceiverWeightsImpl.ADDR_ROOT;

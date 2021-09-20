@@ -37,7 +37,7 @@ contract Dai is ERC20, IDai {
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) override external {
+    ) external override {
         bytes32 message = keccak256(abi.encode(typehash, holder, spender, nonce, expiry, allowed));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, message));
         address signer = ecrecover(digest, v, r, s);
