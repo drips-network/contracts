@@ -131,6 +131,17 @@ abstract contract Pool {
         int128 nextCycle;
     }
 
+    struct StreamUpdates {
+        uint256 length;
+        StreamUpdate[] updates;
+    }
+
+    struct StreamUpdate {
+        address receiver;
+        uint128 amtPerSec;
+        uint64 endTime;
+    }
+
     /// @dev Details about all the senders, the key is the owner's address
     mapping(address => Sender) internal senders;
     /// @dev Details about all the receivers, the key is the owner's address
@@ -226,16 +237,26 @@ abstract contract Pool {
         uint128 amtPerSec,
         ReceiverWeight[] calldata updatedReceivers
     ) internal returns (uint128 withdrawn) {
-        _stopSending(id);
+        uint256 maxUpdates = senders[id].weightCount + updatedReceivers.length;
+        StreamUpdates memory updates = StreamUpdates({
+            length: 0,
+            updates: new StreamUpdate[](maxUpdates)
+        });
+
+        _stopSending(id, updates);
         _topUp(id, topUpAmt);
         withdrawn = _withdraw(id, withdrawAmt);
         _setAmtPerSec(id, amtPerSec);
         for (uint256 i = 0; i < updatedReceivers.length; i++) {
             _setReceiver(id, updatedReceivers[i].receiver, updatedReceivers[i].weight);
         }
-        Sender storage sender = senders[id];
-        emit SenderUpdated(id, sender.startBalance, sender.amtPerSec);
-        _startSending(id);
+        _startSending(id, updates);
+
+        emit SenderUpdated(id, senders[id].startBalance, senders[id].amtPerSec);
+        for (uint256 i = 0; i < updates.length; i++) {
+            StreamUpdate memory update = updates.updates[i];
+            emit SenderToReceiverUpdated(id, update.receiver, update.amtPerSec, update.endTime);
+        }
     }
 
     /// @notice Adds the given amount to the senders balance of the user.
@@ -360,7 +381,8 @@ abstract contract Pool {
     /// It allows the properties of the sender to be safely modified
     /// without having to update the state of its receivers.
     /// @param id The id of the user.
-    function _stopSending(address id) internal {
+    /// @param updates The list of stream updates to log
+    function _stopSending(address id, StreamUpdates memory updates) internal {
         Sender storage sender = senders[id];
         // Hasn't been sending anything
         if (sender.weightSum == 0 || sender.amtPerSec < sender.weightSum) return;
@@ -374,14 +396,16 @@ abstract contract Pool {
             return;
         }
         sender.startBalance -= (_currTimestamp() - sender.startTime) * amtPerSec;
-        _setDeltasFromNow(id, -int128(amtPerWeight), endTime);
+        // Set negative deltas to clear deltas applied by the previous call to `_startSending`
+        _setDeltasFromNow(id, -int128(amtPerWeight), endTime, updates);
     }
 
     /// @notice Makes the user start sending funds.
     /// It applies effects of the sender on all of its receivers.
     /// It doesn't modify the sender.
     /// @param id The id of the user.
-    function _startSending(address id) internal {
+    /// @param updates The list of stream updates to log
+    function _startSending(address id, StreamUpdates memory updates) internal {
         Sender storage sender = senders[id];
         // Won't be sending anything
         if (sender.weightSum == 0 || sender.amtPerSec < sender.weightSum) return;
@@ -392,7 +416,7 @@ abstract contract Pool {
         sender.startTime = _currTimestamp();
         uint256 endTimeUncapped = _currTimestamp() + uint256(sender.startBalance / amtPerSec);
         uint64 endTime = endTimeUncapped > MAX_TIMESTAMP ? MAX_TIMESTAMP : uint64(endTimeUncapped);
-        _setDeltasFromNow(id, int128(amtPerWeight), endTime);
+        _setDeltasFromNow(id, int128(amtPerWeight), endTime, updates);
     }
 
     /// @notice Sets deltas to all sender's receivers from now to `timeEnd`
@@ -401,15 +425,18 @@ abstract contract Pool {
     /// @param id The id of the user.
     /// @param amtPerWeightPerSecDelta Amount of per-second delta applied per receiver weight
     /// @param timeEnd The timestamp from which the delta stops taking effect
+    /// @param updates The list of stream updates to log
     function _setDeltasFromNow(
         address id,
         int128 amtPerWeightPerSecDelta,
-        uint64 timeEnd
+        uint64 timeEnd,
+        StreamUpdates memory updates
     ) internal {
         Sender storage sender = senders[id];
         // Iterating over receivers, see `ReceiverWeights` for details
         address receiverAddr = ReceiverWeightsImpl.ADDR_ROOT;
         address hint = ReceiverWeightsImpl.ADDR_ROOT;
+        uint256 oldLength = updates.length;
         while (true) {
             uint32 weight;
             (receiverAddr, hint, weight) = sender.receiverWeights.nextWeightPruning(
@@ -419,13 +446,33 @@ abstract contract Pool {
             if (receiverAddr == ReceiverWeightsImpl.ADDR_ROOT) break;
             int128 amtPerSecDelta = int128(uint128(weight)) * amtPerWeightPerSecDelta;
             _setReceiverDeltaFromNow(receiverAddr, amtPerSecDelta, timeEnd);
-            if (amtPerSecDelta > 0) {
-                // Sending is starting
-                uint128 amtPerSec = uint128(amtPerSecDelta);
-                emit SenderToReceiverUpdated(id, receiverAddr, amtPerSec, timeEnd);
-            } else {
-                // Sending is stopping
-                emit SenderToReceiverUpdated(id, receiverAddr, 0, _currTimestamp());
+
+            // Stopping sending
+            if (amtPerSecDelta < 0) {
+                updates.updates[updates.length] = StreamUpdate({
+                    receiver: receiverAddr,
+                    amtPerSec: 0,
+                    endTime: _currTimestamp()
+                });
+                updates.length++;
+            }
+            // Starting sending
+            else {
+                // Find an old receiver stream log to update
+                uint256 updated = 0;
+                while (updated < oldLength && updates.updates[updated].receiver != receiverAddr) {
+                    updated++;
+                }
+                // Receiver not found among old logs, will be pushed
+                if (updated == oldLength) {
+                    updated = updates.length;
+                    updates.length++;
+                }
+                updates.updates[updated] = StreamUpdate({
+                    receiver: receiverAddr,
+                    amtPerSec: uint128(amtPerSecDelta),
+                    endTime: timeEnd
+                });
             }
         }
     }
