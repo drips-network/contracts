@@ -45,24 +45,4 @@ contract DaiPool is ERC20Pool {
         IDai(address(erc20)).permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
         return updateSender(topUpAmt, withdraw, amtPerSec, updatedReceivers);
     }
-
-    /// @notice Tops up the sender balance of the user
-    /// and permits spending sender's Dai by the pool.
-    /// This function is an extension of `topUp`, see its documentation for more details.
-    ///
-    /// The sender must sign a Dai permission document allowing the pool to spend their funds.
-    /// The document's `nonce` and `expiry` must be passed here along the parts of its signature.
-    /// These parameters will be passed to the Dai contract by this function.
-    function topUpAndPermit(
-        address id,
-        uint128 topUpAmt,
-        uint256 nonce,
-        uint256 expiry,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) public virtual {
-        IDai(address(erc20)).permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
-        topUp(id, topUpAmt);
-    }
 }

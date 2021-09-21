@@ -61,18 +61,6 @@ contract ERC20Pool is Pool {
         _transfer(msg.sender, withdrawn);
     }
 
-    /// @notice Tops up the sender balance of the user.
-    /// The sender must first grant the contract a sufficient allowance to top up.
-    /// @param id The id of the user.
-    /// @param topUpAmt The topped up amount.
-    function topUp(address id, uint128 topUpAmt) public virtual {
-        if (topUpAmt == 0) {
-            return;
-        }
-        _transferToContract(msg.sender, topUpAmt);
-        _updateSenderInternal(id, topUpAmt, 0, AMT_PER_SEC_UNCHANGED, new ReceiverWeight[](0));
-    }
-
     function _transferToContract(address from, uint128 amt) internal {
         if (amt != 0) erc20.transferFrom(from, address(this), amt);
     }

@@ -224,7 +224,7 @@ abstract contract Pool {
         uint128 topUpAmt,
         uint128 withdrawAmt,
         uint128 amtPerSec,
-        ReceiverWeight[] memory updatedReceivers
+        ReceiverWeight[] calldata updatedReceivers
     ) internal returns (uint128 withdrawn) {
         _stopSending(id);
         _topUp(id, topUpAmt);

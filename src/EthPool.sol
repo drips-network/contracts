@@ -52,21 +52,6 @@ contract EthPool is Pool {
         _transfer(msg.sender, withdrawn);
     }
 
-    /// @notice Tops up the sender balance of the user.
-    /// @param id The id of the user.
-    function topUp(address id) public payable virtual {
-        if (msg.value == 0) {
-            return;
-        }
-        _updateSenderInternal(
-            id,
-            uint128(msg.value),
-            0,
-            AMT_PER_SEC_UNCHANGED,
-            new ReceiverWeight[](0)
-        );
-    }
-
     function _transfer(address to, uint128 amt) internal override {
         if (amt != 0) payable(to).transfer(amt);
     }

@@ -136,22 +136,6 @@ contract EthPoolTest is DSTest {
         updateSender(user, balanceFrom, balanceTo, pool.AMT_PER_SEC_UNCHANGED());
     }
 
-    function topUp(
-        PoolUser user,
-        PoolUser toppedUp,
-        uint128 balanceFrom,
-        uint128 balanceTo
-    ) internal {
-        assertWithdrawable(toppedUp, balanceFrom);
-        uint128 topUpAmt = balanceTo - balanceFrom;
-        uint256 expectedBalance = user.balance() - topUpAmt;
-
-        user.topUp(address(toppedUp), topUpAmt);
-
-        assertWithdrawable(toppedUp, balanceTo);
-        assertBalance(user, expectedBalance);
-    }
-
     function setAmtPerSec(PoolUser user, uint128 amtPerSec) internal {
         uint128 withdrawable = user.withdrawable();
         updateSender(user, withdrawable, withdrawable, amtPerSec);
@@ -494,35 +478,5 @@ contract EthPoolTest is DSTest {
         warpToCycleEnd();
         // Receiver had 1 second paying 10 per second
         collect(sender2, receiver, 10);
-    }
-
-    function testAnybodyCanCallTopUpToUpkeepStream() public {
-        updateSender(sender, 0, 10, 1, Weight(receiver1, 1));
-        warpBy(5);
-        // Sender had 5 second paying 1 per second
-        topUp(receiver2, sender, 5, 10);
-        warpBy(8);
-        // Sender had 13 second paying 1 per second
-        changeBalance(sender, 2, 0);
-        warpToCycleEnd();
-        // Receiver had 13 second paying 1 per second
-        collect(receiver1, 13);
-    }
-
-    function testAnybodyCanCallTopUpToRestoreStream() public {
-        updateSender(sender, 0, 10, 1, Weight(receiver1, 1));
-        // Sender runs out of funds
-        warpBy(10);
-        warpToCycleEnd();
-        // Receiver had 10 second paying 1 per second
-        collect(receiver1, 10);
-        // Sender had 10 second paying 1 per second
-        topUp(receiver2, sender, 0, 5);
-        warpBy(3);
-        // Sender had 3 second paying 1 per second
-        changeBalance(sender, 2, 0);
-        warpToCycleEnd();
-        // Receiver had 3 second paying 1 per second
-        collect(receiver1, 3);
     }
 }

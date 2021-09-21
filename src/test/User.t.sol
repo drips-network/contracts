@@ -19,8 +19,6 @@ abstract contract PoolUser {
         ReceiverWeight[] calldata updatedReceivers
     ) public virtual returns (uint128 withdrawn);
 
-    function topUp(address id, uint128 toppedUp) public virtual;
-
     function collect() public {
         collect(address(this));
     }
@@ -70,11 +68,6 @@ contract ERC20PoolUser is PoolUser {
         pool.erc20().approve(address(pool), toppedUp);
         return pool.updateSender(toppedUp, withdraw, amtPerSec, updatedReceivers);
     }
-
-    function topUp(address id, uint128 toppedUp) public override {
-        pool.erc20().approve(address(pool), toppedUp);
-        pool.topUp(id, toppedUp);
-    }
 }
 
 contract EthPoolUser is PoolUser {
@@ -103,10 +96,6 @@ contract EthPoolUser is PoolUser {
     ) public override returns (uint128 withdrawn) {
         return pool.updateSender{value: toppedUp}(withdraw, amtPerSec, updatedReceivers);
     }
-
-    function topUp(address id, uint128 toppedUp) public override {
-        pool.topUp{value: toppedUp}(id);
-    }
 }
 
 contract NFTPoolUser is PoolUser {
@@ -134,11 +123,6 @@ contract NFTPoolUser is PoolUser {
     ) public override returns (uint128 withdrawn) {
         pool.erc20().approve(address(pool), toppedUp);
         return pool.updateSender(toppedUp, withdrawAmt, amtPerSec, updatedReceivers);
-    }
-
-    function topUp(address id, uint128 toppedUp) public override {
-        pool.erc20().approve(address(pool), toppedUp);
-        pool.topUp(id, toppedUp);
     }
 
     function withdraw(uint256 withdrawAmount) public {
