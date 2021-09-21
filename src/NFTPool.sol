@@ -21,7 +21,7 @@ contract NFTPool is DaiPool {
     /// @notice generates a unique 20 bytes by hashing the nft registry  and tokenId
     /// @param nftRegistry address of the NFT specific registry
     /// @param tokenId the unique token id for the NFT registry
-    function nftID(address nftRegistry, uint128 tokenId) public pure returns (address id) {
+    function nftID(address nftRegistry, uint256 tokenId) public pure returns (address id) {
         // gas optimized without local variables
         return address(uint160(uint256(keccak256(abi.encodePacked(nftRegistry, tokenId)))));
     }
@@ -45,7 +45,7 @@ contract NFTPool is DaiPool {
     /// @return withdrawn The actually withdrawn amount.
     function updateSender(
         address nftRegistry,
-        uint128 tokenId,
+        uint256 tokenId,
         uint128 topUpAmt,
         uint128 withdraw,
         uint128 amtPerSec,
