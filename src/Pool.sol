@@ -28,15 +28,21 @@ struct ReceiverWeight {
 /// It's extracted from the `withdraw`able balance and transferred to the receivers.
 /// The process continues automatically until the sender's balance is empty.
 ///
+/// A single address can act as any number of independent senders by using sub-senders.
+/// A sub-sender is identified by a user address and an ID.
+/// The sender and all sub-senders' configurations are independent and they have separate balances.
+///
 /// A receiver has an account, from which he can `collect` funds sent by the senders.
 /// The available amount is updated every `cycleSecs` seconds,
 /// so recently sent funds may not be `collect`able immediately.
 /// `cycleSecs` is a constant configured when the pool is deployed.
 ///
-/// A single address can be used as a sender and as a receiver, even at the same time.
-/// It will have 2 balances in the contract, one with funds being sent and one with received,
-/// but with no connection between them and no shared configuration.
-/// In order to send received funds, they must be first `collect`ed and then `topUp`ped
+/// A single address can be used as a receiver, a sender or any number of sub-senders,
+/// even at the same time.
+/// It will have multiple balances in the contract, one with received funds, one with funds
+/// being sent and one with funds being sent for each used sub-sender.
+/// These balances have no connection between them and no shared configuration.
+/// In order to send received funds, they must be first collected and then used to tup up
 /// if they are to be sent through the contract.
 ///
 /// The concept of something happening periodically, e.g. every second or every `cycleSecs` are
@@ -82,12 +88,45 @@ abstract contract Pool {
         uint64 endTime
     );
 
+    /// @notice Emitted when a direct stream of funds between
+    /// a sender's sub-sender and a receiver is updated.
+    /// This is caused by a sender updating their sub-sender's parameters.
+    /// Funds are being sent on every second between the event block's timestamp (inclusively) and
+    /// `endTime` (exclusively) or until the timestamp of the next stream update (exclusively).
+    /// @param senderAddr The address of the sender of the updated stream
+    /// @param subSenderId The id of the sender's sub-sender
+    /// @param receiver The receiver of the updated stream
+    /// @param amtPerSec The new amount per second sent from the sender to the receiver
+    /// or 0 if sending is stopped
+    /// @param endTime The timestamp when the funds stop being sent,
+    /// always larger than the block timestamp or equal to it if sending is stopped
+    event SubSenderToReceiverUpdated(
+        address indexed senderAddr,
+        uint256 indexed subSenderId,
+        address indexed receiver,
+        uint128 amtPerSec,
+        uint64 endTime
+    );
+
     /// @notice Emitted when a sender is updated
     /// @param sender The updated sender
     /// @param balance The sender's balance since the event block's timestamp
     /// @param amtPerSec The target amount sent per second after the update.
     /// Takes effect on the event block's timestamp (inclusively).
     event SenderUpdated(address indexed sender, uint128 balance, uint128 amtPerSec);
+
+    /// @notice Emitted when a sender is updated
+    /// @param senderAddr The address of the sender
+    /// @param subSenderId The id of the sender's updated sub-sender
+    /// @param balance The sender's balance since the event block's timestamp
+    /// @param amtPerSec The target amount sent per second after the update.
+    /// Takes effect on the event block's timestamp (inclusively).
+    event SubSenderUpdated(
+        address indexed senderAddr,
+        uint256 indexed subSenderId,
+        uint128 balance,
+        uint128 amtPerSec
+    );
 
     /// @notice Emitted when a receiver collects funds
     /// @param receiver The collecting receiver
@@ -144,6 +183,8 @@ abstract contract Pool {
 
     /// @dev Details about all the senders, the key is the owner's address
     mapping(address => Sender) internal senders;
+    /// @dev Details about all the sub-senders, the keys is the owner address and the sub-sender ID
+    mapping(address => mapping(uint256 => Sender)) internal subSenders;
     /// @dev Details about all the receivers, the key is the owner's address
     mapping(address => Receiver) internal receivers;
 
@@ -206,6 +247,71 @@ abstract contract Pool {
     }
 
     /// @notice Updates all the sender parameters of the user.
+    /// See `_updateAnySender` for more details.
+    /// @param senderAddr The address of the sender
+    function _updateSenderInternal(
+        address senderAddr,
+        uint128 topUpAmt,
+        uint128 withdrawAmt,
+        uint128 amtPerSec,
+        ReceiverWeight[] calldata updatedReceivers
+    ) internal returns (uint128 withdrawn) {
+        Sender storage sender = senders[senderAddr];
+        StreamUpdates memory updates;
+        (withdrawn, updates) = _updateAnySender(
+            sender,
+            topUpAmt,
+            withdrawAmt,
+            amtPerSec,
+            updatedReceivers
+        );
+        emit SenderUpdated(senderAddr, sender.startBalance, sender.amtPerSec);
+        for (uint256 i = 0; i < updates.length; i++) {
+            StreamUpdate memory update = updates.updates[i];
+            emit SenderToReceiverUpdated(
+                senderAddr,
+                update.receiver,
+                update.amtPerSec,
+                update.endTime
+            );
+        }
+    }
+
+    /// @notice Updates all the parameters of the sender's sub-sender.
+    /// See `_updateAnySender` for more details.
+    /// @param senderAddr The address of the sender
+    /// @param subSenderId The id of the sender's sub-sender
+    function _updateSubSenderInternal(
+        address senderAddr,
+        uint256 subSenderId,
+        uint128 topUpAmt,
+        uint128 withdrawAmt,
+        uint128 amtPerSec,
+        ReceiverWeight[] calldata updatedReceivers
+    ) internal returns (uint128 withdrawn) {
+        Sender storage sender = subSenders[senderAddr][subSenderId];
+        StreamUpdates memory updates;
+        (withdrawn, updates) = _updateAnySender(
+            sender,
+            topUpAmt,
+            withdrawAmt,
+            amtPerSec,
+            updatedReceivers
+        );
+        emit SubSenderUpdated(senderAddr, subSenderId, sender.startBalance, sender.amtPerSec);
+        for (uint256 i = 0; i < updates.length; i++) {
+            StreamUpdate memory update = updates.updates[i];
+            emit SubSenderToReceiverUpdated(
+                senderAddr,
+                subSenderId,
+                update.receiver,
+                update.amtPerSec,
+                update.endTime
+            );
+        }
+    }
+
+    /// @notice Updates all the sender's parameters.
     ///
     /// Tops up and withdraws unsent funds from the balance of the sender.
     ///
@@ -220,7 +326,7 @@ abstract contract Pool {
     /// that each of the sender's receivers get.
     /// Setting a non-zero weight for a new receiver adds it to the set of the sender's receivers.
     /// Setting zero as the weight for a receiver removes it from the set of the sender's receivers.
-    /// @param senderAddr The address of the sender
+    /// @param sender The updated sender
     /// @param topUpAmt The topped up amount.
     /// @param withdrawAmt The amount to be withdrawn, must not be higher than available funds.
     /// Can be `WITHDRAW_ALL` to withdraw everything.
@@ -229,20 +335,16 @@ abstract contract Pool {
     /// @param updatedReceivers The list of the updated receivers and their new weights
     /// @return withdrawn The withdrawn amount which should be sent to the user.
     /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
-    function _updateSenderInternal(
-        address senderAddr,
+    /// @return updates The list of stream updates to log
+    function _updateAnySender(
+        Sender storage sender,
         uint128 topUpAmt,
         uint128 withdrawAmt,
         uint128 amtPerSec,
         ReceiverWeight[] calldata updatedReceivers
-    ) internal returns (uint128 withdrawn) {
-        Sender storage sender = senders[senderAddr];
+    ) internal returns (uint128 withdrawn, StreamUpdates memory updates) {
         uint256 maxUpdates = sender.weightCount + updatedReceivers.length;
-        StreamUpdates memory updates = StreamUpdates({
-            length: 0,
-            updates: new StreamUpdate[](maxUpdates)
-        });
-
+        updates = StreamUpdates({length: 0, updates: new StreamUpdate[](maxUpdates)});
         _stopSending(sender, updates);
         _topUp(sender, topUpAmt);
         withdrawn = _withdraw(sender, withdrawAmt);
@@ -251,17 +353,6 @@ abstract contract Pool {
             _setReceiver(sender, updatedReceivers[i].receiver, updatedReceivers[i].weight);
         }
         _startSending(sender, updates);
-
-        emit SenderUpdated(senderAddr, sender.startBalance, sender.amtPerSec);
-        for (uint256 i = 0; i < updates.length; i++) {
-            StreamUpdate memory update = updates.updates[i];
-            emit SenderToReceiverUpdated(
-                senderAddr,
-                update.receiver,
-                update.amtPerSec,
-                update.endTime
-            );
-        }
     }
 
     /// @notice Adds the given amount to the senders balance of the user.
@@ -275,7 +366,25 @@ abstract contract Pool {
     /// @param senderAddr The address of the sender
     /// @return balance The available balance
     function withdrawable(address senderAddr) public view returns (uint128) {
-        Sender storage sender = senders[senderAddr];
+        return _withdrawableAnySender(senders[senderAddr]);
+    }
+
+    /// @notice Returns amount of unsent funds available for withdrawal for the sub-sender
+    /// @param senderAddr The address of the sender
+    /// @param subSenderId The id of the sender's sub-sender
+    /// @return balance The available balance
+    function withdrawableSubSender(address senderAddr, uint256 subSenderId)
+        public
+        view
+        returns (uint128)
+    {
+        return _withdrawableAnySender(subSenders[senderAddr][subSenderId]);
+    }
+
+    /// @notice Returns amount of unsent funds available for withdrawal for the sender.
+    /// See `withdrawable` for more details
+    /// @param sender The queried sender
+    function _withdrawableAnySender(Sender storage sender) internal view returns (uint128) {
         // Hasn't been sending anything
         if (sender.weightSum == 0 || sender.amtPerSec < sender.weightSum) {
             return sender.startBalance;
@@ -327,6 +436,23 @@ abstract contract Pool {
         return senders[senderAddr].amtPerSec;
     }
 
+    /// @notice Gets the target amount sent every second for the provided sub-sender.
+    /// The actual amount sent every second may differ from the target value.
+    /// It's rounded down to the closest multiple of the sum of the weights of
+    /// the sub-sender's receivers and split between them proportionally to their weights.
+    /// Each receiver then receives their part from the sub-sender's balance.
+    /// If zero, funding is stopped.
+    /// @param senderAddr The address of the sender
+    /// @param subSenderId The id of the sender's sub-sender
+    /// @return amt The target amount to be sent every second
+    function getAmtPerSecSubSender(address senderAddr, uint256 subSenderId)
+        public
+        view
+        returns (uint128 amt)
+    {
+        return subSenders[senderAddr][subSenderId].amtPerSec;
+    }
+
     /// @notice Sets the weight of the provided receiver of the user.
     /// The weight regulates the share of the amount sent every second
     /// that each of the sender's receivers gets.
@@ -365,7 +491,32 @@ abstract contract Pool {
         view
         returns (ReceiverWeight[] memory weights)
     {
-        Sender storage sender = senders[senderAddr];
+        return getAllReceiversAnySender(senders[senderAddr]);
+    }
+
+    /// @notice Gets the receivers to whom the sub-sender sends funds.
+    /// Each entry contains a weight, which regulates the share of the amount
+    /// being sent every second in relation to other sub-sender's receivers.
+    /// @param senderAddr The address of the sender
+    /// @param subSenderId The id of the sender's sub-sender
+    /// @return weights The list of receiver addresses and their weights.
+    /// The weights are never zero.
+    function getAllReceiversSubSender(address senderAddr, uint256 subSenderId)
+        public
+        view
+        returns (ReceiverWeight[] memory weights)
+    {
+        return getAllReceiversAnySender(subSenders[senderAddr][subSenderId]);
+    }
+
+    /// @notice Gets the receivers to whom the sender sends funds.
+    /// See `getAllReceivers` for more details.
+    /// @param sender The queried sender
+    function getAllReceiversAnySender(Sender storage sender)
+        internal
+        view
+        returns (ReceiverWeight[] memory weights)
+    {
         weights = new ReceiverWeight[](sender.weightCount);
         uint32 weightsCount = 0;
         // Iterating over receivers, see `ReceiverWeights` for details

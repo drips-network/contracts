@@ -61,6 +61,28 @@ contract ERC20Pool is Pool {
         _transfer(msg.sender, withdrawn);
     }
 
+    /// @notice Updates all the parameters of a sub-sender of the sender of the message.
+    /// See `updateSender` for more details
+    /// @param subSenderId The id of the sender's sub-sender
+    function updateSubSender(
+        uint256 subSenderId,
+        uint128 topUpAmt,
+        uint128 withdraw,
+        uint128 amtPerSec,
+        ReceiverWeight[] calldata updatedReceivers
+    ) public payable virtual returns (uint128 withdrawn) {
+        _transferToContract(msg.sender, topUpAmt);
+        withdrawn = _updateSubSenderInternal(
+            msg.sender,
+            subSenderId,
+            topUpAmt,
+            withdraw,
+            amtPerSec,
+            updatedReceivers
+        );
+        _transfer(msg.sender, withdrawn);
+    }
+
     function _transferToContract(address from, uint128 amt) internal {
         if (amt != 0) erc20.transferFrom(from, address(this), amt);
     }

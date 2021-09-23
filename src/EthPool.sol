@@ -52,6 +52,26 @@ contract EthPool is Pool {
         _transfer(msg.sender, withdrawn);
     }
 
+    /// @notice Updates all the parameters of a sub-sender of the sender of the message.
+    /// See `updateSender` for more details
+    /// @param subSenderId The id of the sender's sub-sender
+    function updateSubSender(
+        uint256 subSenderId,
+        uint128 withdraw,
+        uint128 amtPerSec,
+        ReceiverWeight[] calldata updatedReceivers
+    ) public payable virtual returns (uint128 withdrawn) {
+        withdrawn = _updateSubSenderInternal(
+            msg.sender,
+            subSenderId,
+            uint128(msg.value),
+            withdraw,
+            amtPerSec,
+            updatedReceivers
+        );
+        _transfer(msg.sender, withdrawn);
+    }
+
     function _transfer(address to, uint128 amt) internal override {
         if (amt != 0) payable(to).transfer(amt);
     }
