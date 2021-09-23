@@ -396,6 +396,7 @@ abstract contract Pool {
             return;
         }
         sender.startBalance -= (_currTimestamp() - sender.startTime) * amtPerSec;
+        // Set negative deltas to clear deltas applied by the previous call to `_startSending`
         _setDeltasFromNow(id, -int128(amtPerWeight), endTime, updates);
     }
 
