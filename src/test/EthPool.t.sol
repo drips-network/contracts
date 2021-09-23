@@ -26,6 +26,8 @@ contract EthPoolTest is DSTest {
     PoolUser private receiver1;
     PoolUser private sender2;
     PoolUser private receiver2;
+    uint256 private constant SUB_SENDER_1 = 1;
+    uint256 private constant SUB_SENDER_2 = 2;
 
     constructor() {
         hevm = Hevm(HEVM_ADDRESS);
@@ -158,6 +160,103 @@ contract EthPoolTest is DSTest {
         } catch Error(string memory reason) {
             assertEq(reason, expectedReason, "Invalid sender receivers update revert reason");
         }
+    }
+
+    function updateSubSender(
+        PoolUser user,
+        uint256 subSenderId,
+        uint128 balanceFrom,
+        uint128 balanceTo,
+        uint128 amtPerSec
+    ) internal {
+        updateSubSender(
+            user,
+            subSenderId,
+            balanceFrom,
+            balanceTo,
+            amtPerSec,
+            new ReceiverWeight[](0)
+        );
+    }
+
+    function updateSubSender(
+        PoolUser user,
+        uint256 subSenderId,
+        uint128 balanceFrom,
+        uint128 balanceTo,
+        uint128 amtPerSec,
+        Weight memory weight
+    ) internal {
+        ReceiverWeight[] memory updatedReceivers = new ReceiverWeight[](1);
+        updatedReceivers[0] = ReceiverWeight(address(weight.user), weight.weight);
+        updateSubSender(user, subSenderId, balanceFrom, balanceTo, amtPerSec, updatedReceivers);
+    }
+
+    function updateSubSender(
+        PoolUser user,
+        uint256 subSenderId,
+        uint128 balanceFrom,
+        uint128 balanceTo,
+        uint128 amtPerSec,
+        Weight memory weight1,
+        Weight memory weight2
+    ) internal {
+        ReceiverWeight[] memory updatedReceivers = new ReceiverWeight[](2);
+        updatedReceivers[0] = ReceiverWeight(address(weight1.user), weight1.weight);
+        updatedReceivers[1] = ReceiverWeight(address(weight2.user), weight2.weight);
+        updateSubSender(user, subSenderId, balanceFrom, balanceTo, amtPerSec, updatedReceivers);
+    }
+
+    function updateSubSender(
+        PoolUser user,
+        uint256 subSenderId,
+        uint128 balanceFrom,
+        uint128 balanceTo,
+        uint128 amtPerSec,
+        ReceiverWeight[] memory updatedReceivers
+    ) internal {
+        assertWithdrawableSubSender(user, subSenderId, balanceFrom);
+        uint128 toppedUp = balanceTo > balanceFrom ? balanceTo - balanceFrom : 0;
+        uint128 withdraw = balanceTo < balanceFrom ? balanceFrom - balanceTo : 0;
+        uint256 expectedBalance = user.balance() + withdraw - toppedUp;
+        uint128 expectedAmtPerSec = amtPerSec == pool.AMT_PER_SEC_UNCHANGED()
+            ? user.getAmtPerSecSubSender(subSenderId)
+            : amtPerSec;
+
+        uint256 withdrawn = user.updateSubSender(
+            subSenderId,
+            toppedUp,
+            withdraw,
+            amtPerSec,
+            updatedReceivers
+        );
+
+        assertEq(withdrawn, withdraw, "expected amount not withdrawn");
+        assertWithdrawableSubSender(user, subSenderId, balanceTo);
+        assertBalance(user, expectedBalance);
+        assertEq(
+            user.getAmtPerSecSubSender(subSenderId),
+            expectedAmtPerSec,
+            "Invalid amtPerSec after updateSender"
+        );
+        // TODO assert list of receivers
+    }
+
+    function assertWithdrawableSubSender(
+        PoolUser user,
+        uint256 subSenderId,
+        uint128 expected
+    ) internal {
+        assertEq(user.withdrawableSubSender(subSenderId), expected, "Invalid withdrawable");
+    }
+
+    function changeBalanceSubSender(
+        PoolUser user,
+        uint256 subSenderId,
+        uint128 balanceFrom,
+        uint128 balanceTo
+    ) internal {
+        updateSubSender(user, subSenderId, balanceFrom, balanceTo, pool.AMT_PER_SEC_UNCHANGED());
     }
 
     function collect(PoolUser user, uint128 expectedAmt) internal {
@@ -478,5 +577,56 @@ contract EthPoolTest is DSTest {
         warpToCycleEnd();
         // Receiver had 1 second paying 10 per second
         collect(sender2, receiver, 10);
+    }
+
+    function testSenderAndSubSenderAreIndependent() public {
+        updateSender(sender, 0, 5, 1, Weight(receiver1, 1));
+        warpBy(3);
+        updateSubSender(sender, SUB_SENDER_1, 0, 8, 3, Weight(receiver1, 2), Weight(receiver2, 1));
+        warpBy(1);
+        // Sender had 4 seconds paying 1 per second
+        changeBalance(sender, 1, 0);
+        warpBy(1);
+        // Sender sub-sender1 had 2 seconds paying 3 per second
+        changeBalanceSubSender(sender, SUB_SENDER_1, 2, 0);
+        warpToCycleEnd();
+        // Receiver1 had 4 second paying 1 per second and 2 seconds paying 2 per second
+        collect(receiver1, 8);
+        // Receiver2 had 2 second paying 1 per second
+        collect(receiver2, 2);
+    }
+
+    function testUserSubSendersAreIndependent() public {
+        updateSubSender(sender, SUB_SENDER_1, 0, 5, 1, Weight(receiver1, 1));
+        warpBy(3);
+        updateSubSender(sender, SUB_SENDER_2, 0, 8, 3, Weight(receiver1, 2), Weight(receiver2, 1));
+        warpBy(1);
+        // Sender sub-sender1 had 4 seconds paying 1 per second
+        changeBalanceSubSender(sender, SUB_SENDER_1, 1, 0);
+        warpBy(1);
+        // Sender sub-sender2 had 2 seconds paying 3 per second
+        changeBalanceSubSender(sender, SUB_SENDER_2, 2, 0);
+        warpToCycleEnd();
+        // Receiver1 had 4 second paying 1 per second and 2 seconds paying 2 per second
+        collect(receiver1, 8);
+        // Receiver2 had 2 second paying 1 per second
+        collect(receiver2, 2);
+    }
+
+    function testSubSendersOfDifferentUsersAreIndependent() public {
+        updateSubSender(sender1, SUB_SENDER_1, 0, 5, 1, Weight(receiver1, 1));
+        warpBy(3);
+        updateSubSender(sender2, SUB_SENDER_1, 0, 8, 3, Weight(receiver1, 2), Weight(receiver2, 1));
+        warpBy(1);
+        // Sender1 sub-sender1 had 4 seconds paying 1 per second
+        changeBalanceSubSender(sender1, SUB_SENDER_1, 1, 0);
+        warpBy(1);
+        // Sender2 sub-sender1 had 2 seconds paying 3 per second
+        changeBalanceSubSender(sender2, SUB_SENDER_1, 2, 0);
+        warpToCycleEnd();
+        // Receiver1 had 4 second paying 1 per second and 2 seconds paying 2 per second
+        collect(receiver1, 8);
+        // Receiver2 had 2 second paying 1 per second
+        collect(receiver2, 2);
     }
 }
