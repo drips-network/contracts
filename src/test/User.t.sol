@@ -19,6 +19,14 @@ abstract contract PoolUser {
         ReceiverWeight[] calldata updatedReceivers
     ) public virtual returns (uint128 withdrawn);
 
+    function updateSubSender(
+        uint256 subSenderId,
+        uint128 toppedUp,
+        uint128 withdraw,
+        uint128 amtPerSec,
+        ReceiverWeight[] calldata updatedReceivers
+    ) public virtual returns (uint128 withdrawn);
+
     function collect() public {
         collect(address(this));
     }
@@ -35,12 +43,28 @@ abstract contract PoolUser {
         return getPool().withdrawable(address(this));
     }
 
+    function withdrawableSubSender(uint256 subSenderId) public view returns (uint128) {
+        return getPool().withdrawableSubSender(address(this), subSenderId);
+    }
+
     function getAmtPerSec() public view returns (uint128) {
         return getPool().getAmtPerSec(address(this));
     }
 
+    function getAmtPerSecSubSender(uint256 subSenderId) public view returns (uint128) {
+        return getPool().getAmtPerSecSubSender(address(this), subSenderId);
+    }
+
     function getAllReceivers() public view returns (ReceiverWeight[] memory weights) {
         return getPool().getAllReceivers(address(this));
+    }
+
+    function getAllReceiversSubSender(uint256 subSenderId)
+        public
+        view
+        returns (ReceiverWeight[] memory weights)
+    {
+        return getPool().getAllReceiversSubSender(address(this), subSenderId);
     }
 }
 
@@ -67,6 +91,17 @@ contract ERC20PoolUser is PoolUser {
     ) public override returns (uint128 withdrawn) {
         pool.erc20().approve(address(pool), toppedUp);
         return pool.updateSender(toppedUp, withdraw, amtPerSec, updatedReceivers);
+    }
+
+    function updateSubSender(
+        uint256 subSenderId,
+        uint128 toppedUp,
+        uint128 withdraw,
+        uint128 amtPerSec,
+        ReceiverWeight[] calldata updatedReceivers
+    ) public override returns (uint128 withdrawn) {
+        pool.erc20().approve(address(pool), toppedUp);
+        return pool.updateSubSender(subSenderId, toppedUp, withdraw, amtPerSec, updatedReceivers);
     }
 }
 
@@ -96,6 +131,22 @@ contract EthPoolUser is PoolUser {
     ) public override returns (uint128 withdrawn) {
         return pool.updateSender{value: toppedUp}(withdraw, amtPerSec, updatedReceivers);
     }
+
+    function updateSubSender(
+        uint256 subSenderId,
+        uint128 toppedUp,
+        uint128 withdraw,
+        uint128 amtPerSec,
+        ReceiverWeight[] calldata updatedReceivers
+    ) public override returns (uint128 withdrawn) {
+        return
+            pool.updateSubSender{value: toppedUp}(
+                subSenderId,
+                withdraw,
+                amtPerSec,
+                updatedReceivers
+            );
+    }
 }
 
 contract NFTPoolUser is PoolUser {
@@ -123,6 +174,18 @@ contract NFTPoolUser is PoolUser {
     ) public override returns (uint128 withdrawn) {
         pool.erc20().approve(address(pool), toppedUp);
         return pool.updateSender(toppedUp, withdrawAmt, amtPerSec, updatedReceivers);
+    }
+
+    function updateSubSender(
+        uint256 subSenderId,
+        uint128 toppedUp,
+        uint128 withdrawAmt,
+        uint128 amtPerSec,
+        ReceiverWeight[] calldata updatedReceivers
+    ) public override returns (uint128 withdrawn) {
+        pool.erc20().approve(address(pool), toppedUp);
+        return
+            pool.updateSubSender(subSenderId, toppedUp, withdrawAmt, amtPerSec, updatedReceivers);
     }
 
     function withdraw(uint256 withdrawAmount) public {
