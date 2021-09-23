@@ -12,6 +12,10 @@ abstract contract PoolUser {
 
     function balance() public view virtual returns (uint256);
 
+    function getAmtPerSecUnchanged() public view returns (uint128) {
+        return getPool().AMT_PER_SEC_UNCHANGED();
+    }
+
     function updateSender(
         uint128 toppedUp,
         uint128 withdraw,
