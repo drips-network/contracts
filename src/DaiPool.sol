@@ -45,4 +45,24 @@ contract DaiPool is ERC20Pool {
         IDai(address(erc20)).permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
         return updateSender(topUpAmt, withdraw, amtPerSec, updatedReceivers);
     }
+
+    /// @notice Updates all the parameters of a sub-sender of the sender of the message
+    /// and permits spending sender's Dai by the pool.
+    /// This function is an extension of `updateSubSender`, see its documentation for more details.
+    /// @param subSenderId The id of the sender's sub-sender
+    function updateSubSenderAndPermit(
+        uint256 subSenderId,
+        uint128 topUpAmt,
+        uint128 withdraw,
+        uint128 amtPerSec,
+        ReceiverWeight[] calldata updatedReceivers,
+        uint256 nonce,
+        uint256 expiry,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) public virtual returns (uint128 withdrawn) {
+        IDai(address(erc20)).permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
+        return updateSubSender(subSenderId, topUpAmt, withdraw, amtPerSec, updatedReceivers);
+    }
 }
