@@ -156,11 +156,10 @@ abstract contract Pool {
     }
 
     /// @notice Returns amount of received funds available for collection
-    /// by for the pool user id
-    /// @param id The id of the pool user.
+    /// @param receiverAddr The address of the receiver
     /// @return collected The available amount
-    function collectable(address id) public view returns (uint128) {
-        Receiver storage receiver = receivers[id];
+    function collectable(address receiverAddr) public view returns (uint128) {
+        Receiver storage receiver = receivers[receiverAddr];
         uint64 collectedCycle = receiver.nextCollectedCycle;
         if (collectedCycle == 0) return 0;
         uint64 currFinishedCycle = _currTimestamp() / cycleSecs;
@@ -176,21 +175,21 @@ abstract contract Pool {
     }
 
     /// @notice Collects all received funds available for the user and sends them to that user
-    /// @param id The id of the user.
-    function collect(address id) public virtual {
-        uint128 collected = _collectInternal(id);
+    /// @param receiverAddr The address of the receiver
+    function collect(address receiverAddr) public virtual {
+        uint128 collected = _collectInternal(receiverAddr);
         if (collected > 0) {
-            _transfer(id, collected);
+            _transfer(receiverAddr, collected);
         }
-        emit Collected(id, collected);
+        emit Collected(receiverAddr, collected);
     }
 
     /// @notice Removes from the history and returns the amount of received
     /// funds available for collection by the user
-    /// @param id The id of the user.
+    /// @param receiverAddr The address of the receiver
     /// @return collected The collected amount
-    function _collectInternal(address id) internal returns (uint128 collected) {
-        Receiver storage receiver = receivers[id];
+    function _collectInternal(address receiverAddr) internal returns (uint128 collected) {
+        Receiver storage receiver = receivers[receiverAddr];
         uint64 collectedCycle = receiver.nextCollectedCycle;
         if (collectedCycle == 0) return 0;
         uint64 currFinishedCycle = _currTimestamp() / cycleSecs;
@@ -210,18 +209,18 @@ abstract contract Pool {
     ///
     /// Tops up and withdraws unsent funds from the balance of the sender.
     ///
-    /// Sets the target amount sent every second from the user.
+    /// Sets the target amount sent every second from the sender.
     /// Every second this amount is rounded down to the closest multiple of the sum of the weights
     /// of the receivers and split between them proportionally to their weights.
     /// Each receiver then receives their part from the sender's balance.
     /// If set to zero, stops funding.
     ///
-    /// Sets the weight of the provided receivers of the user.
+    /// Sets the weight of the provided receivers of the sender.
     /// The weight regulates the share of the amount sent every second
     /// that each of the sender's receivers get.
     /// Setting a non-zero weight for a new receiver adds it to the set of the sender's receivers.
     /// Setting zero as the weight for a receiver removes it from the set of the sender's receivers.
-    /// @param id The id of the user.
+    /// @param senderAddr The address of the sender
     /// @param topUpAmt The topped up amount.
     /// @param withdrawAmt The amount to be withdrawn, must not be higher than available funds.
     /// Can be `WITHDRAW_ALL` to withdraw everything.
@@ -231,13 +230,13 @@ abstract contract Pool {
     /// @return withdrawn The withdrawn amount which should be sent to the user.
     /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
     function _updateSenderInternal(
-        address id,
+        address senderAddr,
         uint128 topUpAmt,
         uint128 withdrawAmt,
         uint128 amtPerSec,
         ReceiverWeight[] calldata updatedReceivers
     ) internal returns (uint128 withdrawn) {
-        Sender storage sender = senders[id];
+        Sender storage sender = senders[senderAddr];
         uint256 maxUpdates = sender.weightCount + updatedReceivers.length;
         StreamUpdates memory updates = StreamUpdates({
             length: 0,
@@ -253,10 +252,15 @@ abstract contract Pool {
         }
         _startSending(sender, updates);
 
-        emit SenderUpdated(id, senders[id].startBalance, senders[id].amtPerSec);
+        emit SenderUpdated(senderAddr, sender.startBalance, sender.amtPerSec);
         for (uint256 i = 0; i < updates.length; i++) {
             StreamUpdate memory update = updates.updates[i];
-            emit SenderToReceiverUpdated(id, update.receiver, update.amtPerSec, update.endTime);
+            emit SenderToReceiverUpdated(
+                senderAddr,
+                update.receiver,
+                update.amtPerSec,
+                update.endTime
+            );
         }
     }
 
@@ -267,11 +271,11 @@ abstract contract Pool {
         if (amt != 0) sender.startBalance += amt;
     }
 
-    /// @notice Returns amount of unsent funds available for withdrawal for the pool user id
-    /// @param id The id of the pool user.
+    /// @notice Returns amount of unsent funds available for withdrawal for the sender
+    /// @param senderAddr The address of the sender
     /// @return balance The available balance
-    function withdrawable(address id) public view returns (uint128) {
-        Sender storage sender = senders[id];
+    function withdrawable(address senderAddr) public view returns (uint128) {
+        Sender storage sender = senders[senderAddr];
         // Hasn't been sending anything
         if (sender.weightSum == 0 || sender.amtPerSec < sender.weightSum) {
             return sender.startBalance;
@@ -311,16 +315,16 @@ abstract contract Pool {
         if (amtPerSec != AMT_PER_SEC_UNCHANGED) sender.amtPerSec = amtPerSec;
     }
 
-    /// @notice Gets the target amount sent every second for the provided pool user id
+    /// @notice Gets the target amount sent every second for the provided sender.
     /// The actual amount sent every second may differ from the target value.
     /// It's rounded down to the closest multiple of the sum of the weights of
     /// the sender's receivers and split between them proportionally to their weights.
     /// Each receiver then receives their part from the sender's balance.
     /// If zero, funding is stopped.
-    /// @param id The id of the pool user.
+    /// @param senderAddr The address of the sender
     /// @return amt The target amount to be sent every second
-    function getAmtPerSec(address id) public view returns (uint128 amt) {
-        return senders[id].amtPerSec;
+    function getAmtPerSec(address senderAddr) public view returns (uint128 amt) {
+        return senders[senderAddr].amtPerSec;
     }
 
     /// @notice Sets the weight of the provided receiver of the user.
@@ -350,13 +354,18 @@ abstract contract Pool {
         }
     }
 
-    /// @notice Gets the receivers to whom the sender of the message sends funds.
+    /// @notice Gets the receivers to whom the sender sends funds.
     /// Each entry contains a weight, which regulates the share of the amount
     /// being sent every second in relation to other sender's receivers.
+    /// @param senderAddr The address of the sender
     /// @return weights The list of receiver addresses and their weights.
     /// The weights are never zero.
-    function getAllReceivers(address id) public view returns (ReceiverWeight[] memory weights) {
-        Sender storage sender = senders[id];
+    function getAllReceivers(address senderAddr)
+        public
+        view
+        returns (ReceiverWeight[] memory weights)
+    {
+        Sender storage sender = senders[senderAddr];
         weights = new ReceiverWeight[](sender.weightCount);
         uint32 weightsCount = 0;
         // Iterating over receivers, see `ReceiverWeights` for details
