@@ -31,17 +31,10 @@ library ReceiverWeightsImpl {
     /// or ADDR_ROOT to start iterating
     /// @return receiver The receiver address, ADDR_ROOT if the end of the list was reached
     /// @return weight The receiver weight
-    function nextWeightPruning(
-        ReceiverWeights storage self,
-        address prevReceiver
-    )
+    function nextWeightPruning(ReceiverWeights storage self, address prevReceiver)
         internal
-        returns (
-            address receiver,
-            uint32 weight
-        )
+        returns (address receiver, uint32 weight)
     {
-        address nextReceiver = self.data[prevReceiver].next;
         // next receiver hint because if it is an zero weight receiver
         // it will be removed and not the next one
         address nextReceiverHint = self.data[prevReceiver].next;

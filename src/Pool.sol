@@ -409,12 +409,9 @@ abstract contract Pool {
         Sender storage sender = senders[id];
         // Iterating over receivers, see `ReceiverWeights` for details
         address receiverAddr = ReceiverWeightsImpl.ADDR_ROOT;
-        address hint = ReceiverWeightsImpl.ADDR_ROOT;
         while (true) {
             uint32 weight;
-            (receiverAddr, weight) = sender.receiverWeights.nextWeightPruning(
-                receiverAddr
-            );
+            (receiverAddr, weight) = sender.receiverWeights.nextWeightPruning(receiverAddr);
             if (receiverAddr == ReceiverWeightsImpl.ADDR_ROOT) break;
             int128 amtPerSecDelta = int128(uint128(weight)) * amtPerWeightPerSecDelta;
             _setReceiverDeltaFromNow(receiverAddr, amtPerSecDelta, timeEnd);
