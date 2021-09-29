@@ -28,33 +28,34 @@ library ReceiverWeightsImpl {
     /// between the current and the next item from the list.
     /// Iterating over the whole list prunes all the zeroed items.
     /// @param prevReceiver The previously returned `receiver` or ADDR_ROOT to start iterating
-    /// @param prevReceiverHint The previously returned `receiverHint`
     /// or ADDR_ROOT to start iterating
     /// @return receiver The receiver address, ADDR_ROOT if the end of the list was reached
-    /// @return receiverHint A value passed as `prevReceiverHint` on the next call
     /// @return weight The receiver weight
     function nextWeightPruning(
         ReceiverWeights storage self,
-        address prevReceiver,
-        address prevReceiverHint
+        address prevReceiver
     )
         internal
         returns (
             address receiver,
-            address receiverHint,
             uint32 weight
         )
     {
-        if (prevReceiver == ADDR_ROOT) prevReceiverHint = self.data[ADDR_ROOT].next;
-        receiver = prevReceiverHint;
+        address nextReceiver = self.data[prevReceiver].next;
+        // next receiver hint because if it is an zero weight receiver
+        // it will be removed and not the next one
+        address nextReceiverHint = self.data[prevReceiver].next;
+        receiver = nextReceiverHint;
         while (receiver != ADDR_ROOT) {
             weight = self.data[receiver].weight;
-            receiverHint = self.data[receiver].next;
+            address nextReceiver = self.data[receiver].next;
             if (weight != 0) break;
             delete self.data[receiver];
-            receiver = receiverHint;
+            receiver = nextReceiver;
         }
-        if (receiver != prevReceiverHint) self.data[prevReceiver].next = receiver;
+        // prevReceiver.next needs to be updated if previously stored successor
+        // got removed
+        if (receiver != nextReceiverHint) self.data[prevReceiver].next = receiver;
     }
 
     /// @notice Return the next non-zero receiver weight and its address

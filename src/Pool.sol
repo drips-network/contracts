@@ -412,9 +412,8 @@ abstract contract Pool {
         address hint = ReceiverWeightsImpl.ADDR_ROOT;
         while (true) {
             uint32 weight;
-            (receiverAddr, hint, weight) = sender.receiverWeights.nextWeightPruning(
-                receiverAddr,
-                hint
+            (receiverAddr, weight) = sender.receiverWeights.nextWeightPruning(
+                receiverAddr
             );
             if (receiverAddr == ReceiverWeightsImpl.ADDR_ROOT) break;
             int128 amtPerSecDelta = int128(uint128(weight)) * amtPerWeightPerSecDelta;
