@@ -41,8 +41,8 @@ library ReceiverWeightsImpl {
         receiver = nextReceiverHint;
         while (receiver != ADDR_ROOT) {
             weight = self.data[receiver].weight;
-            address nextReceiver = self.data[receiver].next;
             if (weight != 0) break;
+            address nextReceiver = self.data[receiver].next;
             delete self.data[receiver];
             receiver = nextReceiver;
         }
