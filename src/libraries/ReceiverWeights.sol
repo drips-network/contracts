@@ -42,9 +42,9 @@ library ReceiverWeightsImpl {
         while (receiver != ADDR_ROOT) {
             weight = self.data[receiver].weight;
             if (weight != 0) break;
-            address nextReceiver = self.data[receiver].next;
-            delete self.data[receiver];
-            receiver = nextReceiver;
+            address deleteReceiver = receiver;
+            receiver = self.data[receiver].next;
+            delete self.data[deleteReceiver];
         }
         // prevReceiver.next needs to be updated if previously stored successor
         // got removed
