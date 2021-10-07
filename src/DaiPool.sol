@@ -35,6 +35,7 @@ contract DaiPool is ERC20Pool {
         uint128 topUpAmt,
         uint128 withdraw,
         uint128 amtPerSec,
+        uint32 dripsFraction,
         ReceiverWeight[] calldata updatedReceivers,
         uint256 nonce,
         uint256 expiry,
@@ -43,7 +44,7 @@ contract DaiPool is ERC20Pool {
         bytes32 s
     ) public virtual returns (uint128 withdrawn) {
         IDai(address(erc20)).permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
-        return updateSender(topUpAmt, withdraw, amtPerSec, updatedReceivers);
+        return updateSender(topUpAmt, withdraw, amtPerSec, dripsFraction, updatedReceivers);
     }
 
     /// @notice Updates all the parameters of a sub-sender of the sender of the message

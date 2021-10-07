@@ -62,10 +62,12 @@ abstract contract Pool {
     uint64 internal constant MAX_TIMESTAMP = type(uint64).max - 2;
     /// @notice Maximum sum of all receiver weights of a single sender.
     /// Limits loss of per-second funding accuracy, they are always multiples of weights sum.
-    uint32 public constant SENDER_WEIGHTS_SUM_MAX = 10000;
+    uint32 public constant SENDER_WEIGHTS_SUM_MAX = 10_000;
     /// @notice Maximum number of receivers of a single sender.
     /// Limits costs of changes in sender's configuration.
     uint32 public constant SENDER_WEIGHTS_COUNT_MAX = 100;
+    /// @notice Maximum value of drips fraction
+    uint32 public constant DRIPS_FRACTION_MAX = 1_000_000;
     /// @notice The amount passed as the withdraw amount to withdraw all the funds
     uint128 public constant WITHDRAW_ALL = type(uint128).max;
     /// @notice The amount passed as the amount per second to keep the parameter unchanged
@@ -113,7 +115,15 @@ abstract contract Pool {
     /// @param balance The sender's balance since the event block's timestamp
     /// @param amtPerSec The target amount sent per second after the update.
     /// Takes effect on the event block's timestamp (inclusively).
-    event SenderUpdated(address indexed sender, uint128 balance, uint128 amtPerSec);
+    /// @param dripsFraction The fraction of received funds to be dripped.
+    /// A value from 0 to `DRIPS_FRACTION_MAX` inclusively,
+    /// where 0 means no dripping and `DRIPS_FRACTION_MAX` dripping everything.
+    event SenderUpdated(
+        address indexed sender,
+        uint128 balance,
+        uint128 amtPerSec,
+        uint32 dripsFraction
+    );
 
     /// @notice Emitted when a sender is updated
     /// @param senderAddr The address of the sender
@@ -146,6 +156,10 @@ abstract contract Pool {
         // The target amount sent per second.
         // The actual amount is rounded down to the closes multiple of `weightSum`.
         uint128 amtPerSec;
+        // The fraction of received funds to be dripped.
+        // Always has value from 0 to `DRIPS_FRACTION_MAX` inclusively,
+        // where 0 means no dripping and `DRIPS_FRACTION_MAX` dripping everything.
+        uint32 dripsFraction;
         // --- SLOT BOUNDARY
         // The receivers' addresses and their weights
         ReceiverWeights receiverWeights;
@@ -254,6 +268,7 @@ abstract contract Pool {
         uint128 topUpAmt,
         uint128 withdrawAmt,
         uint128 amtPerSec,
+        uint32 dripsFraction,
         ReceiverWeight[] calldata updatedReceivers
     ) internal returns (uint128 withdrawn) {
         Sender storage sender = senders[senderAddr];
@@ -263,9 +278,10 @@ abstract contract Pool {
             topUpAmt,
             withdrawAmt,
             amtPerSec,
+            dripsFraction,
             updatedReceivers
         );
-        emit SenderUpdated(senderAddr, sender.startBalance, sender.amtPerSec);
+        emit SenderUpdated(senderAddr, sender.startBalance, sender.amtPerSec, sender.dripsFraction);
         for (uint256 i = 0; i < updates.length; i++) {
             StreamUpdate memory update = updates.updates[i];
             emit SenderToReceiverUpdated(
@@ -296,6 +312,7 @@ abstract contract Pool {
             topUpAmt,
             withdrawAmt,
             amtPerSec,
+            0,
             updatedReceivers
         );
         emit SubSenderUpdated(senderAddr, subSenderId, sender.startBalance, sender.amtPerSec);
@@ -332,6 +349,9 @@ abstract contract Pool {
     /// Can be `WITHDRAW_ALL` to withdraw everything.
     /// @param amtPerSec The target amount to be sent every second.
     /// Can be `AMT_PER_SEC_UNCHANGED` to keep the amount unchanged.
+    /// @param dripsFraction The fraction of received funds to be dripped.
+    /// Must be a value from 0 to `DRIPS_FRACTION_MAX` inclusively,
+    /// where 0 means no dripping and `DRIPS_FRACTION_MAX` dripping everything.
     /// @param updatedReceivers The list of the updated receivers and their new weights
     /// @return withdrawn The withdrawn amount which should be sent to the user.
     /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
@@ -341,6 +361,7 @@ abstract contract Pool {
         uint128 topUpAmt,
         uint128 withdrawAmt,
         uint128 amtPerSec,
+        uint32 dripsFraction,
         ReceiverWeight[] calldata updatedReceivers
     ) internal returns (uint128 withdrawn, StreamUpdates memory updates) {
         uint256 maxUpdates = sender.weightCount + updatedReceivers.length;
@@ -349,6 +370,7 @@ abstract contract Pool {
         _topUp(sender, topUpAmt);
         withdrawn = _withdraw(sender, withdrawAmt);
         _setAmtPerSec(sender, amtPerSec);
+        _setDripsFraction(sender, dripsFraction);
         for (uint256 i = 0; i < updatedReceivers.length; i++) {
             _setReceiver(sender, updatedReceivers[i].receiver, updatedReceivers[i].weight);
         }
@@ -451,6 +473,25 @@ abstract contract Pool {
         returns (uint128 amt)
     {
         return subSenders[senderAddr][subSenderId].amtPerSec;
+    }
+
+    /// @notice Sets the fraction of received funds to be dripped by the sender.
+    /// @param sender The updated sender
+    /// @param dripsFraction The fraction of received funds to be dripped.
+    /// Must be a value from 0 to `DRIPS_FRACTION_MAX` inclusively,
+    /// where 0 means no dripping and `DRIPS_FRACTION_MAX` dripping everything.
+    function _setDripsFraction(Sender storage sender, uint32 dripsFraction) internal {
+        require(dripsFraction <= DRIPS_FRACTION_MAX, "Drip fraction too high");
+        sender.dripsFraction = dripsFraction;
+    }
+
+    /// @notice Gets the fraction of received funds to be dripped by the provided user.
+    /// @param userAddr The address of the user
+    /// @return dripsFraction The fraction of received funds to be dripped.
+    /// A value from 0 to `DRIPS_FRACTION_MAX` inclusively,
+    /// where 0 means no dripping and `DRIPS_FRACTION_MAX` dripping everything.
+    function getDripsFraction(address userAddr) public view returns (uint32 dripsFraction) {
+        return senders[userAddr].dripsFraction;
     }
 
     /// @notice Sets the weight of the provided receiver of the user.

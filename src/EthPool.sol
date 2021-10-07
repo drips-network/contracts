@@ -35,11 +35,15 @@ contract EthPool is Pool {
     /// Can be `WITHDRAW_ALL` to withdraw everything.
     /// @param amtPerSec The target amount to be sent every second.
     /// Can be `AMT_PER_SEC_UNCHANGED` to keep the amount unchanged.
+    /// @param dripsFraction The fraction of received funds to be dripped.
+    /// Must be a value from 0 to `DRIPS_FRACTION_MAX` inclusively,
+    /// where 0 means no dripping and `DRIPS_FRACTION_MAX` dripping everything.
     /// @param updatedReceivers The list of the updated receivers and their new weights
     /// @return withdrawn The actually withdrawn amount.
     function updateSender(
         uint128 withdraw,
         uint128 amtPerSec,
+        uint32 dripsFraction,
         ReceiverWeight[] calldata updatedReceivers
     ) public payable virtual returns (uint128 withdrawn) {
         withdrawn = _updateSenderInternal(
@@ -47,6 +51,7 @@ contract EthPool is Pool {
             uint128(msg.value),
             withdraw,
             amtPerSec,
+            dripsFraction,
             updatedReceivers
         );
         _transfer(msg.sender, withdrawn);

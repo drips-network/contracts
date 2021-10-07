@@ -14,10 +14,15 @@ abstract contract PoolUser {
         return getPool().AMT_PER_SEC_UNCHANGED();
     }
 
+    function getDripsFractionMax() public view returns (uint32) {
+        return getPool().DRIPS_FRACTION_MAX();
+    }
+
     function updateSender(
         uint128 toppedUp,
         uint128 withdraw,
         uint128 amtPerSec,
+        uint32 dripsFraction,
         ReceiverWeight[] calldata updatedReceivers
     ) public virtual returns (uint128 withdrawn);
 
@@ -57,6 +62,10 @@ abstract contract PoolUser {
         return getPool().getAmtPerSecSubSender(address(this), subSenderId);
     }
 
+    function getDripsFraction() public view returns (uint32) {
+        return getPool().getDripsFraction(address(this));
+    }
+
     function getAllReceivers() public view returns (ReceiverWeight[] memory weights) {
         return getPool().getAllReceivers(address(this));
     }
@@ -89,10 +98,11 @@ contract ERC20PoolUser is PoolUser {
         uint128 toppedUp,
         uint128 withdraw,
         uint128 amtPerSec,
+        uint32 dripsFraction,
         ReceiverWeight[] calldata updatedReceivers
     ) public override returns (uint128 withdrawn) {
         pool.erc20().approve(address(pool), toppedUp);
-        return pool.updateSender(toppedUp, withdraw, amtPerSec, updatedReceivers);
+        return pool.updateSender(toppedUp, withdraw, amtPerSec, dripsFraction, updatedReceivers);
     }
 
     function updateSubSender(
@@ -129,9 +139,16 @@ contract EthPoolUser is PoolUser {
         uint128 toppedUp,
         uint128 withdraw,
         uint128 amtPerSec,
+        uint32 dripsFraction,
         ReceiverWeight[] calldata updatedReceivers
     ) public override returns (uint128 withdrawn) {
-        return pool.updateSender{value: toppedUp}(withdraw, amtPerSec, updatedReceivers);
+        return
+            pool.updateSender{value: toppedUp}(
+                withdraw,
+                amtPerSec,
+                dripsFraction,
+                updatedReceivers
+            );
     }
 
     function updateSubSender(
