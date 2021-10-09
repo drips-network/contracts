@@ -174,11 +174,13 @@ abstract contract Pool {
     }
 
     struct Receiver {
+        // The amount collectable independently from cycles
+        uint128 collectable;
         // The next cycle to be collected
         uint64 nextCollectedCycle;
+        // --- SLOT BOUNDARY
         // The amount of funds received for the last collected cycle.
-        // It never is negative, it's a signed integer only for convenience of casting.
-        int128 lastFundsPerCycle;
+        uint128 lastFundsPerCycle;
         // --- SLOT BOUNDARY
         // The changes of collected amounts on specific cycle.
         // The keys are cycles, each cycle `C` becomes collectable on timestamp `C * cycleSecs`.
@@ -227,18 +229,29 @@ abstract contract Pool {
         returns (uint128 collected, uint128 dripped)
     {
         Receiver storage receiver = receivers[receiverAddr];
+
+        // Collectable independently from cycles
+        collected = receiver.collectable;
+
+        // Collectable from cycles
         uint64 collectedCycle = receiver.nextCollectedCycle;
-        if (collectedCycle == 0) return (0, 0);
         uint64 currFinishedCycle = _currTimestamp() / cycleSecs;
-        if (collectedCycle > currFinishedCycle) return (0, 0);
-        int128 collected = 0;
-        int128 lastFundsPerCycle = receiver.lastFundsPerCycle;
-        for (; collectedCycle <= currFinishedCycle; collectedCycle++) {
-            lastFundsPerCycle += receiver.amtDeltas[collectedCycle - 1].nextCycle;
-            lastFundsPerCycle += receiver.amtDeltas[collectedCycle].thisCycle;
-            collected += lastFundsPerCycle;
+        if (collectedCycle != 0 && collectedCycle <= currFinishedCycle) {
+            int128 lastFundsPerCycle = int128(receiver.lastFundsPerCycle);
+            for (; collectedCycle <= currFinishedCycle; collectedCycle++) {
+                lastFundsPerCycle += receiver.amtDeltas[collectedCycle - 1].nextCycle;
+                lastFundsPerCycle += receiver.amtDeltas[collectedCycle].thisCycle;
+                collected += uint128(lastFundsPerCycle);
+            }
         }
-        return (uint128(collected), 0);
+
+        // Dripped when collected
+        Sender storage sender = senders[receiverAddr];
+        if (collected > 0 && sender.dripsFraction > 0 && sender.weightSum > 0) {
+            uint256 drippable = (uint256(collected) * sender.dripsFraction) / DRIPS_FRACTION_MAX;
+            dripped = uint128(drippable - (drippable % sender.weightSum));
+            collected -= dripped;
+        }
     }
 
     /// @notice Collects all received funds available for the user and sends them to that user
@@ -260,19 +273,49 @@ abstract contract Pool {
         returns (uint128 collected, uint128 dripped)
     {
         Receiver storage receiver = receivers[receiverAddr];
+
+        // Collectable independently from cycles
+        collected = receiver.collectable;
+        if (collected > 0) receiver.collectable = 0;
+
+        // Collectable from cycles
         uint64 collectedCycle = receiver.nextCollectedCycle;
-        if (collectedCycle == 0) return (0, 0);
         uint64 currFinishedCycle = _currTimestamp() / cycleSecs;
-        if (collectedCycle > currFinishedCycle) return (0, 0);
-        int128 lastFundsPerCycle = receiver.lastFundsPerCycle;
-        for (; collectedCycle <= currFinishedCycle; collectedCycle++) {
-            lastFundsPerCycle += receiver.amtDeltas[collectedCycle - 1].nextCycle;
-            lastFundsPerCycle += receiver.amtDeltas[collectedCycle].thisCycle;
-            collected += uint128(lastFundsPerCycle);
-            delete receiver.amtDeltas[collectedCycle - 1];
+        if (collectedCycle != 0 && collectedCycle <= currFinishedCycle) {
+            int128 lastFundsPerCycle = int128(receiver.lastFundsPerCycle);
+            for (; collectedCycle <= currFinishedCycle; collectedCycle++) {
+                lastFundsPerCycle += receiver.amtDeltas[collectedCycle - 1].nextCycle;
+                delete receiver.amtDeltas[collectedCycle - 1];
+                lastFundsPerCycle += receiver.amtDeltas[collectedCycle].thisCycle;
+                collected += uint128(lastFundsPerCycle);
+            }
+            receiver.lastFundsPerCycle = uint128(lastFundsPerCycle);
+            receiver.nextCollectedCycle = collectedCycle;
         }
-        receiver.lastFundsPerCycle = lastFundsPerCycle;
-        receiver.nextCollectedCycle = collectedCycle;
+
+        // Dripped when collected
+        Sender storage sender = senders[receiverAddr];
+        if (collected > 0 && sender.dripsFraction > 0 && sender.weightSum > 0) {
+            uint256 drippable = (uint256(collected) * sender.dripsFraction) / DRIPS_FRACTION_MAX;
+            dripped = uint128(drippable - (drippable % sender.weightSum));
+            collected -= dripped;
+            uint128 drippedPerWeight = dripped / sender.weightSum;
+            // Iterating over receivers, see `ReceiverWeights` for details
+            address dripsAddr = ReceiverWeightsImpl.ADDR_ROOT;
+            address hint = ReceiverWeightsImpl.ADDR_ROOT;
+            uint128 actuallyDripped = 0;
+            while (true) {
+                uint32 weight;
+                (dripsAddr, hint, weight) = sender.receiverWeights.nextWeight(dripsAddr, hint);
+                if (dripsAddr == ReceiverWeightsImpl.ADDR_ROOT) break;
+                uint128 dripAmt = drippedPerWeight * weight;
+                receivers[dripsAddr].collectable += dripAmt;
+                emit Dripped(receiverAddr, dripsAddr, dripAmt);
+                actuallyDripped += dripAmt;
+            }
+            // Sanity check
+            require(dripped == actuallyDripped, "Invalid total dripped amount");
+        }
     }
 
     /// @notice Updates all the sender parameters of the user.

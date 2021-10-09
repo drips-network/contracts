@@ -16,6 +16,7 @@ abstract contract PoolTest is PoolUserUtils {
     PoolUser private receiver1;
     PoolUser private sender2;
     PoolUser private receiver2;
+    PoolUser private receiver3;
     uint256 private constant SUB_SENDER_1 = 1;
     uint256 private constant SUB_SENDER_2 = 2;
 
@@ -28,6 +29,7 @@ abstract contract PoolTest is PoolUserUtils {
         receiver1 = createUser();
         sender2 = createUser();
         receiver2 = createUser();
+        receiver3 = createUser();
     }
 
     function createUser() internal virtual returns (PoolUser);
@@ -387,5 +389,71 @@ abstract contract PoolTest is PoolUserUtils {
         } catch Error(string memory reason) {
             assertEq(reason, "Drip fraction too high", "Invalid update sender revert reason");
         }
+    }
+
+    function testCollectDrips() public {
+        uint32 dripsFractionMax = sender.getDripsFractionMax();
+        updateSender(sender, 0, 10, 10, 0, Weight(receiver1, 1));
+        updateSender(receiver1, 0, 0, 0, dripsFractionMax, Weight(receiver2, 1));
+        warpToCycleEnd();
+        assertCollectable(receiver2, 0);
+        // Receiver1 had 1 second paying 10 per second of which 10 is dripped
+        collect(receiver1, 0, 10);
+        // Receiver2 got 10 dripped from receiver1
+        collect(receiver2, 10);
+    }
+
+    function testCollectDripsFundsFromDrips() public {
+        uint32 dripsFractionMax = sender.getDripsFractionMax();
+        updateSender(sender, 0, 10, 10, 0, Weight(receiver1, 1));
+        updateSender(receiver1, 0, 0, 0, dripsFractionMax, Weight(receiver2, 1));
+        updateSender(receiver2, 0, 0, 0, dripsFractionMax, Weight(receiver3, 1));
+        warpToCycleEnd();
+        assertCollectable(receiver2, 0);
+        assertCollectable(receiver3, 0);
+        // Receiver1 had 1 second paying 10 per second of which 10 is dripped
+        collect(receiver1, 0, 10);
+        // Receiver2 got 10 dripped from receiver1 of which 10 is dripped
+        collect(receiver2, 0, 10);
+        // Receiver3 got 10 dripped from receiver2
+        collect(receiver3, 10);
+    }
+
+    function testCollectMixesStreamsAndDrips() public {
+        uint32 dripsFractionMax = sender.getDripsFractionMax();
+        updateSender(sender, 0, 10, 10, 0, Weight(receiver1, 1), Weight(receiver2, 1));
+        updateSender(receiver1, 0, 0, 0, dripsFractionMax, Weight(receiver2, 1));
+        warpToCycleEnd();
+        // Receiver2 had 1 second paying 5 per second
+        assertCollectable(receiver2, 5);
+        // Receiver1 had 1 second paying 5 per second
+        collect(receiver1, 0, 5);
+        // Receiver2 had 1 second paying 5 per second and got 5 dripped from receiver1
+        collect(receiver2, 10);
+    }
+
+    function testCollectSplitsFundsBetweenReceiverAndDrips() public {
+        uint32 dripsFractionMax = sender.getDripsFractionMax();
+        updateSender(sender, 0, 10, 10, 0, Weight(receiver1, 1));
+        updateSender(
+            receiver1,
+            0,
+            0,
+            0,
+            (dripsFractionMax * 3) / 4,
+            Weight(receiver2, 1),
+            Weight(receiver3, 2)
+        );
+        warpToCycleEnd();
+        assertCollectable(receiver2, 0);
+        assertCollectable(receiver3, 0);
+        // Receiver1 had 1 second paying 10 per second, of which 6 is dripped.
+        // This is because 3/4 of collected funds get dripped, which is rounded down to 7,
+        // which is then rounded down to a multiple of sum of receiver weights leaving 6.
+        collect(receiver1, 4, 6);
+        // Receiver2 got 2 dripped from receiver1
+        collect(receiver2, 2);
+        // Receiver3 got 4 dripped from receiver1
+        collect(receiver3, 4);
     }
 }
