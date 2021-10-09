@@ -140,8 +140,16 @@ abstract contract Pool {
 
     /// @notice Emitted when a receiver collects funds
     /// @param receiver The collecting receiver
-    /// @param amt The collected amount
-    event Collected(address indexed receiver, uint128 amt);
+    /// @param collectedAmt The collected amount
+    /// @param drippedAmt The amount dripped to the collecting receiver's receivers
+    event Collected(address indexed receiver, uint128 collectedAmt, uint128 drippedAmt);
+
+    /// @notice Emitted when funds are dripped from the sender to the receiver.
+    /// This is caused by the sender collecting received funds.
+    /// @param sender The user which is dripping
+    /// @param receiver The user which is receiving the drips
+    /// @param amt The dripped amount
+    event Dripped(address indexed sender, address indexed receiver, uint128 amt);
 
     struct Sender {
         // Timestamp at which the funding period has started
@@ -213,12 +221,16 @@ abstract contract Pool {
     /// @notice Returns amount of received funds available for collection
     /// @param receiverAddr The address of the receiver
     /// @return collected The available amount
-    function collectable(address receiverAddr) public view returns (uint128) {
+    function collectable(address receiverAddr)
+        public
+        view
+        returns (uint128 collected, uint128 dripped)
+    {
         Receiver storage receiver = receivers[receiverAddr];
         uint64 collectedCycle = receiver.nextCollectedCycle;
-        if (collectedCycle == 0) return 0;
+        if (collectedCycle == 0) return (0, 0);
         uint64 currFinishedCycle = _currTimestamp() / cycleSecs;
-        if (collectedCycle > currFinishedCycle) return 0;
+        if (collectedCycle > currFinishedCycle) return (0, 0);
         int128 collected = 0;
         int128 lastFundsPerCycle = receiver.lastFundsPerCycle;
         for (; collectedCycle <= currFinishedCycle; collectedCycle++) {
@@ -226,29 +238,32 @@ abstract contract Pool {
             lastFundsPerCycle += receiver.amtDeltas[collectedCycle].thisCycle;
             collected += lastFundsPerCycle;
         }
-        return uint128(collected);
+        return (uint128(collected), 0);
     }
 
     /// @notice Collects all received funds available for the user and sends them to that user
     /// @param receiverAddr The address of the receiver
-    function collect(address receiverAddr) public virtual {
-        uint128 collected = _collectInternal(receiverAddr);
+    function collect(address receiverAddr) public returns (uint128 collected, uint128 dripped) {
+        (collected, dripped) = _collectInternal(receiverAddr);
         if (collected > 0) {
             _transfer(receiverAddr, collected);
         }
-        emit Collected(receiverAddr, collected);
+        emit Collected(receiverAddr, collected, dripped);
     }
 
     /// @notice Removes from the history and returns the amount of received
     /// funds available for collection by the user
     /// @param receiverAddr The address of the receiver
     /// @return collected The collected amount
-    function _collectInternal(address receiverAddr) internal returns (uint128 collected) {
+    function _collectInternal(address receiverAddr)
+        internal
+        returns (uint128 collected, uint128 dripped)
+    {
         Receiver storage receiver = receivers[receiverAddr];
         uint64 collectedCycle = receiver.nextCollectedCycle;
-        if (collectedCycle == 0) return 0;
+        if (collectedCycle == 0) return (0, 0);
         uint64 currFinishedCycle = _currTimestamp() / cycleSecs;
-        if (collectedCycle > currFinishedCycle) return 0;
+        if (collectedCycle > currFinishedCycle) return (0, 0);
         int128 lastFundsPerCycle = receiver.lastFundsPerCycle;
         for (; collectedCycle <= currFinishedCycle; collectedCycle++) {
             lastFundsPerCycle += receiver.amtDeltas[collectedCycle - 1].nextCycle;

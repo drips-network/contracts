@@ -264,7 +264,15 @@ abstract contract PoolUserUtils is DSTest {
     }
 
     function collect(PoolUser user, uint128 expectedAmt) internal {
-        collect(user, user, expectedAmt);
+        collect(user, user, expectedAmt, 0);
+    }
+
+    function collect(
+        PoolUser user,
+        uint128 expectedCollected,
+        uint128 expectedDripped
+    ) internal {
+        collect(user, user, expectedCollected, expectedDripped);
     }
 
     function collect(
@@ -272,17 +280,38 @@ abstract contract PoolUserUtils is DSTest {
         PoolUser collected,
         uint128 expectedAmt
     ) internal {
-        assertCollectable(collected, expectedAmt);
-        uint256 expectedBalance = collected.balance() + expectedAmt;
+        collect(user, collected, expectedAmt, 0);
+    }
 
-        user.collect(address(collected));
+    function collect(
+        PoolUser user,
+        PoolUser collected,
+        uint128 expectedCollected,
+        uint128 expectedDripped
+    ) internal {
+        assertCollectable(collected, expectedCollected, expectedDripped);
+        uint256 expectedBalance = collected.balance() + expectedCollected;
 
+        (uint128 collectedAmt, uint128 drippedAmt) = user.collect(address(collected));
+
+        assertEq(collectedAmt, expectedCollected, "Invalid collected amount");
+        assertEq(drippedAmt, expectedDripped, "Invalid dripped amount");
         assertCollectable(collected, 0);
         assertBalance(collected, expectedBalance);
     }
 
     function assertCollectable(PoolUser user, uint128 expected) internal {
-        assertEq(user.collectable(), expected, "Invalid collectable");
+        assertCollectable(user, expected, 0);
+    }
+
+    function assertCollectable(
+        PoolUser user,
+        uint128 expectedCollected,
+        uint128 expectedDripped
+    ) internal {
+        (uint128 actualCollected, uint128 actualDripped) = user.collectable();
+        assertEq(actualCollected, expectedCollected, "Invalid collectable");
+        assertEq(actualDripped, expectedDripped, "Invalid drippable");
     }
 
     function assertBalance(PoolUser user, uint256 expected) internal {
