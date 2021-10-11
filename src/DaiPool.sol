@@ -20,9 +20,14 @@ interface IDai is IERC20 {
 /// @notice Funding pool contract for DAI token.
 /// See the base `Pool` contract docs for more details.
 contract DaiPool is ERC20Pool {
-    // solhint-disable no-empty-blocks
+    /// @notice The address of the Dai contract which tokens the pool works with.
+    /// Always equal to `erc20`, but more strictly typed.
+    IDai public immutable dai;
+
     /// @notice See `ERC20Pool` constructor documentation for more details.
-    constructor(uint64 cycleSecs, IDai dai) ERC20Pool(cycleSecs, dai) {}
+    constructor(uint64 cycleSecs, IDai _dai) ERC20Pool(cycleSecs, _dai) {
+        dai = _dai;
+    }
 
     /// @notice Updates all the sender parameters of the sender of the message
     /// and permits spending sender's Dai by the pool.
@@ -43,7 +48,7 @@ contract DaiPool is ERC20Pool {
         bytes32 r,
         bytes32 s
     ) public virtual returns (uint128 withdrawn) {
-        IDai(address(erc20)).permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
+        dai.permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
         return updateSender(topUpAmt, withdraw, amtPerSec, dripsFraction, updatedReceivers);
     }
 
@@ -63,7 +68,7 @@ contract DaiPool is ERC20Pool {
         bytes32 r,
         bytes32 s
     ) public virtual returns (uint128 withdrawn) {
-        IDai(address(erc20)).permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
+        dai.permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
         return updateSubSender(subSenderId, topUpAmt, withdraw, amtPerSec, updatedReceivers);
     }
 }
