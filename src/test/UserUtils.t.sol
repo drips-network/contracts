@@ -97,7 +97,7 @@ abstract contract PoolUserUtils is DSTest {
             updatedReceivers
         );
 
-        assertEq(withdrawn, withdraw, "expected amount not withdrawn");
+        assertEq(withdrawn, withdraw, "Expected amount not withdrawn");
         assertWithdrawable(user, balanceTo);
         assertBalance(user, expectedBalance);
         assertEq(user.getAmtPerSec(), expectedAmtPerSec, "Invalid amtPerSec after updateSender");

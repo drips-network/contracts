@@ -47,23 +47,24 @@ contract ERC20Pool is Pool {
     /// where 0 means no dripping and `DRIPS_FRACTION_MAX` dripping everything.
     /// @param updatedReceivers The list of the updated receivers and their new weights
     /// @return withdrawn The actually withdrawn amount.
+    /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
     function updateSender(
         uint128 topUpAmt,
         uint128 withdraw,
         uint128 amtPerSec,
         uint32 dripsFraction,
         ReceiverWeight[] calldata updatedReceivers
-    ) public virtual returns (uint128 withdrawn) {
+    ) public returns (uint128 withdrawn) {
         _transferToContract(msg.sender, topUpAmt);
-        withdrawn = _updateSenderInternal(
-            msg.sender,
-            topUpAmt,
-            withdraw,
-            amtPerSec,
-            dripsFraction,
-            updatedReceivers
-        );
-        _transfer(msg.sender, withdrawn);
+        return
+            _updateSenderInternal(
+                msg.sender,
+                topUpAmt,
+                withdraw,
+                amtPerSec,
+                dripsFraction,
+                updatedReceivers
+            );
     }
 
     /// @notice Updates all the parameters of a sub-sender of the sender of the message.
@@ -75,17 +76,17 @@ contract ERC20Pool is Pool {
         uint128 withdraw,
         uint128 amtPerSec,
         ReceiverWeight[] calldata updatedReceivers
-    ) public payable virtual returns (uint128 withdrawn) {
+    ) public payable returns (uint128 withdrawn) {
         _transferToContract(msg.sender, topUpAmt);
-        withdrawn = _updateSubSenderInternal(
-            msg.sender,
-            subSenderId,
-            topUpAmt,
-            withdraw,
-            amtPerSec,
-            updatedReceivers
-        );
-        _transfer(msg.sender, withdrawn);
+        return
+            _updateSubSenderInternal(
+                msg.sender,
+                subSenderId,
+                topUpAmt,
+                withdraw,
+                amtPerSec,
+                updatedReceivers
+            );
     }
 
     function _transferToContract(address from, uint128 amt) internal {

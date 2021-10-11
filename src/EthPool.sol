@@ -40,21 +40,22 @@ contract EthPool is Pool {
     /// where 0 means no dripping and `DRIPS_FRACTION_MAX` dripping everything.
     /// @param updatedReceivers The list of the updated receivers and their new weights
     /// @return withdrawn The actually withdrawn amount.
+    /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
     function updateSender(
         uint128 withdraw,
         uint128 amtPerSec,
         uint32 dripsFraction,
         ReceiverWeight[] calldata updatedReceivers
-    ) public payable virtual returns (uint128 withdrawn) {
-        withdrawn = _updateSenderInternal(
-            msg.sender,
-            uint128(msg.value),
-            withdraw,
-            amtPerSec,
-            dripsFraction,
-            updatedReceivers
-        );
-        _transfer(msg.sender, withdrawn);
+    ) public payable returns (uint128 withdrawn) {
+        return
+            _updateSenderInternal(
+                msg.sender,
+                uint128(msg.value),
+                withdraw,
+                amtPerSec,
+                dripsFraction,
+                updatedReceivers
+            );
     }
 
     /// @notice Updates all the parameters of a sub-sender of the sender of the message.
@@ -65,16 +66,16 @@ contract EthPool is Pool {
         uint128 withdraw,
         uint128 amtPerSec,
         ReceiverWeight[] calldata updatedReceivers
-    ) public payable virtual returns (uint128 withdrawn) {
-        withdrawn = _updateSubSenderInternal(
-            msg.sender,
-            subSenderId,
-            uint128(msg.value),
-            withdraw,
-            amtPerSec,
-            updatedReceivers
-        );
-        _transfer(msg.sender, withdrawn);
+    ) public payable returns (uint128 withdrawn) {
+        return
+            _updateSubSenderInternal(
+                msg.sender,
+                subSenderId,
+                uint128(msg.value),
+                withdraw,
+                amtPerSec,
+                updatedReceivers
+            );
     }
 
     function _transfer(address to, uint128 amt) internal override {

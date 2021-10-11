@@ -222,7 +222,8 @@ abstract contract Pool {
 
     /// @notice Returns amount of received funds available for collection
     /// @param receiverAddr The address of the receiver
-    /// @return collected The available amount
+    /// @return collected The collected amount
+    /// @return dripped The amount dripped to the user's receivers
     function collectable(address receiverAddr)
         public
         view
@@ -256,6 +257,8 @@ abstract contract Pool {
 
     /// @notice Collects all received funds available for the user and sends them to that user
     /// @param receiverAddr The address of the receiver
+    /// @return collected The collected amount
+    /// @return dripped The amount dripped to the user's receivers
     function collect(address receiverAddr) public returns (uint128 collected, uint128 dripped) {
         (collected, dripped) = _collectInternal(receiverAddr);
         if (collected > 0) {
@@ -268,6 +271,7 @@ abstract contract Pool {
     /// funds available for collection by the user
     /// @param receiverAddr The address of the receiver
     /// @return collected The collected amount
+    /// @return dripped The amount dripped to the user's receivers
     function _collectInternal(address receiverAddr)
         internal
         returns (uint128 collected, uint128 dripped)
@@ -321,6 +325,8 @@ abstract contract Pool {
     /// @notice Updates all the sender parameters of the user.
     /// See `_updateAnySender` for more details.
     /// @param senderAddr The address of the sender
+    /// @return withdrawn The withdrawn amount which should be sent to the user.
+    /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
     function _updateSenderInternal(
         address senderAddr,
         uint128 topUpAmt,
@@ -349,6 +355,7 @@ abstract contract Pool {
                 update.endTime
             );
         }
+        _transfer(senderAddr, withdrawn);
     }
 
     /// @notice Updates all the parameters of the sender's sub-sender.
@@ -384,6 +391,7 @@ abstract contract Pool {
                 update.endTime
             );
         }
+        _transfer(senderAddr, withdrawn);
     }
 
     /// @notice Updates all the sender's parameters.
