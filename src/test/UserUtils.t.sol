@@ -89,7 +89,7 @@ abstract contract PoolUserUtils is DSTest {
             ? user.getAmtPerSec()
             : amtPerSec;
 
-        uint256 withdrawn = user.updateSender(
+        (uint128 withdrawn, uint128 collected, uint128 dripped) = user.updateSender(
             toppedUp,
             withdraw,
             amtPerSec,
@@ -98,6 +98,8 @@ abstract contract PoolUserUtils is DSTest {
         );
 
         assertEq(withdrawn, withdraw, "Expected amount not withdrawn");
+        assertEq(collected, 0, "Expected non-withdrawing sender update");
+        assertEq(dripped, 0, "Expected non-dripping sender update");
         assertWithdrawable(user, balanceTo);
         assertBalance(user, expectedBalance);
         assertEq(user.getAmtPerSec(), expectedAmtPerSec, "Invalid amtPerSec after updateSender");

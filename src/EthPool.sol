@@ -14,7 +14,8 @@ contract EthPool is Pool {
         return;
     }
 
-    /// @notice Updates all the sender parameters of the sender of the message.
+    /// @notice Collects received funds and updates all the sender parameters
+    //// of the sender of the message.
     ///
     /// Tops up and withdraws unsent funds from the balance of the sender.
     /// Tops up with the amount in the message.
@@ -41,12 +42,22 @@ contract EthPool is Pool {
     /// @param updatedReceivers The list of the updated receivers and their new weights
     /// @return withdrawn The actually withdrawn amount.
     /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
+    /// @return collected The collected amount
+    /// @return dripped The amount dripped to the user's receivers
     function updateSender(
         uint128 withdraw,
         uint128 amtPerSec,
         uint32 dripsFraction,
         ReceiverWeight[] calldata updatedReceivers
-    ) public payable returns (uint128 withdrawn) {
+    )
+        public
+        payable
+        returns (
+            uint128 withdrawn,
+            uint128 collected,
+            uint128 dripped
+        )
+    {
         return
             _updateSenderInternal(
                 msg.sender,

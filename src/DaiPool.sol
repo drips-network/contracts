@@ -47,7 +47,14 @@ contract DaiPool is ERC20Pool {
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) public returns (uint128 withdrawn) {
+    )
+        public
+        returns (
+            uint128 withdrawn,
+            uint128 collected,
+            uint128 dripped
+        )
+    {
         dai.permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
         return updateSender(topUpAmt, withdraw, amtPerSec, dripsFraction, updatedReceivers);
     }

@@ -322,11 +322,13 @@ abstract contract Pool {
         }
     }
 
-    /// @notice Updates all the sender parameters of the user.
+    /// @notice Collects received funds and updates all the sender parameters of the user.
     /// See `_updateAnySender` for more details.
     /// @param senderAddr The address of the sender
     /// @return withdrawn The withdrawn amount which should be sent to the user.
     /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
+    /// @return collected The collected amount
+    /// @return dripped The amount dripped to the user's receivers
     function _updateSenderInternal(
         address senderAddr,
         uint128 topUpAmt,
@@ -334,7 +336,15 @@ abstract contract Pool {
         uint128 amtPerSec,
         uint32 dripsFraction,
         ReceiverWeight[] calldata updatedReceivers
-    ) internal returns (uint128 withdrawn) {
+    )
+        internal
+        returns (
+            uint128 withdrawn,
+            uint128 collected,
+            uint128 dripped
+        )
+    {
+        (collected, dripped) = _collectInternal(senderAddr);
         Sender storage sender = senders[senderAddr];
         StreamUpdates memory updates;
         (withdrawn, updates) = _updateAnySender(
@@ -355,7 +365,7 @@ abstract contract Pool {
                 update.endTime
             );
         }
-        _transfer(senderAddr, withdrawn);
+        _transfer(senderAddr, withdrawn + collected);
     }
 
     /// @notice Updates all the parameters of the sender's sub-sender.

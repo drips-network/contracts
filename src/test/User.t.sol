@@ -24,7 +24,14 @@ abstract contract PoolUser {
         uint128 amtPerSec,
         uint32 dripsFraction,
         ReceiverWeight[] calldata updatedReceivers
-    ) public virtual returns (uint128 withdrawn);
+    )
+        public
+        virtual
+        returns (
+            uint128 withdrawn,
+            uint128 collected,
+            uint128 dripped
+        );
 
     function updateSubSender(
         uint256 subSenderId,
@@ -96,7 +103,15 @@ contract ERC20PoolUser is PoolUser {
         uint128 amtPerSec,
         uint32 dripsFraction,
         ReceiverWeight[] calldata updatedReceivers
-    ) public override returns (uint128 withdrawn) {
+    )
+        public
+        override
+        returns (
+            uint128 withdrawn,
+            uint128 collected,
+            uint128 dripped
+        )
+    {
         pool.erc20().approve(address(pool), toppedUp);
         return pool.updateSender(toppedUp, withdraw, amtPerSec, dripsFraction, updatedReceivers);
     }
@@ -137,7 +152,15 @@ contract EthPoolUser is PoolUser {
         uint128 amtPerSec,
         uint32 dripsFraction,
         ReceiverWeight[] calldata updatedReceivers
-    ) public override returns (uint128 withdrawn) {
+    )
+        public
+        override
+        returns (
+            uint128 withdrawn,
+            uint128 collected,
+            uint128 dripped
+        )
+    {
         return
             pool.updateSender{value: toppedUp}(
                 withdraw,

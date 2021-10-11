@@ -20,7 +20,8 @@ contract ERC20Pool is Pool {
         erc20 = _erc20;
     }
 
-    /// @notice Updates all the sender parameters of the sender of the message.
+    /// @notice Collects received funds and updates all the sender parameters
+    //// of the sender of the message.
     ///
     /// Tops up and withdraws unsent funds from the balance of the sender.
     /// The sender must first grant the contract a sufficient allowance to top up.
@@ -48,13 +49,22 @@ contract ERC20Pool is Pool {
     /// @param updatedReceivers The list of the updated receivers and their new weights
     /// @return withdrawn The actually withdrawn amount.
     /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
+    /// @return collected The collected amount
+    /// @return dripped The amount dripped to the user's receivers
     function updateSender(
         uint128 topUpAmt,
         uint128 withdraw,
         uint128 amtPerSec,
         uint32 dripsFraction,
         ReceiverWeight[] calldata updatedReceivers
-    ) public returns (uint128 withdrawn) {
+    )
+        public
+        returns (
+            uint128 withdrawn,
+            uint128 collected,
+            uint128 dripped
+        )
+    {
         _transferToContract(msg.sender, topUpAmt);
         return
             _updateSenderInternal(
