@@ -85,6 +85,27 @@ contract ERC20Pool is Pool {
             );
     }
 
+    /// @notice Gives funds from the sender of the message to the receiver.
+    /// The receiver can collect them immediately.
+    /// @param receiver The receiver
+    /// @param amt The sent amount
+    function give(address receiver, uint128 amt) public {
+        _giveInternal(msg.sender, receiver, amt);
+    }
+
+    /// @notice Gives funds from the sub-sender of the sender of the message to the receiver.
+    /// The receiver can collect them immediately.
+    /// @param subSenderId The ID of the sub-sender
+    /// @param receiver The receiver
+    /// @param amt The given amount
+    function giveFromSubSender(
+        uint256 subSenderId,
+        address receiver,
+        uint128 amt
+    ) public {
+        _giveFromSubSenderInternal(msg.sender, subSenderId, receiver, amt);
+    }
+
     function _transfer(address userAddr, int128 amt) internal override {
         if (amt > 0) erc20.transfer(userAddr, uint128(amt));
         else if (amt < 0) erc20.transferFrom(userAddr, address(this), uint128(-amt));

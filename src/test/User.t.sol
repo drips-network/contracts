@@ -37,6 +37,14 @@ abstract contract PoolUser {
         Receiver[] calldata newReceivers
     ) public virtual returns (uint128 withdrawn);
 
+    function give(address receiver, uint128 amt) public virtual;
+
+    function giveFromSubSender(
+        uint256 subSenderId,
+        address receiver,
+        uint128 amt
+    ) public virtual;
+
     function collect(address receiverAddr, Receiver[] calldata currReceivers)
         public
         returns (uint128 collected, uint128 dripped)
@@ -137,6 +145,20 @@ contract ERC20PoolUser is PoolUser {
         pool.erc20().approve(address(pool), toppedUp);
         return pool.updateSubSender(subSenderId, toppedUp, withdraw, currReceivers, newReceivers);
     }
+
+    function give(address receiver, uint128 amt) public override {
+        pool.erc20().approve(address(pool), amt);
+        pool.give(receiver, amt);
+    }
+
+    function giveFromSubSender(
+        uint256 subSenderId,
+        address receiver,
+        uint128 amt
+    ) public override {
+        pool.erc20().approve(address(pool), amt);
+        pool.giveFromSubSender(subSenderId, receiver, amt);
+    }
 }
 
 contract EthPoolUser is PoolUser {
@@ -195,5 +217,17 @@ contract EthPoolUser is PoolUser {
                 currReceivers,
                 newReceivers
             );
+    }
+
+    function give(address receiver, uint128 amt) public override {
+        pool.give{value: amt}(receiver);
+    }
+
+    function giveFromSubSender(
+        uint256 subSenderId,
+        address receiver,
+        uint128 amt
+    ) public override {
+        pool.giveFromSubSender{value: amt}(subSenderId, receiver);
     }
 }

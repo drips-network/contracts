@@ -137,6 +137,24 @@ abstract contract Pool {
     /// @param amt The dripped amount
     event Dripped(address indexed sender, address indexed receiver, uint128 amt);
 
+    /// @notice Emitted when funds are given to the receiver.
+    /// @param giver The address of the giver
+    /// @param receiver The receiver
+    /// @param amt The sent amount
+    event Given(address indexed giver, address indexed receiver, uint128 amt);
+
+    /// @notice Emitted when funds are given from the sub-sender to the receiver.
+    /// @param giver The address of the giver
+    /// @param subSenderId The ID of the giver's sub-sender
+    /// @param receiver The receiver
+    /// @param amt The sent amount
+    event GivenFromSubSender(
+        address indexed giver,
+        uint256 indexed subSenderId,
+        address indexed receiver,
+        uint128 amt
+    );
+
     struct Sender {
         // Timestamp at which the funding period has started
         uint64 startTime;
@@ -343,6 +361,50 @@ abstract contract Pool {
         // In other words the next cycle delta must be an absolute value.
         if (cycleAmt != 0) receiver.amtDeltas[cycle].thisCycle += cycleAmt;
         receiver.nextCollectedCycle = cycle;
+    }
+
+    /// @notice Gives funds to the receiver.
+    /// The receiver can collect them immediately.
+    /// @param giverAddr The address of the giver
+    /// @param receiverAddr The receiver
+    /// @param amt The given amount
+    function _giveInternal(
+        address giverAddr,
+        address receiverAddr,
+        uint128 amt
+    ) internal {
+        emit Given(giverAddr, receiverAddr, amt);
+        _giveFromAnyGiver(giverAddr, receiverAddr, amt);
+    }
+
+    /// @notice Gives funds from the sub-sender to the receiver.
+    /// The receiver can collect them immediately.
+    /// @param giverAddr The address of the giver
+    /// @param subSenderId The ID of the giver sub-sender
+    /// @param receiverAddr The receiver
+    /// @param amt The given amount
+    function _giveFromSubSenderInternal(
+        address giverAddr,
+        uint256 subSenderId,
+        address receiverAddr,
+        uint128 amt
+    ) internal {
+        emit GivenFromSubSender(giverAddr, subSenderId, receiverAddr, amt);
+        _giveFromAnyGiver(giverAddr, receiverAddr, amt);
+    }
+
+    /// @notice Gives funds to the receiver.
+    /// The receiver can collect them immediately.
+    /// @param giverAddr The address of the giver
+    /// @param receiverAddr The receiver
+    /// @param amt The given amount
+    function _giveFromAnyGiver(
+        address giverAddr,
+        address receiverAddr,
+        uint128 amt
+    ) internal {
+        receiverStates[receiverAddr].collectable += amt;
+        _transfer(giverAddr, -int128(amt));
     }
 
     /// @notice Collects received funds and updates all the sender parameters of the user.

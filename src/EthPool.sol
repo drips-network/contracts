@@ -77,6 +77,21 @@ contract EthPool is Pool {
             );
     }
 
+    /// @notice Gives funds from the sender of the message to the receiver.
+    /// The receiver can collect them immediately.
+    /// @param receiver The receiver
+    function give(address receiver) public payable {
+        _giveInternal(msg.sender, receiver, uint128(msg.value));
+    }
+
+    /// @notice Gives funds from the sub-sender of the sender of the message to the receiver.
+    /// The receiver can collect them immediately.
+    /// @param subSenderId The id of the giver's sub-sender
+    /// @param receiver The receiver
+    function giveFromSubSender(uint256 subSenderId, address receiver) public payable {
+        _giveFromSubSenderInternal(msg.sender, subSenderId, receiver, uint128(msg.value));
+    }
+
     function _transfer(address userAddr, int128 amt) internal override {
         // Take into account the amount already transferred into the pool
         amt += int128(uint128(msg.value));

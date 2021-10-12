@@ -42,8 +42,8 @@ contract DaiPool is ERC20Pool {
     /// This function is an extension of `updateSender`, see its documentation for more details.
     ///
     /// The sender must sign a Dai permission document allowing the pool to spend their funds.
-    /// The document's `nonce` and `expiry` must be passed here along the parts of its signature.
     /// These parameters will be passed to the Dai contract by this function.
+    /// @param permitArgs The Dai permission arguments.
     function updateSenderAndPermit(
         uint128 topUpAmt,
         uint128 withdraw,
@@ -66,7 +66,10 @@ contract DaiPool is ERC20Pool {
     /// @notice Updates all the parameters of a sub-sender of the sender of the message
     /// and permits spending sender's Dai by the pool.
     /// This function is an extension of `updateSubSender`, see its documentation for more details.
-    /// @param subSenderId The id of the sender's sub-sender
+    ///
+    /// The sender must sign a Dai permission document allowing the pool to spend their funds.
+    /// These parameters will be passed to the Dai contract by this function.
+    /// @param permitArgs The Dai permission arguments.
     function updateSubSenderAndPermit(
         uint256 subSenderId,
         uint128 topUpAmt,
@@ -79,6 +82,41 @@ contract DaiPool is ERC20Pool {
         return updateSubSender(subSenderId, topUpAmt, withdraw, currReceivers, newReceivers);
     }
 
+    /// @notice Gives funds from the sender of the message to the receiver
+    /// and permits spending sender's Dai by the pool.
+    /// This function is an extension of `give`, see its documentation for more details.
+    ///
+    /// The sender must sign a Dai permission document allowing the pool to spend their funds.
+    /// These parameters will be passed to the Dai contract by this function.
+    /// @param permitArgs The Dai permission arguments.
+    function giveAndPermit(
+        address receiver,
+        uint128 amt,
+        PermitArgs calldata permitArgs
+    ) public {
+        permit(permitArgs);
+        give(receiver, amt);
+    }
+
+    /// @notice Gives funds from the sub-sender of the sender of the message to the receiver
+    /// and permits spending sender's Dai by the pool.
+    /// This function is an extension of `giveFromSubSender` see its documentation for more details.
+    ///
+    /// The sender must sign a Dai permission document allowing the pool to spend their funds.
+    /// These parameters will be passed to the Dai contract by this function.
+    /// @param permitArgs The Dai permission arguments.
+    function giveFromSubSenderAndPermit(
+        uint256 subSenderId,
+        address receiver,
+        uint128 amt,
+        PermitArgs calldata permitArgs
+    ) public {
+        permit(permitArgs);
+        giveFromSubSender(subSenderId, receiver, amt);
+    }
+
+    /// @notice Permits the pool to spend the message sender's Dai.
+    /// @param permitArgs The Dai permission arguments.
     function permit(PermitArgs calldata permitArgs) internal {
         dai.permit(
             msg.sender,

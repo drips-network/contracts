@@ -537,4 +537,14 @@ abstract contract PoolTest is PoolUserUtils {
         flushCycles(receiver, 3, type(uint64).max, 0);
         collect(receiver, amt);
     }
+
+    function testFundsGivenFromSenderCanBeCollected() public {
+        sender.give(address(receiver), 10);
+        collect(receiver, 10);
+    }
+
+    function testFundsGivenFromSubSenderCanBeCollected() public {
+        sender.giveFromSubSender(SUB_SENDER_1, address(receiver), 10);
+        collect(receiver, 10);
+    }
 }
