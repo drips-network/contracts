@@ -316,6 +316,23 @@ abstract contract PoolUserUtils is DSTest {
         assertEq(actualDripped, expectedDripped, "Invalid drippable");
     }
 
+    function flushCycles(
+        PoolUser user,
+        uint64 expectedFlushableBefore,
+        uint64 maxCycles,
+        uint64 expectedFlushableAfter
+    ) internal {
+        assertFlushableCycles(user, expectedFlushableBefore);
+        uint64 flushableLeft = user.flushCycles(maxCycles);
+        assertEq(flushableLeft, expectedFlushableAfter, "Invalid flushable cycles left");
+        assertFlushableCycles(user, expectedFlushableAfter);
+    }
+
+    function assertFlushableCycles(PoolUser user, uint64 expectedFlushable) internal {
+        uint64 actualFlushable = user.flushableCycles();
+        assertEq(actualFlushable, expectedFlushable, "Invalid flushable cycles");
+    }
+
     function assertBalance(PoolUser user, uint256 expected) internal {
         assertEq(user.balance(), expected, "Invalid balance");
     }

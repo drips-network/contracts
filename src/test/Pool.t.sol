@@ -500,4 +500,28 @@ abstract contract PoolTest is PoolUserUtils {
         collect(receiver1, 10);
         assertCollectable(receiver2, 0);
     }
+
+    function testFlushSomeCycles() public {
+        // Enough for 3 cycles
+        uint128 amt = pool.cycleSecs() * 3;
+        warpToCycleEnd();
+        updateSender(sender, 0, amt, 1, 0, Weight(receiver, 1));
+        warpToCycleEnd();
+        warpToCycleEnd();
+        warpToCycleEnd();
+        flushCycles(receiver, 3, 2, 1);
+        collect(receiver, amt);
+    }
+
+    function testFlushAllCycles() public {
+        // Enough for 3 cycles
+        uint128 amt = pool.cycleSecs() * 3;
+        warpToCycleEnd();
+        updateSender(sender, 0, amt, 1, 0, Weight(receiver, 1));
+        warpToCycleEnd();
+        warpToCycleEnd();
+        warpToCycleEnd();
+        flushCycles(receiver, 3, type(uint64).max, 0);
+        collect(receiver, amt);
+    }
 }

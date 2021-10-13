@@ -267,6 +267,40 @@ abstract contract Pool {
         emit Collected(receiverAddr, collected, dripped);
     }
 
+    /// @notice Counts cycles which will need to be analyzed when collecting or flushing.
+    /// This function can be used to detect that there are too many cycles
+    /// to analyze in a single transaction and flushing is needed.
+    /// @param receiverAddr The address of the receiver
+    /// @return flushable The number of cycles which can be flushed
+    function flushableCycles(address receiverAddr) public view returns (uint64 flushable) {
+        uint64 nextCollectedCycle = receivers[receiverAddr].nextCollectedCycle;
+        if (nextCollectedCycle == 0) return 0;
+        uint64 currFinishedCycle = _currTimestamp() / cycleSecs;
+        return currFinishedCycle + 1 - nextCollectedCycle;
+    }
+
+    /// @notice Flushes uncollected cycles of the user.
+    /// Flushed cycles won't need to be analyzed when the user collects from them.
+    /// Calling this function does not collect and does not affect the collectable amount.
+    ///
+    /// This function is needed when collecting funds received over a period so long, that the gas
+    /// needed for analyzing all the uncollected cycles can't fit in a single transaction.
+    /// Calling this function allows spreading the analysis cost over multiple transactions.
+    /// A cycle is never flushed more than once, even if this function is called many times.
+    /// @param receiverAddr The address of the receiver
+    /// @param maxCycles The maximum number of flushed cycles.
+    /// If too low, flushing will be cheap, but will cut little gas from the next collection.
+    /// If too high, flushing may become too expensive to fit in a single transaction.
+    /// @return flushable The number of cycles which can be flushed
+    function flushCycles(address receiverAddr, uint64 maxCycles) public returns (uint64 flushable) {
+        Receiver storage receiver = receivers[receiverAddr];
+        flushable = flushableCycles(receiverAddr);
+        uint64 cycles = maxCycles < flushable ? maxCycles : flushable;
+        flushable -= cycles;
+        uint128 collected = _flushCyclesInternal(receiverAddr, cycles);
+        if (collected > 0) receiver.collectable += collected;
+    }
+
     /// @notice Removes from the history and returns the amount of received
     /// funds available for collection by the user
     /// @param receiverAddr The address of the receiver
@@ -283,19 +317,8 @@ abstract contract Pool {
         if (collected > 0) receiver.collectable = 0;
 
         // Collectable from cycles
-        uint64 collectedCycle = receiver.nextCollectedCycle;
-        uint64 currFinishedCycle = _currTimestamp() / cycleSecs;
-        if (collectedCycle != 0 && collectedCycle <= currFinishedCycle) {
-            int128 lastFundsPerCycle = int128(receiver.lastFundsPerCycle);
-            for (; collectedCycle <= currFinishedCycle; collectedCycle++) {
-                lastFundsPerCycle += receiver.amtDeltas[collectedCycle - 1].nextCycle;
-                delete receiver.amtDeltas[collectedCycle - 1];
-                lastFundsPerCycle += receiver.amtDeltas[collectedCycle].thisCycle;
-                collected += uint128(lastFundsPerCycle);
-            }
-            receiver.lastFundsPerCycle = uint128(lastFundsPerCycle);
-            receiver.nextCollectedCycle = collectedCycle;
-        }
+        uint64 cycles = flushableCycles(receiverAddr);
+        collected += _flushCyclesInternal(receiverAddr, cycles);
 
         // Dripped when collected
         Sender storage sender = senders[receiverAddr];
@@ -320,6 +343,25 @@ abstract contract Pool {
             // Sanity check
             require(dripped == actuallyDripped, "Invalid total dripped amount");
         }
+    }
+
+    function _flushCyclesInternal(address receiverAddr, uint64 count)
+        internal
+        returns (uint128 collectedAmt)
+    {
+        if (count == 0) return 0;
+        Receiver storage receiver = receivers[receiverAddr];
+        int128 fundsPerCycle = int128(receiver.lastFundsPerCycle);
+        uint64 cycle = receiver.nextCollectedCycle;
+        for (uint256 i = 0; i < count; i++) {
+            fundsPerCycle += receiver.amtDeltas[cycle - 1].nextCycle;
+            delete receiver.amtDeltas[cycle - 1];
+            fundsPerCycle += receiver.amtDeltas[cycle].thisCycle;
+            collectedAmt += uint128(fundsPerCycle);
+            cycle++;
+        }
+        receiver.lastFundsPerCycle = uint128(fundsPerCycle);
+        receiver.nextCollectedCycle = cycle;
     }
 
     /// @notice Collects received funds and updates all the sender parameters of the user.

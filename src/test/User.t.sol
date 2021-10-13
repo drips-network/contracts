@@ -49,6 +49,14 @@ abstract contract PoolUser {
         return getPool().collectable(address(this));
     }
 
+    function flushableCycles() public view returns (uint64 flushable) {
+        return getPool().flushableCycles(address(this));
+    }
+
+    function flushCycles(uint64 maxCycles) public returns (uint64 flushable) {
+        return getPool().flushCycles(address(this), maxCycles);
+    }
+
     function withdrawable() public view returns (uint128) {
         return getPool().withdrawable(address(this));
     }
