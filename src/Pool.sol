@@ -240,9 +240,9 @@ abstract contract Pool {
         if (collectedCycle != 0 && collectedCycle <= currFinishedCycle) {
             int128 lastFundsPerCycle = int128(receiver.lastFundsPerCycle);
             for (; collectedCycle <= currFinishedCycle; collectedCycle++) {
-                lastFundsPerCycle += receiver.amtDeltas[collectedCycle - 1].nextCycle;
                 lastFundsPerCycle += receiver.amtDeltas[collectedCycle].thisCycle;
                 collected += uint128(lastFundsPerCycle);
+                lastFundsPerCycle += receiver.amtDeltas[collectedCycle].nextCycle;
             }
         }
 
@@ -354,10 +354,10 @@ abstract contract Pool {
         int128 fundsPerCycle = int128(receiver.lastFundsPerCycle);
         uint64 cycle = receiver.nextCollectedCycle;
         for (uint256 i = 0; i < count; i++) {
-            fundsPerCycle += receiver.amtDeltas[cycle - 1].nextCycle;
-            delete receiver.amtDeltas[cycle - 1];
             fundsPerCycle += receiver.amtDeltas[cycle].thisCycle;
             collectedAmt += uint128(fundsPerCycle);
+            fundsPerCycle += receiver.amtDeltas[cycle].nextCycle;
+            delete receiver.amtDeltas[cycle];
             cycle++;
         }
         receiver.lastFundsPerCycle = uint128(fundsPerCycle);
