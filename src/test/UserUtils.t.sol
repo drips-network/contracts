@@ -6,71 +6,42 @@ import {PoolUser} from "./User.t.sol";
 import {Pool, ReceiverWeight} from "../Pool.sol";
 
 abstract contract PoolUserUtils is DSTest {
-    struct Weight {
-        PoolUser user;
-        uint32 weight;
+    function weights() internal pure returns (ReceiverWeight[] memory list) {
+        list = new ReceiverWeight[](0);
     }
 
-    function updateSender(
-        PoolUser user,
-        uint128 balanceFrom,
-        uint128 balanceTo,
-        uint128 amtPerSec,
-        uint32 dripsFraction
-    ) internal {
-        updateSender(
-            user,
-            balanceFrom,
-            balanceTo,
-            amtPerSec,
-            dripsFraction,
-            new ReceiverWeight[](0)
-        );
+    function weights(PoolUser user, uint32 weight)
+        internal
+        pure
+        returns (ReceiverWeight[] memory list)
+    {
+        list = new ReceiverWeight[](1);
+        list[0] = ReceiverWeight(address(user), weight);
     }
 
-    function updateSender(
-        PoolUser user,
-        uint128 balanceFrom,
-        uint128 balanceTo,
-        uint128 amtPerSec,
-        uint32 dripsFraction,
-        Weight memory weight
-    ) internal {
-        ReceiverWeight[] memory updatedReceivers = new ReceiverWeight[](1);
-        updatedReceivers[0] = ReceiverWeight(address(weight.user), weight.weight);
-        updateSender(user, balanceFrom, balanceTo, amtPerSec, dripsFraction, updatedReceivers);
+    function weights(
+        PoolUser user1,
+        uint32 weight1,
+        PoolUser user2,
+        uint32 weight2
+    ) internal pure returns (ReceiverWeight[] memory list) {
+        list = new ReceiverWeight[](2);
+        list[0] = ReceiverWeight(address(user1), weight1);
+        list[1] = ReceiverWeight(address(user2), weight2);
     }
 
-    function updateSender(
-        PoolUser user,
-        uint128 balanceFrom,
-        uint128 balanceTo,
-        uint128 amtPerSec,
-        uint32 dripsFraction,
-        Weight memory weight1,
-        Weight memory weight2
-    ) internal {
-        ReceiverWeight[] memory updatedReceivers = new ReceiverWeight[](2);
-        updatedReceivers[0] = ReceiverWeight(address(weight1.user), weight1.weight);
-        updatedReceivers[1] = ReceiverWeight(address(weight2.user), weight2.weight);
-        updateSender(user, balanceFrom, balanceTo, amtPerSec, dripsFraction, updatedReceivers);
-    }
-
-    function updateSender(
-        PoolUser user,
-        uint128 balanceFrom,
-        uint128 balanceTo,
-        uint128 amtPerSec,
-        uint32 dripsFraction,
-        Weight memory weight1,
-        Weight memory weight2,
-        Weight memory weight3
-    ) internal {
-        ReceiverWeight[] memory updatedReceivers = new ReceiverWeight[](3);
-        updatedReceivers[0] = ReceiverWeight(address(weight1.user), weight1.weight);
-        updatedReceivers[1] = ReceiverWeight(address(weight2.user), weight2.weight);
-        updatedReceivers[2] = ReceiverWeight(address(weight3.user), weight3.weight);
-        updateSender(user, balanceFrom, balanceTo, amtPerSec, dripsFraction, updatedReceivers);
+    function weights(
+        PoolUser user1,
+        uint32 weight1,
+        PoolUser user2,
+        uint32 weight2,
+        PoolUser user3,
+        uint32 weight3
+    ) internal pure returns (ReceiverWeight[] memory list) {
+        list = new ReceiverWeight[](3);
+        list[0] = ReceiverWeight(address(user1), weight1);
+        list[1] = ReceiverWeight(address(user2), weight2);
+        list[2] = ReceiverWeight(address(user3), weight3);
     }
 
     function updateSender(
@@ -125,16 +96,24 @@ abstract contract PoolUserUtils is DSTest {
             balanceFrom,
             balanceTo,
             user.getAmtPerSecUnchanged(),
-            user.getDripsFraction()
+            user.getDripsFraction(),
+            weights()
         );
     }
 
     function setAmtPerSec(PoolUser user, uint128 amtPerSec) internal {
         uint128 withdrawable = user.withdrawable();
-        updateSender(user, withdrawable, withdrawable, amtPerSec, user.getDripsFraction());
+        updateSender(
+            user,
+            withdrawable,
+            withdrawable,
+            amtPerSec,
+            user.getDripsFraction(),
+            weights()
+        );
     }
 
-    function setReceiver(PoolUser user, Weight memory weight) internal {
+    function setReceivers(PoolUser user, ReceiverWeight[] memory updatedReceivers) internal {
         uint128 withdrawable = user.withdrawable();
         updateSender(
             user,
@@ -142,17 +121,15 @@ abstract contract PoolUserUtils is DSTest {
             withdrawable,
             user.getAmtPerSecUnchanged(),
             user.getDripsFraction(),
-            weight
+            updatedReceivers
         );
     }
 
-    function assertSetReceiverReverts(
+    function assertSetReceiversReverts(
         PoolUser user,
-        Weight memory weight,
+        ReceiverWeight[] memory updatedReceivers,
         string memory expectedReason
     ) internal {
-        ReceiverWeight[] memory updatedReceivers = new ReceiverWeight[](1);
-        updatedReceivers[0] = ReceiverWeight(address(weight.user), weight.weight);
         try
             user.updateSender(
                 0,
@@ -166,51 +143,6 @@ abstract contract PoolUserUtils is DSTest {
         } catch Error(string memory reason) {
             assertEq(reason, expectedReason, "Invalid sender receivers update revert reason");
         }
-    }
-
-    function updateSubSender(
-        PoolUser user,
-        uint256 subSenderId,
-        uint128 balanceFrom,
-        uint128 balanceTo,
-        uint128 amtPerSec
-    ) internal {
-        updateSubSender(
-            user,
-            subSenderId,
-            balanceFrom,
-            balanceTo,
-            amtPerSec,
-            new ReceiverWeight[](0)
-        );
-    }
-
-    function updateSubSender(
-        PoolUser user,
-        uint256 subSenderId,
-        uint128 balanceFrom,
-        uint128 balanceTo,
-        uint128 amtPerSec,
-        Weight memory weight
-    ) internal {
-        ReceiverWeight[] memory updatedReceivers = new ReceiverWeight[](1);
-        updatedReceivers[0] = ReceiverWeight(address(weight.user), weight.weight);
-        updateSubSender(user, subSenderId, balanceFrom, balanceTo, amtPerSec, updatedReceivers);
-    }
-
-    function updateSubSender(
-        PoolUser user,
-        uint256 subSenderId,
-        uint128 balanceFrom,
-        uint128 balanceTo,
-        uint128 amtPerSec,
-        Weight memory weight1,
-        Weight memory weight2
-    ) internal {
-        ReceiverWeight[] memory updatedReceivers = new ReceiverWeight[](2);
-        updatedReceivers[0] = ReceiverWeight(address(weight1.user), weight1.weight);
-        updatedReceivers[1] = ReceiverWeight(address(weight2.user), weight2.weight);
-        updateSubSender(user, subSenderId, balanceFrom, balanceTo, amtPerSec, updatedReceivers);
     }
 
     function updateSubSender(
@@ -262,7 +194,14 @@ abstract contract PoolUserUtils is DSTest {
         uint128 balanceFrom,
         uint128 balanceTo
     ) internal {
-        updateSubSender(user, subSenderId, balanceFrom, balanceTo, user.getAmtPerSecUnchanged());
+        updateSubSender(
+            user,
+            subSenderId,
+            balanceFrom,
+            balanceTo,
+            user.getAmtPerSecUnchanged(),
+            weights()
+        );
     }
 
     function collect(PoolUser user, uint128 expectedAmt) internal {

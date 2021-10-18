@@ -43,7 +43,7 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testAllowsSendingToASingleReceiver() public {
-        updateSender(sender, 0, 100, 1, 0, Weight(receiver, 1));
+        updateSender(sender, 0, 100, 1, 0, weights(receiver, 1));
         warpBy(15);
         // Sender had 15 seconds paying 1 per second
         changeBalance(sender, 85, 0);
@@ -57,7 +57,7 @@ abstract contract PoolTest is PoolUserUtils {
     {
         uint128 time = (cycles / 10) * pool.cycleSecs() + (timeInCycle % pool.cycleSecs());
         uint128 balance = 25 * pool.cycleSecs() + 256;
-        updateSender(sender, 0, balance, 1, 0, Weight(receiver, 1));
+        updateSender(sender, 0, balance, 1, 0, weights(receiver, 1));
         warpBy(time);
         // Sender had `time` seconds paying 1 per second
         changeBalance(sender, balance - time, 0);
@@ -67,7 +67,7 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testAllowsSendingToMultipleReceivers() public {
-        updateSender(sender, 0, 6, 3, 0, Weight(receiver1, 1), Weight(receiver2, 2));
+        updateSender(sender, 0, 6, 3, 0, weights(receiver1, 1, receiver2, 2));
         warpToCycleEnd();
         // Sender had 2 seconds paying 1 per second
         collect(receiver1, 2);
@@ -76,7 +76,7 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testSendsSomeFundsFromASingleSenderToTwoReceivers() public {
-        updateSender(sender, 0, 100, 2, 0, Weight(receiver1, 1), Weight(receiver2, 1));
+        updateSender(sender, 0, 100, 2, 0, weights(receiver1, 1, receiver2, 1));
         warpBy(14);
         // Sender had 14 seconds paying 2 per second
         changeBalance(sender, 72, 0);
@@ -88,9 +88,9 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testSendsSomeFundsFromATwoSendersToASingleReceiver() public {
-        updateSender(sender1, 0, 100, 1, 0, Weight(receiver, 1));
+        updateSender(sender1, 0, 100, 1, 0, weights(receiver, 1));
         warpBy(2);
-        updateSender(sender2, 0, 100, 2, 0, Weight(receiver, 1));
+        updateSender(sender2, 0, 100, 2, 0, weights(receiver, 1));
         warpBy(15);
         // Sender1 had 17 seconds paying 1 per second
         changeBalance(sender1, 83, 0);
@@ -106,7 +106,7 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testAllowsCollectingFundsWhileTheyAreBeingSent() public {
-        updateSender(sender, 0, pool.cycleSecs() + 10, 1, 0, Weight(receiver, 1));
+        updateSender(sender, 0, pool.cycleSecs() + 10, 1, 0, weights(receiver, 1));
         warpToCycleEnd();
         // Receiver had cycleSecs seconds paying 1 per second
         collect(receiver, pool.cycleSecs());
@@ -119,7 +119,7 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testSendsFundsUntilTheyRunOut() public {
-        updateSender(sender, 0, 100, 9, 0, Weight(receiver, 1));
+        updateSender(sender, 0, 100, 9, 0, weights(receiver, 1));
         warpBy(10);
         // Sender had 10 seconds paying 9 per second, funds are about to run out
         assertWithdrawable(sender, 10);
@@ -133,7 +133,7 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testAllowsToppingUpWhileSending() public {
-        updateSender(sender, 0, 100, 10, 0, Weight(receiver, 1));
+        updateSender(sender, 0, 100, 10, 0, weights(receiver, 1));
         warpBy(6);
         // Sender had 6 seconds paying 10 per second
         changeBalance(sender, 40, 60);
@@ -146,7 +146,7 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testAllowsToppingUpAfterFundsRunOut() public {
-        updateSender(sender, 0, 100, 10, 0, Weight(receiver, 1));
+        updateSender(sender, 0, 100, 10, 0, weights(receiver, 1));
         warpBy(10);
         // Sender had 10 seconds paying 10 per second
         assertWithdrawable(sender, 0);
@@ -164,7 +164,7 @@ abstract contract PoolTest is PoolUserUtils {
 
     function testAllowsSendingWhichShouldEndAfterMaxTimestamp() public {
         uint128 balance = type(uint64).max + uint128(6);
-        updateSender(sender, 0, balance, 1, 0, Weight(receiver, 1));
+        updateSender(sender, 0, balance, 1, 0, weights(receiver, 1));
         warpBy(10);
         // Sender had 10 seconds paying 1 per second
         changeBalance(sender, balance - 10, 0);
@@ -174,7 +174,7 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testAllowsChangingAmountPerSecondWhileSending() public {
-        updateSender(sender, 0, 100, 10, 0, Weight(receiver, 1));
+        updateSender(sender, 0, 100, 10, 0, weights(receiver, 1));
         warpBy(4);
         setAmtPerSec(sender, 9);
         warpBy(4);
@@ -186,21 +186,21 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testAllowsSenderUpdateWithTopUpAndWithdrawal() public {
-        sender.updateSender(10, 3, 0, 0, new ReceiverWeight[](0));
+        sender.updateSender(10, 3, 0, 0, weights());
         assertWithdrawable(sender, 7);
     }
 
     function testAllowsNoSenderUpdate() public {
-        updateSender(sender, 0, 6, 3, 0, Weight(receiver, 1));
+        updateSender(sender, 0, 6, 3, 0, weights(receiver, 1));
         warpBy(1);
         // Sender had 1 second paying 3 per second
-        updateSender(sender, 3, 3, pool.AMT_PER_SEC_UNCHANGED(), 0);
+        updateSender(sender, 3, 3, pool.AMT_PER_SEC_UNCHANGED(), 0, weights());
         warpToCycleEnd();
         collect(receiver, 6);
     }
 
     function testSendsAmountPerSecondRoundedDownToAMultipleOfWeightsSum() public {
-        updateSender(sender, 0, 100, 9, 0, Weight(receiver, 5));
+        updateSender(sender, 0, 100, 9, 0, weights(receiver, 5));
         warpBy(5);
         // Sender had 5 seconds paying 5 per second
         changeBalance(sender, 75, 0);
@@ -210,7 +210,7 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testSendsNothingIfAmountPerSecondIsSmallerThanWeightsSum() public {
-        updateSender(sender, 0, 100, 4, 0, Weight(receiver, 5));
+        updateSender(sender, 0, 100, 4, 0, weights(receiver, 5));
         warpBy(5);
         // Sender had 0 paying seconds
         changeBalance(sender, 100, 0);
@@ -220,16 +220,7 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testAllowsRemovingTheLastReceiverWeightWhenAmountPerSecondIsZero() public {
-        updateSender(
-            sender,
-            0,
-            100,
-            12,
-            0,
-            Weight(receiver1, 1),
-            Weight(receiver2, 1),
-            Weight(receiver2, 0)
-        );
+        updateSender(sender, 0, 100, 12, 0, weights(receiver1, 1, receiver2, 1, receiver2, 0));
         warpBy(1);
         // Sender had 1 seconds paying 12 per second
         changeBalance(sender, 88, 0);
@@ -241,9 +232,9 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testAllowsChangingReceiverWeightsWhileSending() public {
-        updateSender(sender, 0, 100, 12, 0, Weight(receiver1, 1), Weight(receiver2, 1));
+        updateSender(sender, 0, 100, 12, 0, weights(receiver1, 1, receiver2, 1));
         warpBy(3);
-        setReceiver(sender, Weight(receiver2, 2));
+        setReceivers(sender, weights(receiver2, 2));
         warpBy(4);
         // Sender had 7 seconds paying 12 per second
         changeBalance(sender, 16, 0);
@@ -255,11 +246,11 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testAllowsRemovingReceiversWhileSending() public {
-        updateSender(sender, 0, 100, 10, 0, Weight(receiver1, 1), Weight(receiver2, 1));
+        updateSender(sender, 0, 100, 10, 0, weights(receiver1, 1, receiver2, 1));
         warpBy(3);
-        setReceiver(sender, Weight(receiver1, 0));
+        setReceivers(sender, weights(receiver1, 0));
         warpBy(4);
-        setReceiver(sender, Weight(receiver2, 0));
+        setReceivers(sender, weights(receiver2, 0));
         warpBy(10);
         // Sender had 7 seconds paying 10 per second
         changeBalance(sender, 30, 0);
@@ -271,15 +262,15 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testLimitsTheTotalWeightsSum() public {
-        setReceiver(sender, Weight(receiver1, pool.SENDER_WEIGHTS_SUM_MAX()));
-        assertSetReceiverReverts(sender, Weight(receiver2, 1), "Too much total receivers weight");
+        setReceivers(sender, weights(receiver1, pool.SENDER_WEIGHTS_SUM_MAX()));
+        assertSetReceiversReverts(sender, weights(receiver2, 1), "Too much total receivers weight");
     }
 
     function testLimitsTheOverflowingTotalWeightsSum() public {
-        setReceiver(sender, Weight(receiver1, 1));
-        assertSetReceiverReverts(
+        setReceivers(sender, weights(receiver1, 1));
+        assertSetReceiversReverts(
             sender,
-            Weight(receiver2, type(uint32).max),
+            weights(receiver2, type(uint32).max),
             "Too much total receivers weight"
         );
     }
@@ -290,11 +281,11 @@ abstract contract PoolTest is PoolUserUtils {
             receivers[i] = ReceiverWeight(address(i + 1), 1);
         }
         sender.updateSender(0, 0, pool.AMT_PER_SEC_UNCHANGED(), 0, receivers);
-        assertSetReceiverReverts(sender, Weight(receiver, 1), "Too many receivers");
+        assertSetReceiversReverts(sender, weights(receiver, 1), "Too many receivers");
     }
 
     function testAllowsAnAddressToBeASenderAndAReceiverIndependently() public {
-        updateSender(sender, 0, 10, 10, 0, Weight(sender, 10));
+        updateSender(sender, 0, 10, 10, 0, weights(sender, 10));
         warpBy(1);
         // Sender had 1 second paying 10 per second
         assertWithdrawable(sender, 0);
@@ -304,18 +295,12 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testAllowsWithdrawalOfAllFunds() public {
-        updateSender(sender, 0, 10, 1, 0, Weight(receiver, 1));
+        updateSender(sender, 0, 10, 1, 0, weights(receiver, 1));
         warpBy(4);
         // Sender had 4 second paying 1 per second
         assertWithdrawable(sender, 6);
         uint256 expectedBalance = sender.balance() + 6;
-        sender.updateSender(
-            0,
-            pool.WITHDRAW_ALL(),
-            pool.AMT_PER_SEC_UNCHANGED(),
-            0,
-            new ReceiverWeight[](0)
-        );
+        sender.updateSender(0, pool.WITHDRAW_ALL(), pool.AMT_PER_SEC_UNCHANGED(), 0, weights());
         assertWithdrawable(sender, 0);
         assertBalance(sender, expectedBalance);
         warpToCycleEnd();
@@ -324,16 +309,16 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testAnybodyCanCallCollect() public {
-        updateSender(sender1, 0, 10, 10, 0, Weight(receiver, 1));
+        updateSender(sender1, 0, 10, 10, 0, weights(receiver, 1));
         warpToCycleEnd();
         // Receiver had 1 second paying 10 per second
         collect(sender2, receiver, 10);
     }
 
     function testSenderAndSubSenderAreIndependent() public {
-        updateSender(sender, 0, 5, 1, 0, Weight(receiver1, 1));
+        updateSender(sender, 0, 5, 1, 0, weights(receiver1, 1));
         warpBy(3);
-        updateSubSender(sender, SUB_SENDER_1, 0, 8, 3, Weight(receiver1, 2), Weight(receiver2, 1));
+        updateSubSender(sender, SUB_SENDER_1, 0, 8, 3, weights(receiver1, 2, receiver2, 1));
         warpBy(1);
         // Sender had 4 seconds paying 1 per second
         changeBalance(sender, 1, 0);
@@ -348,9 +333,9 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testUserSubSendersAreIndependent() public {
-        updateSubSender(sender, SUB_SENDER_1, 0, 5, 1, Weight(receiver1, 1));
+        updateSubSender(sender, SUB_SENDER_1, 0, 5, 1, weights(receiver1, 1));
         warpBy(3);
-        updateSubSender(sender, SUB_SENDER_2, 0, 8, 3, Weight(receiver1, 2), Weight(receiver2, 1));
+        updateSubSender(sender, SUB_SENDER_2, 0, 8, 3, weights(receiver1, 2, receiver2, 1));
         warpBy(1);
         // Sender sub-sender1 had 4 seconds paying 1 per second
         changeBalanceSubSender(sender, SUB_SENDER_1, 1, 0);
@@ -365,9 +350,9 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testSubSendersOfDifferentUsersAreIndependent() public {
-        updateSubSender(sender1, SUB_SENDER_1, 0, 5, 1, Weight(receiver1, 1));
+        updateSubSender(sender1, SUB_SENDER_1, 0, 5, 1, weights(receiver1, 1));
         warpBy(3);
-        updateSubSender(sender2, SUB_SENDER_1, 0, 8, 3, Weight(receiver1, 2), Weight(receiver2, 1));
+        updateSubSender(sender2, SUB_SENDER_1, 0, 8, 3, weights(receiver1, 2, receiver2, 1));
         warpBy(1);
         // Sender1 sub-sender1 had 4 seconds paying 1 per second
         changeBalanceSubSender(sender1, SUB_SENDER_1, 1, 0);
@@ -383,8 +368,8 @@ abstract contract PoolTest is PoolUserUtils {
 
     function testDripsFractionIsLimited() public {
         uint32 dripsFractionMax = sender.getDripsFractionMax();
-        updateSender(sender, 0, 0, 0, dripsFractionMax);
-        try sender.updateSender(0, 0, 0, dripsFractionMax + 1, new ReceiverWeight[](0)) {
+        updateSender(sender, 0, 0, 0, dripsFractionMax, weights());
+        try sender.updateSender(0, 0, 0, dripsFractionMax + 1, weights()) {
             assertTrue(false, "Update senders hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, "Drip fraction too high", "Invalid update sender revert reason");
@@ -393,8 +378,8 @@ abstract contract PoolTest is PoolUserUtils {
 
     function testCollectDrips() public {
         uint32 dripsFractionMax = sender.getDripsFractionMax();
-        updateSender(sender, 0, 10, 10, 0, Weight(receiver1, 1));
-        updateSender(receiver1, 0, 0, 0, dripsFractionMax, Weight(receiver2, 1));
+        updateSender(sender, 0, 10, 10, 0, weights(receiver1, 1));
+        updateSender(receiver1, 0, 0, 0, dripsFractionMax, weights(receiver2, 1));
         warpToCycleEnd();
         assertCollectable(receiver2, 0);
         // Receiver1 had 1 second paying 10 per second of which 10 is dripped
@@ -405,9 +390,9 @@ abstract contract PoolTest is PoolUserUtils {
 
     function testCollectDripsFundsFromDrips() public {
         uint32 dripsFractionMax = sender.getDripsFractionMax();
-        updateSender(sender, 0, 10, 10, 0, Weight(receiver1, 1));
-        updateSender(receiver1, 0, 0, 0, dripsFractionMax, Weight(receiver2, 1));
-        updateSender(receiver2, 0, 0, 0, dripsFractionMax, Weight(receiver3, 1));
+        updateSender(sender, 0, 10, 10, 0, weights(receiver1, 1));
+        updateSender(receiver1, 0, 0, 0, dripsFractionMax, weights(receiver2, 1));
+        updateSender(receiver2, 0, 0, 0, dripsFractionMax, weights(receiver3, 1));
         warpToCycleEnd();
         assertCollectable(receiver2, 0);
         assertCollectable(receiver3, 0);
@@ -421,8 +406,8 @@ abstract contract PoolTest is PoolUserUtils {
 
     function testCollectMixesStreamsAndDrips() public {
         uint32 dripsFractionMax = sender.getDripsFractionMax();
-        updateSender(sender, 0, 10, 10, 0, Weight(receiver1, 1), Weight(receiver2, 1));
-        updateSender(receiver1, 0, 0, 0, dripsFractionMax, Weight(receiver2, 1));
+        updateSender(sender, 0, 10, 10, 0, weights(receiver1, 1, receiver2, 1));
+        updateSender(receiver1, 0, 0, 0, dripsFractionMax, weights(receiver2, 1));
         warpToCycleEnd();
         // Receiver2 had 1 second paying 5 per second
         assertCollectable(receiver2, 5);
@@ -434,15 +419,14 @@ abstract contract PoolTest is PoolUserUtils {
 
     function testCollectSplitsFundsBetweenReceiverAndDrips() public {
         uint32 dripsFractionMax = sender.getDripsFractionMax();
-        updateSender(sender, 0, 10, 10, 0, Weight(receiver1, 1));
+        updateSender(sender, 0, 10, 10, 0, weights(receiver1, 1));
         updateSender(
             receiver1,
             0,
             0,
             0,
             (dripsFractionMax * 3) / 4,
-            Weight(receiver2, 1),
-            Weight(receiver3, 2)
+            weights(receiver2, 1, receiver3, 2)
         );
         warpToCycleEnd();
         assertCollectable(receiver2, 0);
@@ -458,7 +442,7 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testUpdateSenderCollects() public {
-        updateSender(sender1, 0, 10, 10, 0, Weight(sender2, 1));
+        updateSender(sender1, 0, 10, 10, 0, weights(sender2, 1));
         warpToCycleEnd();
         uint256 balanceOld = sender2.balance();
         (uint128 withdrawn, uint128 collected, uint128 dripped) = sender2.updateSender(
@@ -466,7 +450,7 @@ abstract contract PoolTest is PoolUserUtils {
             0,
             0,
             0,
-            new ReceiverWeight[](0)
+            weights()
         );
         assertEq(withdrawn, 0, "Invalid withdrawn");
         assertEq(collected, 10, "Invalid collected");
@@ -477,20 +461,17 @@ abstract contract PoolTest is PoolUserUtils {
     function testUpdateSenderDrips() public {
         uint32 dripsFractionMax = sender.getDripsFractionMax();
         // Sender2 drips to receiver1
-        updateSender(sender2, 0, 0, 0, dripsFractionMax, Weight(receiver1, 1));
-        updateSender(sender1, 0, 10, 10, 0, Weight(sender2, 1));
+        updateSender(sender2, 0, 0, 0, dripsFractionMax, weights(receiver1, 1));
+        updateSender(sender1, 0, 10, 10, 0, weights(sender2, 1));
         warpToCycleEnd();
         uint256 balanceOld = sender2.balance();
         // New sender2 configuration, stops dripping to receiver1
-        ReceiverWeight[] memory receiverWeightUpdate = new ReceiverWeight[](2);
-        receiverWeightUpdate[0] = ReceiverWeight(address(receiver1), 0);
-        receiverWeightUpdate[1] = ReceiverWeight(address(receiver2), 1);
         (uint128 withdrawn, uint128 collected, uint128 dripped) = sender2.updateSender(
             0,
             0,
             0,
             0,
-            receiverWeightUpdate
+            weights(receiver1, 0, receiver2, 1)
         );
         assertEq(withdrawn, 0, "Invalid withdrawn");
         assertEq(collected, 0, "Invalid collected");
@@ -505,7 +486,7 @@ abstract contract PoolTest is PoolUserUtils {
         // Enough for 3 cycles
         uint128 amt = pool.cycleSecs() * 3;
         warpToCycleEnd();
-        updateSender(sender, 0, amt, 1, 0, Weight(receiver, 1));
+        updateSender(sender, 0, amt, 1, 0, weights(receiver, 1));
         warpToCycleEnd();
         warpToCycleEnd();
         warpToCycleEnd();
@@ -517,7 +498,7 @@ abstract contract PoolTest is PoolUserUtils {
         // Enough for 3 cycles
         uint128 amt = pool.cycleSecs() * 3;
         warpToCycleEnd();
-        updateSender(sender, 0, amt, 1, 0, Weight(receiver, 1));
+        updateSender(sender, 0, amt, 1, 0, weights(receiver, 1));
         warpToCycleEnd();
         warpToCycleEnd();
         warpToCycleEnd();
