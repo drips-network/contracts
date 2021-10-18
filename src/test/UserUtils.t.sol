@@ -6,6 +6,41 @@ import {PoolUser} from "./User.t.sol";
 import {Pool, ReceiverWeight} from "../Pool.sol";
 
 abstract contract PoolUserUtils is DSTest {
+    mapping(PoolUser => bytes) internal currWeights;
+    mapping(PoolUser => mapping(uint256 => bytes)) internal currSubSenderWeights;
+
+    function getCurrWeights(PoolUser user) internal view returns (ReceiverWeight[] memory) {
+        return decodeWeights(currWeights[user]);
+    }
+
+    function setCurrWeights(PoolUser user, ReceiverWeight[] memory newReceivers) internal {
+        currWeights[user] = abi.encode(newReceivers);
+    }
+
+    function getCurrSubSenderWeights(PoolUser user, uint256 id)
+        internal
+        view
+        returns (ReceiverWeight[] memory)
+    {
+        return decodeWeights(currSubSenderWeights[user][id]);
+    }
+
+    function setCurrSubSenderWeights(
+        PoolUser user,
+        uint256 id,
+        ReceiverWeight[] memory newReceivers
+    ) internal {
+        currSubSenderWeights[user][id] = abi.encode(newReceivers);
+    }
+
+    function decodeWeights(bytes storage encoded) internal view returns (ReceiverWeight[] memory) {
+        if (encoded.length == 0) {
+            return new ReceiverWeight[](0);
+        } else {
+            return abi.decode(encoded, (ReceiverWeight[]));
+        }
+    }
+
     function weights() internal pure returns (ReceiverWeight[] memory list) {
         list = new ReceiverWeight[](0);
     }
@@ -30,27 +65,13 @@ abstract contract PoolUserUtils is DSTest {
         list[1] = ReceiverWeight(address(user2), weight2);
     }
 
-    function weights(
-        PoolUser user1,
-        uint32 weight1,
-        PoolUser user2,
-        uint32 weight2,
-        PoolUser user3,
-        uint32 weight3
-    ) internal pure returns (ReceiverWeight[] memory list) {
-        list = new ReceiverWeight[](3);
-        list[0] = ReceiverWeight(address(user1), weight1);
-        list[1] = ReceiverWeight(address(user2), weight2);
-        list[2] = ReceiverWeight(address(user3), weight3);
-    }
-
     function updateSender(
         PoolUser user,
         uint128 balanceFrom,
         uint128 balanceTo,
         uint128 amtPerSec,
         uint32 dripsFraction,
-        ReceiverWeight[] memory updatedReceivers
+        ReceiverWeight[] memory newReceivers
     ) internal {
         assertWithdrawable(user, balanceFrom);
         uint128 toppedUp = balanceTo > balanceFrom ? balanceTo - balanceFrom : 0;
@@ -65,9 +86,10 @@ abstract contract PoolUserUtils is DSTest {
             withdraw,
             amtPerSec,
             dripsFraction,
-            updatedReceivers
+            newReceivers
         );
 
+        setCurrWeights(user, newReceivers);
         assertEq(withdrawn, withdraw, "Expected amount not withdrawn");
         assertEq(collected, 0, "Expected non-withdrawing sender update");
         assertEq(dripped, 0, "Expected non-dripping sender update");
@@ -97,7 +119,7 @@ abstract contract PoolUserUtils is DSTest {
             balanceTo,
             user.getAmtPerSecUnchanged(),
             user.getDripsFraction(),
-            weights()
+            getCurrWeights(user)
         );
     }
 
@@ -109,11 +131,11 @@ abstract contract PoolUserUtils is DSTest {
             withdrawable,
             amtPerSec,
             user.getDripsFraction(),
-            weights()
+            getCurrWeights(user)
         );
     }
 
-    function setReceivers(PoolUser user, ReceiverWeight[] memory updatedReceivers) internal {
+    function setReceivers(PoolUser user, ReceiverWeight[] memory newReceivers) internal {
         uint128 withdrawable = user.withdrawable();
         updateSender(
             user,
@@ -121,13 +143,13 @@ abstract contract PoolUserUtils is DSTest {
             withdrawable,
             user.getAmtPerSecUnchanged(),
             user.getDripsFraction(),
-            updatedReceivers
+            newReceivers
         );
     }
 
     function assertSetReceiversReverts(
         PoolUser user,
-        ReceiverWeight[] memory updatedReceivers,
+        ReceiverWeight[] memory newReceivers,
         string memory expectedReason
     ) internal {
         try
@@ -136,7 +158,7 @@ abstract contract PoolUserUtils is DSTest {
                 0,
                 user.getAmtPerSecUnchanged(),
                 user.getDripsFraction(),
-                updatedReceivers
+                newReceivers
             )
         {
             assertTrue(false, "Sender receivers update hasn't reverted");
@@ -151,7 +173,7 @@ abstract contract PoolUserUtils is DSTest {
         uint128 balanceFrom,
         uint128 balanceTo,
         uint128 amtPerSec,
-        ReceiverWeight[] memory updatedReceivers
+        ReceiverWeight[] memory newReceivers
     ) internal {
         assertWithdrawableSubSender(user, subSenderId, balanceFrom);
         uint128 toppedUp = balanceTo > balanceFrom ? balanceTo - balanceFrom : 0;
@@ -166,9 +188,10 @@ abstract contract PoolUserUtils is DSTest {
             toppedUp,
             withdraw,
             amtPerSec,
-            updatedReceivers
+            newReceivers
         );
 
+        setCurrSubSenderWeights(user, subSenderId, newReceivers);
         assertEq(withdrawn, withdraw, "expected amount not withdrawn");
         assertWithdrawableSubSender(user, subSenderId, balanceTo);
         assertBalance(user, expectedBalance);
@@ -200,7 +223,7 @@ abstract contract PoolUserUtils is DSTest {
             balanceFrom,
             balanceTo,
             user.getAmtPerSecUnchanged(),
-            weights()
+            getCurrSubSenderWeights(user, subSenderId)
         );
     }
 

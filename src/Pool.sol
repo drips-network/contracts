@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.7;
 
-import {ReceiverWeights, ReceiverWeightsImpl} from "./libraries/ReceiverWeights.sol";
-
 struct ReceiverWeight {
     address receiver;
     uint32 weight;
@@ -53,8 +51,6 @@ struct ReceiverWeight {
 /// The contract assumes that all amounts in the system can be stored in signed 128-bit integers.
 /// It's guaranteed to be safe only when working with assets with supply lower than `2 ^ 127`.
 abstract contract Pool {
-    using ReceiverWeightsImpl for ReceiverWeights;
-
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
     /// gain access to funds collected during `T - cycleSecs` to `T - 1`.
     uint64 public immutable cycleSecs;
@@ -170,7 +166,7 @@ abstract contract Pool {
         uint32 dripsFraction;
         // --- SLOT BOUNDARY
         // The receivers' addresses and their weights
-        ReceiverWeights receiverWeights;
+        mapping(uint256 => ReceiverWeight) receiverWeights;
     }
 
     struct Receiver {
@@ -327,14 +323,11 @@ abstract contract Pool {
             dripped = uint128(drippable - (drippable % sender.weightSum));
             collected -= dripped;
             uint128 drippedPerWeight = dripped / sender.weightSum;
-            // Iterating over receivers, see `ReceiverWeights` for details
-            address dripsAddr = ReceiverWeightsImpl.ADDR_ROOT;
-            address hint = ReceiverWeightsImpl.ADDR_ROOT;
+            uint32 receiversCount = sender.weightCount;
             uint128 actuallyDripped = 0;
-            while (true) {
-                uint32 weight;
-                (dripsAddr, hint, weight) = sender.receiverWeights.nextWeight(dripsAddr, hint);
-                if (dripsAddr == ReceiverWeightsImpl.ADDR_ROOT) break;
+            for (uint256 i = 0; i < receiversCount; i++) {
+                address dripsAddr = sender.receiverWeights[i].receiver;
+                uint32 weight = sender.receiverWeights[i].weight;
                 uint128 dripAmt = drippedPerWeight * weight;
                 receivers[dripsAddr].collectable += dripAmt;
                 emit Dripped(receiverAddr, dripsAddr, dripAmt);
@@ -379,7 +372,7 @@ abstract contract Pool {
         uint128 withdrawAmt,
         uint128 amtPerSec,
         uint32 dripsFraction,
-        ReceiverWeight[] calldata updatedReceivers
+        ReceiverWeight[] calldata newReceivers
     )
         internal
         returns (
@@ -397,7 +390,7 @@ abstract contract Pool {
             withdrawAmt,
             amtPerSec,
             dripsFraction,
-            updatedReceivers
+            newReceivers
         );
         emit SenderUpdated(senderAddr, sender.startBalance, sender.amtPerSec, sender.dripsFraction);
         for (uint256 i = 0; i < updates.length; i++) {
@@ -422,7 +415,7 @@ abstract contract Pool {
         uint128 topUpAmt,
         uint128 withdrawAmt,
         uint128 amtPerSec,
-        ReceiverWeight[] calldata updatedReceivers
+        ReceiverWeight[] calldata newReceivers
     ) internal returns (uint128 withdrawn) {
         Sender storage sender = subSenders[senderAddr][subSenderId];
         StreamUpdates memory updates;
@@ -432,7 +425,7 @@ abstract contract Pool {
             withdrawAmt,
             amtPerSec,
             0,
-            updatedReceivers
+            newReceivers
         );
         emit SubSenderUpdated(senderAddr, subSenderId, sender.startBalance, sender.amtPerSec);
         for (uint256 i = 0; i < updates.length; i++) {
@@ -472,7 +465,8 @@ abstract contract Pool {
     /// @param dripsFraction The fraction of received funds to be dripped.
     /// Must be a value from 0 to `DRIPS_FRACTION_MAX` inclusively,
     /// where 0 means no dripping and `DRIPS_FRACTION_MAX` dripping everything.
-    /// @param updatedReceivers The list of the updated receivers and their new weights
+    /// @param newReceivers The list of the user's receivers and their weights,
+    /// which shall be in use after this function is called.
     /// @return withdrawn The withdrawn amount which should be sent to the user.
     /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
     /// @return updates The list of stream updates to log
@@ -482,18 +476,16 @@ abstract contract Pool {
         uint128 withdrawAmt,
         uint128 amtPerSec,
         uint32 dripsFraction,
-        ReceiverWeight[] calldata updatedReceivers
+        ReceiverWeight[] calldata newReceivers
     ) internal returns (uint128 withdrawn, StreamUpdates memory updates) {
-        uint256 maxUpdates = sender.weightCount + updatedReceivers.length;
+        uint256 maxUpdates = sender.weightCount + newReceivers.length;
         updates = StreamUpdates({length: 0, updates: new StreamUpdate[](maxUpdates)});
         _stopSending(sender, updates);
         _topUp(sender, topUpAmt);
         withdrawn = _withdraw(sender, withdrawAmt);
         _setAmtPerSec(sender, amtPerSec);
         _setDripsFraction(sender, dripsFraction);
-        for (uint256 i = 0; i < updatedReceivers.length; i++) {
-            _setReceiver(sender, updatedReceivers[i].receiver, updatedReceivers[i].weight);
-        }
+        _setReceivers(sender, newReceivers);
         _startSending(sender, updates);
     }
 
@@ -614,30 +606,35 @@ abstract contract Pool {
         return senders[userAddr].dripsFraction;
     }
 
-    /// @notice Sets the weight of the provided receiver of the user.
+    /// @notice Sets the weight of the provided receivers of the user.
     /// The weight regulates the share of the amount sent every second
     /// that each of the sender's receivers gets.
     /// Setting a non-zero weight for a new receiver adds it to the list of the sender's receivers.
     /// Setting zero as the weight for a receiver removes it from the list of the sender's receivers.
     /// @param sender The updated sender
-    /// @param receiver The address of the receiver
-    /// @param weight The weight of the receiver
-    function _setReceiver(
-        Sender storage sender,
-        address receiver,
-        uint32 weight
-    ) internal {
-        uint64 senderWeightSum = sender.weightSum;
-        uint32 oldWeight = sender.receiverWeights.setWeight(receiver, weight);
-        senderWeightSum -= oldWeight;
-        senderWeightSum += weight;
+    /// @param newReceivers The list of the user's receivers and their weights,
+    /// which shall be in use after this function is called.
+    function _setReceivers(Sender storage sender, ReceiverWeight[] calldata newReceivers) internal {
+        require(newReceivers.length <= SENDER_WEIGHTS_COUNT_MAX, "Too many receivers");
+        uint32 oldWeightCount = sender.weightCount;
+        sender.weightCount = uint32(newReceivers.length);
+
+        uint256 senderWeightSum = 0;
+        for (uint256 i = 0; i < newReceivers.length; i++) {
+            senderWeightSum += newReceivers[i].weight;
+            sender.receiverWeights[i] = newReceivers[i];
+            require(newReceivers[i].weight > 0, "Receiver weight zero");
+            if (i > 0) {
+                address prevReceiver = newReceivers[i - 1].receiver;
+                address currReceiver = newReceivers[i].receiver;
+                require(prevReceiver <= currReceiver, "Receivers not sorted by address");
+                require(prevReceiver != currReceiver, "Duplicate receivers");
+            }
+        }
         require(senderWeightSum <= SENDER_WEIGHTS_SUM_MAX, "Too much total receivers weight");
         sender.weightSum = uint32(senderWeightSum);
-        if (weight != 0 && oldWeight == 0) {
-            sender.weightCount++;
-            require(sender.weightCount <= SENDER_WEIGHTS_COUNT_MAX, "Too many receivers");
-        } else if (weight == 0 && oldWeight != 0) {
-            sender.weightCount--;
+        for (uint256 i = newReceivers.length; i < oldWeightCount; i++) {
+            delete sender.receiverWeights[i];
         }
     }
 
@@ -678,16 +675,10 @@ abstract contract Pool {
         view
         returns (ReceiverWeight[] memory weights)
     {
-        weights = new ReceiverWeight[](sender.weightCount);
-        uint32 weightsCount = 0;
-        // Iterating over receivers, see `ReceiverWeights` for details
-        address receiver = ReceiverWeightsImpl.ADDR_ROOT;
-        address hint = ReceiverWeightsImpl.ADDR_ROOT;
-        while (true) {
-            uint32 receiverWeight;
-            (receiver, hint, receiverWeight) = sender.receiverWeights.nextWeight(receiver, hint);
-            if (receiver == ReceiverWeightsImpl.ADDR_ROOT) break;
-            weights[weightsCount++] = ReceiverWeight(receiver, receiverWeight);
+        uint32 receiversCount = sender.weightCount;
+        weights = new ReceiverWeight[](receiversCount);
+        for (uint256 i = 0; i < receiversCount; i++) {
+            weights[i] = sender.receiverWeights[i];
         }
     }
 
@@ -751,17 +742,11 @@ abstract contract Pool {
         uint64 timeEnd,
         StreamUpdates memory updates
     ) internal {
-        // Iterating over receivers, see `ReceiverWeights` for details
-        address receiverAddr = ReceiverWeightsImpl.ADDR_ROOT;
-        address hint = ReceiverWeightsImpl.ADDR_ROOT;
         uint256 oldLength = updates.length;
-        while (true) {
-            uint32 weight;
-            (receiverAddr, hint, weight) = sender.receiverWeights.nextWeightPruning(
-                receiverAddr,
-                hint
-            );
-            if (receiverAddr == ReceiverWeightsImpl.ADDR_ROOT) break;
+        uint32 receiversCount = sender.weightCount;
+        for (uint256 i = 0; i < receiversCount; i++) {
+            address receiverAddr = sender.receiverWeights[i].receiver;
+            uint32 weight = sender.receiverWeights[i].weight;
             int128 amtPerSecDelta = int128(uint128(weight)) * amtPerWeightPerSecDelta;
             _setReceiverDeltaFromNow(receiverAddr, amtPerSecDelta, timeEnd);
 

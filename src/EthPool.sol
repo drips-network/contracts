@@ -39,7 +39,8 @@ contract EthPool is Pool {
     /// @param dripsFraction The fraction of received funds to be dripped.
     /// Must be a value from 0 to `DRIPS_FRACTION_MAX` inclusively,
     /// where 0 means no dripping and `DRIPS_FRACTION_MAX` dripping everything.
-    /// @param updatedReceivers The list of the updated receivers and their new weights
+    /// @param newReceivers The list of the user's receivers and their weights,
+    /// which shall be in use after this function is called.
     /// @return withdrawn The actually withdrawn amount.
     /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
     /// @return collected The collected amount
@@ -48,7 +49,7 @@ contract EthPool is Pool {
         uint128 withdraw,
         uint128 amtPerSec,
         uint32 dripsFraction,
-        ReceiverWeight[] calldata updatedReceivers
+        ReceiverWeight[] calldata newReceivers
     )
         public
         payable
@@ -65,7 +66,7 @@ contract EthPool is Pool {
                 withdraw,
                 amtPerSec,
                 dripsFraction,
-                updatedReceivers
+                newReceivers
             );
     }
 
@@ -76,7 +77,7 @@ contract EthPool is Pool {
         uint256 subSenderId,
         uint128 withdraw,
         uint128 amtPerSec,
-        ReceiverWeight[] calldata updatedReceivers
+        ReceiverWeight[] calldata newReceivers
     ) public payable returns (uint128 withdrawn) {
         return
             _updateSubSenderInternal(
@@ -85,7 +86,7 @@ contract EthPool is Pool {
                 uint128(msg.value),
                 withdraw,
                 amtPerSec,
-                updatedReceivers
+                newReceivers
             );
     }
 

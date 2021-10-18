@@ -24,12 +24,16 @@ abstract contract PoolTest is PoolUserUtils {
     function setUp(Pool pool_) internal {
         pool = pool_;
         sender = createUser();
-        receiver = createUser();
         sender1 = createUser();
-        receiver1 = createUser();
         sender2 = createUser();
+        receiver = createUser();
+        receiver1 = createUser();
         receiver2 = createUser();
         receiver3 = createUser();
+        // Sort receivers by address
+        if (receiver1 > receiver2) (receiver1, receiver2) = (receiver2, receiver1);
+        if (receiver2 > receiver3) (receiver2, receiver3) = (receiver3, receiver2);
+        if (receiver1 > receiver2) (receiver1, receiver2) = (receiver2, receiver1);
     }
 
     function createUser() internal virtual returns (PoolUser);
@@ -194,7 +198,7 @@ abstract contract PoolTest is PoolUserUtils {
         updateSender(sender, 0, 6, 3, 0, weights(receiver, 1));
         warpBy(1);
         // Sender had 1 second paying 3 per second
-        updateSender(sender, 3, 3, pool.AMT_PER_SEC_UNCHANGED(), 0, weights());
+        updateSender(sender, 3, 3, pool.AMT_PER_SEC_UNCHANGED(), 0, weights(receiver, 1));
         warpToCycleEnd();
         collect(receiver, 6);
     }
@@ -219,22 +223,10 @@ abstract contract PoolTest is PoolUserUtils {
         collect(receiver, 0);
     }
 
-    function testAllowsRemovingTheLastReceiverWeightWhenAmountPerSecondIsZero() public {
-        updateSender(sender, 0, 100, 12, 0, weights(receiver1, 1, receiver2, 1, receiver2, 0));
-        warpBy(1);
-        // Sender had 1 seconds paying 12 per second
-        changeBalance(sender, 88, 0);
-        warpToCycleEnd();
-        // Receiver1 had 1 seconds paying 12 per second
-        collect(receiver1, 12);
-        // Receiver2 had 0 paying seconds
-        assertCollectable(receiver2, 0);
-    }
-
     function testAllowsChangingReceiverWeightsWhileSending() public {
         updateSender(sender, 0, 100, 12, 0, weights(receiver1, 1, receiver2, 1));
         warpBy(3);
-        setReceivers(sender, weights(receiver2, 2));
+        setReceivers(sender, weights(receiver1, 1, receiver2, 2));
         warpBy(4);
         // Sender had 7 seconds paying 12 per second
         changeBalance(sender, 16, 0);
@@ -248,9 +240,9 @@ abstract contract PoolTest is PoolUserUtils {
     function testAllowsRemovingReceiversWhileSending() public {
         updateSender(sender, 0, 100, 10, 0, weights(receiver1, 1, receiver2, 1));
         warpBy(3);
-        setReceivers(sender, weights(receiver1, 0));
+        setReceivers(sender, weights(receiver2, 1));
         warpBy(4);
-        setReceivers(sender, weights(receiver2, 0));
+        setReceivers(sender, weights());
         warpBy(10);
         // Sender had 7 seconds paying 10 per second
         changeBalance(sender, 30, 0);
@@ -262,8 +254,12 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testLimitsTheTotalWeightsSum() public {
-        setReceivers(sender, weights(receiver1, pool.SENDER_WEIGHTS_SUM_MAX()));
-        assertSetReceiversReverts(sender, weights(receiver2, 1), "Too much total receivers weight");
+        setReceivers(sender, weights(receiver, pool.SENDER_WEIGHTS_SUM_MAX()));
+        assertSetReceiversReverts(
+            sender,
+            weights(receiver, pool.SENDER_WEIGHTS_SUM_MAX() + 1),
+            "Too much total receivers weight"
+        );
     }
 
     function testLimitsTheOverflowingTotalWeightsSum() public {
@@ -276,12 +272,33 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testLimitsTheTotalReceiversCount() public {
-        ReceiverWeight[] memory receivers = new ReceiverWeight[](pool.SENDER_WEIGHTS_COUNT_MAX());
-        for (uint160 i = 0; i < receivers.length; i++) {
-            receivers[i] = ReceiverWeight(address(i + 1), 1);
+        uint160 countMax = pool.SENDER_WEIGHTS_COUNT_MAX();
+        ReceiverWeight[] memory receiversGood = new ReceiverWeight[](countMax);
+        ReceiverWeight[] memory receiversBad = new ReceiverWeight[](countMax + 1);
+        for (uint160 i = 0; i < countMax; i++) {
+            receiversGood[i] = ReceiverWeight(address(i + 1), 1);
+            receiversBad[i] = receiversGood[i];
         }
-        sender.updateSender(0, 0, pool.AMT_PER_SEC_UNCHANGED(), 0, receivers);
-        assertSetReceiversReverts(sender, weights(receiver, 1), "Too many receivers");
+        receiversBad[countMax] = ReceiverWeight(address(countMax + 1), 1);
+
+        setReceivers(sender, receiversGood);
+        assertSetReceiversReverts(sender, receiversBad, "Too many receivers");
+    }
+
+    function testRejectsZeroWeightReceivers() public {
+        assertSetReceiversReverts(sender, weights(receiver, 0), "Receiver weight zero");
+    }
+
+    function testRejectsUnsortedReceivers() public {
+        assertSetReceiversReverts(
+            sender,
+            weights(receiver2, 1, receiver1, 1),
+            "Receivers not sorted by address"
+        );
+    }
+
+    function testRejectsDuplicateReceivers() public {
+        assertSetReceiversReverts(sender, weights(receiver, 1, receiver, 2), "Duplicate receivers");
     }
 
     function testAllowsAnAddressToBeASenderAndAReceiverIndependently() public {
@@ -471,7 +488,7 @@ abstract contract PoolTest is PoolUserUtils {
             0,
             0,
             0,
-            weights(receiver1, 0, receiver2, 1)
+            weights(receiver2, 1)
         );
         assertEq(withdrawn, 0, "Invalid withdrawn");
         assertEq(collected, 0, "Invalid collected");
