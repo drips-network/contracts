@@ -190,7 +190,7 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testAllowsSenderUpdateWithTopUpAndWithdrawal() public {
-        sender.updateSender(10, 3, 0, 0, weights());
+        sender.updateSender(10, 3, 0, 0, weights(), weights());
         assertWithdrawable(sender, 7);
     }
 
@@ -301,6 +301,15 @@ abstract contract PoolTest is PoolUserUtils {
         assertSetReceiversReverts(sender, weights(receiver, 1, receiver, 2), "Duplicate receivers");
     }
 
+    function testUpdateSenderRevertsIfInvalidCurrReceivers() public {
+        updateSender(sender, 0, 0, 0, 0, weights(receiver, 1));
+        try sender.updateSender(0, 0, 0, 0, weights(receiver, 2), weights()) {
+            assertTrue(false, "Sender update hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, "Invalid current receivers", "Invalid sender update revert reason");
+        }
+    }
+
     function testAllowsAnAddressToBeASenderAndAReceiverIndependently() public {
         updateSender(sender, 0, 10, 10, 0, weights(sender, 10));
         warpBy(1);
@@ -317,7 +326,14 @@ abstract contract PoolTest is PoolUserUtils {
         // Sender had 4 second paying 1 per second
         assertWithdrawable(sender, 6);
         uint256 expectedBalance = sender.balance() + 6;
-        sender.updateSender(0, pool.WITHDRAW_ALL(), pool.AMT_PER_SEC_UNCHANGED(), 0, weights());
+        sender.updateSender(
+            0,
+            pool.WITHDRAW_ALL(),
+            pool.AMT_PER_SEC_UNCHANGED(),
+            0,
+            weights(receiver, 1),
+            weights()
+        );
         assertWithdrawable(sender, 0);
         assertBalance(sender, expectedBalance);
         warpToCycleEnd();
@@ -386,7 +402,7 @@ abstract contract PoolTest is PoolUserUtils {
     function testDripsFractionIsLimited() public {
         uint32 dripsFractionMax = sender.getDripsFractionMax();
         updateSender(sender, 0, 0, 0, dripsFractionMax, weights());
-        try sender.updateSender(0, 0, 0, dripsFractionMax + 1, weights()) {
+        try sender.updateSender(0, 0, 0, dripsFractionMax + 1, weights(), weights()) {
             assertTrue(false, "Update senders hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, "Drip fraction too high", "Invalid update sender revert reason");
@@ -467,6 +483,7 @@ abstract contract PoolTest is PoolUserUtils {
             0,
             0,
             0,
+            weights(),
             weights()
         );
         assertEq(withdrawn, 0, "Invalid withdrawn");
@@ -488,6 +505,7 @@ abstract contract PoolTest is PoolUserUtils {
             0,
             0,
             0,
+            weights(receiver1, 1),
             weights(receiver2, 1)
         );
         assertEq(withdrawn, 0, "Invalid withdrawn");

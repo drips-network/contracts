@@ -46,6 +46,9 @@ contract ERC20Pool is Pool {
     /// @param dripsFraction The fraction of received funds to be dripped.
     /// Must be a value from 0 to `DRIPS_FRACTION_MAX` inclusively,
     /// where 0 means no dripping and `DRIPS_FRACTION_MAX` dripping everything.
+    /// @param currReceivers The list of the user's receivers and their weights,
+    /// which is currently in use.
+    /// If this function is called for the first time for the user, should be an empty array.
     /// @param newReceivers The list of the user's receivers and their weights,
     /// which shall be in use after this function is called.
     /// @return withdrawn The actually withdrawn amount.
@@ -57,6 +60,7 @@ contract ERC20Pool is Pool {
         uint128 withdraw,
         uint128 amtPerSec,
         uint32 dripsFraction,
+        ReceiverWeight[] calldata currReceivers,
         ReceiverWeight[] calldata newReceivers
     )
         public
@@ -74,6 +78,7 @@ contract ERC20Pool is Pool {
                 withdraw,
                 amtPerSec,
                 dripsFraction,
+                currReceivers,
                 newReceivers
             );
     }
@@ -86,6 +91,7 @@ contract ERC20Pool is Pool {
         uint128 topUpAmt,
         uint128 withdraw,
         uint128 amtPerSec,
+        ReceiverWeight[] calldata currReceivers,
         ReceiverWeight[] calldata newReceivers
     ) public payable returns (uint128 withdrawn) {
         _transferToContract(msg.sender, topUpAmt);
@@ -96,6 +102,7 @@ contract ERC20Pool is Pool {
                 topUpAmt,
                 withdraw,
                 amtPerSec,
+                currReceivers,
                 newReceivers
             );
     }

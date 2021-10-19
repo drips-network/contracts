@@ -23,6 +23,7 @@ abstract contract PoolUser {
         uint128 withdraw,
         uint128 amtPerSec,
         uint32 dripsFraction,
+        ReceiverWeight[] calldata currReceivers,
         ReceiverWeight[] calldata newReceivers
     )
         public
@@ -38,6 +39,7 @@ abstract contract PoolUser {
         uint128 toppedUp,
         uint128 withdraw,
         uint128 amtPerSec,
+        ReceiverWeight[] calldata currReceivers,
         ReceiverWeight[] calldata newReceivers
     ) public virtual returns (uint128 withdrawn);
 
@@ -110,6 +112,7 @@ contract ERC20PoolUser is PoolUser {
         uint128 withdraw,
         uint128 amtPerSec,
         uint32 dripsFraction,
+        ReceiverWeight[] calldata currReceivers,
         ReceiverWeight[] calldata newReceivers
     )
         public
@@ -121,7 +124,15 @@ contract ERC20PoolUser is PoolUser {
         )
     {
         pool.erc20().approve(address(pool), toppedUp);
-        return pool.updateSender(toppedUp, withdraw, amtPerSec, dripsFraction, newReceivers);
+        return
+            pool.updateSender(
+                toppedUp,
+                withdraw,
+                amtPerSec,
+                dripsFraction,
+                currReceivers,
+                newReceivers
+            );
     }
 
     function updateSubSender(
@@ -129,10 +140,19 @@ contract ERC20PoolUser is PoolUser {
         uint128 toppedUp,
         uint128 withdraw,
         uint128 amtPerSec,
+        ReceiverWeight[] calldata currReceivers,
         ReceiverWeight[] calldata newReceivers
     ) public override returns (uint128 withdrawn) {
         pool.erc20().approve(address(pool), toppedUp);
-        return pool.updateSubSender(subSenderId, toppedUp, withdraw, amtPerSec, newReceivers);
+        return
+            pool.updateSubSender(
+                subSenderId,
+                toppedUp,
+                withdraw,
+                amtPerSec,
+                currReceivers,
+                newReceivers
+            );
     }
 }
 
@@ -159,6 +179,7 @@ contract EthPoolUser is PoolUser {
         uint128 withdraw,
         uint128 amtPerSec,
         uint32 dripsFraction,
+        ReceiverWeight[] calldata currReceivers,
         ReceiverWeight[] calldata newReceivers
     )
         public
@@ -169,7 +190,14 @@ contract EthPoolUser is PoolUser {
             uint128 dripped
         )
     {
-        return pool.updateSender{value: toppedUp}(withdraw, amtPerSec, dripsFraction, newReceivers);
+        return
+            pool.updateSender{value: toppedUp}(
+                withdraw,
+                amtPerSec,
+                dripsFraction,
+                currReceivers,
+                newReceivers
+            );
     }
 
     function updateSubSender(
@@ -177,9 +205,16 @@ contract EthPoolUser is PoolUser {
         uint128 toppedUp,
         uint128 withdraw,
         uint128 amtPerSec,
+        ReceiverWeight[] calldata currReceivers,
         ReceiverWeight[] calldata newReceivers
     ) public override returns (uint128 withdrawn) {
         return
-            pool.updateSubSender{value: toppedUp}(subSenderId, withdraw, amtPerSec, newReceivers);
+            pool.updateSubSender{value: toppedUp}(
+                subSenderId,
+                withdraw,
+                amtPerSec,
+                currReceivers,
+                newReceivers
+            );
     }
 }

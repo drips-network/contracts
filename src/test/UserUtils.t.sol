@@ -80,12 +80,14 @@ abstract contract PoolUserUtils is DSTest {
         uint128 expectedAmtPerSec = amtPerSec == user.getAmtPerSecUnchanged()
             ? user.getAmtPerSec()
             : amtPerSec;
+        ReceiverWeight[] memory curr = getCurrWeights(user);
 
         (uint128 withdrawn, uint128 collected, uint128 dripped) = user.updateSender(
             toppedUp,
             withdraw,
             amtPerSec,
             dripsFraction,
+            curr,
             newReceivers
         );
 
@@ -158,6 +160,7 @@ abstract contract PoolUserUtils is DSTest {
                 0,
                 user.getAmtPerSecUnchanged(),
                 user.getDripsFraction(),
+                getCurrWeights(user),
                 newReceivers
             )
         {
@@ -182,12 +185,14 @@ abstract contract PoolUserUtils is DSTest {
         uint128 expectedAmtPerSec = amtPerSec == user.getAmtPerSecUnchanged()
             ? user.getAmtPerSecSubSender(subSenderId)
             : amtPerSec;
+        ReceiverWeight[] memory curr = getCurrSubSenderWeights(user, subSenderId);
 
         uint256 withdrawn = user.updateSubSender(
             subSenderId,
             toppedUp,
             withdraw,
             amtPerSec,
+            curr,
             newReceivers
         );
 

@@ -372,6 +372,7 @@ abstract contract Pool {
         uint128 withdrawAmt,
         uint128 amtPerSec,
         uint32 dripsFraction,
+        ReceiverWeight[] calldata currReceivers,
         ReceiverWeight[] calldata newReceivers
     )
         internal
@@ -390,16 +391,16 @@ abstract contract Pool {
             withdrawAmt,
             amtPerSec,
             dripsFraction,
+            currReceivers,
             newReceivers
         );
         emit SenderUpdated(senderAddr, sender.startBalance, sender.amtPerSec, sender.dripsFraction);
         for (uint256 i = 0; i < updates.length; i++) {
-            StreamUpdate memory update = updates.updates[i];
             emit SenderToReceiverUpdated(
                 senderAddr,
-                update.receiver,
-                update.amtPerSec,
-                update.endTime
+                updates.updates[i].receiver,
+                updates.updates[i].amtPerSec,
+                updates.updates[i].endTime
             );
         }
         _transfer(senderAddr, withdrawn + collected);
@@ -415,6 +416,7 @@ abstract contract Pool {
         uint128 topUpAmt,
         uint128 withdrawAmt,
         uint128 amtPerSec,
+        ReceiverWeight[] calldata currReceivers,
         ReceiverWeight[] calldata newReceivers
     ) internal returns (uint128 withdrawn) {
         Sender storage sender = subSenders[senderAddr][subSenderId];
@@ -425,6 +427,7 @@ abstract contract Pool {
             withdrawAmt,
             amtPerSec,
             0,
+            currReceivers,
             newReceivers
         );
         emit SubSenderUpdated(senderAddr, subSenderId, sender.startBalance, sender.amtPerSec);
@@ -465,6 +468,9 @@ abstract contract Pool {
     /// @param dripsFraction The fraction of received funds to be dripped.
     /// Must be a value from 0 to `DRIPS_FRACTION_MAX` inclusively,
     /// where 0 means no dripping and `DRIPS_FRACTION_MAX` dripping everything.
+    /// @param currReceivers The list of the user's receivers and their weights,
+    /// which is currently in use.
+    /// If this function is called for the first time for the user, should be an empty array.
     /// @param newReceivers The list of the user's receivers and their weights,
     /// which shall be in use after this function is called.
     /// @return withdrawn The withdrawn amount which should be sent to the user.
@@ -476,17 +482,19 @@ abstract contract Pool {
         uint128 withdrawAmt,
         uint128 amtPerSec,
         uint32 dripsFraction,
+        ReceiverWeight[] calldata currReceivers,
         ReceiverWeight[] calldata newReceivers
     ) internal returns (uint128 withdrawn, StreamUpdates memory updates) {
+        _assertCurrReceivers(sender, currReceivers);
         uint256 maxUpdates = sender.weightCount + newReceivers.length;
         updates = StreamUpdates({length: 0, updates: new StreamUpdate[](maxUpdates)});
-        _stopSending(sender, updates);
+        _stopSending(sender, currReceivers, updates);
         _topUp(sender, topUpAmt);
         withdrawn = _withdraw(sender, withdrawAmt);
         _setAmtPerSec(sender, amtPerSec);
         _setDripsFraction(sender, dripsFraction);
         _setReceivers(sender, newReceivers);
-        _startSending(sender, updates);
+        _startSending(sender, newReceivers, updates);
     }
 
     /// @notice Adds the given amount to the senders balance of the user.
@@ -606,6 +614,19 @@ abstract contract Pool {
         return senders[userAddr].dripsFraction;
     }
 
+    function _assertCurrReceivers(Sender storage sender, ReceiverWeight[] calldata currReceivers)
+        internal
+        view
+    {
+        ReceiverWeight[] memory storedReceivers = new ReceiverWeight[](sender.weightCount);
+        for (uint256 i = 0; i < storedReceivers.length; i++) {
+            storedReceivers[i] = sender.receiverWeights[i];
+        }
+        bytes32 storedHash = sha256(abi.encode(storedReceivers));
+        bytes32 calldataHash = sha256(abi.encode(currReceivers));
+        require(storedHash == calldataHash, "Invalid current receivers");
+    }
+
     /// @notice Sets the weight of the provided receivers of the user.
     /// The weight regulates the share of the amount sent every second
     /// that each of the sender's receivers gets.
@@ -693,8 +714,13 @@ abstract contract Pool {
     /// It allows the properties of the sender to be safely modified
     /// without having to update the state of its receivers.
     /// @param sender The updated sender
+    /// @param weights The list of the user's receivers and their weights.
     /// @param updates The list of stream updates to log
-    function _stopSending(Sender storage sender, StreamUpdates memory updates) internal {
+    function _stopSending(
+        Sender storage sender,
+        ReceiverWeight[] calldata weights,
+        StreamUpdates memory updates
+    ) internal {
         // Hasn't been sending anything
         if (sender.weightSum == 0 || sender.amtPerSec < sender.weightSum) return;
         uint128 amtPerWeight = sender.amtPerSec / sender.weightSum;
@@ -708,15 +734,20 @@ abstract contract Pool {
         }
         sender.startBalance -= (_currTimestamp() - sender.startTime) * amtPerSec;
         // Set negative deltas to clear deltas applied by the previous call to `_startSending`
-        _setDeltasFromNow(sender, -int128(amtPerWeight), endTime, updates);
+        _setDeltasFromNow(weights, -int128(amtPerWeight), endTime, updates);
     }
 
     /// @notice Makes the user start sending funds.
     /// It applies effects of the sender on all of its receivers.
     /// It doesn't modify the sender.
     /// @param sender The updated sender
+    /// @param weights The list of the user's receivers and their weights.
     /// @param updates The list of stream updates to log
-    function _startSending(Sender storage sender, StreamUpdates memory updates) internal {
+    function _startSending(
+        Sender storage sender,
+        ReceiverWeight[] calldata weights,
+        StreamUpdates memory updates
+    ) internal {
         // Won't be sending anything
         if (sender.weightSum == 0 || sender.amtPerSec < sender.weightSum) return;
         uint128 amtPerWeight = sender.amtPerSec / sender.weightSum;
@@ -726,28 +757,26 @@ abstract contract Pool {
         sender.startTime = _currTimestamp();
         uint256 endTimeUncapped = _currTimestamp() + uint256(sender.startBalance / amtPerSec);
         uint64 endTime = endTimeUncapped > MAX_TIMESTAMP ? MAX_TIMESTAMP : uint64(endTimeUncapped);
-        _setDeltasFromNow(sender, int128(amtPerWeight), endTime, updates);
+        _setDeltasFromNow(weights, int128(amtPerWeight), endTime, updates);
     }
 
     /// @notice Sets deltas to all sender's receivers from now to `timeEnd`
     /// proportionally to their weights.
     /// Effects are applied as if the change was made on the beginning of the current cycle.
-    /// @param sender The updated sender
+    /// @param weights The list of the user's receivers and their weights.
     /// @param amtPerWeightPerSecDelta Amount of per-second delta applied per receiver weight
     /// @param timeEnd The timestamp from which the delta stops taking effect
     /// @param updates The list of stream updates to log
     function _setDeltasFromNow(
-        Sender storage sender,
+        ReceiverWeight[] calldata weights,
         int128 amtPerWeightPerSecDelta,
         uint64 timeEnd,
         StreamUpdates memory updates
     ) internal {
         uint256 oldLength = updates.length;
-        uint32 receiversCount = sender.weightCount;
-        for (uint256 i = 0; i < receiversCount; i++) {
-            address receiverAddr = sender.receiverWeights[i].receiver;
-            uint32 weight = sender.receiverWeights[i].weight;
-            int128 amtPerSecDelta = int128(uint128(weight)) * amtPerWeightPerSecDelta;
+        for (uint256 i = 0; i < weights.length; i++) {
+            address receiverAddr = weights[i].receiver;
+            int128 amtPerSecDelta = int128(uint128(weights[i].weight)) * amtPerWeightPerSecDelta;
             _setReceiverDeltaFromNow(receiverAddr, amtPerSecDelta, timeEnd);
 
             // Stopping sending

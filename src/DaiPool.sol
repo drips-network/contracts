@@ -17,6 +17,14 @@ interface IDai is IERC20 {
     ) external;
 }
 
+struct PermitArgs {
+    uint256 nonce;
+    uint256 expiry;
+    uint8 v;
+    bytes32 r;
+    bytes32 s;
+}
+
 /// @notice Funding pool contract for DAI token.
 /// See the base `Pool` contract docs for more details.
 contract DaiPool is ERC20Pool {
@@ -41,12 +49,9 @@ contract DaiPool is ERC20Pool {
         uint128 withdraw,
         uint128 amtPerSec,
         uint32 dripsFraction,
-        ReceiverWeight[] calldata updatedReceivers,
-        uint256 nonce,
-        uint256 expiry,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
+        ReceiverWeight[] calldata currReceivers,
+        ReceiverWeight[] calldata newReceivers,
+        PermitArgs calldata permitArgs
     )
         public
         returns (
@@ -55,8 +60,9 @@ contract DaiPool is ERC20Pool {
             uint128 dripped
         )
     {
-        dai.permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
-        return updateSender(topUpAmt, withdraw, amtPerSec, dripsFraction, updatedReceivers);
+        permit(permitArgs);
+        return
+            updateSender(topUpAmt, withdraw, amtPerSec, dripsFraction, currReceivers, newReceivers);
     }
 
     /// @notice Updates all the parameters of a sub-sender of the sender of the message
@@ -68,14 +74,32 @@ contract DaiPool is ERC20Pool {
         uint128 topUpAmt,
         uint128 withdraw,
         uint128 amtPerSec,
-        ReceiverWeight[] calldata updatedReceivers,
-        uint256 nonce,
-        uint256 expiry,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
+        ReceiverWeight[] calldata currReceivers,
+        ReceiverWeight[] calldata newReceivers,
+        PermitArgs calldata permitArgs
     ) public returns (uint128 withdrawn) {
-        dai.permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
-        return updateSubSender(subSenderId, topUpAmt, withdraw, amtPerSec, updatedReceivers);
+        permit(permitArgs);
+        return
+            updateSubSender(
+                subSenderId,
+                topUpAmt,
+                withdraw,
+                amtPerSec,
+                currReceivers,
+                newReceivers
+            );
+    }
+
+    function permit(PermitArgs calldata permitArgs) internal {
+        dai.permit(
+            msg.sender,
+            address(this),
+            permitArgs.nonce,
+            permitArgs.expiry,
+            true,
+            permitArgs.v,
+            permitArgs.r,
+            permitArgs.s
+        );
     }
 }
