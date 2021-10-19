@@ -114,11 +114,13 @@ abstract contract Pool {
     /// @param dripsFraction The fraction of received funds to be dripped.
     /// A value from 0 to `DRIPS_FRACTION_MAX` inclusively,
     /// where 0 means no dripping and `DRIPS_FRACTION_MAX` dripping everything.
+    /// @param receivers The list of the user's receivers and their weights.
     event SenderUpdated(
         address indexed sender,
         uint128 balance,
         uint128 amtPerSec,
-        uint32 dripsFraction
+        uint32 dripsFraction,
+        ReceiverWeight[] receivers
     );
 
     /// @notice Emitted when a sender is updated
@@ -127,11 +129,13 @@ abstract contract Pool {
     /// @param balance The sender's balance since the event block's timestamp
     /// @param amtPerSec The target amount sent per second after the update.
     /// Takes effect on the event block's timestamp (inclusively).
+    /// @param receivers The list of the user's receivers and their weights.
     event SubSenderUpdated(
         address indexed senderAddr,
         uint256 indexed subSenderId,
         uint128 balance,
-        uint128 amtPerSec
+        uint128 amtPerSec,
+        ReceiverWeight[] receivers
     );
 
     /// @notice Emitted when a receiver collects funds
@@ -165,8 +169,8 @@ abstract contract Pool {
         // where 0 means no dripping and `DRIPS_FRACTION_MAX` dripping everything.
         uint32 dripsFraction;
         // --- SLOT BOUNDARY
-        // The receivers' addresses and their weights
-        mapping(uint256 => ReceiverWeight) receiverWeights;
+        // Keccak256 of the ABI-encoded list of ReceiverWeight describing receivers of the sender
+        bytes32 receiverWeightsHash;
     }
 
     struct Receiver {
@@ -398,7 +402,13 @@ abstract contract Pool {
             currReceivers,
             newReceivers
         );
-        emit SenderUpdated(senderAddr, sender.startBalance, sender.amtPerSec, sender.dripsFraction);
+        emit SenderUpdated(
+            senderAddr,
+            sender.startBalance,
+            sender.amtPerSec,
+            sender.dripsFraction,
+            newReceivers
+        );
         for (uint256 i = 0; i < updates.length; i++) {
             emit SenderToReceiverUpdated(
                 senderAddr,
@@ -434,7 +444,13 @@ abstract contract Pool {
             currReceivers,
             newReceivers
         );
-        emit SubSenderUpdated(senderAddr, subSenderId, sender.startBalance, sender.amtPerSec);
+        emit SubSenderUpdated(
+            senderAddr,
+            subSenderId,
+            sender.startBalance,
+            sender.amtPerSec,
+            newReceivers
+        );
         for (uint256 i = 0; i < updates.length; i++) {
             StreamUpdate memory update = updates.updates[i];
             emit SubSenderToReceiverUpdated(
@@ -622,13 +638,19 @@ abstract contract Pool {
         internal
         view
     {
-        ReceiverWeight[] memory storedReceivers = new ReceiverWeight[](sender.weightCount);
-        for (uint256 i = 0; i < storedReceivers.length; i++) {
-            storedReceivers[i] = sender.receiverWeights[i];
-        }
-        bytes32 storedHash = sha256(abi.encode(storedReceivers));
-        bytes32 calldataHash = sha256(abi.encode(currReceivers));
-        require(storedHash == calldataHash, "Invalid current receivers");
+        require(
+            _receiverWeightsHash(currReceivers) == sender.receiverWeightsHash,
+            "Invalid current receivers"
+        );
+    }
+
+    function _receiverWeightsHash(ReceiverWeight[] calldata receiverWeights)
+        internal
+        pure
+        returns (bytes32)
+    {
+        if (receiverWeights.length == 0) return bytes32(0);
+        return keccak256(abi.encode(receiverWeights));
     }
 
     /// @notice Sets the weight of the provided receivers of the user.
@@ -641,13 +663,9 @@ abstract contract Pool {
     /// which shall be in use after this function is called.
     function _setReceivers(Sender storage sender, ReceiverWeight[] calldata newReceivers) internal {
         require(newReceivers.length <= SENDER_WEIGHTS_COUNT_MAX, "Too many receivers");
-        uint32 oldWeightCount = sender.weightCount;
-        sender.weightCount = uint32(newReceivers.length);
-
         uint256 senderWeightSum = 0;
         for (uint256 i = 0; i < newReceivers.length; i++) {
             senderWeightSum += newReceivers[i].weight;
-            sender.receiverWeights[i] = newReceivers[i];
             require(newReceivers[i].weight > 0, "Receiver weight zero");
             if (i > 0) {
                 address prevReceiver = newReceivers[i - 1].receiver;
@@ -658,53 +676,8 @@ abstract contract Pool {
         }
         require(senderWeightSum <= SENDER_WEIGHTS_SUM_MAX, "Too much total receivers weight");
         sender.weightSum = uint32(senderWeightSum);
-        for (uint256 i = newReceivers.length; i < oldWeightCount; i++) {
-            delete sender.receiverWeights[i];
-        }
-    }
-
-    /// @notice Gets the receivers to whom the sender sends funds.
-    /// Each entry contains a weight, which regulates the share of the amount
-    /// being sent every second in relation to other sender's receivers.
-    /// @param senderAddr The address of the sender
-    /// @return weights The list of receiver addresses and their weights.
-    /// The weights are never zero.
-    function getAllReceivers(address senderAddr)
-        public
-        view
-        returns (ReceiverWeight[] memory weights)
-    {
-        return _getAllReceiversAnySender(senders[senderAddr]);
-    }
-
-    /// @notice Gets the receivers to whom the sub-sender sends funds.
-    /// Each entry contains a weight, which regulates the share of the amount
-    /// being sent every second in relation to other sub-sender's receivers.
-    /// @param senderAddr The address of the sender
-    /// @param subSenderId The id of the sender's sub-sender
-    /// @return weights The list of receiver addresses and their weights.
-    /// The weights are never zero.
-    function getAllReceiversSubSender(address senderAddr, uint256 subSenderId)
-        public
-        view
-        returns (ReceiverWeight[] memory weights)
-    {
-        return _getAllReceiversAnySender(subSenders[senderAddr][subSenderId]);
-    }
-
-    /// @notice Gets the receivers to whom the sender sends funds.
-    /// See `getAllReceivers` for more details.
-    /// @param sender The queried sender
-    function _getAllReceiversAnySender(Sender storage sender)
-        internal
-        view
-        returns (ReceiverWeight[] memory weights)
-    {
-        uint32 receiversCount = sender.weightCount;
-        weights = new ReceiverWeight[](receiversCount);
-        for (uint256 i = 0; i < receiversCount; i++) {
-            weights[i] = sender.receiverWeights[i];
-        }
+        sender.weightCount = uint32(newReceivers.length);
+        sender.receiverWeightsHash = _receiverWeightsHash(newReceivers);
     }
 
     /// @notice Called when user funds need to be transferred out of the pool

@@ -81,18 +81,6 @@ abstract contract PoolUser {
     function getDripsFraction() public view returns (uint32) {
         return getPool().getDripsFraction(address(this));
     }
-
-    function getAllReceivers() public view returns (ReceiverWeight[] memory weights) {
-        return getPool().getAllReceivers(address(this));
-    }
-
-    function getAllReceiversSubSender(uint256 subSenderId)
-        public
-        view
-        returns (ReceiverWeight[] memory weights)
-    {
-        return getPool().getAllReceiversSubSender(address(this), subSenderId);
-    }
 }
 
 contract ERC20PoolUser is PoolUser {
