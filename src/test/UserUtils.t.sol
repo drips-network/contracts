@@ -261,7 +261,10 @@ abstract contract PoolUserUtils is DSTest {
         assertCollectable(collected, expectedCollected, expectedDripped);
         uint256 expectedBalance = collected.balance() + expectedCollected;
 
-        (uint128 collectedAmt, uint128 drippedAmt) = user.collect(address(collected));
+        (uint128 collectedAmt, uint128 drippedAmt) = user.collect(
+            address(collected),
+            getCurrWeights(user)
+        );
 
         assertEq(collectedAmt, expectedCollected, "Invalid collected amount");
         assertEq(drippedAmt, expectedDripped, "Invalid dripped amount");

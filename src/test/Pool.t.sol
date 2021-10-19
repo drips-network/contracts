@@ -122,6 +122,15 @@ abstract contract PoolTest is PoolUserUtils {
         collect(receiver, 7);
     }
 
+    function testCollectRevertsIfInvalidCurrReceivers() public {
+        updateSender(sender, 0, 0, 0, 0, weights(receiver, 1));
+        try sender.collect(address(sender), weights(receiver, 2)) {
+            assertTrue(false, "Collect hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, "Invalid current receivers", "Invalid collect revert reason");
+        }
+    }
+
     function testSendsFundsUntilTheyRunOut() public {
         updateSender(sender, 0, 100, 9, 0, weights(receiver, 1));
         warpBy(10);

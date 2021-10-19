@@ -43,8 +43,11 @@ abstract contract PoolUser {
         ReceiverWeight[] calldata newReceivers
     ) public virtual returns (uint128 withdrawn);
 
-    function collect(address id) public returns (uint128 collected, uint128 dripped) {
-        return getPool().collect(id);
+    function collect(address receiverAddr, ReceiverWeight[] calldata currReceivers)
+        public
+        returns (uint128 collected, uint128 dripped)
+    {
+        return getPool().collect(receiverAddr, currReceivers);
     }
 
     function collectable() public view returns (uint128 collected, uint128 dripped) {
