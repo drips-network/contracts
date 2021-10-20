@@ -179,9 +179,6 @@ abstract contract Pool {
         // The next cycle to be collected
         uint64 nextCollectedCycle;
         // --- SLOT BOUNDARY
-        // The amount of funds received for the last collected cycle.
-        uint128 lastFundsPerCycle;
-        // --- SLOT BOUNDARY
         // The changes of collected amounts on specific cycle.
         // The keys are cycles, each cycle `C` becomes collectable on timestamp `C * cycleSecs`.
         mapping(uint64 => AmtDelta) amtDeltas;
@@ -238,11 +235,11 @@ abstract contract Pool {
         uint64 collectedCycle = receiver.nextCollectedCycle;
         uint64 currFinishedCycle = _currTimestamp() / cycleSecs;
         if (collectedCycle != 0 && collectedCycle <= currFinishedCycle) {
-            int128 lastFundsPerCycle = int128(receiver.lastFundsPerCycle);
+            int128 cycleAmt = 0;
             for (; collectedCycle <= currFinishedCycle; collectedCycle++) {
-                lastFundsPerCycle += receiver.amtDeltas[collectedCycle].thisCycle;
-                collected += uint128(lastFundsPerCycle);
-                lastFundsPerCycle += receiver.amtDeltas[collectedCycle].nextCycle;
+                cycleAmt += receiver.amtDeltas[collectedCycle].thisCycle;
+                collected += uint128(cycleAmt);
+                cycleAmt += receiver.amtDeltas[collectedCycle].nextCycle;
             }
         }
 
@@ -351,16 +348,16 @@ abstract contract Pool {
     {
         if (count == 0) return 0;
         Receiver storage receiver = receivers[receiverAddr];
-        int128 fundsPerCycle = int128(receiver.lastFundsPerCycle);
         uint64 cycle = receiver.nextCollectedCycle;
+        int128 cycleAmt = 0;
         for (uint256 i = 0; i < count; i++) {
-            fundsPerCycle += receiver.amtDeltas[cycle].thisCycle;
-            collectedAmt += uint128(fundsPerCycle);
-            fundsPerCycle += receiver.amtDeltas[cycle].nextCycle;
+            cycleAmt += receiver.amtDeltas[cycle].thisCycle;
+            collectedAmt += uint128(cycleAmt);
+            cycleAmt += receiver.amtDeltas[cycle].nextCycle;
             delete receiver.amtDeltas[cycle];
             cycle++;
         }
-        receiver.lastFundsPerCycle = uint128(fundsPerCycle);
+        if (cycleAmt != 0) receiver.amtDeltas[cycle].thisCycle += cycleAmt;
         receiver.nextCollectedCycle = cycle;
     }
 
