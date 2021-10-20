@@ -50,8 +50,12 @@ abstract contract PoolUser {
         return getPool().collect(receiverAddr, currReceivers);
     }
 
-    function collectable() public view returns (uint128 collected, uint128 dripped) {
-        return getPool().collectable(address(this));
+    function collectable(ReceiverWeight[] calldata currReceivers)
+        public
+        view
+        returns (uint128 collected, uint128 dripped)
+    {
+        return getPool().collectable(address(this), currReceivers);
     }
 
     function flushableCycles() public view returns (uint64 flushable) {
@@ -62,12 +66,16 @@ abstract contract PoolUser {
         return getPool().flushCycles(address(this), maxCycles);
     }
 
-    function withdrawable() public view returns (uint128) {
-        return getPool().withdrawable(address(this));
+    function withdrawable(ReceiverWeight[] calldata currReceivers) public view returns (uint128) {
+        return getPool().withdrawable(address(this), currReceivers);
     }
 
-    function withdrawableSubSender(uint256 subSenderId) public view returns (uint128) {
-        return getPool().withdrawableSubSender(address(this), subSenderId);
+    function withdrawableSubSender(uint256 subSenderId, ReceiverWeight[] calldata currReceivers)
+        public
+        view
+        returns (uint128)
+    {
+        return getPool().withdrawableSubSender(address(this), subSenderId, currReceivers);
     }
 
     function getAmtPerSec() public view returns (uint128) {

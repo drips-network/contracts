@@ -114,7 +114,8 @@ abstract contract PoolUserUtils is DSTest {
     }
 
     function assertWithdrawable(PoolUser user, uint128 expected) internal {
-        assertEq(user.withdrawable(), expected, "Invalid withdrawable");
+        uint128 actual = user.withdrawable(getCurrWeights(user));
+        assertEq(actual, expected, "Invalid withdrawable");
     }
 
     function changeBalance(
@@ -133,7 +134,7 @@ abstract contract PoolUserUtils is DSTest {
     }
 
     function setAmtPerSec(PoolUser user, uint128 amtPerSec) internal {
-        uint128 withdrawable = user.withdrawable();
+        uint128 withdrawable = user.withdrawable(getCurrWeights(user));
         updateSender(
             user,
             withdrawable,
@@ -145,7 +146,7 @@ abstract contract PoolUserUtils is DSTest {
     }
 
     function setReceivers(PoolUser user, ReceiverWeight[] memory newReceivers) internal {
-        uint128 withdrawable = user.withdrawable();
+        uint128 withdrawable = user.withdrawable(getCurrWeights(user));
         updateSender(
             user,
             withdrawable,
@@ -221,7 +222,9 @@ abstract contract PoolUserUtils is DSTest {
         uint256 subSenderId,
         uint128 expected
     ) internal {
-        assertEq(user.withdrawableSubSender(subSenderId), expected, "Invalid withdrawable");
+        ReceiverWeight[] memory receivers = getCurrSubSenderWeights(user, subSenderId);
+        uint128 actual = user.withdrawableSubSender(subSenderId, receivers);
+        assertEq(actual, expected, "Invalid withdrawable");
     }
 
     function assertSubSenderReceivers(
@@ -299,7 +302,7 @@ abstract contract PoolUserUtils is DSTest {
         uint128 expectedCollected,
         uint128 expectedDripped
     ) internal {
-        (uint128 actualCollected, uint128 actualDripped) = user.collectable();
+        (uint128 actualCollected, uint128 actualDripped) = user.collectable(getCurrWeights(user));
         assertEq(actualCollected, expectedCollected, "Invalid collectable");
         assertEq(actualDripped, expectedDripped, "Invalid drippable");
     }

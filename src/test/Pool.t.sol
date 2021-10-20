@@ -145,6 +145,15 @@ abstract contract PoolTest is PoolUserUtils {
         collect(receiver, 99);
     }
 
+    function testCollectableRevertsIfInvalidCurrReceivers() public {
+        updateSender(sender, 0, 0, 0, 0, weights(receiver, 1));
+        try sender.collectable(weights(receiver, 2)) {
+            assertTrue(false, "Collectable hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, "Invalid current receivers", "Invalid collectable revert reason");
+        }
+    }
+
     function testAllowsToppingUpWhileSending() public {
         updateSender(sender, 0, 100, 10, 0, weights(receiver, 1));
         warpBy(6);
@@ -341,13 +350,31 @@ abstract contract PoolTest is PoolUserUtils {
             pool.AMT_PER_SEC_UNCHANGED(),
             0,
             weights(receiver, 1),
-            weights()
+            weights(receiver, 1)
         );
         assertWithdrawable(sender, 0);
         assertBalance(sender, expectedBalance);
         warpToCycleEnd();
         // Receiver had 4 seconds paying 1 per second
         collect(receiver, 4);
+    }
+
+    function testWithdrawableRevertsIfInvalidCurrReceivers() public {
+        updateSender(sender, 0, 0, 0, 0, weights(receiver, 1));
+        try sender.withdrawable(weights(receiver, 2)) {
+            assertTrue(false, "Withdrawable hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, "Invalid current receivers", "Invalid withdrawable revert reason");
+        }
+    }
+
+    function testWithdrawableSubSenderRevertsIfInvalidCurrReceivers() public {
+        updateSubSender(sender, SUB_SENDER_1, 0, 0, 0, weights(receiver, 1));
+        try sender.withdrawableSubSender(SUB_SENDER_1, weights(receiver, 2)) {
+            assertTrue(false, "Withdrawable hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, "Invalid current receivers", "Invalid withdrawable revert reason");
+        }
     }
 
     function testAnybodyCanCallCollect() public {
