@@ -181,6 +181,9 @@ abstract contract Pool {
         // --- SLOT BOUNDARY
         // The changes of collected amounts on specific cycle.
         // The keys are cycles, each cycle `C` becomes collectable on timestamp `C * cycleSecs`.
+        // Values for cycles before `nextCollectedCycle` are guaranteed to be zeroed.
+        // This means that the value of `amtDeltas[nextCollectedCycle].thisCycle` is always
+        // relative to 0 or in other words it's an absolute value independent from other cycles.
         mapping(uint64 => AmtDelta) amtDeltas;
     }
 
@@ -357,6 +360,8 @@ abstract contract Pool {
             delete receiver.amtDeltas[cycle];
             cycle++;
         }
+        // The next cycle delta must be relative to the last collected cycle, which got zeroed.
+        // In other words the next cycle delta must be an absolute value.
         if (cycleAmt != 0) receiver.amtDeltas[cycle].thisCycle += cycleAmt;
         receiver.nextCollectedCycle = cycle;
     }
