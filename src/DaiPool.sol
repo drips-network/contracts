@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.7;
 
-import {ERC20Pool, ReceiverWeight} from "./ERC20Pool.sol";
+import {ERC20Pool, Receiver} from "./ERC20Pool.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
 interface IDai is IERC20 {
@@ -48,8 +48,8 @@ contract DaiPool is ERC20Pool {
         uint128 topUpAmt,
         uint128 withdraw,
         uint32 dripsFraction,
-        ReceiverWeight[] calldata currReceivers,
-        ReceiverWeight[] calldata newReceivers,
+        Receiver[] calldata currReceivers,
+        Receiver[] calldata newReceivers,
         PermitArgs calldata permitArgs
     )
         public
@@ -71,8 +71,8 @@ contract DaiPool is ERC20Pool {
         uint256 subSenderId,
         uint128 topUpAmt,
         uint128 withdraw,
-        ReceiverWeight[] calldata currReceivers,
-        ReceiverWeight[] calldata newReceivers,
+        Receiver[] calldata currReceivers,
+        Receiver[] calldata newReceivers,
         PermitArgs calldata permitArgs
     ) public returns (uint128 withdrawn) {
         permit(permitArgs);

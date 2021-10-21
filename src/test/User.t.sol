@@ -3,7 +3,7 @@
 pragma solidity ^0.8.7;
 
 import {EthPool, Pool} from "../EthPool.sol";
-import {ERC20Pool, ReceiverWeight} from "../DaiPool.sol";
+import {ERC20Pool, Receiver} from "../DaiPool.sol";
 
 abstract contract PoolUser {
     function getPool() internal view virtual returns (Pool);
@@ -11,15 +11,15 @@ abstract contract PoolUser {
     function balance() public view virtual returns (uint256);
 
     function getDripsFractionMax() public view returns (uint32) {
-        return getPool().DRIPS_FRACTION_MAX();
+        return getPool().MAX_DRIPS_FRACTION();
     }
 
     function updateSender(
         uint128 toppedUp,
         uint128 withdraw,
         uint32 dripsFraction,
-        ReceiverWeight[] calldata currReceivers,
-        ReceiverWeight[] calldata newReceivers
+        Receiver[] calldata currReceivers,
+        Receiver[] calldata newReceivers
     )
         public
         virtual
@@ -33,18 +33,18 @@ abstract contract PoolUser {
         uint256 subSenderId,
         uint128 toppedUp,
         uint128 withdraw,
-        ReceiverWeight[] calldata currReceivers,
-        ReceiverWeight[] calldata newReceivers
+        Receiver[] calldata currReceivers,
+        Receiver[] calldata newReceivers
     ) public virtual returns (uint128 withdrawn);
 
-    function collect(address receiverAddr, ReceiverWeight[] calldata currReceivers)
+    function collect(address receiverAddr, Receiver[] calldata currReceivers)
         public
         returns (uint128 collected, uint128 dripped)
     {
         return getPool().collect(receiverAddr, currReceivers);
     }
 
-    function collectable(ReceiverWeight[] calldata currReceivers)
+    function collectable(Receiver[] calldata currReceivers)
         public
         view
         returns (uint128 collected, uint128 dripped)
@@ -60,11 +60,11 @@ abstract contract PoolUser {
         return getPool().flushCycles(address(this), maxCycles);
     }
 
-    function withdrawable(ReceiverWeight[] calldata currReceivers) public view returns (uint128) {
+    function withdrawable(Receiver[] calldata currReceivers) public view returns (uint128) {
         return getPool().withdrawable(address(this), currReceivers);
     }
 
-    function withdrawableSubSender(uint256 subSenderId, ReceiverWeight[] calldata currReceivers)
+    function withdrawableSubSender(uint256 subSenderId, Receiver[] calldata currReceivers)
         public
         view
         returns (uint128)
@@ -76,24 +76,20 @@ abstract contract PoolUser {
         return getPool().getDripsFraction(address(this));
     }
 
-    function hashReceiverWeights(ReceiverWeight[] calldata receiverWeights)
-        public
-        view
-        returns (bytes32)
-    {
-        return getPool().hashReceiverWeights(receiverWeights);
+    function hashReceivers(Receiver[] calldata receivers) public view returns (bytes32) {
+        return getPool().hashReceivers(receivers);
     }
 
-    function getReceiverWeightsHash() public view returns (bytes32 weightsHash) {
-        return getPool().getReceiverWeightsHash(address(this));
+    function getReceiversHash() public view returns (bytes32 weightsHash) {
+        return getPool().getReceiversHash(address(this));
     }
 
-    function getSubSenderReceiverWeightsHash(uint256 subSenderId)
+    function getSubSenderReceiversHash(uint256 subSenderId)
         public
         view
         returns (bytes32 weightsHash)
     {
-        return getPool().getSubSenderReceiverWeightsHash(address(this), subSenderId);
+        return getPool().getSubSenderReceiversHash(address(this), subSenderId);
     }
 }
 
@@ -116,8 +112,8 @@ contract ERC20PoolUser is PoolUser {
         uint128 toppedUp,
         uint128 withdraw,
         uint32 dripsFraction,
-        ReceiverWeight[] calldata currReceivers,
-        ReceiverWeight[] calldata newReceivers
+        Receiver[] calldata currReceivers,
+        Receiver[] calldata newReceivers
     )
         public
         override
@@ -135,8 +131,8 @@ contract ERC20PoolUser is PoolUser {
         uint256 subSenderId,
         uint128 toppedUp,
         uint128 withdraw,
-        ReceiverWeight[] calldata currReceivers,
-        ReceiverWeight[] calldata newReceivers
+        Receiver[] calldata currReceivers,
+        Receiver[] calldata newReceivers
     ) public override returns (uint128 withdrawn) {
         pool.erc20().approve(address(pool), toppedUp);
         return pool.updateSubSender(subSenderId, toppedUp, withdraw, currReceivers, newReceivers);
@@ -165,8 +161,8 @@ contract EthPoolUser is PoolUser {
         uint128 toppedUp,
         uint128 withdraw,
         uint32 dripsFraction,
-        ReceiverWeight[] calldata currReceivers,
-        ReceiverWeight[] calldata newReceivers
+        Receiver[] calldata currReceivers,
+        Receiver[] calldata newReceivers
     )
         public
         override
@@ -189,8 +185,8 @@ contract EthPoolUser is PoolUser {
         uint256 subSenderId,
         uint128 toppedUp,
         uint128 withdraw,
-        ReceiverWeight[] calldata currReceivers,
-        ReceiverWeight[] calldata newReceivers
+        Receiver[] calldata currReceivers,
+        Receiver[] calldata newReceivers
     ) public override returns (uint128 withdrawn) {
         return
             pool.updateSubSender{value: toppedUp}(

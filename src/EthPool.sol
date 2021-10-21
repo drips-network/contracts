@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.7;
 
-import {Pool, ReceiverWeight} from "./Pool.sol";
+import {Pool, Receiver} from "./Pool.sol";
 
 /// @notice Funding pool contract for Ether.
 /// See the base `Pool` contract docs for more details.
@@ -20,28 +20,14 @@ contract EthPool is Pool {
     /// Tops up and withdraws unsent funds from the balance of the sender.
     /// Tops up with the amount in the message.
     /// Sends the withdrawn funds to the sender of the message.
-    ///
-    /// Sets the target amount sent every second from the sender of the message.
-    /// Every second this amount is rounded down to the closest multiple of the sum of the weights
-    /// of the receivers and split between them proportionally to their weights.
-    /// Each receiver then receives their part from the sender's balance.
-    /// If set to zero, stops funding.
-    ///
-    /// Sets the weight of the provided receivers of the sender of the message.
-    /// The weight regulates the share of the amount sent every second
-    /// that each of the sender's receivers get.
-    /// Setting a non-zero weight for a new receiver adds it to the set of the sender's receivers.
-    /// Setting zero as the weight for a receiver removes it from the set of the sender's receivers.
     /// @param withdraw The amount to be withdrawn, must not be higher than available funds.
     /// Can be `WITHDRAW_ALL` to withdraw everything.
     /// @param dripsFraction The fraction of received funds to be dripped.
-    /// Must be a value from 0 to `DRIPS_FRACTION_MAX` inclusively,
-    /// where 0 means no dripping and `DRIPS_FRACTION_MAX` dripping everything.
-    /// @param currReceivers The list of the user's receivers and their weights,
-    /// which is currently in use.
+    /// Must be a value from 0 to `MAX_DRIPS_FRACTION` inclusively,
+    /// where 0 means no dripping and `MAX_DRIPS_FRACTION` dripping everything.
+    /// @param currReceivers The list of the user's receivers which is currently in use.
     /// If this function is called for the first time for the user, should be an empty array.
-    /// @param newReceivers The list of the user's receivers and their weights,
-    /// which shall be in use after this function is called.
+    /// @param newReceivers The new list of the user's receivers.
     /// @return withdrawn The actually withdrawn amount.
     /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
     /// @return collected The collected amount
@@ -49,8 +35,8 @@ contract EthPool is Pool {
     function updateSender(
         uint128 withdraw,
         uint32 dripsFraction,
-        ReceiverWeight[] calldata currReceivers,
-        ReceiverWeight[] calldata newReceivers
+        Receiver[] calldata currReceivers,
+        Receiver[] calldata newReceivers
     )
         public
         payable
@@ -77,8 +63,8 @@ contract EthPool is Pool {
     function updateSubSender(
         uint256 subSenderId,
         uint128 withdraw,
-        ReceiverWeight[] calldata currReceivers,
-        ReceiverWeight[] calldata newReceivers
+        Receiver[] calldata currReceivers,
+        Receiver[] calldata newReceivers
     ) public payable returns (uint128 withdrawn) {
         return
             _updateSubSenderInternal(

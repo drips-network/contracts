@@ -3,66 +3,66 @@ pragma solidity ^0.8.7;
 
 import {DSTest} from "ds-test/test.sol";
 import {PoolUser} from "./User.t.sol";
-import {Pool, ReceiverWeight} from "../Pool.sol";
+import {Pool, Receiver} from "../Pool.sol";
 
 abstract contract PoolUserUtils is DSTest {
-    mapping(PoolUser => bytes) internal currWeights;
-    mapping(PoolUser => mapping(uint256 => bytes)) internal currSubSenderWeights;
+    mapping(PoolUser => bytes) internal currReceivers;
+    mapping(PoolUser => mapping(uint256 => bytes)) internal currSubSenderReceivers;
 
-    function getCurrWeights(PoolUser user) internal view returns (ReceiverWeight[] memory) {
-        return decodeWeights(currWeights[user]);
+    function getCurrReceivers(PoolUser user) internal view returns (Receiver[] memory) {
+        return decodeReceivers(currReceivers[user]);
     }
 
-    function setCurrWeights(PoolUser user, ReceiverWeight[] memory newReceivers) internal {
-        currWeights[user] = abi.encode(newReceivers);
+    function setCurrReceivers(PoolUser user, Receiver[] memory newReceivers) internal {
+        currReceivers[user] = abi.encode(newReceivers);
     }
 
-    function getCurrSubSenderWeights(PoolUser user, uint256 id)
+    function getCurrSubSenderReceivers(PoolUser user, uint256 id)
         internal
         view
-        returns (ReceiverWeight[] memory)
+        returns (Receiver[] memory)
     {
-        return decodeWeights(currSubSenderWeights[user][id]);
+        return decodeReceivers(currSubSenderReceivers[user][id]);
     }
 
-    function setCurrSubSenderWeights(
+    function setCurrSubSenderReceivers(
         PoolUser user,
         uint256 id,
-        ReceiverWeight[] memory newReceivers
+        Receiver[] memory newReceivers
     ) internal {
-        currSubSenderWeights[user][id] = abi.encode(newReceivers);
+        currSubSenderReceivers[user][id] = abi.encode(newReceivers);
     }
 
-    function decodeWeights(bytes storage encoded) internal view returns (ReceiverWeight[] memory) {
+    function decodeReceivers(bytes storage encoded) internal view returns (Receiver[] memory) {
         if (encoded.length == 0) {
-            return new ReceiverWeight[](0);
+            return new Receiver[](0);
         } else {
-            return abi.decode(encoded, (ReceiverWeight[]));
+            return abi.decode(encoded, (Receiver[]));
         }
     }
 
-    function weights() internal pure returns (ReceiverWeight[] memory list) {
-        list = new ReceiverWeight[](0);
+    function receivers() internal pure returns (Receiver[] memory list) {
+        list = new Receiver[](0);
     }
 
-    function weights(PoolUser user, uint128 amtPerSec)
+    function receivers(PoolUser user, uint128 amtPerSec)
         internal
         pure
-        returns (ReceiverWeight[] memory list)
+        returns (Receiver[] memory list)
     {
-        list = new ReceiverWeight[](1);
-        list[0] = ReceiverWeight(address(user), amtPerSec);
+        list = new Receiver[](1);
+        list[0] = Receiver(address(user), amtPerSec);
     }
 
-    function weights(
+    function receivers(
         PoolUser user1,
         uint128 amtPerSec1,
         PoolUser user2,
         uint128 amtPerSec2
-    ) internal pure returns (ReceiverWeight[] memory list) {
-        list = new ReceiverWeight[](2);
-        list[0] = ReceiverWeight(address(user1), amtPerSec1);
-        list[1] = ReceiverWeight(address(user2), amtPerSec2);
+    ) internal pure returns (Receiver[] memory list) {
+        list = new Receiver[](2);
+        list[0] = Receiver(address(user1), amtPerSec1);
+        list[1] = Receiver(address(user2), amtPerSec2);
     }
 
     function updateSender(
@@ -70,13 +70,13 @@ abstract contract PoolUserUtils is DSTest {
         uint128 balanceFrom,
         uint128 balanceTo,
         uint32 dripsFraction,
-        ReceiverWeight[] memory newReceivers
+        Receiver[] memory newReceivers
     ) internal {
         assertWithdrawable(user, balanceFrom);
         uint128 toppedUp = balanceTo > balanceFrom ? balanceTo - balanceFrom : 0;
         uint128 withdraw = balanceTo < balanceFrom ? balanceFrom - balanceTo : 0;
         uint256 expectedBalance = user.balance() + withdraw - toppedUp;
-        ReceiverWeight[] memory curr = getCurrWeights(user);
+        Receiver[] memory curr = getCurrReceivers(user);
         assertReceivers(user, curr);
 
         (uint128 withdrawn, uint128 collected, uint128 dripped) = user.updateSender(
@@ -87,7 +87,7 @@ abstract contract PoolUserUtils is DSTest {
             newReceivers
         );
 
-        setCurrWeights(user, newReceivers);
+        setCurrReceivers(user, newReceivers);
         assertEq(withdrawn, withdraw, "Expected amount not withdrawn");
         assertEq(collected, 0, "Expected non-withdrawing sender update");
         assertEq(dripped, 0, "Expected non-dripping sender update");
@@ -101,14 +101,14 @@ abstract contract PoolUserUtils is DSTest {
         assertReceivers(user, newReceivers);
     }
 
-    function assertReceivers(PoolUser user, ReceiverWeight[] memory list) internal {
-        bytes32 actual = user.getReceiverWeightsHash();
-        bytes32 expected = user.hashReceiverWeights(list);
+    function assertReceivers(PoolUser user, Receiver[] memory expectedReceivers) internal {
+        bytes32 actual = user.getReceiversHash();
+        bytes32 expected = user.hashReceivers(expectedReceivers);
         assertEq(actual, expected, "Invalid receivers list hash");
     }
 
     function assertWithdrawable(PoolUser user, uint128 expected) internal {
-        uint128 actual = user.withdrawable(getCurrWeights(user));
+        uint128 actual = user.withdrawable(getCurrReceivers(user));
         assertEq(actual, expected, "Invalid withdrawable");
     }
 
@@ -117,20 +117,20 @@ abstract contract PoolUserUtils is DSTest {
         uint128 balanceFrom,
         uint128 balanceTo
     ) internal {
-        updateSender(user, balanceFrom, balanceTo, user.getDripsFraction(), getCurrWeights(user));
+        updateSender(user, balanceFrom, balanceTo, user.getDripsFraction(), getCurrReceivers(user));
     }
 
-    function setReceivers(PoolUser user, ReceiverWeight[] memory newReceivers) internal {
-        uint128 withdrawable = user.withdrawable(getCurrWeights(user));
+    function setReceivers(PoolUser user, Receiver[] memory newReceivers) internal {
+        uint128 withdrawable = user.withdrawable(getCurrReceivers(user));
         updateSender(user, withdrawable, withdrawable, user.getDripsFraction(), newReceivers);
     }
 
     function assertSetReceiversReverts(
         PoolUser user,
-        ReceiverWeight[] memory newReceivers,
+        Receiver[] memory newReceivers,
         string memory expectedReason
     ) internal {
-        try user.updateSender(0, 0, user.getDripsFraction(), getCurrWeights(user), newReceivers) {
+        try user.updateSender(0, 0, user.getDripsFraction(), getCurrReceivers(user), newReceivers) {
             assertTrue(false, "Sender receivers update hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, expectedReason, "Invalid sender receivers update revert reason");
@@ -142,13 +142,13 @@ abstract contract PoolUserUtils is DSTest {
         uint256 subSenderId,
         uint128 balanceFrom,
         uint128 balanceTo,
-        ReceiverWeight[] memory newReceivers
+        Receiver[] memory newReceivers
     ) internal {
         assertWithdrawableSubSender(user, subSenderId, balanceFrom);
         uint128 toppedUp = balanceTo > balanceFrom ? balanceTo - balanceFrom : 0;
         uint128 withdraw = balanceTo < balanceFrom ? balanceFrom - balanceTo : 0;
         uint256 expectedBalance = user.balance() + withdraw - toppedUp;
-        ReceiverWeight[] memory curr = getCurrSubSenderWeights(user, subSenderId);
+        Receiver[] memory curr = getCurrSubSenderReceivers(user, subSenderId);
         assertSubSenderReceivers(user, subSenderId, curr);
 
         uint256 withdrawn = user.updateSubSender(
@@ -159,7 +159,7 @@ abstract contract PoolUserUtils is DSTest {
             newReceivers
         );
 
-        setCurrSubSenderWeights(user, subSenderId, newReceivers);
+        setCurrSubSenderReceivers(user, subSenderId, newReceivers);
         assertEq(withdrawn, withdraw, "expected amount not withdrawn");
         assertWithdrawableSubSender(user, subSenderId, balanceTo);
         assertBalance(user, expectedBalance);
@@ -171,18 +171,20 @@ abstract contract PoolUserUtils is DSTest {
         uint256 subSenderId,
         uint128 expected
     ) internal {
-        ReceiverWeight[] memory receivers = getCurrSubSenderWeights(user, subSenderId);
-        uint128 actual = user.withdrawableSubSender(subSenderId, receivers);
+        uint128 actual = user.withdrawableSubSender(
+            subSenderId,
+            getCurrSubSenderReceivers(user, subSenderId)
+        );
         assertEq(actual, expected, "Invalid withdrawable");
     }
 
     function assertSubSenderReceivers(
         PoolUser user,
         uint256 subSenderId,
-        ReceiverWeight[] memory list
+        Receiver[] memory expectedReceivers
     ) internal {
-        bytes32 actual = user.getSubSenderReceiverWeightsHash(subSenderId);
-        bytes32 expected = user.hashReceiverWeights(list);
+        bytes32 actual = user.getSubSenderReceiversHash(subSenderId);
+        bytes32 expected = user.hashReceivers(expectedReceivers);
         assertEq(actual, expected, "Invalid receivers list hash");
     }
 
@@ -197,7 +199,7 @@ abstract contract PoolUserUtils is DSTest {
             subSenderId,
             balanceFrom,
             balanceTo,
-            getCurrSubSenderWeights(user, subSenderId)
+            getCurrSubSenderReceivers(user, subSenderId)
         );
     }
 
@@ -232,7 +234,7 @@ abstract contract PoolUserUtils is DSTest {
 
         (uint128 collectedAmt, uint128 drippedAmt) = user.collect(
             address(collected),
-            getCurrWeights(user)
+            getCurrReceivers(user)
         );
 
         assertEq(collectedAmt, expectedCollected, "Invalid collected amount");
@@ -250,7 +252,7 @@ abstract contract PoolUserUtils is DSTest {
         uint128 expectedCollected,
         uint128 expectedDripped
     ) internal {
-        (uint128 actualCollected, uint128 actualDripped) = user.collectable(getCurrWeights(user));
+        (uint128 actualCollected, uint128 actualDripped) = user.collectable(getCurrReceivers(user));
         assertEq(actualCollected, expectedCollected, "Invalid collectable");
         assertEq(actualDripped, expectedDripped, "Invalid drippable");
     }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.7;
 
-struct ReceiverWeight {
+struct Receiver {
     address receiver;
     uint128 amtPerSec;
 }
@@ -11,18 +11,15 @@ struct ReceiverWeight {
 /// The contract has 2 types of users: the senders and the receivers.
 ///
 /// A sender has some funds and a set of addresses of receivers, to whom he wants to send funds.
-/// In order to send there are 3 conditions, which must be fulfilled:
+/// In order to send there are 2 conditions, which must be fulfilled:
 ///
 /// 1. There must be funds on his account in this contract.
 ///    They can be added with `topUp` and removed with `withdraw`.
-/// 2. Total amount sent to the receivers every second must be set to a non-zero value.
-///    This is done with `setAmtPerSec`.
-/// 3. A set of receivers must be non-empty.
+/// 2. A set of receivers must be non-empty.
 ///    Receivers can be added, removed and updated with `setReceiver`.
-///    Each receiver has a weight, which is used to calculate how the total sent amount is split.
 ///
 /// Each of these functions can be called in any order and at any time, they have immediate effects.
-/// When all of these conditions are fulfilled, every second the configured amount is being sent.
+/// When both conditions are fulfilled, every second the configured amount is being sent.
 /// It's extracted from the `withdraw`able balance and transferred to the receivers.
 /// The process continues automatically until the sender's balance is empty.
 ///
@@ -30,7 +27,7 @@ struct ReceiverWeight {
 /// A sub-sender is identified by a user address and an ID.
 /// The sender and all sub-senders' configurations are independent and they have separate balances.
 ///
-/// A receiver has an account, from which he can `collect` funds sent by the senders.
+/// A receiver has an account, from which they can `collect` funds sent by the senders.
 /// The available amount is updated every `cycleSecs` seconds,
 /// so recently sent funds may not be `collect`able immediately.
 /// `cycleSecs` is a constant configured when the pool is deployed.
@@ -58,9 +55,9 @@ abstract contract Pool {
     uint64 internal constant MAX_TIMESTAMP = type(uint64).max - 2;
     /// @notice Maximum number of receivers of a single sender.
     /// Limits costs of changes in sender's configuration.
-    uint32 public constant SENDER_WEIGHTS_COUNT_MAX = 100;
+    uint32 public constant MAX_RECEIVERS = 100;
     /// @notice Maximum value of drips fraction
-    uint32 public constant DRIPS_FRACTION_MAX = 1_000_000;
+    uint32 public constant MAX_DRIPS_FRACTION = 1_000_000;
     /// @notice The amount passed as the withdraw amount to withdraw all the funds
     uint128 public constant WITHDRAW_ALL = type(uint128).max;
 
@@ -105,26 +102,26 @@ abstract contract Pool {
     /// @param sender The updated sender
     /// @param balance The sender's balance since the event block's timestamp
     /// @param dripsFraction The fraction of received funds to be dripped.
-    /// A value from 0 to `DRIPS_FRACTION_MAX` inclusively,
-    /// where 0 means no dripping and `DRIPS_FRACTION_MAX` dripping everything.
-    /// @param receivers The list of the user's receivers and their weights.
+    /// A value from 0 to `MAX_DRIPS_FRACTION` inclusively,
+    /// where 0 means no dripping and `MAX_DRIPS_FRACTION` dripping everything.
+    /// @param receivers The list of the user's receivers.
     event SenderUpdated(
         address indexed sender,
         uint128 balance,
         uint32 dripsFraction,
-        ReceiverWeight[] receivers
+        Receiver[] receivers
     );
 
     /// @notice Emitted when a sender is updated
     /// @param senderAddr The address of the sender
     /// @param subSenderId The id of the sender's updated sub-sender
     /// @param balance The sender's balance since the event block's timestamp
-    /// @param receivers The list of the user's receivers and their weights.
+    /// @param receivers The list of the user's receivers.
     event SubSenderUpdated(
         address indexed senderAddr,
         uint256 indexed subSenderId,
         uint128 balance,
-        ReceiverWeight[] receivers
+        Receiver[] receivers
     );
 
     /// @notice Emitted when a receiver collects funds
@@ -146,15 +143,15 @@ abstract contract Pool {
         // The amount available when the funding period has started
         uint128 startBalance;
         // The fraction of received funds to be dripped.
-        // Always has value from 0 to `DRIPS_FRACTION_MAX` inclusively,
-        // where 0 means no dripping and `DRIPS_FRACTION_MAX` dripping everything.
+        // Always has value from 0 to `MAX_DRIPS_FRACTION` inclusively,
+        // where 0 means no dripping and `MAX_DRIPS_FRACTION` dripping everything.
         uint32 dripsFraction;
         // --- SLOT BOUNDARY
-        // Keccak256 of the ABI-encoded list of ReceiverWeight describing receivers of the sender
-        bytes32 receiverWeightsHash;
+        // Keccak256 of the ABI-encoded list of `Receiver`s describing receivers of the sender
+        bytes32 receiversHash;
     }
 
-    struct Receiver {
+    struct ReceiverState {
         // The amount collectable independently from cycles
         uint128 collectable;
         // The next cycle to be collected
@@ -191,7 +188,7 @@ abstract contract Pool {
     /// @dev Details about all the sub-senders, the keys is the owner address and the sub-sender ID
     mapping(address => mapping(uint256 => Sender)) internal subSenders;
     /// @dev Details about all the receivers, the key is the owner's address
-    mapping(address => Receiver) internal receivers;
+    mapping(address => ReceiverState) internal receiverStates;
 
     /// @param _cycleSecs The length of cycleSecs to be used in the contract instance.
     /// Low values make funds more available by shortening the average duration of funds being
@@ -203,15 +200,15 @@ abstract contract Pool {
 
     /// @notice Returns amount of received funds available for collection
     /// @param receiverAddr The address of the receiver
-    /// @param currReceivers The list of the user's current receivers and their weights.
+    /// @param currReceivers The list of the user's current receivers.
     /// @return collected The collected amount
     /// @return dripped The amount dripped to the user's receivers
-    function collectable(address receiverAddr, ReceiverWeight[] calldata currReceivers)
+    function collectable(address receiverAddr, Receiver[] calldata currReceivers)
         public
         view
         returns (uint128 collected, uint128 dripped)
     {
-        Receiver storage receiver = receivers[receiverAddr];
+        ReceiverState storage receiver = receiverStates[receiverAddr];
         _assertCurrReceivers(senders[receiverAddr], currReceivers);
 
         // Collectable independently from cycles
@@ -232,7 +229,7 @@ abstract contract Pool {
         // Dripped when collected
         Sender storage sender = senders[receiverAddr];
         if (collected > 0 && currReceivers.length > 0 && sender.dripsFraction > 0) {
-            uint256 drippable = (uint256(collected) * sender.dripsFraction) / DRIPS_FRACTION_MAX;
+            uint256 drippable = (uint256(collected) * sender.dripsFraction) / MAX_DRIPS_FRACTION;
             uint128 totalAmtPerSec = _totalAmtPerSec(currReceivers);
             for (uint256 i = 0; i < currReceivers.length; i++) {
                 dripped += uint128((drippable * currReceivers[i].amtPerSec) / totalAmtPerSec);
@@ -243,10 +240,10 @@ abstract contract Pool {
 
     /// @notice Collects all received funds available for the user and sends them to that user
     /// @param receiverAddr The address of the receiver
-    /// @param currReceivers The list of the user's current receivers and their weights.
+    /// @param currReceivers The list of the user's current receivers.
     /// @return collected The collected amount
     /// @return dripped The amount dripped to the user's receivers
-    function collect(address receiverAddr, ReceiverWeight[] calldata currReceivers)
+    function collect(address receiverAddr, Receiver[] calldata currReceivers)
         public
         returns (uint128 collected, uint128 dripped)
     {
@@ -263,7 +260,7 @@ abstract contract Pool {
     /// @param receiverAddr The address of the receiver
     /// @return flushable The number of cycles which can be flushed
     function flushableCycles(address receiverAddr) public view returns (uint64 flushable) {
-        uint64 nextCollectedCycle = receivers[receiverAddr].nextCollectedCycle;
+        uint64 nextCollectedCycle = receiverStates[receiverAddr].nextCollectedCycle;
         if (nextCollectedCycle == 0) return 0;
         uint64 currFinishedCycle = _currTimestamp() / cycleSecs;
         return currFinishedCycle + 1 - nextCollectedCycle;
@@ -283,7 +280,7 @@ abstract contract Pool {
     /// If too high, flushing may become too expensive to fit in a single transaction.
     /// @return flushable The number of cycles which can be flushed
     function flushCycles(address receiverAddr, uint64 maxCycles) public returns (uint64 flushable) {
-        Receiver storage receiver = receivers[receiverAddr];
+        ReceiverState storage receiver = receiverStates[receiverAddr];
         flushable = flushableCycles(receiverAddr);
         uint64 cycles = maxCycles < flushable ? maxCycles : flushable;
         flushable -= cycles;
@@ -294,14 +291,14 @@ abstract contract Pool {
     /// @notice Removes from the history and returns the amount of received
     /// funds available for collection by the user
     /// @param receiverAddr The address of the receiver
-    /// @param currReceivers The list of the user's current receivers and their weights.
+    /// @param currReceivers The list of the user's current receivers.
     /// @return collected The collected amount
     /// @return dripped The amount dripped to the user's receivers
-    function _collectInternal(address receiverAddr, ReceiverWeight[] calldata currReceivers)
+    function _collectInternal(address receiverAddr, Receiver[] calldata currReceivers)
         internal
         returns (uint128 collected, uint128 dripped)
     {
-        Receiver storage receiver = receivers[receiverAddr];
+        ReceiverState storage receiver = receiverStates[receiverAddr];
         Sender storage sender = senders[receiverAddr];
         _assertCurrReceivers(sender, currReceivers);
 
@@ -315,7 +312,7 @@ abstract contract Pool {
 
         // Dripped when collected
         if (collected > 0 && currReceivers.length > 0 && sender.dripsFraction > 0) {
-            uint256 drippable = (uint256(collected) * sender.dripsFraction) / DRIPS_FRACTION_MAX;
+            uint256 drippable = (uint256(collected) * sender.dripsFraction) / MAX_DRIPS_FRACTION;
             uint128 totalAmtPerSec = _totalAmtPerSec(currReceivers);
             for (uint256 i = 0; i < currReceivers.length; i++) {
                 uint128 dripAmt = uint128(
@@ -323,7 +320,7 @@ abstract contract Pool {
                 );
                 dripped += dripAmt;
                 address dripsAddr = currReceivers[i].receiver;
-                receivers[dripsAddr].collectable += dripAmt;
+                receiverStates[dripsAddr].collectable += dripAmt;
                 emit Dripped(receiverAddr, dripsAddr, dripAmt);
             }
             collected -= dripped;
@@ -335,7 +332,7 @@ abstract contract Pool {
         returns (uint128 collectedAmt)
     {
         if (count == 0) return 0;
-        Receiver storage receiver = receivers[receiverAddr];
+        ReceiverState storage receiver = receiverStates[receiverAddr];
         uint64 cycle = receiver.nextCollectedCycle;
         int128 cycleAmt = 0;
         for (uint256 i = 0; i < count; i++) {
@@ -363,8 +360,8 @@ abstract contract Pool {
         uint128 topUpAmt,
         uint128 withdrawAmt,
         uint32 dripsFraction,
-        ReceiverWeight[] calldata currReceivers,
-        ReceiverWeight[] calldata newReceivers
+        Receiver[] calldata currReceivers,
+        Receiver[] calldata newReceivers
     )
         internal
         returns (
@@ -405,8 +402,8 @@ abstract contract Pool {
         uint256 subSenderId,
         uint128 topUpAmt,
         uint128 withdrawAmt,
-        ReceiverWeight[] calldata currReceivers,
-        ReceiverWeight[] calldata newReceivers
+        Receiver[] calldata currReceivers,
+        Receiver[] calldata newReceivers
     ) internal returns (uint128 withdrawn) {
         Sender storage sender = subSenders[senderAddr][subSenderId];
         StreamUpdates memory updates;
@@ -433,32 +430,17 @@ abstract contract Pool {
     }
 
     /// @notice Updates all the sender's parameters.
-    ///
     /// Tops up and withdraws unsent funds from the balance of the sender.
-    ///
-    /// Sets the target amount sent every second from the sender.
-    /// Every second this amount is rounded down to the closest multiple of the sum of the weights
-    /// of the receivers and split between them proportionally to their weights.
-    /// Each receiver then receives their part from the sender's balance.
-    /// If set to zero, stops funding.
-    ///
-    /// Sets the weight of the provided receivers of the sender.
-    /// The weight regulates the share of the amount sent every second
-    /// that each of the sender's receivers get.
-    /// Setting a non-zero weight for a new receiver adds it to the set of the sender's receivers.
-    /// Setting zero as the weight for a receiver removes it from the set of the sender's receivers.
     /// @param sender The updated sender
     /// @param topUpAmt The topped up amount.
     /// @param withdrawAmt The amount to be withdrawn, must not be higher than available funds.
     /// Can be `WITHDRAW_ALL` to withdraw everything.
     /// @param dripsFraction The fraction of received funds to be dripped.
-    /// Must be a value from 0 to `DRIPS_FRACTION_MAX` inclusively,
-    /// where 0 means no dripping and `DRIPS_FRACTION_MAX` dripping everything.
-    /// @param currReceivers The list of the user's receivers and their weights,
-    /// which is currently in use.
+    /// Must be a value from 0 to `MAX_DRIPS_FRACTION` inclusively,
+    /// where 0 means no dripping and `MAX_DRIPS_FRACTION` dripping everything.
+    /// @param currReceivers The list of the user's receivers which is currently in use.
     /// If this function is called for the first time for the user, should be an empty array.
-    /// @param newReceivers The list of the user's receivers and their weights,
-    /// which shall be in use after this function is called.
+    /// @param newReceivers The new list of the user's receivers.
     /// @return withdrawn The withdrawn amount which should be sent to the user.
     /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
     /// @return updates The list of stream updates to log
@@ -467,8 +449,8 @@ abstract contract Pool {
         uint128 topUpAmt,
         uint128 withdrawAmt,
         uint32 dripsFraction,
-        ReceiverWeight[] calldata currReceivers,
-        ReceiverWeight[] calldata newReceivers
+        Receiver[] calldata currReceivers,
+        Receiver[] calldata newReceivers
     ) internal returns (uint128 withdrawn, StreamUpdates memory updates) {
         _assertCurrReceivers(sender, currReceivers);
         uint256 maxUpdates = currReceivers.length + newReceivers.length;
@@ -477,7 +459,7 @@ abstract contract Pool {
         _topUp(sender, topUpAmt);
         withdrawn = _withdraw(sender, withdrawAmt);
         _setDripsFraction(sender, dripsFraction);
-        _setReceivers(sender, newReceivers);
+        _setReceiversHash(sender, newReceivers);
         _startSending(sender, newReceivers, updates);
     }
 
@@ -490,9 +472,9 @@ abstract contract Pool {
 
     /// @notice Returns amount of unsent funds available for withdrawal for the sender
     /// @param senderAddr The address of the sender
-    /// @param currReceivers The list of the user's current receivers and their weights.
+    /// @param currReceivers The list of the user's current receivers.
     /// @return balance The available balance
-    function withdrawable(address senderAddr, ReceiverWeight[] calldata currReceivers)
+    function withdrawable(address senderAddr, Receiver[] calldata currReceivers)
         public
         view
         returns (uint128)
@@ -503,12 +485,12 @@ abstract contract Pool {
     /// @notice Returns amount of unsent funds available for withdrawal for the sub-sender
     /// @param senderAddr The address of the sender
     /// @param subSenderId The id of the sender's sub-sender
-    /// @param currReceivers The list of the sub-sender's current receivers and their weights.
+    /// @param currReceivers The list of the sub-sender's current receivers.
     /// @return balance The available balance
     function withdrawableSubSender(
         address senderAddr,
         uint256 subSenderId,
-        ReceiverWeight[] calldata currReceivers
+        Receiver[] calldata currReceivers
     ) public view returns (uint128) {
         return _withdrawableAnySender(subSenders[senderAddr][subSenderId], currReceivers);
     }
@@ -516,8 +498,8 @@ abstract contract Pool {
     /// @notice Returns amount of unsent funds available for withdrawal for the sender.
     /// See `withdrawable` for more details
     /// @param sender The queried sender
-    /// @param currReceivers The list of the user's current receivers and their weights.
-    function _withdrawableAnySender(Sender storage sender, ReceiverWeight[] calldata currReceivers)
+    /// @param currReceivers The list of the user's current receivers.
+    function _withdrawableAnySender(Sender storage sender, Receiver[] calldata currReceivers)
         internal
         view
         returns (uint128)
@@ -554,97 +536,95 @@ abstract contract Pool {
     /// @notice Sets the fraction of received funds to be dripped by the sender.
     /// @param sender The updated sender
     /// @param dripsFraction The fraction of received funds to be dripped.
-    /// Must be a value from 0 to `DRIPS_FRACTION_MAX` inclusively,
-    /// where 0 means no dripping and `DRIPS_FRACTION_MAX` dripping everything.
+    /// Must be a value from 0 to `MAX_DRIPS_FRACTION` inclusively,
+    /// where 0 means no dripping and `MAX_DRIPS_FRACTION` dripping everything.
     function _setDripsFraction(Sender storage sender, uint32 dripsFraction) internal {
-        require(dripsFraction <= DRIPS_FRACTION_MAX, "Drip fraction too high");
+        require(dripsFraction <= MAX_DRIPS_FRACTION, "Drip fraction too high");
         sender.dripsFraction = dripsFraction;
     }
 
     /// @notice Gets the fraction of received funds to be dripped by the provided user.
     /// @param userAddr The address of the user
     /// @return dripsFraction The fraction of received funds to be dripped.
-    /// A value from 0 to `DRIPS_FRACTION_MAX` inclusively,
-    /// where 0 means no dripping and `DRIPS_FRACTION_MAX` dripping everything.
+    /// A value from 0 to `MAX_DRIPS_FRACTION` inclusively,
+    /// where 0 means no dripping and `MAX_DRIPS_FRACTION` dripping everything.
     function getDripsFraction(address userAddr) public view returns (uint32 dripsFraction) {
         return senders[userAddr].dripsFraction;
     }
 
-    function _assertCurrReceivers(Sender storage sender, ReceiverWeight[] calldata currReceivers)
+    /// @notice Asserts that the list of receivers is the sender's currently used one.
+    /// @param sender The sender
+    /// @param currReceivers The list of the user's current receivers.
+    function _assertCurrReceivers(Sender storage sender, Receiver[] calldata currReceivers)
         internal
         view
     {
-        require(
-            hashReceiverWeights(currReceivers) == sender.receiverWeightsHash,
-            "Invalid current receivers"
-        );
+        require(hashReceivers(currReceivers) == sender.receiversHash, "Invalid current receivers");
     }
 
-    /// @notice Calculates the hash of a receivers weights list.
-    /// @param receiverWeights The receivers weights list.
+    /// @notice Calculates the hash of the list of receivers.
+    /// @param receivers The list of the receivers.
     /// Must be sorted by the receivers' addresses and deduplicated.
-    /// @return weightsHash The receiver weights list hash.
-    function hashReceiverWeights(ReceiverWeight[] calldata receiverWeights)
+    /// @return receiversHash The hash of the list of receivers.
+    function hashReceivers(Receiver[] calldata receivers)
         public
         pure
-        returns (bytes32 weightsHash)
+        returns (bytes32 receiversHash)
     {
-        if (receiverWeights.length == 0) return bytes32(0);
-        return keccak256(abi.encode(receiverWeights));
+        if (receivers.length == 0) return bytes32(0);
+        return keccak256(abi.encode(receivers));
     }
 
-    /// @notice Returns the sender's receivers weights list hash.
+    /// @notice Returns the sender's receivers list hash.
     /// @param senderAddr The address of the sender
-    /// @return weightsHash The receiver weights list hash.
-    function getReceiverWeightsHash(address senderAddr) public view returns (bytes32 weightsHash) {
-        return senders[senderAddr].receiverWeightsHash;
+    /// @return receiversHash The receivers list hash.
+    function getReceiversHash(address senderAddr) public view returns (bytes32 receiversHash) {
+        return senders[senderAddr].receiversHash;
     }
 
-    /// @notice Returns the sub-sender's receivers weights list hash.
+    /// @notice Returns the sub-sender's receivers list hash.
     /// @param senderAddr The address of the sender
     /// @param subSenderId The id of the sender's sub-sender
-    /// @return weightsHash The receiver weights list hash.
-    function getSubSenderReceiverWeightsHash(address senderAddr, uint256 subSenderId)
+    /// @return receiversHash The receivers list hash.
+    function getSubSenderReceiversHash(address senderAddr, uint256 subSenderId)
         public
         view
-        returns (bytes32 weightsHash)
+        returns (bytes32 receiversHash)
     {
-        return subSenders[senderAddr][subSenderId].receiverWeightsHash;
+        return subSenders[senderAddr][subSenderId].receiversHash;
     }
 
-    function _totalAmtPerSec(ReceiverWeight[] calldata receiversList)
+    /// @notice Calculates the total amount per second of all the passed receivers.
+    /// @param receivers The list of the receivers.
+    /// @return totalAmtPerSec The total amount per second
+    function _totalAmtPerSec(Receiver[] calldata receivers)
         internal
         pure
         returns (uint128 totalAmtPerSec)
     {
-        for (uint256 i = 0; i < receiversList.length; i++) {
-            totalAmtPerSec += receiversList[i].amtPerSec;
+        for (uint256 i = 0; i < receivers.length; i++) {
+            totalAmtPerSec += receivers[i].amtPerSec;
         }
     }
 
-    /// @notice Sets the weight of the provided receivers of the user.
-    /// The weight regulates the share of the amount sent every second
-    /// that each of the sender's receivers gets.
-    /// Setting a non-zero weight for a new receiver adds it to the list of the sender's receivers.
-    /// Setting zero as the weight for a receiver removes it from the list of the sender's receivers.
+    /// @notice Sets the receivers of the sender.
     /// @param sender The updated sender
-    /// @param newReceivers The list of the user's receivers and their weights,
-    /// which shall be in use after this function is called.
-    function _setReceivers(Sender storage sender, ReceiverWeight[] calldata newReceivers) internal {
-        require(newReceivers.length <= SENDER_WEIGHTS_COUNT_MAX, "Too many receivers");
+    /// @param receivers The new list of the user's receivers
+    function _setReceiversHash(Sender storage sender, Receiver[] calldata receivers) internal {
+        require(receivers.length <= MAX_RECEIVERS, "Too many receivers");
         uint256 totalAmtPerSec = 0;
-        for (uint256 i = 0; i < newReceivers.length; i++) {
-            require(newReceivers[i].amtPerSec != 0, "Receiver amtPerSec is zero");
-            totalAmtPerSec += newReceivers[i].amtPerSec;
+        for (uint256 i = 0; i < receivers.length; i++) {
+            require(receivers[i].amtPerSec != 0, "Receiver amtPerSec is zero");
+            totalAmtPerSec += receivers[i].amtPerSec;
             if (i > 0) {
-                address prevReceiver = newReceivers[i - 1].receiver;
-                address currReceiver = newReceivers[i].receiver;
+                address prevReceiver = receivers[i - 1].receiver;
+                address currReceiver = receivers[i].receiver;
                 require(prevReceiver <= currReceiver, "Receivers not sorted by address");
                 require(prevReceiver != currReceiver, "Duplicate receivers");
             }
         }
         require(totalAmtPerSec <= type(uint128).max, "Total amtPerSec too high");
-        sender.receiverWeightsHash = hashReceiverWeights(newReceivers);
+        sender.receiversHash = hashReceivers(receivers);
     }
 
     /// @notice Called when user funds need to be transferred out of the pool
@@ -658,14 +638,14 @@ abstract contract Pool {
     /// It allows the properties of the sender to be safely modified
     /// without having to update the state of its receivers.
     /// @param sender The updated sender
-    /// @param weights The list of the user's receivers and their weights.
+    /// @param receivers The list of the user's receivers.
     /// @param updates The list of stream updates to log
     function _stopSending(
         Sender storage sender,
-        ReceiverWeight[] calldata weights,
+        Receiver[] calldata receivers,
         StreamUpdates memory updates
     ) internal {
-        uint128 amtPerSec = _totalAmtPerSec(weights);
+        uint128 amtPerSec = _totalAmtPerSec(receivers);
         // Hasn't been sending anything
         if (amtPerSec == 0) return;
         uint256 endTimeUncapped = sender.startTime + uint256(sender.startBalance / amtPerSec);
@@ -677,21 +657,21 @@ abstract contract Pool {
         }
         sender.startBalance -= (_currTimestamp() - sender.startTime) * amtPerSec;
         // Set negative deltas to clear deltas applied by the previous call to `_startSending`
-        _setDeltasFromNow(weights, -1, endTime, updates);
+        _setDeltasFromNow(receivers, -1, endTime, updates);
     }
 
     /// @notice Makes the user start sending funds.
     /// It applies effects of the sender on all of its receivers.
     /// It doesn't modify the sender.
     /// @param sender The updated sender
-    /// @param weights The list of the user's receivers and their weights.
+    /// @param receivers The list of the user's receivers.
     /// @param updates The list of stream updates to log
     function _startSending(
         Sender storage sender,
-        ReceiverWeight[] calldata weights,
+        Receiver[] calldata receivers,
         StreamUpdates memory updates
     ) internal {
-        uint128 amtPerSec = _totalAmtPerSec(weights);
+        uint128 amtPerSec = _totalAmtPerSec(receivers);
         // Won't be sending anything
         if (amtPerSec == 0) return;
         // Won't be sending anything
@@ -699,26 +679,24 @@ abstract contract Pool {
         sender.startTime = _currTimestamp();
         uint256 endTimeUncapped = _currTimestamp() + uint256(sender.startBalance / amtPerSec);
         uint64 endTime = endTimeUncapped > MAX_TIMESTAMP ? MAX_TIMESTAMP : uint64(endTimeUncapped);
-        _setDeltasFromNow(weights, 1, endTime, updates);
+        _setDeltasFromNow(receivers, 1, endTime, updates);
     }
 
-    /// @notice Sets deltas to all sender's receivers from now to `timeEnd`
-    /// proportionally to their weights.
-    /// Effects are applied as if the change was made on the beginning of the current cycle.
-    /// @param weights The list of the user's receivers and their weights.
+    /// @notice Sets deltas to all sender's receivers from now to `timeEnd`.
+    /// @param receivers The list of the user's receivers.
     /// @param multiplier AmtPerSec multiplier
     /// @param timeEnd The timestamp from which the delta stops taking effect
     /// @param updates The list of stream updates to log
     function _setDeltasFromNow(
-        ReceiverWeight[] calldata weights,
+        Receiver[] calldata receivers,
         int8 multiplier,
         uint64 timeEnd,
         StreamUpdates memory updates
     ) internal {
         uint256 oldLength = updates.length;
-        for (uint256 i = 0; i < weights.length; i++) {
-            address receiverAddr = weights[i].receiver;
-            int128 amtPerSecDelta = int128(weights[i].amtPerSec) * multiplier;
+        for (uint256 i = 0; i < receivers.length; i++) {
+            address receiverAddr = receivers[i].receiver;
+            int128 amtPerSecDelta = int128(receivers[i].amtPerSec) * multiplier;
             _setReceiverDeltaFromNow(receiverAddr, amtPerSecDelta, timeEnd);
 
             // Stopping sending
@@ -760,7 +738,7 @@ abstract contract Pool {
         int128 amtPerSecDelta,
         uint64 timeEnd
     ) internal {
-        Receiver storage receiver = receivers[receiverAddr];
+        ReceiverState storage receiver = receiverStates[receiverAddr];
         // The receiver was never used, initialize it.
         // The first usage of a receiver is always setting a positive delta to start sending.
         // If the delta is negative, the receiver must've been used before and now is being cleared.
