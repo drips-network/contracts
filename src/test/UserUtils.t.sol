@@ -45,31 +45,30 @@ abstract contract PoolUserUtils is DSTest {
         list = new ReceiverWeight[](0);
     }
 
-    function weights(PoolUser user, uint32 weight)
+    function weights(PoolUser user, uint128 amtPerSec)
         internal
         pure
         returns (ReceiverWeight[] memory list)
     {
         list = new ReceiverWeight[](1);
-        list[0] = ReceiverWeight(address(user), weight);
+        list[0] = ReceiverWeight(address(user), amtPerSec);
     }
 
     function weights(
         PoolUser user1,
-        uint32 weight1,
+        uint128 amtPerSec1,
         PoolUser user2,
-        uint32 weight2
+        uint128 amtPerSec2
     ) internal pure returns (ReceiverWeight[] memory list) {
         list = new ReceiverWeight[](2);
-        list[0] = ReceiverWeight(address(user1), weight1);
-        list[1] = ReceiverWeight(address(user2), weight2);
+        list[0] = ReceiverWeight(address(user1), amtPerSec1);
+        list[1] = ReceiverWeight(address(user2), amtPerSec2);
     }
 
     function updateSender(
         PoolUser user,
         uint128 balanceFrom,
         uint128 balanceTo,
-        uint128 amtPerSec,
         uint32 dripsFraction,
         ReceiverWeight[] memory newReceivers
     ) internal {
@@ -77,16 +76,12 @@ abstract contract PoolUserUtils is DSTest {
         uint128 toppedUp = balanceTo > balanceFrom ? balanceTo - balanceFrom : 0;
         uint128 withdraw = balanceTo < balanceFrom ? balanceFrom - balanceTo : 0;
         uint256 expectedBalance = user.balance() + withdraw - toppedUp;
-        uint128 expectedAmtPerSec = amtPerSec == user.getAmtPerSecUnchanged()
-            ? user.getAmtPerSec()
-            : amtPerSec;
         ReceiverWeight[] memory curr = getCurrWeights(user);
         assertReceivers(user, curr);
 
         (uint128 withdrawn, uint128 collected, uint128 dripped) = user.updateSender(
             toppedUp,
             withdraw,
-            amtPerSec,
             dripsFraction,
             curr,
             newReceivers
@@ -98,7 +93,6 @@ abstract contract PoolUserUtils is DSTest {
         assertEq(dripped, 0, "Expected non-dripping sender update");
         assertWithdrawable(user, balanceTo);
         assertBalance(user, expectedBalance);
-        assertEq(user.getAmtPerSec(), expectedAmtPerSec, "Invalid amtPerSec after updateSender");
         assertEq(
             user.getDripsFraction(),
             dripsFraction,
@@ -123,38 +117,12 @@ abstract contract PoolUserUtils is DSTest {
         uint128 balanceFrom,
         uint128 balanceTo
     ) internal {
-        updateSender(
-            user,
-            balanceFrom,
-            balanceTo,
-            user.getAmtPerSecUnchanged(),
-            user.getDripsFraction(),
-            getCurrWeights(user)
-        );
-    }
-
-    function setAmtPerSec(PoolUser user, uint128 amtPerSec) internal {
-        uint128 withdrawable = user.withdrawable(getCurrWeights(user));
-        updateSender(
-            user,
-            withdrawable,
-            withdrawable,
-            amtPerSec,
-            user.getDripsFraction(),
-            getCurrWeights(user)
-        );
+        updateSender(user, balanceFrom, balanceTo, user.getDripsFraction(), getCurrWeights(user));
     }
 
     function setReceivers(PoolUser user, ReceiverWeight[] memory newReceivers) internal {
         uint128 withdrawable = user.withdrawable(getCurrWeights(user));
-        updateSender(
-            user,
-            withdrawable,
-            withdrawable,
-            user.getAmtPerSecUnchanged(),
-            user.getDripsFraction(),
-            newReceivers
-        );
+        updateSender(user, withdrawable, withdrawable, user.getDripsFraction(), newReceivers);
     }
 
     function assertSetReceiversReverts(
@@ -162,16 +130,7 @@ abstract contract PoolUserUtils is DSTest {
         ReceiverWeight[] memory newReceivers,
         string memory expectedReason
     ) internal {
-        try
-            user.updateSender(
-                0,
-                0,
-                user.getAmtPerSecUnchanged(),
-                user.getDripsFraction(),
-                getCurrWeights(user),
-                newReceivers
-            )
-        {
+        try user.updateSender(0, 0, user.getDripsFraction(), getCurrWeights(user), newReceivers) {
             assertTrue(false, "Sender receivers update hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, expectedReason, "Invalid sender receivers update revert reason");
@@ -183,16 +142,12 @@ abstract contract PoolUserUtils is DSTest {
         uint256 subSenderId,
         uint128 balanceFrom,
         uint128 balanceTo,
-        uint128 amtPerSec,
         ReceiverWeight[] memory newReceivers
     ) internal {
         assertWithdrawableSubSender(user, subSenderId, balanceFrom);
         uint128 toppedUp = balanceTo > balanceFrom ? balanceTo - balanceFrom : 0;
         uint128 withdraw = balanceTo < balanceFrom ? balanceFrom - balanceTo : 0;
         uint256 expectedBalance = user.balance() + withdraw - toppedUp;
-        uint128 expectedAmtPerSec = amtPerSec == user.getAmtPerSecUnchanged()
-            ? user.getAmtPerSecSubSender(subSenderId)
-            : amtPerSec;
         ReceiverWeight[] memory curr = getCurrSubSenderWeights(user, subSenderId);
         assertSubSenderReceivers(user, subSenderId, curr);
 
@@ -200,7 +155,6 @@ abstract contract PoolUserUtils is DSTest {
             subSenderId,
             toppedUp,
             withdraw,
-            amtPerSec,
             curr,
             newReceivers
         );
@@ -209,11 +163,6 @@ abstract contract PoolUserUtils is DSTest {
         assertEq(withdrawn, withdraw, "expected amount not withdrawn");
         assertWithdrawableSubSender(user, subSenderId, balanceTo);
         assertBalance(user, expectedBalance);
-        assertEq(
-            user.getAmtPerSecSubSender(subSenderId),
-            expectedAmtPerSec,
-            "Invalid amtPerSec after updateSender"
-        );
         assertSubSenderReceivers(user, subSenderId, newReceivers);
     }
 
@@ -248,7 +197,6 @@ abstract contract PoolUserUtils is DSTest {
             subSenderId,
             balanceFrom,
             balanceTo,
-            user.getAmtPerSecUnchanged(),
             getCurrSubSenderWeights(user, subSenderId)
         );
     }

@@ -41,8 +41,6 @@ contract ERC20Pool is Pool {
     /// @param topUpAmt The topped up amount
     /// @param withdraw The amount to be withdrawn, must not be higher than available funds.
     /// Can be `WITHDRAW_ALL` to withdraw everything.
-    /// @param amtPerSec The target amount to be sent every second.
-    /// Can be `AMT_PER_SEC_UNCHANGED` to keep the amount unchanged.
     /// @param dripsFraction The fraction of received funds to be dripped.
     /// Must be a value from 0 to `DRIPS_FRACTION_MAX` inclusively,
     /// where 0 means no dripping and `DRIPS_FRACTION_MAX` dripping everything.
@@ -58,7 +56,6 @@ contract ERC20Pool is Pool {
     function updateSender(
         uint128 topUpAmt,
         uint128 withdraw,
-        uint128 amtPerSec,
         uint32 dripsFraction,
         ReceiverWeight[] calldata currReceivers,
         ReceiverWeight[] calldata newReceivers
@@ -76,7 +73,6 @@ contract ERC20Pool is Pool {
                 msg.sender,
                 topUpAmt,
                 withdraw,
-                amtPerSec,
                 dripsFraction,
                 currReceivers,
                 newReceivers
@@ -90,7 +86,6 @@ contract ERC20Pool is Pool {
         uint256 subSenderId,
         uint128 topUpAmt,
         uint128 withdraw,
-        uint128 amtPerSec,
         ReceiverWeight[] calldata currReceivers,
         ReceiverWeight[] calldata newReceivers
     ) public payable returns (uint128 withdrawn) {
@@ -101,7 +96,6 @@ contract ERC20Pool is Pool {
                 subSenderId,
                 topUpAmt,
                 withdraw,
-                amtPerSec,
                 currReceivers,
                 newReceivers
             );

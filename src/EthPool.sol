@@ -34,8 +34,6 @@ contract EthPool is Pool {
     /// Setting zero as the weight for a receiver removes it from the set of the sender's receivers.
     /// @param withdraw The amount to be withdrawn, must not be higher than available funds.
     /// Can be `WITHDRAW_ALL` to withdraw everything.
-    /// @param amtPerSec The target amount to be sent every second.
-    /// Can be `AMT_PER_SEC_UNCHANGED` to keep the amount unchanged.
     /// @param dripsFraction The fraction of received funds to be dripped.
     /// Must be a value from 0 to `DRIPS_FRACTION_MAX` inclusively,
     /// where 0 means no dripping and `DRIPS_FRACTION_MAX` dripping everything.
@@ -50,7 +48,6 @@ contract EthPool is Pool {
     /// @return dripped The amount dripped to the user's receivers
     function updateSender(
         uint128 withdraw,
-        uint128 amtPerSec,
         uint32 dripsFraction,
         ReceiverWeight[] calldata currReceivers,
         ReceiverWeight[] calldata newReceivers
@@ -68,7 +65,6 @@ contract EthPool is Pool {
                 msg.sender,
                 uint128(msg.value),
                 withdraw,
-                amtPerSec,
                 dripsFraction,
                 currReceivers,
                 newReceivers
@@ -81,7 +77,6 @@ contract EthPool is Pool {
     function updateSubSender(
         uint256 subSenderId,
         uint128 withdraw,
-        uint128 amtPerSec,
         ReceiverWeight[] calldata currReceivers,
         ReceiverWeight[] calldata newReceivers
     ) public payable returns (uint128 withdrawn) {
@@ -91,7 +86,6 @@ contract EthPool is Pool {
                 subSenderId,
                 uint128(msg.value),
                 withdraw,
-                amtPerSec,
                 currReceivers,
                 newReceivers
             );

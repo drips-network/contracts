@@ -10,10 +10,6 @@ abstract contract PoolUser {
 
     function balance() public view virtual returns (uint256);
 
-    function getAmtPerSecUnchanged() public view returns (uint128) {
-        return getPool().AMT_PER_SEC_UNCHANGED();
-    }
-
     function getDripsFractionMax() public view returns (uint32) {
         return getPool().DRIPS_FRACTION_MAX();
     }
@@ -21,7 +17,6 @@ abstract contract PoolUser {
     function updateSender(
         uint128 toppedUp,
         uint128 withdraw,
-        uint128 amtPerSec,
         uint32 dripsFraction,
         ReceiverWeight[] calldata currReceivers,
         ReceiverWeight[] calldata newReceivers
@@ -38,7 +33,6 @@ abstract contract PoolUser {
         uint256 subSenderId,
         uint128 toppedUp,
         uint128 withdraw,
-        uint128 amtPerSec,
         ReceiverWeight[] calldata currReceivers,
         ReceiverWeight[] calldata newReceivers
     ) public virtual returns (uint128 withdrawn);
@@ -76,14 +70,6 @@ abstract contract PoolUser {
         returns (uint128)
     {
         return getPool().withdrawableSubSender(address(this), subSenderId, currReceivers);
-    }
-
-    function getAmtPerSec() public view returns (uint128) {
-        return getPool().getAmtPerSec(address(this));
-    }
-
-    function getAmtPerSecSubSender(uint256 subSenderId) public view returns (uint128) {
-        return getPool().getAmtPerSecSubSender(address(this), subSenderId);
     }
 
     function getDripsFraction() public view returns (uint32) {
@@ -129,7 +115,6 @@ contract ERC20PoolUser is PoolUser {
     function updateSender(
         uint128 toppedUp,
         uint128 withdraw,
-        uint128 amtPerSec,
         uint32 dripsFraction,
         ReceiverWeight[] calldata currReceivers,
         ReceiverWeight[] calldata newReceivers
@@ -143,35 +128,18 @@ contract ERC20PoolUser is PoolUser {
         )
     {
         pool.erc20().approve(address(pool), toppedUp);
-        return
-            pool.updateSender(
-                toppedUp,
-                withdraw,
-                amtPerSec,
-                dripsFraction,
-                currReceivers,
-                newReceivers
-            );
+        return pool.updateSender(toppedUp, withdraw, dripsFraction, currReceivers, newReceivers);
     }
 
     function updateSubSender(
         uint256 subSenderId,
         uint128 toppedUp,
         uint128 withdraw,
-        uint128 amtPerSec,
         ReceiverWeight[] calldata currReceivers,
         ReceiverWeight[] calldata newReceivers
     ) public override returns (uint128 withdrawn) {
         pool.erc20().approve(address(pool), toppedUp);
-        return
-            pool.updateSubSender(
-                subSenderId,
-                toppedUp,
-                withdraw,
-                amtPerSec,
-                currReceivers,
-                newReceivers
-            );
+        return pool.updateSubSender(subSenderId, toppedUp, withdraw, currReceivers, newReceivers);
     }
 }
 
@@ -196,7 +164,6 @@ contract EthPoolUser is PoolUser {
     function updateSender(
         uint128 toppedUp,
         uint128 withdraw,
-        uint128 amtPerSec,
         uint32 dripsFraction,
         ReceiverWeight[] calldata currReceivers,
         ReceiverWeight[] calldata newReceivers
@@ -212,7 +179,6 @@ contract EthPoolUser is PoolUser {
         return
             pool.updateSender{value: toppedUp}(
                 withdraw,
-                amtPerSec,
                 dripsFraction,
                 currReceivers,
                 newReceivers
@@ -223,7 +189,6 @@ contract EthPoolUser is PoolUser {
         uint256 subSenderId,
         uint128 toppedUp,
         uint128 withdraw,
-        uint128 amtPerSec,
         ReceiverWeight[] calldata currReceivers,
         ReceiverWeight[] calldata newReceivers
     ) public override returns (uint128 withdrawn) {
@@ -231,7 +196,6 @@ contract EthPoolUser is PoolUser {
             pool.updateSubSender{value: toppedUp}(
                 subSenderId,
                 withdraw,
-                amtPerSec,
                 currReceivers,
                 newReceivers
             );

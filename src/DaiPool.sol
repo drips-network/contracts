@@ -47,7 +47,6 @@ contract DaiPool is ERC20Pool {
     function updateSenderAndPermit(
         uint128 topUpAmt,
         uint128 withdraw,
-        uint128 amtPerSec,
         uint32 dripsFraction,
         ReceiverWeight[] calldata currReceivers,
         ReceiverWeight[] calldata newReceivers,
@@ -61,8 +60,7 @@ contract DaiPool is ERC20Pool {
         )
     {
         permit(permitArgs);
-        return
-            updateSender(topUpAmt, withdraw, amtPerSec, dripsFraction, currReceivers, newReceivers);
+        return updateSender(topUpAmt, withdraw, dripsFraction, currReceivers, newReceivers);
     }
 
     /// @notice Updates all the parameters of a sub-sender of the sender of the message
@@ -73,21 +71,12 @@ contract DaiPool is ERC20Pool {
         uint256 subSenderId,
         uint128 topUpAmt,
         uint128 withdraw,
-        uint128 amtPerSec,
         ReceiverWeight[] calldata currReceivers,
         ReceiverWeight[] calldata newReceivers,
         PermitArgs calldata permitArgs
     ) public returns (uint128 withdrawn) {
         permit(permitArgs);
-        return
-            updateSubSender(
-                subSenderId,
-                topUpAmt,
-                withdraw,
-                amtPerSec,
-                currReceivers,
-                newReceivers
-            );
+        return updateSubSender(subSenderId, topUpAmt, withdraw, currReceivers, newReceivers);
     }
 
     function permit(PermitArgs calldata permitArgs) internal {
