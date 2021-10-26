@@ -151,6 +151,23 @@ abstract contract Pool {
     /// @param amt The dripped amount
     event Dripped(address indexed sender, address indexed receiver, uint128 amt);
 
+    /// @notice Invalid total dripped amount.
+    error InvalidTotalDrippedAmount();
+
+    /// The amount `amt` is higher than available funds of sender.
+    /// @param amt The amount to be withdrawn, must not be higher than available funds.
+    error NotEnoughFundsInSenderAccount(uint128 amt);
+
+    /// Drip fraction `dripsFraction` is too high.
+    /// @param dripsFraction The fraction of received funds to be dripped.
+    error InvalidDripFraction(uint32 dripsFraction);
+
+    /// @notice Too much total receivers weight.
+    error InvalidTotalReceiversWeight();
+
+    /// @notice Too many receivers.
+    error InvalidReceiverCount();
+
     struct Sender {
         // Timestamp at which the funding period has started
         uint64 startTime;
@@ -341,7 +358,7 @@ abstract contract Pool {
                 actuallyDripped += dripAmt;
             }
             // Sanity check
-            require(dripped == actuallyDripped, "Invalid total dripped amount");
+            if (dripped != actuallyDripped) revert InvalidTotalDrippedAmount();
         }
     }
 
@@ -550,7 +567,7 @@ abstract contract Pool {
         uint128 startBalance = sender.startBalance;
         if (amt == WITHDRAW_ALL) amt = startBalance;
         if (amt == 0) return 0;
-        require(amt <= startBalance, "Not enough funds in the sender account");
+        if (amt > startBalance) revert NotEnoughFundsInSenderAccount(amt);
         sender.startBalance = startBalance - amt;
         return amt;
     }
@@ -601,7 +618,7 @@ abstract contract Pool {
     /// Must be a value from 0 to `DRIPS_FRACTION_MAX` inclusively,
     /// where 0 means no dripping and `DRIPS_FRACTION_MAX` dripping everything.
     function _setDripsFraction(Sender storage sender, uint32 dripsFraction) internal {
-        require(dripsFraction <= DRIPS_FRACTION_MAX, "Drip fraction too high");
+        if (dripsFraction > DRIPS_FRACTION_MAX) revert InvalidDripFraction(dripsFraction);
         sender.dripsFraction = dripsFraction;
     }
 
@@ -631,11 +648,11 @@ abstract contract Pool {
         uint32 oldWeight = sender.receiverWeights.setWeight(receiver, weight);
         senderWeightSum -= oldWeight;
         senderWeightSum += weight;
-        require(senderWeightSum <= SENDER_WEIGHTS_SUM_MAX, "Too much total receivers weight");
+        if (senderWeightSum > SENDER_WEIGHTS_SUM_MAX) revert InvalidTotalReceiversWeight();
         sender.weightSum = uint32(senderWeightSum);
         if (weight != 0 && oldWeight == 0) {
             sender.weightCount++;
-            require(sender.weightCount <= SENDER_WEIGHTS_COUNT_MAX, "Too many receivers");
+            if (sender.weightCount > SENDER_WEIGHTS_COUNT_MAX) revert InvalidReceiverCount(); 
         } else if (weight == 0 && oldWeight != 0) {
             sender.weightCount--;
         }

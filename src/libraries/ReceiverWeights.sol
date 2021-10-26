@@ -23,6 +23,10 @@ library ReceiverWeightsImpl {
 
     address internal constant ADDR_ROOT = address(0);
 
+    /// `sender` is an invalid receiver address.
+    /// @param sender The receiver to set weight.
+    error InvalidReceiverAddress(address sender);
+
     /// @notice Return the next non-zero receiver weight and its address.
     /// Removes all the items that have zero receiver weights found
     /// between the current and the next item from the list.
@@ -95,7 +99,7 @@ library ReceiverWeightsImpl {
         address receiver,
         uint32 weight
     ) internal returns (uint32 previousWeight) {
-        require(receiver != ADDR_ROOT, "Invalid receiver address");
+        if (receiver == ADDR_ROOT) revert InvalidReceiverAddress(receiver);
         // Ensure that the weight for a specific receiver is attached to the list
         if (!self.data[receiver].isAttached) {
             address rootNext = self.data[ADDR_ROOT].next;
