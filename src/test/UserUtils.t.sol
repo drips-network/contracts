@@ -81,6 +81,7 @@ abstract contract PoolUserUtils is DSTest {
             ? user.getAmtPerSec()
             : amtPerSec;
         ReceiverWeight[] memory curr = getCurrWeights(user);
+        assertReceivers(user, curr);
 
         (uint128 withdrawn, uint128 collected, uint128 dripped) = user.updateSender(
             toppedUp,
@@ -103,7 +104,13 @@ abstract contract PoolUserUtils is DSTest {
             dripsFraction,
             "Invalid dripsFraction after updateSender"
         );
-        // TODO assert list of receivers
+        assertReceivers(user, newReceivers);
+    }
+
+    function assertReceivers(PoolUser user, ReceiverWeight[] memory list) internal {
+        bytes32 actual = user.getReceiverWeightsHash();
+        bytes32 expected = user.hashReceiverWeights(list);
+        assertEq(actual, expected, "Invalid receivers list hash");
     }
 
     function assertWithdrawable(PoolUser user, uint128 expected) internal {
@@ -186,6 +193,7 @@ abstract contract PoolUserUtils is DSTest {
             ? user.getAmtPerSecSubSender(subSenderId)
             : amtPerSec;
         ReceiverWeight[] memory curr = getCurrSubSenderWeights(user, subSenderId);
+        assertSubSenderReceivers(user, subSenderId, curr);
 
         uint256 withdrawn = user.updateSubSender(
             subSenderId,
@@ -205,7 +213,7 @@ abstract contract PoolUserUtils is DSTest {
             expectedAmtPerSec,
             "Invalid amtPerSec after updateSender"
         );
-        // TODO assert list of receivers
+        assertSubSenderReceivers(user, subSenderId, newReceivers);
     }
 
     function assertWithdrawableSubSender(
@@ -214,6 +222,16 @@ abstract contract PoolUserUtils is DSTest {
         uint128 expected
     ) internal {
         assertEq(user.withdrawableSubSender(subSenderId), expected, "Invalid withdrawable");
+    }
+
+    function assertSubSenderReceivers(
+        PoolUser user,
+        uint256 subSenderId,
+        ReceiverWeight[] memory list
+    ) internal {
+        bytes32 actual = user.getSubSenderReceiverWeightsHash(subSenderId);
+        bytes32 expected = user.hashReceiverWeights(list);
+        assertEq(actual, expected, "Invalid receivers list hash");
     }
 
     function changeBalanceSubSender(

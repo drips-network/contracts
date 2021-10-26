@@ -639,18 +639,41 @@ abstract contract Pool {
         view
     {
         require(
-            _receiverWeightsHash(currReceivers) == sender.receiverWeightsHash,
+            hashReceiverWeights(currReceivers) == sender.receiverWeightsHash,
             "Invalid current receivers"
         );
     }
 
-    function _receiverWeightsHash(ReceiverWeight[] calldata receiverWeights)
-        internal
+    /// @notice Calculates the hash of a receivers weights list.
+    /// @param receiverWeights The receivers weights list.
+    /// Must be sorted by the receivers' addresses and deduplicated.
+    /// @return weightsHash The receiver weights list hash.
+    function hashReceiverWeights(ReceiverWeight[] calldata receiverWeights)
+        public
         pure
-        returns (bytes32)
+        returns (bytes32 weightsHash)
     {
         if (receiverWeights.length == 0) return bytes32(0);
         return keccak256(abi.encode(receiverWeights));
+    }
+
+    /// @notice Returns the sender's receivers weights list hash.
+    /// @param senderAddr The address of the sender
+    /// @return weightsHash The receiver weights list hash.
+    function getReceiverWeightsHash(address senderAddr) public view returns (bytes32 weightsHash) {
+        return senders[senderAddr].receiverWeightsHash;
+    }
+
+    /// @notice Returns the sub-sender's receivers weights list hash.
+    /// @param senderAddr The address of the sender
+    /// @param subSenderId The id of the sender's sub-sender
+    /// @return weightsHash The receiver weights list hash.
+    function getSubSenderReceiverWeightsHash(address senderAddr, uint256 subSenderId)
+        public
+        view
+        returns (bytes32 weightsHash)
+    {
+        return subSenders[senderAddr][subSenderId].receiverWeightsHash;
     }
 
     /// @notice Sets the weight of the provided receivers of the user.
@@ -677,7 +700,7 @@ abstract contract Pool {
         require(senderWeightSum <= SENDER_WEIGHTS_SUM_MAX, "Too much total receivers weight");
         sender.weightSum = uint32(senderWeightSum);
         sender.weightCount = uint32(newReceivers.length);
-        sender.receiverWeightsHash = _receiverWeightsHash(newReceivers);
+        sender.receiverWeightsHash = hashReceiverWeights(newReceivers);
     }
 
     /// @notice Called when user funds need to be transferred out of the pool
