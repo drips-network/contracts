@@ -453,14 +453,122 @@ abstract contract Pool {
         Receiver[] calldata newReceivers
     ) internal returns (uint128 withdrawn, StreamUpdates memory updates) {
         _assertCurrReceivers(sender, currReceivers);
-        uint256 maxUpdates = currReceivers.length + newReceivers.length;
-        updates = StreamUpdates({length: 0, updates: new StreamUpdate[](maxUpdates)});
-        _stopSending(sender, currReceivers, updates);
-        _topUp(sender, topUpAmt);
-        withdrawn = _withdraw(sender, withdrawAmt);
+        uint128 newAmtPerSec = _setReceiversHash(sender, newReceivers);
         _setDripsFraction(sender, dripsFraction);
-        _setReceiversHash(sender, newReceivers);
-        _startSending(sender, newReceivers, updates);
+        uint128 currAmtPerSec = _totalAmtPerSec(currReceivers);
+        uint64 currEndTime = _sendingEndTime(sender, currAmtPerSec);
+        withdrawn = _updateSenderBalance(sender, topUpAmt, withdrawAmt, currAmtPerSec, currEndTime);
+        sender.startTime = _currTimestamp();
+        uint64 newEndTime = _sendingEndTime(sender, newAmtPerSec);
+        updates = _updateStreams(currReceivers, newReceivers, currEndTime, newEndTime);
+    }
+
+    /// @notice Updates sender's `startBalance`.
+    /// @param sender The updated sender.
+    /// @param topUpAmt The topped up amount.
+    /// @param withdrawAmt The amount to be withdrawn, must not be higher than available funds.
+    /// Can be `WITHDRAW_ALL` to withdraw everything.
+    /// @param amtPerSec The sender's total amount per second
+    /// @param endTime Time when sending was supposed to stop.
+    /// @return withdrawn The withdrawn amount which should be sent to the user.
+    /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
+    function _updateSenderBalance(
+        Sender storage sender,
+        uint128 topUpAmt,
+        uint128 withdrawAmt,
+        uint128 amtPerSec,
+        uint64 endTime
+    ) internal returns (uint128 withdrawn) {
+        if (endTime > _currTimestamp()) endTime = _currTimestamp();
+        sender.startBalance -= (endTime - sender.startTime) * amtPerSec;
+        sender.startBalance += topUpAmt;
+        if (withdrawAmt == WITHDRAW_ALL) withdrawAmt = sender.startBalance;
+        require(withdrawAmt <= sender.startBalance, "Not enough funds in the sender account");
+        sender.startBalance -= withdrawAmt;
+        return withdrawAmt;
+    }
+
+    /// @notice Updates streams in the receivers' `amtDeltas`.
+    /// @param currReceivers The list of the user's receivers which is currently in use.
+    /// If this function is called for the first time for the user, should be an empty array.
+    /// @param newReceivers The new list of the user's receivers.
+    /// @param currEndTime Time when sending using `currReceivers` was supposed to stop.
+    /// @param newEndTime Time when sending using `newReceivers` will be supposed to stop.
+    /// @return updates The list of stream updates to log
+    function _updateStreams(
+        Receiver[] calldata currReceivers,
+        Receiver[] calldata newReceivers,
+        uint64 currEndTime,
+        uint64 newEndTime
+    ) internal returns (StreamUpdates memory updates) {
+        // Skip iterating over `currReceivers` if funding has run out
+        uint256 currIdx = currEndTime > _currTimestamp() ? 0 : currReceivers.length;
+        // Skip iterating over `newReceivers` if no new funding is started
+        uint256 newIdx = newEndTime > _currTimestamp() ? 0 : newReceivers.length;
+        uint256 updatesMax = currReceivers.length + newReceivers.length - currIdx - newIdx;
+        updates = StreamUpdates({length: 0, updates: new StreamUpdate[](updatesMax)});
+        while (true) {
+            // Each iteration gets the next stream update and applies it on the receiver.
+            // A stream update is composed of two receiver configurations, one current and one new,
+            // or from a single receiver configuration if the receiver is being added or removed.
+            bool pickCurr = currIdx < currReceivers.length;
+            bool pickNew = newIdx < newReceivers.length;
+            if (!pickCurr && !pickNew) break;
+            if (pickCurr && pickNew) {
+                // There are two candidate receiver configurations to create a stream update.
+                // Pick both if they describe the same receiver or the one with a lower address.
+                // The one with a higher address won't be used in this iteration.
+                // Because receiver lists are sorted by addresses and deduplicated,
+                // this guarantees that all matching pairs of receiver configurations will be found.
+                address currReceiver = currReceivers[currIdx].receiver;
+                address newReceiver = newReceivers[newIdx].receiver;
+                pickCurr = currReceiver <= newReceiver;
+                pickNew = newReceiver <= currReceiver;
+            }
+            // The stream update parameters
+            address receiver;
+            int128 currAmt = 0;
+            int128 newAmt = 0;
+            if (pickCurr) {
+                receiver = currReceivers[currIdx].receiver;
+                currAmt = int128(currReceivers[currIdx].amtPerSec);
+                // Clear the obsolete stream end
+                _setDelta(receiver, currEndTime, currAmt);
+                currIdx++;
+            }
+            if (pickNew) {
+                receiver = newReceivers[newIdx].receiver;
+                newAmt = int128(newReceivers[newIdx].amtPerSec);
+                // Apply the new stream end
+                _setDelta(receiver, newEndTime, -newAmt);
+                newIdx++;
+            }
+            // Apply the stream update since now
+            _setDelta(receiver, _currTimestamp(), newAmt - currAmt);
+            updates.updates[updates.length++] = StreamUpdate({
+                receiver: receiver,
+                amtPerSec: uint128(newAmt),
+                endTime: newAmt == 0 ? _currTimestamp() : newEndTime
+            });
+            // The receiver was never used, initialize it.
+            if (!pickCurr && receiverStates[receiver].nextCollectedCycle == 0) {
+                receiverStates[receiver].nextCollectedCycle = _currTimestamp() / cycleSecs + 1;
+            }
+        }
+    }
+
+    /// @notice Calculates the sending end time for a sender.
+    /// @param sender The analyzed sender
+    /// @param totalAmtPerSec The sender's total amount per second
+    /// @return sendingEndTime The sending end time
+    function _sendingEndTime(Sender storage sender, uint128 totalAmtPerSec)
+        internal
+        view
+        returns (uint64 sendingEndTime)
+    {
+        if (totalAmtPerSec == 0) return _currTimestamp();
+        uint256 endTime = sender.startTime + uint256(sender.startBalance / totalAmtPerSec);
+        return endTime > MAX_TIMESTAMP ? MAX_TIMESTAMP : uint64(endTime);
     }
 
     /// @notice Adds the given amount to the senders balance of the user.
@@ -610,12 +718,16 @@ abstract contract Pool {
     /// @notice Sets the receivers of the sender.
     /// @param sender The updated sender
     /// @param receivers The new list of the user's receivers
-    function _setReceiversHash(Sender storage sender, Receiver[] calldata receivers) internal {
+    /// @return totalAmtPerSec The total amount per second
+    function _setReceiversHash(Sender storage sender, Receiver[] calldata receivers)
+        internal
+        returns (uint128 totalAmtPerSec)
+    {
         require(receivers.length <= MAX_RECEIVERS, "Too many receivers");
-        uint256 totalAmtPerSec = 0;
+        uint256 amtPerSec = 0;
         for (uint256 i = 0; i < receivers.length; i++) {
             require(receivers[i].amtPerSec != 0, "Receiver amtPerSec is zero");
-            totalAmtPerSec += receivers[i].amtPerSec;
+            amtPerSec += receivers[i].amtPerSec;
             if (i > 0) {
                 address prevReceiver = receivers[i - 1].receiver;
                 address currReceiver = receivers[i].receiver;
@@ -623,7 +735,8 @@ abstract contract Pool {
                 require(prevReceiver != currReceiver, "Duplicate receivers");
             }
         }
-        require(totalAmtPerSec <= type(uint128).max, "Total amtPerSec too high");
+        require(amtPerSec <= type(uint128).max, "Total amtPerSec too high");
+        totalAmtPerSec = uint128(amtPerSec);
         sender.receiversHash = hashReceivers(receivers);
     }
 
@@ -632,132 +745,17 @@ abstract contract Pool {
     /// @param amt The transferred amount
     function _transfer(address to, uint128 amt) internal virtual;
 
-    /// @notice Makes the user stop sending funds.
-    /// It removes any effects of the sender from all of its receivers.
-    /// It doesn't modify the sender.
-    /// It allows the properties of the sender to be safely modified
-    /// without having to update the state of its receivers.
-    /// @param sender The updated sender
-    /// @param receivers The list of the user's receivers.
-    /// @param updates The list of stream updates to log
-    function _stopSending(
-        Sender storage sender,
-        Receiver[] calldata receivers,
-        StreamUpdates memory updates
-    ) internal {
-        uint128 amtPerSec = _totalAmtPerSec(receivers);
-        // Hasn't been sending anything
-        if (amtPerSec == 0) return;
-        uint256 endTimeUncapped = sender.startTime + uint256(sender.startBalance / amtPerSec);
-        uint64 endTime = endTimeUncapped > MAX_TIMESTAMP ? MAX_TIMESTAMP : uint64(endTimeUncapped);
-        // The funding period has run out
-        if (endTime <= _currTimestamp()) {
-            sender.startBalance %= amtPerSec;
-            return;
-        }
-        sender.startBalance -= (_currTimestamp() - sender.startTime) * amtPerSec;
-        // Set negative deltas to clear deltas applied by the previous call to `_startSending`
-        _setDeltasFromNow(receivers, -1, endTime, updates);
-    }
-
-    /// @notice Makes the user start sending funds.
-    /// It applies effects of the sender on all of its receivers.
-    /// It doesn't modify the sender.
-    /// @param sender The updated sender
-    /// @param receivers The list of the user's receivers.
-    /// @param updates The list of stream updates to log
-    function _startSending(
-        Sender storage sender,
-        Receiver[] calldata receivers,
-        StreamUpdates memory updates
-    ) internal {
-        uint128 amtPerSec = _totalAmtPerSec(receivers);
-        // Won't be sending anything
-        if (amtPerSec == 0) return;
-        // Won't be sending anything
-        if (sender.startBalance < amtPerSec) return;
-        sender.startTime = _currTimestamp();
-        uint256 endTimeUncapped = _currTimestamp() + uint256(sender.startBalance / amtPerSec);
-        uint64 endTime = endTimeUncapped > MAX_TIMESTAMP ? MAX_TIMESTAMP : uint64(endTimeUncapped);
-        _setDeltasFromNow(receivers, 1, endTime, updates);
-    }
-
-    /// @notice Sets deltas to all sender's receivers from now to `timeEnd`.
-    /// @param receivers The list of the user's receivers.
-    /// @param multiplier AmtPerSec multiplier
-    /// @param timeEnd The timestamp from which the delta stops taking effect
-    /// @param updates The list of stream updates to log
-    function _setDeltasFromNow(
-        Receiver[] calldata receivers,
-        int8 multiplier,
-        uint64 timeEnd,
-        StreamUpdates memory updates
-    ) internal {
-        uint256 oldLength = updates.length;
-        for (uint256 i = 0; i < receivers.length; i++) {
-            address receiverAddr = receivers[i].receiver;
-            int128 amtPerSecDelta = int128(receivers[i].amtPerSec) * multiplier;
-            _setReceiverDeltaFromNow(receiverAddr, amtPerSecDelta, timeEnd);
-
-            // Stopping sending
-            if (amtPerSecDelta < 0) {
-                updates.updates[updates.length] = StreamUpdate({
-                    receiver: receiverAddr,
-                    amtPerSec: 0,
-                    endTime: _currTimestamp()
-                });
-                updates.length++;
-            }
-            // Starting sending
-            else {
-                // Find an old receiver stream log to update
-                uint256 updated = 0;
-                while (updated < oldLength && updates.updates[updated].receiver != receiverAddr) {
-                    updated++;
-                }
-                // Receiver not found among old logs, will be pushed
-                if (updated == oldLength) {
-                    updated = updates.length;
-                    updates.length++;
-                }
-                updates.updates[updated] = StreamUpdate({
-                    receiver: receiverAddr,
-                    amtPerSec: uint128(amtPerSecDelta),
-                    endTime: timeEnd
-                });
-            }
-        }
-    }
-
-    /// @notice Sets deltas to a receiver from now to `timeEnd`
-    /// @param receiverAddr The address of the receiver
-    /// @param amtPerSecDelta Change of the per-second receiving rate
-    /// @param timeEnd The timestamp from which the delta stops taking effect
-    function _setReceiverDeltaFromNow(
-        address receiverAddr,
-        int128 amtPerSecDelta,
-        uint64 timeEnd
-    ) internal {
-        ReceiverState storage receiver = receiverStates[receiverAddr];
-        // The receiver was never used, initialize it.
-        // The first usage of a receiver is always setting a positive delta to start sending.
-        // If the delta is negative, the receiver must've been used before and now is being cleared.
-        if (amtPerSecDelta > 0 && receiver.nextCollectedCycle == 0)
-            receiver.nextCollectedCycle = _currTimestamp() / cycleSecs + 1;
-        // Set delta in a time range from now to `timeEnd`
-        _setSingleDelta(receiver.amtDeltas, _currTimestamp(), amtPerSecDelta);
-        _setSingleDelta(receiver.amtDeltas, timeEnd, -amtPerSecDelta);
-    }
-
     /// @notice Sets delta of a single receiver on a given timestamp
-    /// @param amtDeltas The deltas of the per-cycle receiving rate
+    /// @param receiverAddr The address of the receiver
     /// @param timestamp The timestamp from which the delta takes effect
     /// @param amtPerSecDelta Change of the per-second receiving rate
-    function _setSingleDelta(
-        mapping(uint64 => AmtDelta) storage amtDeltas,
+    function _setDelta(
+        address receiverAddr,
         uint64 timestamp,
         int128 amtPerSecDelta
     ) internal {
+        if (amtPerSecDelta == 0) return;
+        mapping(uint64 => AmtDelta) storage amtDeltas = receiverStates[receiverAddr].amtDeltas;
         // In order to set a delta on a specific timestamp it must be introduced in two cycles.
         // The cycle delta is split proportionally based on how much this cycle is affected.
         // The next cycle has the rest of the delta applied, so the update is fully completed.
