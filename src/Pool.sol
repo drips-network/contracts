@@ -172,15 +172,10 @@ abstract contract Pool {
         int128 nextCycle;
     }
 
-    struct StreamUpdates {
-        uint256 length;
-        StreamUpdate[] updates;
-    }
-
-    struct StreamUpdate {
-        address receiver;
-        uint128 amtPerSec;
-        uint64 endTime;
+    struct SenderId {
+        bool isSubSender;
+        address senderAddr;
+        uint256 subSenderId;
     }
 
     /// @dev Details about all the senders, the key is the owner's address
@@ -372,9 +367,9 @@ abstract contract Pool {
     {
         (collected, dripped) = _collectInternal(senderAddr, currReceivers);
         Sender memory sender = senders[senderAddr];
-        StreamUpdates memory updates;
-        (withdrawn, updates) = _updateAnySender(
+        withdrawn = _updateAnySender(
             sender,
+            _senderId(senderAddr),
             topUpAmt,
             withdrawAmt,
             dripsFraction,
@@ -383,14 +378,6 @@ abstract contract Pool {
         );
         senders[senderAddr] = sender;
         emit SenderUpdated(senderAddr, sender.startBalance, sender.dripsFraction, newReceivers);
-        for (uint256 i = 0; i < updates.length; i++) {
-            emit SenderToReceiverUpdated(
-                senderAddr,
-                updates.updates[i].receiver,
-                updates.updates[i].amtPerSec,
-                updates.updates[i].endTime
-            );
-        }
         _transfer(senderAddr, withdrawn + collected);
     }
 
@@ -407,9 +394,9 @@ abstract contract Pool {
         Receiver[] calldata newReceivers
     ) internal returns (uint128 withdrawn) {
         Sender memory sender = subSenders[senderAddr][subSenderId];
-        StreamUpdates memory updates;
-        (withdrawn, updates) = _updateAnySender(
+        withdrawn = _updateAnySender(
             sender,
+            _subSenderId(senderAddr, subSenderId),
             topUpAmt,
             withdrawAmt,
             0,
@@ -418,22 +405,13 @@ abstract contract Pool {
         );
         subSenders[senderAddr][subSenderId] = sender;
         emit SubSenderUpdated(senderAddr, subSenderId, sender.startBalance, newReceivers);
-        for (uint256 i = 0; i < updates.length; i++) {
-            StreamUpdate memory update = updates.updates[i];
-            emit SubSenderToReceiverUpdated(
-                senderAddr,
-                subSenderId,
-                update.receiver,
-                update.amtPerSec,
-                update.endTime
-            );
-        }
         _transfer(senderAddr, withdrawn);
     }
 
     /// @notice Updates all the sender's parameters.
     /// Tops up and withdraws unsent funds from the balance of the sender.
     /// @param sender The updated sender
+    /// @param senderId The sender id
     /// @param topUpAmt The topped up amount.
     /// @param withdrawAmt The amount to be withdrawn, must not be higher than available funds.
     /// Can be `WITHDRAW_ALL` to withdraw everything.
@@ -445,15 +423,15 @@ abstract contract Pool {
     /// @param newReceivers The new list of the user's receivers.
     /// @return withdrawn The withdrawn amount which should be sent to the user.
     /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
-    /// @return updates The list of stream updates to log
     function _updateAnySender(
         Sender memory sender,
+        SenderId memory senderId,
         uint128 topUpAmt,
         uint128 withdrawAmt,
         uint32 dripsFraction,
         Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers
-    ) internal returns (uint128 withdrawn, StreamUpdates memory updates) {
+    ) internal returns (uint128 withdrawn) {
         _assertCurrReceiversHash(sender.receiversHash, currReceivers);
         uint128 newAmtPerSec = _setReceiversHash(sender, newReceivers);
         _setDripsFraction(sender, dripsFraction);
@@ -462,7 +440,7 @@ abstract contract Pool {
         withdrawn = _updateSenderBalance(sender, topUpAmt, withdrawAmt, currAmtPerSec, currEndTime);
         sender.startTime = _currTimestamp();
         uint64 newEndTime = _sendingEndTime(sender, newAmtPerSec);
-        updates = _updateStreams(currReceivers, newReceivers, currEndTime, newEndTime);
+        _updateStreams(senderId, currReceivers, newReceivers, currEndTime, newEndTime);
     }
 
     /// @notice Updates sender's `startBalance`.
@@ -496,19 +474,17 @@ abstract contract Pool {
     /// @param newReceivers The new list of the user's receivers.
     /// @param currEndTime Time when sending using `currReceivers` was supposed to stop.
     /// @param newEndTime Time when sending using `newReceivers` will be supposed to stop.
-    /// @return updates The list of stream updates to log
     function _updateStreams(
+        SenderId memory senderId,
         Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers,
         uint64 currEndTime,
         uint64 newEndTime
-    ) internal returns (StreamUpdates memory updates) {
+    ) internal {
         // Skip iterating over `currReceivers` if funding has run out
         uint256 currIdx = currEndTime > _currTimestamp() ? 0 : currReceivers.length;
         // Skip iterating over `newReceivers` if no new funding is started
         uint256 newIdx = newEndTime > _currTimestamp() ? 0 : newReceivers.length;
-        uint256 updatesMax = currReceivers.length + newReceivers.length - currIdx - newIdx;
-        updates = StreamUpdates({length: 0, updates: new StreamUpdate[](updatesMax)});
         while (true) {
             // Each iteration gets the next stream update and applies it on the receiver.
             // A stream update is composed of two receiver configurations, one current and one new,
@@ -547,15 +523,37 @@ abstract contract Pool {
             }
             // Apply the stream update since now
             _setDelta(receiver, _currTimestamp(), newAmt - currAmt);
-            updates.updates[updates.length++] = StreamUpdate({
-                receiver: receiver,
-                amtPerSec: uint128(newAmt),
-                endTime: newAmt == 0 ? _currTimestamp() : newEndTime
-            });
+            emitStreamUpdated(senderId, receiver, uint128(newAmt), newEndTime);
             // The receiver was never used, initialize it.
             if (!pickCurr && receiverStates[receiver].nextCollectedCycle == 0) {
                 receiverStates[receiver].nextCollectedCycle = _currTimestamp() / cycleSecs + 1;
             }
+        }
+    }
+
+    /// @notice Emit a relevant event when a stream is updated.
+    /// @param senderId The id of the sender of the updated stream
+    /// @param receiver The receiver of the updated stream
+    /// @param amtPerSec The new amount per second sent from the sender to the receiver
+    /// or 0 if sending is stopped
+    /// @param endTime The timestamp when the funds stop being sent.
+    function emitStreamUpdated(
+        SenderId memory senderId,
+        address receiver,
+        uint128 amtPerSec,
+        uint64 endTime
+    ) internal {
+        if (amtPerSec == 0) endTime = _currTimestamp();
+        if (senderId.isSubSender) {
+            emit SubSenderToReceiverUpdated(
+                senderId.senderAddr,
+                senderId.subSenderId,
+                receiver,
+                amtPerSec,
+                endTime
+            );
+        } else {
+            emit SenderToReceiverUpdated(senderId.senderAddr, receiver, amtPerSec, endTime);
         }
     }
 
@@ -777,6 +775,18 @@ abstract contract Pool {
         uint64 thisCycleSecs = cycleSecs - nextCycleSecs;
         amtDeltas[thisCycle].thisCycle += int128(uint128(thisCycleSecs)) * amtPerSecDelta;
         amtDeltas[thisCycle].nextCycle += int128(uint128(nextCycleSecs)) * amtPerSecDelta;
+    }
+
+    function _senderId(address senderAddr) internal pure returns (SenderId memory) {
+        return SenderId({isSubSender: false, senderAddr: senderAddr, subSenderId: 0});
+    }
+
+    function _subSenderId(address senderAddr, uint256 subSenderId)
+        internal
+        pure
+        returns (SenderId memory)
+    {
+        return SenderId({isSubSender: true, senderAddr: senderAddr, subSenderId: subSenderId});
     }
 
     function _currTimestamp() internal view returns (uint64) {
