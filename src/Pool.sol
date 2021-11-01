@@ -371,7 +371,7 @@ abstract contract Pool {
         )
     {
         (collected, dripped) = _collectInternal(senderAddr, currReceivers);
-        Sender storage sender = senders[senderAddr];
+        Sender memory sender = senders[senderAddr];
         StreamUpdates memory updates;
         (withdrawn, updates) = _updateAnySender(
             sender,
@@ -381,6 +381,7 @@ abstract contract Pool {
             currReceivers,
             newReceivers
         );
+        senders[senderAddr] = sender;
         emit SenderUpdated(senderAddr, sender.startBalance, sender.dripsFraction, newReceivers);
         for (uint256 i = 0; i < updates.length; i++) {
             emit SenderToReceiverUpdated(
@@ -405,7 +406,7 @@ abstract contract Pool {
         Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers
     ) internal returns (uint128 withdrawn) {
-        Sender storage sender = subSenders[senderAddr][subSenderId];
+        Sender memory sender = subSenders[senderAddr][subSenderId];
         StreamUpdates memory updates;
         (withdrawn, updates) = _updateAnySender(
             sender,
@@ -415,6 +416,7 @@ abstract contract Pool {
             currReceivers,
             newReceivers
         );
+        subSenders[senderAddr][subSenderId] = sender;
         emit SubSenderUpdated(senderAddr, subSenderId, sender.startBalance, newReceivers);
         for (uint256 i = 0; i < updates.length; i++) {
             StreamUpdate memory update = updates.updates[i];
@@ -445,14 +447,14 @@ abstract contract Pool {
     /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
     /// @return updates The list of stream updates to log
     function _updateAnySender(
-        Sender storage sender,
+        Sender memory sender,
         uint128 topUpAmt,
         uint128 withdrawAmt,
         uint32 dripsFraction,
         Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers
     ) internal returns (uint128 withdrawn, StreamUpdates memory updates) {
-        _assertCurrReceivers(sender, currReceivers);
+        _assertCurrReceiversHash(sender.receiversHash, currReceivers);
         uint128 newAmtPerSec = _setReceiversHash(sender, newReceivers);
         _setDripsFraction(sender, dripsFraction);
         uint128 currAmtPerSec = _totalAmtPerSec(currReceivers);
@@ -473,12 +475,12 @@ abstract contract Pool {
     /// @return withdrawn The withdrawn amount which should be sent to the user.
     /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
     function _updateSenderBalance(
-        Sender storage sender,
+        Sender memory sender,
         uint128 topUpAmt,
         uint128 withdrawAmt,
         uint128 amtPerSec,
         uint64 endTime
-    ) internal returns (uint128 withdrawn) {
+    ) internal view returns (uint128 withdrawn) {
         if (endTime > _currTimestamp()) endTime = _currTimestamp();
         sender.startBalance -= (endTime - sender.startTime) * amtPerSec;
         sender.startBalance += topUpAmt;
@@ -561,7 +563,7 @@ abstract contract Pool {
     /// @param sender The analyzed sender
     /// @param totalAmtPerSec The sender's total amount per second
     /// @return sendingEndTime The sending end time
-    function _sendingEndTime(Sender storage sender, uint128 totalAmtPerSec)
+    function _sendingEndTime(Sender memory sender, uint128 totalAmtPerSec)
         internal
         view
         returns (uint64 sendingEndTime)
@@ -646,7 +648,7 @@ abstract contract Pool {
     /// @param dripsFraction The fraction of received funds to be dripped.
     /// Must be a value from 0 to `MAX_DRIPS_FRACTION` inclusively,
     /// where 0 means no dripping and `MAX_DRIPS_FRACTION` dripping everything.
-    function _setDripsFraction(Sender storage sender, uint32 dripsFraction) internal {
+    function _setDripsFraction(Sender memory sender, uint32 dripsFraction) internal pure {
         require(dripsFraction <= MAX_DRIPS_FRACTION, "Drip fraction too high");
         sender.dripsFraction = dripsFraction;
     }
@@ -667,7 +669,17 @@ abstract contract Pool {
         internal
         view
     {
-        require(hashReceivers(currReceivers) == sender.receiversHash, "Invalid current receivers");
+        _assertCurrReceiversHash(sender.receiversHash, currReceivers);
+    }
+
+    /// @notice Asserts that the list of receivers is the sender's currently used one.
+    /// @param receiversHash The receivers list hash
+    /// @param currReceivers The list of the user's current receivers.
+    function _assertCurrReceiversHash(bytes32 receiversHash, Receiver[] calldata currReceivers)
+        internal
+        pure
+    {
+        require(hashReceivers(currReceivers) == receiversHash, "Invalid current receivers");
     }
 
     /// @notice Calculates the hash of the list of receivers.
@@ -719,8 +731,9 @@ abstract contract Pool {
     /// @param sender The updated sender
     /// @param receivers The new list of the user's receivers
     /// @return totalAmtPerSec The total amount per second
-    function _setReceiversHash(Sender storage sender, Receiver[] calldata receivers)
+    function _setReceiversHash(Sender memory sender, Receiver[] calldata receivers)
         internal
+        pure
         returns (uint128 totalAmtPerSec)
     {
         require(receivers.length <= MAX_RECEIVERS, "Too many receivers");
