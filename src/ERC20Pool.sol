@@ -53,7 +53,6 @@ contract ERC20Pool is Pool {
             uint128 dripped
         )
     {
-        _transferToContract(msg.sender, topUpAmt);
         return
             _updateSenderInternal(
                 msg.sender,
@@ -75,7 +74,6 @@ contract ERC20Pool is Pool {
         Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers
     ) public payable returns (uint128 withdrawn) {
-        _transferToContract(msg.sender, topUpAmt);
         return
             _updateSubSenderInternal(
                 msg.sender,
@@ -87,11 +85,8 @@ contract ERC20Pool is Pool {
             );
     }
 
-    function _transferToContract(address from, uint128 amt) internal {
-        if (amt != 0) erc20.transferFrom(from, address(this), amt);
-    }
-
-    function _transfer(address to, uint128 amt) internal override {
-        if (amt != 0) erc20.transfer(to, amt);
+    function _transfer(address userAddr, int128 amt) internal override {
+        if (amt > 0) erc20.transfer(userAddr, uint128(amt));
+        else if (amt < 0) erc20.transferFrom(userAddr, address(this), uint128(-amt));
     }
 }

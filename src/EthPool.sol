@@ -77,7 +77,11 @@ contract EthPool is Pool {
             );
     }
 
-    function _transfer(address to, uint128 amt) internal override {
-        if (amt != 0) payable(to).transfer(amt);
+    function _transfer(address userAddr, int128 amt) internal override {
+        // Take into account the amount already transferred into the pool
+        amt += int128(uint128(msg.value));
+        if (amt == 0) return;
+        require(amt > 0, "Sending a negative ether amount");
+        payable(userAddr).transfer(uint128(amt));
     }
 }

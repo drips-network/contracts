@@ -243,10 +243,8 @@ abstract contract Pool {
         returns (uint128 collected, uint128 dripped)
     {
         (collected, dripped) = _collectInternal(receiverAddr, currReceivers);
-        if (collected > 0) {
-            _transfer(receiverAddr, collected);
-        }
         emit Collected(receiverAddr, collected, dripped);
+        _transfer(receiverAddr, int128(collected));
     }
 
     /// @notice Counts cycles which will need to be analyzed when collecting or flushing.
@@ -322,6 +320,10 @@ abstract contract Pool {
         }
     }
 
+    /// @notice Collects and clears receiver's cycles
+    /// @param receiverAddr The address of the receiver
+    /// @param count The number of flushed cycles.
+    /// @return collectedAmt The collected amount
     function _flushCyclesInternal(address receiverAddr, uint64 count)
         internal
         returns (uint128 collectedAmt)
@@ -378,7 +380,7 @@ abstract contract Pool {
         );
         senders[senderAddr] = sender;
         emit SenderUpdated(senderAddr, sender.startBalance, sender.dripsFraction, newReceivers);
-        _transfer(senderAddr, withdrawn + collected);
+        _transfer(senderAddr, int128(withdrawn) + int128(collected) - int128(topUpAmt));
     }
 
     /// @notice Updates all the parameters of the sender's sub-sender.
@@ -405,7 +407,7 @@ abstract contract Pool {
         );
         subSenders[senderAddr][subSenderId] = sender;
         emit SubSenderUpdated(senderAddr, subSenderId, sender.startBalance, newReceivers);
-        _transfer(senderAddr, withdrawn);
+        _transfer(senderAddr, int128(withdrawn) - int128(topUpAmt));
     }
 
     /// @notice Updates all the sender's parameters.
@@ -751,10 +753,12 @@ abstract contract Pool {
         sender.receiversHash = hashReceivers(receivers);
     }
 
-    /// @notice Called when user funds need to be transferred out of the pool
-    /// @param to The address of the transfer recipient.
-    /// @param amt The transferred amount
-    function _transfer(address to, uint128 amt) internal virtual;
+    /// @notice Called when funds need to be transferred between the user and the pool.
+    /// The function must be called no more than once per transaction.
+    /// @param userAddr The address of the user.
+    /// @param amt The transferred amount.
+    /// Positive to send funds to the user, negative to send from them.
+    function _transfer(address userAddr, int128 amt) internal virtual;
 
     /// @notice Sets delta of a single receiver on a given timestamp
     /// @param receiverAddr The address of the receiver
