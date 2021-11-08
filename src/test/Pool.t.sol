@@ -463,14 +463,25 @@ abstract contract PoolTest is PoolUserUtils {
         warpToCycleEnd();
         assertCollectable(receiver2, 0);
         assertCollectable(receiver3, 0);
-        // Receiver1 had 1 second paying 10 per second, of which 6 is dripped.
-        // This is because 3/4 of collected funds get dripped, which is rounded down to 7,
-        // which is then rounded down to 6 while splitting between receivers.
-        collect(receiver1, 4, 6);
-        // Receiver2 got 2 dripped from receiver1
+        // Receiver1 had 1 second paying 10 per second, of which 3/4 is dripped, which is 7
+        collect(receiver1, 3, 7);
+        // Receiver2 got 1/3 of 7 dripped from receiver1, which is 2
         collect(receiver2, 2);
-        // Receiver3 got 4 dripped from receiver1
-        collect(receiver3, 4);
+        // Receiver3 got 2/3 of 7 dripped from receiver1, which is 5
+        collect(receiver3, 5);
+    }
+
+    function testCanDripAllWhenCollectedDoesntSplitEvenly() public {
+        uint32 dripsFractionMax = sender.getDripsFractionMax();
+        updateSender(sender, 0, 3, 0, receivers(receiver1, 3));
+        updateSender(receiver1, 0, 0, dripsFractionMax, receivers(receiver2, 1, receiver3, 1));
+        warpToCycleEnd();
+        // Receiver1 had 1 second paying 3 per second of which 3 is dripped
+        collect(receiver1, 0, 3);
+        // Receiver2 got 1 dripped from receiver
+        collect(receiver2, 1);
+        // Receiver3 got 2 dripped from receiver
+        collect(receiver3, 2);
     }
 
     function testUpdateSenderCollects() public {

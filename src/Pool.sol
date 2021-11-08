@@ -240,13 +240,9 @@ abstract contract Pool {
         }
 
         // Dripped when collected
-        Sender storage sender = senders[receiverAddr];
-        if (collected > 0 && currReceivers.length > 0 && sender.dripsFraction > 0) {
-            uint256 drippable = (uint256(collected) * sender.dripsFraction) / MAX_DRIPS_FRACTION;
-            uint128 totalAmtPerSec = _totalAmtPerSec(currReceivers);
-            for (uint256 i = 0; i < currReceivers.length; i++) {
-                dripped += uint128((drippable * currReceivers[i].amtPerSec) / totalAmtPerSec);
-            }
+        if (collected > 0 && currReceivers.length > 0) {
+            Sender storage sender = senders[receiverAddr];
+            dripped = uint128((uint160(collected) * sender.dripsFraction) / MAX_DRIPS_FRACTION);
             collected -= dripped;
         }
     }
@@ -325,10 +321,11 @@ abstract contract Pool {
         if (collected > 0 && currReceivers.length > 0 && sender.dripsFraction > 0) {
             uint256 drippable = (uint256(collected) * sender.dripsFraction) / MAX_DRIPS_FRACTION;
             uint128 totalAmtPerSec = _totalAmtPerSec(currReceivers);
+            uint128 drippedAmtPerSec = 0;
             for (uint256 i = 0; i < currReceivers.length; i++) {
-                uint128 dripAmt = uint128(
-                    (drippable * currReceivers[i].amtPerSec) / totalAmtPerSec
-                );
+                drippedAmtPerSec += currReceivers[i].amtPerSec;
+                uint128 dripAmt = uint128((drippable * drippedAmtPerSec) / totalAmtPerSec) -
+                    dripped;
                 dripped += dripAmt;
                 address dripsAddr = currReceivers[i].receiver;
                 receiverStates[dripsAddr].collectable += dripAmt;
