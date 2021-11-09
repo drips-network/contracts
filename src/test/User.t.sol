@@ -3,7 +3,7 @@
 pragma solidity ^0.8.7;
 
 import {EthPool, Pool} from "../EthPool.sol";
-import {ERC20Pool, Receiver} from "../DaiPool.sol";
+import {DripsReceiver, ERC20Pool, Receiver} from "../ERC20Pool.sol";
 
 abstract contract PoolUser {
     function getPool() internal view virtual returns (Pool);
@@ -43,6 +43,11 @@ abstract contract PoolUser {
         uint256 subSenderId,
         address receiver,
         uint128 amt
+    ) public virtual;
+
+    function setDripsReceivers(
+        DripsReceiver[] calldata currReceivers,
+        DripsReceiver[] calldata newReceivers
     ) public virtual;
 
     function collect(address receiverAddr, Receiver[] calldata currReceivers)
@@ -88,7 +93,7 @@ abstract contract PoolUser {
         return getPool().hashReceivers(receivers);
     }
 
-    function getReceiversHash() public view returns (bytes32 weightsHash) {
+    function getReceiversHash() public view returns (bytes32) {
         return getPool().getReceiversHash(address(this));
     }
 
@@ -98,6 +103,14 @@ abstract contract PoolUser {
         returns (bytes32 weightsHash)
     {
         return getPool().getSubSenderReceiversHash(address(this), subSenderId);
+    }
+
+    function hashDripsReceivers(DripsReceiver[] calldata receivers) public view returns (bytes32) {
+        return getPool().hashDripsReceivers(receivers);
+    }
+
+    function dripsReceiversHash() public view returns (bytes32) {
+        return getPool().dripsReceiversHash(address(this));
     }
 }
 
@@ -158,6 +171,13 @@ contract ERC20PoolUser is PoolUser {
     ) public override {
         pool.erc20().approve(address(pool), amt);
         pool.giveFromSubSender(subSenderId, receiver, amt);
+    }
+
+    function setDripsReceivers(
+        DripsReceiver[] calldata currReceivers,
+        DripsReceiver[] calldata newReceivers
+    ) public override {
+        pool.setDripsReceivers(currReceivers, newReceivers);
     }
 }
 
@@ -229,5 +249,12 @@ contract EthPoolUser is PoolUser {
         uint128 amt
     ) public override {
         pool.giveFromSubSender{value: amt}(subSenderId, receiver);
+    }
+
+    function setDripsReceivers(
+        DripsReceiver[] calldata currReceivers,
+        DripsReceiver[] calldata newReceivers
+    ) public override {
+        pool.setDripsReceivers(currReceivers, newReceivers);
     }
 }

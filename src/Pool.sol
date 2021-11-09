@@ -6,6 +6,11 @@ struct Receiver {
     uint128 amtPerSec;
 }
 
+struct DripsReceiver {
+    address receiver;
+    uint32 weight;
+}
+
 /// @notice Funding pool contract. Automatically sends funds to a configurable set of receivers.
 ///
 /// The contract has 2 types of users: the senders and the receivers.
@@ -56,6 +61,11 @@ abstract contract Pool {
     /// @notice Maximum number of receivers of a single sender.
     /// Limits costs of changes in sender's configuration.
     uint32 public constant MAX_RECEIVERS = 100;
+    /// @notice Maximum number of drips receivers of a single user.
+    /// Limits costs of dripping.
+    uint32 public constant MAX_DRIPS_RECEIVERS = 200;
+    /// @notice The total drips weights of a user
+    uint32 public constant TOTAL_DRIPS_WEIGHTS = 1_000_000;
     /// @notice Maximum value of drips fraction
     uint32 public constant MAX_DRIPS_FRACTION = 1_000_000;
     /// @notice The amount passed as the withdraw amount to withdraw all the funds
@@ -123,6 +133,11 @@ abstract contract Pool {
         uint128 balance,
         Receiver[] receivers
     );
+
+    /// @notice Emitted when the user's drips receivers list is updated.
+    /// @param userAddr The user address
+    /// @param receivers The list of the user's drips receivers.
+    event DripsReceiversUpdated(address indexed userAddr, DripsReceiver[] receivers);
 
     /// @notice Emitted when a receiver collects funds
     /// @param receiver The collecting receiver
@@ -195,6 +210,10 @@ abstract contract Pool {
         address senderAddr;
         uint256 subSenderId;
     }
+
+    /// @notice Current drips configuration hash, see `hashDripsReceivers`.
+    /// The key is the user address.
+    mapping(address => bytes32) public dripsReceiversHash;
 
     /// @dev Details about all the senders, the key is the owner's address
     mapping(address => Sender) internal senders;
@@ -771,6 +790,70 @@ abstract contract Pool {
         returns (bytes32 receiversHash)
     {
         return subSenders[senderAddr][subSenderId].receiversHash;
+    }
+
+    /// @notice Sets a new list of drips receivers of a user
+    /// @param userAddr The user address
+    /// @param currReceivers The list of the user's drips receivers which is currently in use.
+    /// If this function is called for the first time for the user, should be an empty array.
+    /// @param newReceivers The new list of the user's drips receivers.
+    /// Must be sorted by the drips receivers' addresses, deduplicated and without 0 weights.
+    /// Each drips receiver will be getting `weight / TOTAL_DRIPS_WEIGHTS`
+    /// share of the funds collected by the user.
+    function _setDripsReceiversInternal(
+        address userAddr,
+        DripsReceiver[] calldata currReceivers,
+        DripsReceiver[] calldata newReceivers
+    ) internal {
+        _assertCurrDripsReceivers(userAddr, currReceivers);
+        _assertDripsReceiversValid(newReceivers);
+        dripsReceiversHash[userAddr] = hashDripsReceivers(newReceivers);
+        emit DripsReceiversUpdated(userAddr, newReceivers);
+    }
+
+    /// @notice Validates a list of drips receivers
+    /// @param receivers The list of drips receivers
+    /// Must be sorted by the drips receivers' addresses, deduplicated and without 0 weights.
+    function _assertDripsReceiversValid(DripsReceiver[] calldata receivers) internal pure {
+        require(receivers.length <= MAX_DRIPS_RECEIVERS, "Too many drips receivers");
+        uint64 totalWeight = 0;
+        for (uint256 i = 0; i < receivers.length; i++) {
+            require(receivers[i].weight != 0, "Drips receiver weight is zero");
+            totalWeight += receivers[i].weight;
+            if (i > 0) {
+                address prevReceiver = receivers[i - 1].receiver;
+                address currReceiver = receivers[i].receiver;
+                require(prevReceiver <= currReceiver, "Drips receivers not sorted by address");
+                require(prevReceiver != currReceiver, "Duplicate drips receivers");
+            }
+        }
+        require(totalWeight <= TOTAL_DRIPS_WEIGHTS, "Drips weights sum too high");
+    }
+
+    /// @notice Asserts that the list of drips receivers is the user's currently used one.
+    /// @param userAddr The user address
+    /// @param currReceivers The list of the user's current drips receivers.
+    function _assertCurrDripsReceivers(address userAddr, DripsReceiver[] calldata currReceivers)
+        internal
+        view
+    {
+        require(
+            hashDripsReceivers(currReceivers) == dripsReceiversHash[userAddr],
+            "Invalid current drips receivers"
+        );
+    }
+
+    /// @notice Calculates the hash of the list of drips receivers.
+    /// @param receivers The list of the drips receivers.
+    /// Must be sorted by the drips receivers' addresses, deduplicated and without 0 weights.
+    /// @return receiversHash The hash of the list of drips receivers.
+    function hashDripsReceivers(DripsReceiver[] calldata receivers)
+        public
+        pure
+        returns (bytes32 receiversHash)
+    {
+        if (receivers.length == 0) return bytes32(0);
+        return keccak256(abi.encode(receivers));
     }
 
     /// @notice Calculates the total amount per second of all the passed receivers.

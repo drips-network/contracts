@@ -5,7 +5,7 @@ import {DSTest} from "ds-test/test.sol";
 import {PoolUserUtils} from "./UserUtils.t.sol";
 import {PoolUser} from "./User.t.sol";
 import {Hevm} from "./BaseTest.t.sol";
-import {Pool, Receiver} from "../Pool.sol";
+import {DripsReceiver, Pool, Receiver} from "../Pool.sol";
 
 abstract contract PoolTest is PoolUserUtils {
     Pool private pool;
@@ -254,14 +254,12 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testRejectsOverflowingTotalAmtPerSec() public {
-        Receiver[] memory receiversGood = receivers(receiver1, type(uint128).max);
-        Receiver[] memory receiversBad = receivers(receiver1, type(uint128).max, receiver2, 1);
-        updateSender(sender, 0, 0, 0, receiversGood);
-        try sender.updateSender(0, 0, 0, receiversGood, receiversBad) {
-            assertTrue(false, "Sender update hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, "Total amtPerSec too high", "Invalid sender update revert reason");
-        }
+        setReceivers(sender, receivers(receiver1, type(uint128).max));
+        assertSetReceiversReverts(
+            sender,
+            receivers(receiver1, type(uint128).max, receiver2, 1),
+            "Total amtPerSec too high"
+        );
     }
 
     function testRejectsZeroAmtPerSecReceivers() public {
@@ -397,6 +395,67 @@ abstract contract PoolTest is PoolUserUtils {
         collect(receiver1, 8);
         // Receiver2 had 2 second paying 1 per second
         collect(receiver2, 2);
+    }
+
+    function testLimitsTheTotalDripsReceiversCount() public {
+        uint160 countMax = pool.MAX_DRIPS_RECEIVERS();
+        DripsReceiver[] memory receiversGood = new DripsReceiver[](countMax);
+        DripsReceiver[] memory receiversBad = new DripsReceiver[](countMax + 1);
+        for (uint160 i = 0; i < countMax; i++) {
+            receiversGood[i] = DripsReceiver(address(i + 1), 1);
+            receiversBad[i] = receiversGood[i];
+        }
+        receiversBad[countMax] = DripsReceiver(address(countMax + 1), 1);
+
+        setDripsReceivers(sender, receiversGood);
+        assertSetDripsReceiversReverts(sender, receiversBad, "Too many drips receivers");
+    }
+
+    function testRejectsTooHighTotalWeight() public {
+        uint32 totalWeight = pool.TOTAL_DRIPS_WEIGHTS();
+        setDripsReceivers(sender, dripsReceivers(receiver, totalWeight));
+        assertSetDripsReceiversReverts(
+            sender,
+            dripsReceivers(receiver, totalWeight + 1),
+            "Drips weights sum too high"
+        );
+    }
+
+    function testRejectsZeroWeightDripsReceivers() public {
+        assertSetDripsReceiversReverts(
+            sender,
+            dripsReceivers(receiver, 0),
+            "Drips receiver weight is zero"
+        );
+    }
+
+    function testRejectsUnsortedDripsReceivers() public {
+        assertSetDripsReceiversReverts(
+            sender,
+            dripsReceivers(receiver2, 1, receiver1, 1),
+            "Drips receivers not sorted by address"
+        );
+    }
+
+    function testRejectsDuplicateDripsReceivers() public {
+        assertSetDripsReceiversReverts(
+            sender,
+            dripsReceivers(receiver, 1, receiver, 2),
+            "Duplicate drips receivers"
+        );
+    }
+
+    function testUpdateSenderRevertsIfInvalidCurrDripsReceivers() public {
+        setDripsReceivers(sender, dripsReceivers(receiver, 1));
+        try sender.setDripsReceivers(dripsReceivers(receiver, 2), dripsReceivers()) {
+            assertTrue(false, "Sender update hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(
+                reason,
+                "Invalid current drips receivers",
+                "Invalid sender update revert reason"
+            );
+        }
     }
 
     function testDripsFractionIsLimited() public {

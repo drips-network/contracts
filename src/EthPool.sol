@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.7;
 
-import {Pool, Receiver} from "./Pool.sol";
+import {DripsReceiver, Pool, Receiver} from "./Pool.sol";
 
 /// @notice Funding pool contract for Ether.
 /// See the base `Pool` contract docs for more details.
@@ -90,6 +90,20 @@ contract EthPool is Pool {
     /// @param receiver The receiver
     function giveFromSubSender(uint256 subSenderId, address receiver) public payable {
         _giveFromSubSenderInternal(msg.sender, subSenderId, receiver, uint128(msg.value));
+    }
+
+    /// @notice Sets a new list of drips receivers of the sender of the message.
+    /// @param currReceivers The list of the user's drips receivers which is currently in use.
+    /// If this function is called for the first time for the user, should be an empty array.
+    /// @param newReceivers The new list of the user's drips receivers.
+    /// Must be sorted by the drips receivers' addresses, deduplicated and without 0 weights.
+    /// Each drips receiver will be getting `weight / TOTAL_DRIPS_WEIGHTS`
+    /// share of the funds collected by the user.
+    function setDripsReceivers(
+        DripsReceiver[] calldata currReceivers,
+        DripsReceiver[] calldata newReceivers
+    ) public {
+        _setDripsReceiversInternal(msg.sender, currReceivers, newReceivers);
     }
 
     function _transfer(address userAddr, int128 amt) internal override {

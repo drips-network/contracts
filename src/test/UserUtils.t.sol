@@ -3,11 +3,12 @@ pragma solidity ^0.8.7;
 
 import {DSTest} from "ds-test/test.sol";
 import {PoolUser} from "./User.t.sol";
-import {Pool, Receiver} from "../Pool.sol";
+import {DripsReceiver, Pool, Receiver} from "../Pool.sol";
 
 abstract contract PoolUserUtils is DSTest {
     mapping(PoolUser => bytes) internal currReceivers;
     mapping(PoolUser => mapping(uint256 => bytes)) internal currSubSenderReceivers;
+    mapping(PoolUser => bytes) internal currDripsReceivers;
 
     function getCurrReceivers(PoolUser user) internal view returns (Receiver[] memory) {
         return decodeReceivers(currReceivers[user]);
@@ -39,6 +40,19 @@ abstract contract PoolUserUtils is DSTest {
         } else {
             return abi.decode(encoded, (Receiver[]));
         }
+    }
+
+    function getCurrDripsReceivers(PoolUser user) internal view returns (DripsReceiver[] memory) {
+        bytes storage encoded = currDripsReceivers[user];
+        if (encoded.length == 0) {
+            return new DripsReceiver[](0);
+        } else {
+            return abi.decode(encoded, (DripsReceiver[]));
+        }
+    }
+
+    function setCurrDripsReceivers(PoolUser user, DripsReceiver[] memory newReceivers) internal {
+        currDripsReceivers[user] = abi.encode(newReceivers);
     }
 
     function receivers() internal pure returns (Receiver[] memory list) {
@@ -201,6 +215,62 @@ abstract contract PoolUserUtils is DSTest {
             balanceTo,
             getCurrSubSenderReceivers(user, subSenderId)
         );
+    }
+
+    function dripsReceivers() internal pure returns (DripsReceiver[] memory list) {
+        list = new DripsReceiver[](0);
+    }
+
+    function dripsReceivers(PoolUser user, uint32 weight)
+        internal
+        pure
+        returns (DripsReceiver[] memory list)
+    {
+        list = new DripsReceiver[](1);
+        list[0] = DripsReceiver(address(user), weight);
+    }
+
+    function dripsReceivers(
+        PoolUser user1,
+        uint32 weight1,
+        PoolUser user2,
+        uint32 weight2
+    ) internal pure returns (DripsReceiver[] memory list) {
+        list = new DripsReceiver[](2);
+        list[0] = DripsReceiver(address(user1), weight1);
+        list[1] = DripsReceiver(address(user2), weight2);
+    }
+
+    function setDripsReceivers(PoolUser user, DripsReceiver[] memory newReceivers) internal {
+        DripsReceiver[] memory curr = getCurrDripsReceivers(user);
+        assertDripsReceivers(user, curr);
+
+        user.setDripsReceivers(curr, newReceivers);
+
+        setCurrDripsReceivers(user, newReceivers);
+        assertDripsReceivers(user, newReceivers);
+    }
+
+    function assertSetDripsReceiversReverts(
+        PoolUser user,
+        DripsReceiver[] memory newReceivers,
+        string memory expectedReason
+    ) internal {
+        DripsReceiver[] memory curr = getCurrDripsReceivers(user);
+        assertDripsReceivers(user, curr);
+        try user.setDripsReceivers(curr, newReceivers) {
+            assertTrue(false, "Drips receivers update hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, expectedReason, "Invalid drips receivers update revert reason");
+        }
+    }
+
+    function assertDripsReceivers(PoolUser user, DripsReceiver[] memory expectedReceivers)
+        internal
+    {
+        bytes32 actual = user.dripsReceiversHash();
+        bytes32 expected = user.hashDripsReceivers(expectedReceivers);
+        assertEq(actual, expected, "Invalid drips receivers list hash");
     }
 
     function collect(PoolUser user, uint128 expectedAmt) internal {
