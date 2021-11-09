@@ -28,24 +28,15 @@ contract EthPool is Pool {
     /// @param currReceivers The list of the user's receivers which is currently in use.
     /// If this function is called for the first time for the user, should be an empty array.
     /// @param newReceivers The new list of the user's receivers.
+    /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
     /// @return withdrawn The actually withdrawn amount.
     /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
-    /// @return collected The collected amount
-    /// @return dripped The amount dripped to the user's receivers
     function updateSender(
         uint128 withdraw,
         uint32 dripsFraction,
         Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers
-    )
-        public
-        payable
-        returns (
-            uint128 withdrawn,
-            uint128 collected,
-            uint128 dripped
-        )
-    {
+    ) public payable returns (uint128 withdrawn) {
         return
             _updateSenderInternal(
                 msg.sender,

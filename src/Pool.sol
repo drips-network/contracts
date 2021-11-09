@@ -423,13 +423,11 @@ abstract contract Pool {
         _transfer(giverAddr, -int128(amt));
     }
 
-    /// @notice Collects received funds and updates all the sender parameters of the user.
+    /// @notice Updates all the sender parameters of the user.
     /// See `_updateAnySender` for more details.
     /// @param senderAddr The address of the sender
     /// @return withdrawn The withdrawn amount which should be sent to the user.
     /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
-    /// @return collected The collected amount
-    /// @return dripped The amount dripped to the user's receivers
     function _updateSenderInternal(
         address senderAddr,
         uint128 topUpAmt,
@@ -437,15 +435,7 @@ abstract contract Pool {
         uint32 dripsFraction,
         Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers
-    )
-        internal
-        returns (
-            uint128 withdrawn,
-            uint128 collected,
-            uint128 dripped
-        )
-    {
-        (collected, dripped) = _collectInternal(senderAddr, currReceivers);
+    ) internal returns (uint128 withdrawn) {
         Sender memory sender = senders[senderAddr];
         withdrawn = _updateAnySender(
             sender,
@@ -458,7 +448,7 @@ abstract contract Pool {
         );
         senders[senderAddr] = sender;
         emit SenderUpdated(senderAddr, sender.startBalance, sender.dripsFraction, newReceivers);
-        _transfer(senderAddr, int128(withdrawn) + int128(collected) - int128(topUpAmt));
+        _transfer(senderAddr, int128(withdrawn) - int128(topUpAmt));
     }
 
     /// @notice Updates all the parameters of the sender's sub-sender.
@@ -501,6 +491,7 @@ abstract contract Pool {
     /// @param currReceivers The list of the user's receivers which is currently in use.
     /// If this function is called for the first time for the user, should be an empty array.
     /// @param newReceivers The new list of the user's receivers.
+    /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
     /// @return withdrawn The withdrawn amount which should be sent to the user.
     /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
     function _updateAnySender(
@@ -552,6 +543,7 @@ abstract contract Pool {
     /// @param currReceivers The list of the user's receivers which is currently in use.
     /// If this function is called for the first time for the user, should be an empty array.
     /// @param newReceivers The new list of the user's receivers.
+    /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
     /// @param currEndTime Time when sending using `currReceivers` was supposed to stop.
     /// @param newEndTime Time when sending using `newReceivers` will be supposed to stop.
     function _updateStreams(
@@ -762,7 +754,7 @@ abstract contract Pool {
 
     /// @notice Calculates the hash of the list of receivers.
     /// @param receivers The list of the receivers.
-    /// Must be sorted by the receivers' addresses and deduplicated.
+    /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
     /// @return receiversHash The hash of the list of receivers.
     function hashReceivers(Receiver[] calldata receivers)
         public
@@ -869,9 +861,10 @@ abstract contract Pool {
         }
     }
 
-    /// @notice Sets the receivers of the sender.
+    /// @notice Validates and sets the receivers of the sender.
     /// @param sender The updated sender
-    /// @param receivers The new list of the user's receivers
+    /// @param receivers The new list of the user's receivers.
+    /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
     /// @return totalAmtPerSec The total amount per second
     function _setReceiversHash(Sender memory sender, Receiver[] calldata receivers)
         internal

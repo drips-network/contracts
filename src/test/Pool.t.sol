@@ -543,47 +543,6 @@ abstract contract PoolTest is PoolUserUtils {
         collect(receiver3, 2);
     }
 
-    function testUpdateSenderCollects() public {
-        updateSender(sender1, 0, 10, 0, receivers(sender2, 10));
-        warpToCycleEnd();
-        uint256 balanceOld = sender2.balance();
-        (uint128 withdrawn, uint128 collected, uint128 dripped) = sender2.updateSender(
-            0,
-            0,
-            0,
-            receivers(),
-            receivers()
-        );
-        assertEq(withdrawn, 0, "Invalid withdrawn");
-        assertEq(collected, 10, "Invalid collected");
-        assertEq(dripped, 0, "Invalid dripped");
-        assertBalance(sender2, balanceOld + 10);
-    }
-
-    function testUpdateSenderDrips() public {
-        uint32 dripsFractionMax = sender.getDripsFractionMax();
-        // Sender2 drips to receiver1
-        updateSender(sender2, 0, 0, dripsFractionMax, receivers(receiver1, 1));
-        updateSender(sender1, 0, 10, 0, receivers(sender2, 10));
-        warpToCycleEnd();
-        uint256 balanceOld = sender2.balance();
-        // New sender2 configuration, stops dripping to receiver1
-        (uint128 withdrawn, uint128 collected, uint128 dripped) = sender2.updateSender(
-            0,
-            0,
-            0,
-            receivers(receiver1, 1),
-            receivers(receiver2, 1)
-        );
-        assertEq(withdrawn, 0, "Invalid withdrawn");
-        assertEq(collected, 0, "Invalid collected");
-        assertEq(dripped, 10, "Invalid dripped");
-        assertBalance(sender2, balanceOld);
-        // Dripped according to the old sender2 configuration
-        collect(receiver1, 10);
-        assertCollectable(receiver2, 0);
-    }
-
     function testFlushSomeCycles() public {
         // Enough for 3 cycles
         uint128 amt = pool.cycleSecs() * 3;

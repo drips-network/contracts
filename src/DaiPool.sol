@@ -51,14 +51,7 @@ contract DaiPool is ERC20Pool {
         Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers,
         PermitArgs calldata permitArgs
-    )
-        public
-        returns (
-            uint128 withdrawn,
-            uint128 collected,
-            uint128 dripped
-        )
-    {
+    ) public returns (uint128 withdrawn) {
         permit(permitArgs);
         return updateSender(topUpAmt, withdraw, dripsFraction, currReceivers, newReceivers);
     }

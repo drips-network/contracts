@@ -93,7 +93,7 @@ abstract contract PoolUserUtils is DSTest {
         Receiver[] memory curr = getCurrReceivers(user);
         assertReceivers(user, curr);
 
-        (uint128 withdrawn, uint128 collected, uint128 dripped) = user.updateSender(
+        uint128 withdrawn = user.updateSender(
             toppedUp,
             withdraw,
             dripsFraction,
@@ -103,8 +103,6 @@ abstract contract PoolUserUtils is DSTest {
 
         setCurrReceivers(user, newReceivers);
         assertEq(withdrawn, withdraw, "Expected amount not withdrawn");
-        assertEq(collected, 0, "Expected non-withdrawing sender update");
-        assertEq(dripped, 0, "Expected non-dripping sender update");
         assertWithdrawable(user, balanceTo);
         assertBalance(user, expectedBalance);
         assertEq(
