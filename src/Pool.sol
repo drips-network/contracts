@@ -66,8 +66,6 @@ abstract contract Pool {
     uint32 public constant MAX_DRIPS_RECEIVERS = 200;
     /// @notice The total drips weights of a user
     uint32 public constant TOTAL_DRIPS_WEIGHTS = 1_000_000;
-    /// @notice Maximum value of drips fraction
-    uint32 public constant MAX_DRIPS_FRACTION = 1_000_000;
     /// @notice The amount passed as the withdraw amount to withdraw all the funds
     uint128 public constant WITHDRAW_ALL = type(uint128).max;
 
@@ -111,16 +109,8 @@ abstract contract Pool {
     /// @notice Emitted when a sender is updated
     /// @param sender The updated sender
     /// @param balance The sender's balance since the event block's timestamp
-    /// @param dripsFraction The fraction of received funds to be dripped.
-    /// A value from 0 to `MAX_DRIPS_FRACTION` inclusively,
-    /// where 0 means no dripping and `MAX_DRIPS_FRACTION` dripping everything.
     /// @param receivers The list of the user's receivers.
-    event SenderUpdated(
-        address indexed sender,
-        uint128 balance,
-        uint32 dripsFraction,
-        Receiver[] receivers
-    );
+    event SenderUpdated(address indexed sender, uint128 balance, Receiver[] receivers);
 
     /// @notice Emitted when a sender is updated
     /// @param senderAddr The address of the sender
@@ -175,10 +165,6 @@ abstract contract Pool {
         uint64 startTime;
         // The amount available when the funding period has started
         uint128 startBalance;
-        // The fraction of received funds to be dripped.
-        // Always has value from 0 to `MAX_DRIPS_FRACTION` inclusively,
-        // where 0 means no dripping and `MAX_DRIPS_FRACTION` dripping everything.
-        uint32 dripsFraction;
         // --- SLOT BOUNDARY
         // Keccak256 of the ABI-encoded list of `Receiver`s describing receivers of the sender
         bytes32 receiversHash;
@@ -433,7 +419,6 @@ abstract contract Pool {
         address senderAddr,
         uint128 topUpAmt,
         uint128 withdrawAmt,
-        uint32 dripsFraction,
         Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers
     ) internal returns (uint128 withdrawn) {
@@ -443,12 +428,11 @@ abstract contract Pool {
             _senderId(senderAddr),
             topUpAmt,
             withdrawAmt,
-            dripsFraction,
             currReceivers,
             newReceivers
         );
         senders[senderAddr] = sender;
-        emit SenderUpdated(senderAddr, sender.startBalance, sender.dripsFraction, newReceivers);
+        emit SenderUpdated(senderAddr, sender.startBalance, newReceivers);
         _transfer(senderAddr, int128(withdrawn) - int128(topUpAmt));
     }
 
@@ -470,7 +454,6 @@ abstract contract Pool {
             _subSenderId(senderAddr, subSenderId),
             topUpAmt,
             withdrawAmt,
-            0,
             currReceivers,
             newReceivers
         );
@@ -486,9 +469,6 @@ abstract contract Pool {
     /// @param topUpAmt The topped up amount.
     /// @param withdrawAmt The amount to be withdrawn, must not be higher than available funds.
     /// Can be `WITHDRAW_ALL` to withdraw everything.
-    /// @param dripsFraction The fraction of received funds to be dripped.
-    /// Must be a value from 0 to `MAX_DRIPS_FRACTION` inclusively,
-    /// where 0 means no dripping and `MAX_DRIPS_FRACTION` dripping everything.
     /// @param currReceivers The list of the user's receivers which is currently in use.
     /// If this function is called for the first time for the user, should be an empty array.
     /// @param newReceivers The new list of the user's receivers.
@@ -500,13 +480,11 @@ abstract contract Pool {
         SenderId memory senderId,
         uint128 topUpAmt,
         uint128 withdrawAmt,
-        uint32 dripsFraction,
         Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers
     ) internal returns (uint128 withdrawn) {
         _assertCurrReceiversHash(sender.receiversHash, currReceivers);
         uint128 newAmtPerSec = _setReceiversHash(sender, newReceivers);
-        _setDripsFraction(sender, dripsFraction);
         uint128 currAmtPerSec = _totalAmtPerSec(currReceivers);
         uint64 currEndTime = _sendingEndTime(sender, currAmtPerSec);
         withdrawn = _updateSenderBalance(sender, topUpAmt, withdrawAmt, currAmtPerSec, currEndTime);
@@ -712,25 +690,6 @@ abstract contract Pool {
         require(amt <= startBalance, "Not enough funds in the sender account");
         sender.startBalance = startBalance - amt;
         return amt;
-    }
-
-    /// @notice Sets the fraction of received funds to be dripped by the sender.
-    /// @param sender The updated sender
-    /// @param dripsFraction The fraction of received funds to be dripped.
-    /// Must be a value from 0 to `MAX_DRIPS_FRACTION` inclusively,
-    /// where 0 means no dripping and `MAX_DRIPS_FRACTION` dripping everything.
-    function _setDripsFraction(Sender memory sender, uint32 dripsFraction) internal pure {
-        require(dripsFraction <= MAX_DRIPS_FRACTION, "Drip fraction too high");
-        sender.dripsFraction = dripsFraction;
-    }
-
-    /// @notice Gets the fraction of received funds to be dripped by the provided user.
-    /// @param userAddr The address of the user
-    /// @return dripsFraction The fraction of received funds to be dripped.
-    /// A value from 0 to `MAX_DRIPS_FRACTION` inclusively,
-    /// where 0 means no dripping and `MAX_DRIPS_FRACTION` dripping everything.
-    function getDripsFraction(address userAddr) public view returns (uint32 dripsFraction) {
-        return senders[userAddr].dripsFraction;
     }
 
     /// @notice Asserts that the list of receivers is the sender's currently used one.

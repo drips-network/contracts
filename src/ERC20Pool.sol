@@ -29,9 +29,6 @@ contract ERC20Pool is Pool {
     /// @param topUpAmt The topped up amount
     /// @param withdraw The amount to be withdrawn, must not be higher than available funds.
     /// Can be `WITHDRAW_ALL` to withdraw everything.
-    /// @param dripsFraction The fraction of received funds to be dripped.
-    /// Must be a value from 0 to `MAX_DRIPS_FRACTION` inclusively,
-    /// where 0 means no dripping and `MAX_DRIPS_FRACTION` dripping everything.
     /// @param currReceivers The list of the user's receivers which is currently in use.
     /// If this function is called for the first time for the user, should be an empty array.
     /// @param newReceivers The new list of the user's receivers.
@@ -41,19 +38,10 @@ contract ERC20Pool is Pool {
     function updateSender(
         uint128 topUpAmt,
         uint128 withdraw,
-        uint32 dripsFraction,
         Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers
     ) public returns (uint128 withdrawn) {
-        return
-            _updateSenderInternal(
-                msg.sender,
-                topUpAmt,
-                withdraw,
-                dripsFraction,
-                currReceivers,
-                newReceivers
-            );
+        return _updateSenderInternal(msg.sender, topUpAmt, withdraw, currReceivers, newReceivers);
     }
 
     /// @notice Updates all the parameters of a sub-sender of the sender of the message.

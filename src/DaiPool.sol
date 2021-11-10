@@ -47,13 +47,12 @@ contract DaiPool is ERC20Pool {
     function updateSenderAndPermit(
         uint128 topUpAmt,
         uint128 withdraw,
-        uint32 dripsFraction,
         Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers,
         PermitArgs calldata permitArgs
     ) public returns (uint128 withdrawn) {
         permit(permitArgs);
-        return updateSender(topUpAmt, withdraw, dripsFraction, currReceivers, newReceivers);
+        return updateSender(topUpAmt, withdraw, currReceivers, newReceivers);
     }
 
     /// @notice Updates all the parameters of a sub-sender of the sender of the message

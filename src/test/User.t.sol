@@ -10,14 +10,9 @@ abstract contract PoolUser {
 
     function balance() public view virtual returns (uint256);
 
-    function getDripsFractionMax() public view returns (uint32) {
-        return getPool().MAX_DRIPS_FRACTION();
-    }
-
     function updateSender(
         uint128 toppedUp,
         uint128 withdraw,
-        uint32 dripsFraction,
         Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers
     ) public virtual returns (uint128 withdrawn);
@@ -78,10 +73,6 @@ abstract contract PoolUser {
         return getPool().withdrawableSubSender(address(this), subSenderId, currReceivers);
     }
 
-    function getDripsFraction() public view returns (uint32) {
-        return getPool().getDripsFraction(address(this));
-    }
-
     function hashReceivers(Receiver[] calldata receivers) public view returns (bytes32) {
         return getPool().hashReceivers(receivers);
     }
@@ -125,12 +116,11 @@ contract ERC20PoolUser is PoolUser {
     function updateSender(
         uint128 toppedUp,
         uint128 withdraw,
-        uint32 dripsFraction,
         Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers
     ) public override returns (uint128 withdrawn) {
         pool.erc20().approve(address(pool), toppedUp);
-        return pool.updateSender(toppedUp, withdraw, dripsFraction, currReceivers, newReceivers);
+        return pool.updateSender(toppedUp, withdraw, currReceivers, newReceivers);
     }
 
     function updateSubSender(
@@ -187,17 +177,10 @@ contract EthPoolUser is PoolUser {
     function updateSender(
         uint128 toppedUp,
         uint128 withdraw,
-        uint32 dripsFraction,
         Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers
     ) public override returns (uint128 withdrawn) {
-        return
-            pool.updateSender{value: toppedUp}(
-                withdraw,
-                dripsFraction,
-                currReceivers,
-                newReceivers
-            );
+        return pool.updateSender{value: toppedUp}(withdraw, currReceivers, newReceivers);
     }
 
     function updateSubSender(

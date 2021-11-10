@@ -83,7 +83,6 @@ abstract contract PoolUserUtils is DSTest {
         PoolUser user,
         uint128 balanceFrom,
         uint128 balanceTo,
-        uint32 dripsFraction,
         Receiver[] memory newReceivers
     ) internal {
         assertWithdrawable(user, balanceFrom);
@@ -93,23 +92,12 @@ abstract contract PoolUserUtils is DSTest {
         Receiver[] memory curr = getCurrReceivers(user);
         assertReceivers(user, curr);
 
-        uint128 withdrawn = user.updateSender(
-            toppedUp,
-            withdraw,
-            dripsFraction,
-            curr,
-            newReceivers
-        );
+        uint128 withdrawn = user.updateSender(toppedUp, withdraw, curr, newReceivers);
 
         setCurrReceivers(user, newReceivers);
         assertEq(withdrawn, withdraw, "Expected amount not withdrawn");
         assertWithdrawable(user, balanceTo);
         assertBalance(user, expectedBalance);
-        assertEq(
-            user.getDripsFraction(),
-            dripsFraction,
-            "Invalid dripsFraction after updateSender"
-        );
         assertReceivers(user, newReceivers);
     }
 
@@ -129,12 +117,12 @@ abstract contract PoolUserUtils is DSTest {
         uint128 balanceFrom,
         uint128 balanceTo
     ) internal {
-        updateSender(user, balanceFrom, balanceTo, user.getDripsFraction(), getCurrReceivers(user));
+        updateSender(user, balanceFrom, balanceTo, getCurrReceivers(user));
     }
 
     function setReceivers(PoolUser user, Receiver[] memory newReceivers) internal {
         uint128 withdrawable = user.withdrawable(getCurrReceivers(user));
-        updateSender(user, withdrawable, withdrawable, user.getDripsFraction(), newReceivers);
+        updateSender(user, withdrawable, withdrawable, newReceivers);
     }
 
     function assertSetReceiversReverts(
@@ -142,7 +130,7 @@ abstract contract PoolUserUtils is DSTest {
         Receiver[] memory newReceivers,
         string memory expectedReason
     ) internal {
-        try user.updateSender(0, 0, user.getDripsFraction(), getCurrReceivers(user), newReceivers) {
+        try user.updateSender(0, 0, getCurrReceivers(user), newReceivers) {
             assertTrue(false, "Sender receivers update hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, expectedReason, "Invalid sender receivers update revert reason");
