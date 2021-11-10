@@ -232,16 +232,16 @@ abstract contract Pool {
 
     /// @notice Returns amount of received funds available for collection
     /// @param receiverAddr The address of the receiver
-    /// @param currReceivers The list of the user's current receivers.
+    /// @param currReceivers The list of the user's current drips receivers.
     /// @return collected The collected amount
     /// @return dripped The amount dripped to the user's receivers
-    function collectable(address receiverAddr, Receiver[] calldata currReceivers)
+    function collectable(address receiverAddr, DripsReceiver[] calldata currReceivers)
         public
         view
         returns (uint128 collected, uint128 dripped)
     {
         ReceiverState storage receiver = receiverStates[receiverAddr];
-        _assertCurrReceivers(senders[receiverAddr], currReceivers);
+        _assertCurrDripsReceivers(receiverAddr, currReceivers);
 
         // Collectable independently from cycles
         collected = receiver.collectable;
@@ -260,23 +260,25 @@ abstract contract Pool {
 
         // Dripped when collected
         if (collected > 0 && currReceivers.length > 0) {
-            Sender storage sender = senders[receiverAddr];
-            dripped = uint128((uint160(collected) * sender.dripsFraction) / MAX_DRIPS_FRACTION);
+            uint32 drippedWeight = 0;
+            for (uint256 i = 0; i < currReceivers.length; i++) {
+                drippedWeight += currReceivers[i].weight;
+            }
+            dripped = uint128((uint160(collected) * drippedWeight) / TOTAL_DRIPS_WEIGHTS);
             collected -= dripped;
         }
     }
 
     /// @notice Collects all received funds available for the user and sends them to that user
     /// @param receiverAddr The address of the receiver
-    /// @param currReceivers The list of the user's current receivers.
+    /// @param currReceivers The list of the user's current drips receivers.
     /// @return collected The collected amount
     /// @return dripped The amount dripped to the user's receivers
-    function collect(address receiverAddr, Receiver[] calldata currReceivers)
+    function collect(address receiverAddr, DripsReceiver[] calldata currReceivers)
         public
         returns (uint128 collected, uint128 dripped)
     {
         (collected, dripped) = _collectInternal(receiverAddr, currReceivers);
-        emit Collected(receiverAddr, collected, dripped);
         _transfer(receiverAddr, int128(collected));
     }
 
@@ -317,16 +319,15 @@ abstract contract Pool {
     /// @notice Removes from the history and returns the amount of received
     /// funds available for collection by the user
     /// @param receiverAddr The address of the receiver
-    /// @param currReceivers The list of the user's current receivers.
+    /// @param currReceivers The list of the user's current drips receivers.
     /// @return collected The collected amount
     /// @return dripped The amount dripped to the user's receivers
-    function _collectInternal(address receiverAddr, Receiver[] calldata currReceivers)
+    function _collectInternal(address receiverAddr, DripsReceiver[] calldata currReceivers)
         internal
         returns (uint128 collected, uint128 dripped)
     {
         ReceiverState storage receiver = receiverStates[receiverAddr];
-        Sender storage sender = senders[receiverAddr];
-        _assertCurrReceivers(sender, currReceivers);
+        _assertCurrDripsReceivers(receiverAddr, currReceivers);
 
         // Collectable independently from cycles
         collected = receiver.collectable;
@@ -337,14 +338,13 @@ abstract contract Pool {
         collected += _flushCyclesInternal(receiverAddr, cycles);
 
         // Dripped when collected
-        if (collected > 0 && currReceivers.length > 0 && sender.dripsFraction > 0) {
-            uint256 drippable = (uint256(collected) * sender.dripsFraction) / MAX_DRIPS_FRACTION;
-            uint128 totalAmtPerSec = _totalAmtPerSec(currReceivers);
-            uint128 drippedAmtPerSec = 0;
+        if (collected > 0 && currReceivers.length > 0) {
+            uint32 drippedWeight = 0;
             for (uint256 i = 0; i < currReceivers.length; i++) {
-                drippedAmtPerSec += currReceivers[i].amtPerSec;
-                uint128 dripAmt = uint128((drippable * drippedAmtPerSec) / totalAmtPerSec) -
-                    dripped;
+                drippedWeight += currReceivers[i].weight;
+                uint128 dripAmt = uint128(
+                    (uint160(collected) * drippedWeight) / TOTAL_DRIPS_WEIGHTS - dripped
+                );
                 dripped += dripAmt;
                 address dripsAddr = currReceivers[i].receiver;
                 receiverStates[dripsAddr].collectable += dripAmt;
@@ -352,6 +352,7 @@ abstract contract Pool {
             }
             collected -= dripped;
         }
+        emit Collected(receiverAddr, collected, dripped);
     }
 
     /// @notice Collects and clears receiver's cycles

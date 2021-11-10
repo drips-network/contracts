@@ -302,7 +302,7 @@ abstract contract PoolUserUtils is DSTest {
 
         (uint128 collectedAmt, uint128 drippedAmt) = user.collect(
             address(collected),
-            getCurrReceivers(user)
+            getCurrDripsReceivers(user)
         );
 
         assertEq(collectedAmt, expectedCollected, "Invalid collected amount");
@@ -320,7 +320,9 @@ abstract contract PoolUserUtils is DSTest {
         uint128 expectedCollected,
         uint128 expectedDripped
     ) internal {
-        (uint128 actualCollected, uint128 actualDripped) = user.collectable(getCurrReceivers(user));
+        (uint128 actualCollected, uint128 actualDripped) = user.collectable(
+            getCurrDripsReceivers(user)
+        );
         assertEq(actualCollected, expectedCollected, "Invalid collectable");
         assertEq(actualDripped, expectedDripped, "Invalid drippable");
     }

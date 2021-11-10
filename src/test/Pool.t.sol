@@ -122,12 +122,12 @@ abstract contract PoolTest is PoolUserUtils {
         collect(receiver, 7);
     }
 
-    function testCollectRevertsIfInvalidCurrReceivers() public {
-        updateSender(sender, 0, 0, 0, receivers(receiver, 1));
-        try sender.collect(address(sender), receivers(receiver, 2)) {
+    function testCollectRevertsIfInvalidCurrDripsReceivers() public {
+        setDripsReceivers(sender, dripsReceivers(receiver, 1));
+        try sender.collect(address(sender), dripsReceivers(receiver, 2)) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, "Invalid current receivers", "Invalid collect revert reason");
+            assertEq(reason, "Invalid current drips receivers", "Invalid collect revert reason");
         }
     }
 
@@ -145,12 +145,16 @@ abstract contract PoolTest is PoolUserUtils {
         collect(receiver, 99);
     }
 
-    function testCollectableRevertsIfInvalidCurrReceivers() public {
-        updateSender(sender, 0, 0, 0, receivers(receiver, 1));
-        try sender.collectable(receivers(receiver, 2)) {
+    function testCollectableRevertsIfInvalidCurrDripsReceivers() public {
+        setDripsReceivers(sender, dripsReceivers(receiver, 1));
+        try sender.collectable(dripsReceivers(receiver, 2)) {
             assertTrue(false, "Collectable hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, "Invalid current receivers", "Invalid collectable revert reason");
+            assertEq(
+                reason,
+                "Invalid current drips receivers",
+                "Invalid collectable revert reason"
+            );
         }
     }
 
@@ -411,7 +415,7 @@ abstract contract PoolTest is PoolUserUtils {
         assertSetDripsReceiversReverts(sender, receiversBad, "Too many drips receivers");
     }
 
-    function testRejectsTooHighTotalWeight() public {
+    function testRejectsTooHighTotalWeightDripsReceivers() public {
         uint32 totalWeight = pool.TOTAL_DRIPS_WEIGHTS();
         setDripsReceivers(sender, dripsReceivers(receiver, totalWeight));
         assertSetDripsReceiversReverts(
@@ -469,9 +473,9 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testCollectDrips() public {
-        uint32 dripsFractionMax = sender.getDripsFractionMax();
+        uint32 totalWeight = pool.TOTAL_DRIPS_WEIGHTS();
         updateSender(sender, 0, 10, 0, receivers(receiver1, 10));
-        updateSender(receiver1, 0, 0, dripsFractionMax, receivers(receiver2, 1));
+        setDripsReceivers(receiver1, dripsReceivers(receiver2, totalWeight));
         warpToCycleEnd();
         assertCollectable(receiver2, 0);
         // Receiver1 had 1 second paying 10 per second of which 10 is dripped
@@ -481,10 +485,10 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testCollectDripsFundsFromDrips() public {
-        uint32 dripsFractionMax = sender.getDripsFractionMax();
+        uint32 totalWeight = pool.TOTAL_DRIPS_WEIGHTS();
         updateSender(sender, 0, 10, 0, receivers(receiver1, 10));
-        updateSender(receiver1, 0, 0, dripsFractionMax, receivers(receiver2, 1));
-        updateSender(receiver2, 0, 0, dripsFractionMax, receivers(receiver3, 1));
+        setDripsReceivers(receiver1, dripsReceivers(receiver2, totalWeight));
+        setDripsReceivers(receiver2, dripsReceivers(receiver3, totalWeight));
         warpToCycleEnd();
         assertCollectable(receiver2, 0);
         assertCollectable(receiver3, 0);
@@ -497,9 +501,9 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testCollectMixesStreamsAndDrips() public {
-        uint32 dripsFractionMax = sender.getDripsFractionMax();
+        uint32 totalWeight = pool.TOTAL_DRIPS_WEIGHTS();
         updateSender(sender, 0, 10, 0, receivers(receiver1, 5, receiver2, 5));
-        updateSender(receiver1, 0, 0, dripsFractionMax, receivers(receiver2, 1));
+        setDripsReceivers(receiver1, dripsReceivers(receiver2, totalWeight));
         warpToCycleEnd();
         // Receiver2 had 1 second paying 5 per second
         assertCollectable(receiver2, 5);
@@ -510,14 +514,11 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testCollectSplitsFundsBetweenReceiverAndDrips() public {
-        uint32 dripsFractionMax = sender.getDripsFractionMax();
+        uint32 totalWeight = pool.TOTAL_DRIPS_WEIGHTS();
         updateSender(sender, 0, 10, 0, receivers(receiver1, 10));
-        updateSender(
+        setDripsReceivers(
             receiver1,
-            0,
-            0,
-            (dripsFractionMax * 3) / 4,
-            receivers(receiver2, 1, receiver3, 2)
+            dripsReceivers(receiver2, totalWeight / 4, receiver3, totalWeight / 2)
         );
         warpToCycleEnd();
         assertCollectable(receiver2, 0);
@@ -531,9 +532,12 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testCanDripAllWhenCollectedDoesntSplitEvenly() public {
-        uint32 dripsFractionMax = sender.getDripsFractionMax();
+        uint32 totalWeight = pool.TOTAL_DRIPS_WEIGHTS();
         updateSender(sender, 0, 3, 0, receivers(receiver1, 3));
-        updateSender(receiver1, 0, 0, dripsFractionMax, receivers(receiver2, 1, receiver3, 1));
+        setDripsReceivers(
+            receiver1,
+            dripsReceivers(receiver2, totalWeight / 2, receiver3, totalWeight / 2)
+        );
         warpToCycleEnd();
         // Receiver1 had 1 second paying 3 per second of which 3 is dripped
         collect(receiver1, 0, 3);

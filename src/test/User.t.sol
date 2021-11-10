@@ -43,14 +43,14 @@ abstract contract PoolUser {
         DripsReceiver[] calldata newReceivers
     ) public virtual;
 
-    function collect(address receiverAddr, Receiver[] calldata currReceivers)
+    function collect(address receiverAddr, DripsReceiver[] calldata currReceivers)
         public
         returns (uint128 collected, uint128 dripped)
     {
         return getPool().collect(receiverAddr, currReceivers);
     }
 
-    function collectable(Receiver[] calldata currReceivers)
+    function collectable(DripsReceiver[] calldata currReceivers)
         public
         view
         returns (uint128 collected, uint128 dripped)
