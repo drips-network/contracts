@@ -744,7 +744,7 @@ abstract contract Pool {
         return subSenders[senderAddr][subSenderId].receiversHash;
     }
 
-    /// @notice Sets a new list of drips receivers of a user
+    /// @notice Collects received funds and sets a new list of drips receivers of the user.
     /// @param userAddr The user address
     /// @param currReceivers The list of the user's drips receivers which is currently in use.
     /// If this function is called for the first time for the user, should be an empty array.
@@ -752,15 +752,18 @@ abstract contract Pool {
     /// Must be sorted by the drips receivers' addresses, deduplicated and without 0 weights.
     /// Each drips receiver will be getting `weight / TOTAL_DRIPS_WEIGHTS`
     /// share of the funds collected by the user.
+    /// @return collected The collected amount
+    /// @return dripped The amount dripped to the user's receivers
     function _setDripsReceiversInternal(
         address userAddr,
         DripsReceiver[] calldata currReceivers,
         DripsReceiver[] calldata newReceivers
-    ) internal {
-        _assertCurrDripsReceivers(userAddr, currReceivers);
+    ) internal returns (uint128 collected, uint128 dripped) {
+        (collected, dripped) = _collectInternal(userAddr, currReceivers);
         _assertDripsReceiversValid(newReceivers);
         dripsReceiversHash[userAddr] = hashDripsReceivers(newReceivers);
         emit DripsReceiversUpdated(userAddr, newReceivers);
+        _transfer(userAddr, int128(collected));
     }
 
     /// @notice Validates a list of drips receivers

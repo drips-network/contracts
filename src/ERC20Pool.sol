@@ -20,8 +20,7 @@ contract ERC20Pool is Pool {
         erc20 = _erc20;
     }
 
-    /// @notice Collects received funds and updates all the sender parameters
-    //// of the sender of the message.
+    /// @notice Updates all the sender parameters of the sender of the message.
     ///
     /// Tops up and withdraws unsent funds from the balance of the sender.
     /// The sender must first grant the contract a sufficient allowance to top up.
@@ -86,18 +85,21 @@ contract ERC20Pool is Pool {
         _giveFromSubSenderInternal(msg.sender, subSenderId, receiver, amt);
     }
 
-    /// @notice Sets a new list of drips receivers of the sender of the message.
+    /// @notice Collects received funds and sets a new list of drips receivers
+    /// of the sender of the message.
     /// @param currReceivers The list of the user's drips receivers which is currently in use.
     /// If this function is called for the first time for the user, should be an empty array.
     /// @param newReceivers The new list of the user's drips receivers.
     /// Must be sorted by the drips receivers' addresses, deduplicated and without 0 weights.
     /// Each drips receiver will be getting `weight / TOTAL_DRIPS_WEIGHTS`
     /// share of the funds collected by the user.
+    /// @return collected The collected amount
+    /// @return dripped The amount dripped to the user's receivers
     function setDripsReceivers(
         DripsReceiver[] calldata currReceivers,
         DripsReceiver[] calldata newReceivers
-    ) public {
-        _setDripsReceiversInternal(msg.sender, currReceivers, newReceivers);
+    ) public returns (uint128 collected, uint128 dripped) {
+        return _setDripsReceiversInternal(msg.sender, currReceivers, newReceivers);
     }
 
     function _transfer(address userAddr, int128 amt) internal override {

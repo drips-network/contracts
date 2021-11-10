@@ -443,7 +443,7 @@ abstract contract PoolTest is PoolUserUtils {
         );
     }
 
-    function testUpdateSenderRevertsIfInvalidCurrDripsReceivers() public {
+    function testSetDripsReceiversRevertsIfInvalidCurrDripsReceivers() public {
         setDripsReceivers(sender, dripsReceivers(receiver, 1));
         try sender.setDripsReceivers(dripsReceivers(receiver, 2), dripsReceivers()) {
             assertTrue(false, "Sender update hasn't reverted");
@@ -454,6 +454,21 @@ abstract contract PoolTest is PoolUserUtils {
                 "Invalid sender update revert reason"
             );
         }
+    }
+
+    function testSetDripsReceiversCollects() public {
+        updateSender(sender, 0, 10, receivers(receiver, 10));
+        warpToCycleEnd();
+        setDripsReceivers(receiver, dripsReceivers(), 10, 0);
+    }
+
+    function testSetDripsReceiversDrips() public {
+        uint32 totalWeight = pool.TOTAL_DRIPS_WEIGHTS();
+        updateSender(sender, 0, 10, receivers(receiver1, 10));
+        setDripsReceivers(receiver1, dripsReceivers(receiver2, totalWeight));
+        warpToCycleEnd();
+        setDripsReceivers(receiver1, dripsReceivers(), 0, 10);
+        collect(receiver2, 10);
     }
 
     function testCollectDrips() public {

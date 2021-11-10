@@ -36,7 +36,7 @@ abstract contract PoolUser {
     function setDripsReceivers(
         DripsReceiver[] calldata currReceivers,
         DripsReceiver[] calldata newReceivers
-    ) public virtual;
+    ) public virtual returns (uint128 collected, uint128 dripped);
 
     function collect(address receiverAddr, DripsReceiver[] calldata currReceivers)
         public
@@ -151,8 +151,8 @@ contract ERC20PoolUser is PoolUser {
     function setDripsReceivers(
         DripsReceiver[] calldata currReceivers,
         DripsReceiver[] calldata newReceivers
-    ) public override {
-        pool.setDripsReceivers(currReceivers, newReceivers);
+    ) public override returns (uint128 collected, uint128 dripped) {
+        return pool.setDripsReceivers(currReceivers, newReceivers);
     }
 }
 
@@ -214,7 +214,7 @@ contract EthPoolUser is PoolUser {
     function setDripsReceivers(
         DripsReceiver[] calldata currReceivers,
         DripsReceiver[] calldata newReceivers
-    ) public override {
-        pool.setDripsReceivers(currReceivers, newReceivers);
+    ) public override returns (uint128 collected, uint128 dripped) {
+        return pool.setDripsReceivers(currReceivers, newReceivers);
     }
 }

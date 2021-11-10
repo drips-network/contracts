@@ -228,13 +228,28 @@ abstract contract PoolUserUtils is DSTest {
     }
 
     function setDripsReceivers(PoolUser user, DripsReceiver[] memory newReceivers) internal {
+        setDripsReceivers(user, newReceivers, 0, 0);
+    }
+
+    function setDripsReceivers(
+        PoolUser user,
+        DripsReceiver[] memory newReceivers,
+        uint128 expectedCollected,
+        uint128 expectedDripped
+    ) internal {
         DripsReceiver[] memory curr = getCurrDripsReceivers(user);
         assertDripsReceivers(user, curr);
+        assertCollectable(user, expectedCollected, expectedDripped);
+        uint256 expectedBalance = user.balance() + expectedCollected;
 
-        user.setDripsReceivers(curr, newReceivers);
+        (uint128 collected, uint128 dripped) = user.setDripsReceivers(curr, newReceivers);
 
         setCurrDripsReceivers(user, newReceivers);
         assertDripsReceivers(user, newReceivers);
+        assertEq(collected, expectedCollected, "Invalid collected amount");
+        assertEq(dripped, expectedDripped, "Invalid dripped amount");
+        assertCollectable(user, 0, 0);
+        assertBalance(user, expectedBalance);
     }
 
     function assertSetDripsReceiversReverts(
