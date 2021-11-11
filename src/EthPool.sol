@@ -34,8 +34,8 @@ contract EthPool is Pool {
         Receiver[] calldata newReceivers
     ) public payable returns (uint128 withdrawn) {
         return
-            _updateSenderInternal(
-                msg.sender,
+            _updateSender(
+                _senderId(msg.sender),
                 uint128(msg.value),
                 withdraw,
                 currReceivers,
@@ -53,9 +53,8 @@ contract EthPool is Pool {
         Receiver[] calldata newReceivers
     ) public payable returns (uint128 withdrawn) {
         return
-            _updateSubSenderInternal(
-                msg.sender,
-                subSenderId,
+            _updateSender(
+                _senderId(msg.sender, subSenderId),
                 uint128(msg.value),
                 withdraw,
                 currReceivers,
@@ -67,7 +66,7 @@ contract EthPool is Pool {
     /// The receiver can collect them immediately.
     /// @param receiver The receiver
     function give(address receiver) public payable {
-        _giveInternal(msg.sender, receiver, uint128(msg.value));
+        _give(_senderId(msg.sender), receiver, uint128(msg.value));
     }
 
     /// @notice Gives funds from the sub-sender of the sender of the message to the receiver.
@@ -75,7 +74,7 @@ contract EthPool is Pool {
     /// @param subSenderId The id of the giver's sub-sender
     /// @param receiver The receiver
     function giveFromSubSender(uint256 subSenderId, address receiver) public payable {
-        _giveFromSubSenderInternal(msg.sender, subSenderId, receiver, uint128(msg.value));
+        _give(_senderId(msg.sender, subSenderId), receiver, uint128(msg.value));
     }
 
     /// @notice Collects received funds and sets a new list of drips receivers
@@ -92,7 +91,7 @@ contract EthPool is Pool {
         DripsReceiver[] calldata currReceivers,
         DripsReceiver[] calldata newReceivers
     ) public returns (uint128 collected, uint128 dripped) {
-        return _setDripsReceiversInternal(msg.sender, currReceivers, newReceivers);
+        return _setDripsReceivers(msg.sender, currReceivers, newReceivers);
     }
 
     function _transfer(address userAddr, int128 amt) internal override {

@@ -145,14 +145,14 @@ abstract contract Pool {
     /// @notice Emitted when funds are given to the receiver.
     /// @param giver The address of the giver
     /// @param receiver The receiver
-    /// @param amt The sent amount
+    /// @param amt The given amount
     event Given(address indexed giver, address indexed receiver, uint128 amt);
 
     /// @notice Emitted when funds are given from the sub-sender to the receiver.
     /// @param giver The address of the giver
     /// @param subSenderId The ID of the giver's sub-sender
     /// @param receiver The receiver
-    /// @param amt The sent amount
+    /// @param amt The given amount
     event GivenFromSubSender(
         address indexed giver,
         uint256 indexed subSenderId,
@@ -368,103 +368,25 @@ abstract contract Pool {
 
     /// @notice Gives funds to the receiver.
     /// The receiver can collect them immediately.
-    /// @param giverAddr The address of the giver
+    /// @param senderId The sender id of the giver
     /// @param receiverAddr The receiver
     /// @param amt The given amount
-    function _giveInternal(
-        address giverAddr,
-        address receiverAddr,
-        uint128 amt
-    ) internal {
-        emit Given(giverAddr, receiverAddr, amt);
-        _giveFromAnyGiver(giverAddr, receiverAddr, amt);
-    }
-
-    /// @notice Gives funds from the sub-sender to the receiver.
-    /// The receiver can collect them immediately.
-    /// @param giverAddr The address of the giver
-    /// @param subSenderId The ID of the giver sub-sender
-    /// @param receiverAddr The receiver
-    /// @param amt The given amount
-    function _giveFromSubSenderInternal(
-        address giverAddr,
-        uint256 subSenderId,
-        address receiverAddr,
-        uint128 amt
-    ) internal {
-        emit GivenFromSubSender(giverAddr, subSenderId, receiverAddr, amt);
-        _giveFromAnyGiver(giverAddr, receiverAddr, amt);
-    }
-
-    /// @notice Gives funds to the receiver.
-    /// The receiver can collect them immediately.
-    /// @param giverAddr The address of the giver
-    /// @param receiverAddr The receiver
-    /// @param amt The given amount
-    function _giveFromAnyGiver(
-        address giverAddr,
+    function _give(
+        SenderId memory senderId,
         address receiverAddr,
         uint128 amt
     ) internal {
         receiverStates[receiverAddr].collectable += amt;
-        _transfer(giverAddr, -int128(amt));
-    }
-
-    /// @notice Updates all the sender parameters of the user.
-    /// See `_updateAnySender` for more details.
-    /// @param senderAddr The address of the sender
-    /// @return withdrawn The withdrawn amount which should be sent to the user.
-    /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
-    function _updateSenderInternal(
-        address senderAddr,
-        uint128 topUpAmt,
-        uint128 withdrawAmt,
-        Receiver[] calldata currReceivers,
-        Receiver[] calldata newReceivers
-    ) internal returns (uint128 withdrawn) {
-        Sender memory sender = senders[senderAddr];
-        withdrawn = _updateAnySender(
-            sender,
-            _senderId(senderAddr),
-            topUpAmt,
-            withdrawAmt,
-            currReceivers,
-            newReceivers
-        );
-        senders[senderAddr] = sender;
-        emit SenderUpdated(senderAddr, sender.startBalance, newReceivers);
-        _transfer(senderAddr, int128(withdrawn) - int128(topUpAmt));
-    }
-
-    /// @notice Updates all the parameters of the sender's sub-sender.
-    /// See `_updateAnySender` for more details.
-    /// @param senderAddr The address of the sender
-    /// @param subSenderId The id of the sender's sub-sender
-    function _updateSubSenderInternal(
-        address senderAddr,
-        uint256 subSenderId,
-        uint128 topUpAmt,
-        uint128 withdrawAmt,
-        Receiver[] calldata currReceivers,
-        Receiver[] calldata newReceivers
-    ) internal returns (uint128 withdrawn) {
-        Sender memory sender = subSenders[senderAddr][subSenderId];
-        withdrawn = _updateAnySender(
-            sender,
-            _subSenderId(senderAddr, subSenderId),
-            topUpAmt,
-            withdrawAmt,
-            currReceivers,
-            newReceivers
-        );
-        subSenders[senderAddr][subSenderId] = sender;
-        emit SubSenderUpdated(senderAddr, subSenderId, sender.startBalance, newReceivers);
-        _transfer(senderAddr, int128(withdrawn) - int128(topUpAmt));
+        if (senderId.isSubSender) {
+            emit GivenFromSubSender(senderId.senderAddr, senderId.subSenderId, receiverAddr, amt);
+        } else {
+            emit Given(senderId.senderAddr, receiverAddr, amt);
+        }
+        _transfer(senderId.senderAddr, -int128(amt));
     }
 
     /// @notice Updates all the sender's parameters.
     /// Tops up and withdraws unsent funds from the balance of the sender.
-    /// @param sender The updated sender
     /// @param senderId The sender id
     /// @param topUpAmt The topped up amount.
     /// @param withdrawAmt The amount to be withdrawn, must not be higher than available funds.
@@ -475,15 +397,16 @@ abstract contract Pool {
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
     /// @return withdrawn The withdrawn amount which should be sent to the user.
     /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
-    function _updateAnySender(
-        Sender memory sender,
+    function _updateSender(
         SenderId memory senderId,
         uint128 topUpAmt,
         uint128 withdrawAmt,
         Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers
     ) internal returns (uint128 withdrawn) {
-        _assertCurrReceiversHash(sender.receiversHash, currReceivers);
+        Sender memory sender = _loadSender(senderId);
+        _assertCurrReceivers(sender, currReceivers);
+
         uint128 newAmtPerSec = _setReceiversHash(sender, newReceivers);
         uint128 currAmtPerSec = _totalAmtPerSec(currReceivers);
         uint64 currEndTime = _sendingEndTime(sender, currAmtPerSec);
@@ -491,6 +414,38 @@ abstract contract Pool {
         sender.startTime = _currTimestamp();
         uint64 newEndTime = _sendingEndTime(sender, newAmtPerSec);
         _updateStreams(senderId, currReceivers, newReceivers, currEndTime, newEndTime);
+
+        _storeSender(senderId, sender);
+        _emitSenderUpdated(senderId, sender.startBalance, newReceivers);
+        _transfer(senderId.senderAddr, int128(withdrawn) - int128(topUpAmt));
+    }
+
+    function _loadSender(SenderId memory senderId) internal view returns (Sender memory) {
+        if (senderId.isSubSender) {
+            return subSenders[senderId.senderAddr][senderId.subSenderId];
+        } else {
+            return senders[senderId.senderAddr];
+        }
+    }
+
+    function _storeSender(SenderId memory senderId, Sender memory sender) internal {
+        if (senderId.isSubSender) {
+            subSenders[senderId.senderAddr][senderId.subSenderId] = sender;
+        } else {
+            senders[senderId.senderAddr] = sender;
+        }
+    }
+
+    function _emitSenderUpdated(
+        SenderId memory senderId,
+        uint128 balance,
+        Receiver[] calldata receivers
+    ) internal {
+        if (senderId.isSubSender) {
+            emit SubSenderUpdated(senderId.senderAddr, senderId.subSenderId, balance, receivers);
+        } else {
+            emit SenderUpdated(senderId.senderAddr, balance, receivers);
+        }
     }
 
     /// @notice Updates sender's `startBalance`.
@@ -574,7 +529,7 @@ abstract contract Pool {
             }
             // Apply the stream update since now
             _setDelta(receiver, _currTimestamp(), newAmt - currAmt);
-            emitStreamUpdated(senderId, receiver, uint128(newAmt), newEndTime);
+            _emitStreamUpdated(senderId, receiver, uint128(newAmt), newEndTime);
             // The receiver was never used, initialize it.
             if (!pickCurr && receiverStates[receiver].nextCollectedCycle == 0) {
                 receiverStates[receiver].nextCollectedCycle = _currTimestamp() / cycleSecs + 1;
@@ -588,7 +543,7 @@ abstract contract Pool {
     /// @param amtPerSec The new amount per second sent from the sender to the receiver
     /// or 0 if sending is stopped
     /// @param endTime The timestamp when the funds stop being sent.
-    function emitStreamUpdated(
+    function _emitStreamUpdated(
         SenderId memory senderId,
         address receiver,
         uint128 amtPerSec,
@@ -622,47 +577,43 @@ abstract contract Pool {
         return endTime > MAX_TIMESTAMP ? MAX_TIMESTAMP : uint64(endTime);
     }
 
-    /// @notice Adds the given amount to the senders balance of the user.
-    /// @param sender The updated sender
-    /// @param amt The topped up amount
-    function _topUp(Sender storage sender, uint128 amt) internal {
-        if (amt != 0) sender.startBalance += amt;
-    }
-
     /// @notice Returns amount of unsent funds available for withdrawal for the sender
     /// @param senderAddr The address of the sender
     /// @param currReceivers The list of the user's current receivers.
-    /// @return balance The available balance
+    /// @return withdrawableAmt The withdrawable amount
     function withdrawable(address senderAddr, Receiver[] calldata currReceivers)
         public
         view
-        returns (uint128)
+        returns (uint128 withdrawableAmt)
     {
-        return _withdrawableAnySender(senders[senderAddr], currReceivers);
+        SenderId memory senderId = _senderId(senderAddr);
+        return _withdrawable(senderId, currReceivers);
     }
 
     /// @notice Returns amount of unsent funds available for withdrawal for the sub-sender
     /// @param senderAddr The address of the sender
     /// @param subSenderId The id of the sender's sub-sender
     /// @param currReceivers The list of the sub-sender's current receivers.
-    /// @return balance The available balance
+    /// @return withdrawableAmt The withdrawable amount
     function withdrawableSubSender(
         address senderAddr,
         uint256 subSenderId,
         Receiver[] calldata currReceivers
-    ) public view returns (uint128) {
-        return _withdrawableAnySender(subSenders[senderAddr][subSenderId], currReceivers);
+    ) public view returns (uint128 withdrawableAmt) {
+        SenderId memory senderId = _senderId(senderAddr, subSenderId);
+        return _withdrawable(senderId, currReceivers);
     }
 
     /// @notice Returns amount of unsent funds available for withdrawal for the sender.
-    /// See `withdrawable` for more details
-    /// @param sender The queried sender
-    /// @param currReceivers The list of the user's current receivers.
-    function _withdrawableAnySender(Sender storage sender, Receiver[] calldata currReceivers)
+    /// @param senderId The id of the sender
+    /// @param currReceivers The list of the sender's current receivers.
+    /// @return withdrawableAmt The withdrawable amount
+    function _withdrawable(SenderId memory senderId, Receiver[] calldata currReceivers)
         internal
         view
-        returns (uint128)
+        returns (uint128 withdrawableAmt)
     {
+        Sender memory sender = _loadSender(senderId);
         _assertCurrReceivers(sender, currReceivers);
         uint128 amtPerSec = _totalAmtPerSec(currReceivers);
         // Hasn't been sending anything
@@ -676,40 +627,14 @@ abstract contract Pool {
         return sender.startBalance - uint128(alreadySent);
     }
 
-    /// @notice Withdraws unsent funds of the user.
-    /// @param sender The updated sender
-    /// @param amt The amount to be withdrawn, must not be higher than available funds.
-    /// Can be `WITHDRAW_ALL` to withdraw everything.
-    /// @return withdrawn The actually withdrawn amount.
-    /// Equal to `amt` unless `WITHDRAW_ALL` is used.
-    function _withdraw(Sender storage sender, uint128 amt) internal returns (uint128 withdrawn) {
-        if (amt == 0) return 0;
-        uint128 startBalance = sender.startBalance;
-        if (amt == WITHDRAW_ALL) amt = startBalance;
-        if (amt == 0) return 0;
-        require(amt <= startBalance, "Not enough funds in the sender account");
-        sender.startBalance = startBalance - amt;
-        return amt;
-    }
-
     /// @notice Asserts that the list of receivers is the sender's currently used one.
     /// @param sender The sender
     /// @param currReceivers The list of the user's current receivers.
-    function _assertCurrReceivers(Sender storage sender, Receiver[] calldata currReceivers)
-        internal
-        view
-    {
-        _assertCurrReceiversHash(sender.receiversHash, currReceivers);
-    }
-
-    /// @notice Asserts that the list of receivers is the sender's currently used one.
-    /// @param receiversHash The receivers list hash
-    /// @param currReceivers The list of the user's current receivers.
-    function _assertCurrReceiversHash(bytes32 receiversHash, Receiver[] calldata currReceivers)
+    function _assertCurrReceivers(Sender memory sender, Receiver[] calldata currReceivers)
         internal
         pure
     {
-        require(hashReceivers(currReceivers) == receiversHash, "Invalid current receivers");
+        require(hashReceivers(currReceivers) == sender.receiversHash, "Invalid current receivers");
     }
 
     /// @notice Calculates the hash of the list of receivers.
@@ -754,7 +679,7 @@ abstract contract Pool {
     /// share of the funds collected by the user.
     /// @return collected The collected amount
     /// @return dripped The amount dripped to the user's receivers
-    function _setDripsReceiversInternal(
+    function _setDripsReceivers(
         address userAddr,
         DripsReceiver[] calldata currReceivers,
         DripsReceiver[] calldata newReceivers
@@ -883,7 +808,7 @@ abstract contract Pool {
         return SenderId({isSubSender: false, senderAddr: senderAddr, subSenderId: 0});
     }
 
-    function _subSenderId(address senderAddr, uint256 subSenderId)
+    function _senderId(address senderAddr, uint256 subSenderId)
         internal
         pure
         returns (SenderId memory)

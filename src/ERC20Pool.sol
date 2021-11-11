@@ -40,7 +40,8 @@ contract ERC20Pool is Pool {
         Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers
     ) public returns (uint128 withdrawn) {
-        return _updateSenderInternal(msg.sender, topUpAmt, withdraw, currReceivers, newReceivers);
+        return
+            _updateSender(_senderId(msg.sender), topUpAmt, withdraw, currReceivers, newReceivers);
     }
 
     /// @notice Updates all the parameters of a sub-sender of the sender of the message.
@@ -54,9 +55,8 @@ contract ERC20Pool is Pool {
         Receiver[] calldata newReceivers
     ) public payable returns (uint128 withdrawn) {
         return
-            _updateSubSenderInternal(
-                msg.sender,
-                subSenderId,
+            _updateSender(
+                _senderId(msg.sender, subSenderId),
                 topUpAmt,
                 withdraw,
                 currReceivers,
@@ -69,7 +69,7 @@ contract ERC20Pool is Pool {
     /// @param receiver The receiver
     /// @param amt The sent amount
     function give(address receiver, uint128 amt) public {
-        _giveInternal(msg.sender, receiver, amt);
+        _give(_senderId(msg.sender), receiver, amt);
     }
 
     /// @notice Gives funds from the sub-sender of the sender of the message to the receiver.
@@ -82,7 +82,7 @@ contract ERC20Pool is Pool {
         address receiver,
         uint128 amt
     ) public {
-        _giveFromSubSenderInternal(msg.sender, subSenderId, receiver, amt);
+        _give(_senderId(msg.sender, subSenderId), receiver, amt);
     }
 
     /// @notice Collects received funds and sets a new list of drips receivers
@@ -99,7 +99,7 @@ contract ERC20Pool is Pool {
         DripsReceiver[] calldata currReceivers,
         DripsReceiver[] calldata newReceivers
     ) public returns (uint128 collected, uint128 dripped) {
-        return _setDripsReceiversInternal(msg.sender, currReceivers, newReceivers);
+        return _setDripsReceivers(msg.sender, currReceivers, newReceivers);
     }
 
     function _transfer(address userAddr, int128 amt) internal override {
