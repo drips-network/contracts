@@ -11,19 +11,23 @@ abstract contract PoolUser {
     function balance() public view virtual returns (uint256);
 
     function updateSender(
+        uint64 lastUpdate,
+        uint128 lastBalance,
+        Receiver[] calldata currReceivers,
         uint128 toppedUp,
         uint128 withdraw,
-        Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers
-    ) public virtual returns (uint128 withdrawn);
+    ) public virtual returns (uint128 newBalance, uint128 withdrawn);
 
     function updateSubSender(
         uint256 subSenderId,
+        uint64 lastUpdate,
+        uint128 lastBalance,
+        Receiver[] calldata currReceivers,
         uint128 toppedUp,
         uint128 withdraw,
-        Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers
-    ) public virtual returns (uint128 withdrawn);
+    ) public virtual returns (uint128 newBalance, uint128 withdrawn);
 
     function give(address receiver, uint128 amt) public virtual;
 
@@ -61,32 +65,44 @@ abstract contract PoolUser {
         return getPool().flushCycles(address(this), maxCycles);
     }
 
-    function withdrawable(Receiver[] calldata currReceivers) public view returns (uint128) {
-        return getPool().withdrawable(address(this), currReceivers);
+    function withdrawable(
+        uint64 lastUpdate,
+        uint128 lastBalance,
+        Receiver[] calldata currReceivers
+    ) public view returns (uint128) {
+        return getPool().withdrawable(address(this), lastUpdate, lastBalance, currReceivers);
     }
 
-    function withdrawableSubSender(uint256 subSenderId, Receiver[] calldata currReceivers)
-        public
-        view
-        returns (uint128)
-    {
-        return getPool().withdrawableSubSender(address(this), subSenderId, currReceivers);
+    function withdrawableSubSender(
+        uint256 subSenderId,
+        uint64 lastUpdate,
+        uint128 lastBalance,
+        Receiver[] calldata currReceivers
+    ) public view returns (uint128) {
+        return
+            getPool().withdrawableSubSender(
+                address(this),
+                subSenderId,
+                lastUpdate,
+                lastBalance,
+                currReceivers
+            );
     }
 
-    function hashReceivers(Receiver[] calldata receivers) public view returns (bytes32) {
-        return getPool().hashReceivers(receivers);
+    function hashSenderState(
+        uint64 lastUpdate,
+        uint128 lastBalance,
+        Receiver[] calldata receivers
+    ) public view returns (bytes32) {
+        return getPool().hashSenderState(lastUpdate, lastBalance, receivers);
     }
 
-    function getReceiversHash() public view returns (bytes32) {
-        return getPool().getReceiversHash(address(this));
+    function senderStateHash() public view returns (bytes32) {
+        return getPool().senderStateHash(address(this));
     }
 
-    function getSubSenderReceiversHash(uint256 subSenderId)
-        public
-        view
-        returns (bytes32 weightsHash)
-    {
-        return getPool().getSubSenderReceiversHash(address(this), subSenderId);
+    function subSenderStateHash(uint256 subSenderId) public view returns (bytes32 weightsHash) {
+        return getPool().subSenderStateHash(address(this), subSenderId);
     }
 
     function hashDripsReceivers(DripsReceiver[] calldata receivers) public view returns (bytes32) {
@@ -114,24 +130,45 @@ contract ERC20PoolUser is PoolUser {
     }
 
     function updateSender(
+        uint64 lastUpdate,
+        uint128 lastBalance,
+        Receiver[] calldata currReceivers,
         uint128 toppedUp,
         uint128 withdraw,
-        Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers
-    ) public override returns (uint128 withdrawn) {
+    ) public override returns (uint128 newBalance, uint128 withdrawn) {
         pool.erc20().approve(address(pool), toppedUp);
-        return pool.updateSender(toppedUp, withdraw, currReceivers, newReceivers);
+        return
+            pool.updateSender(
+                lastUpdate,
+                lastBalance,
+                currReceivers,
+                toppedUp,
+                withdraw,
+                newReceivers
+            );
     }
 
     function updateSubSender(
         uint256 subSenderId,
+        uint64 lastUpdate,
+        uint128 lastBalance,
+        Receiver[] calldata currReceivers,
         uint128 toppedUp,
         uint128 withdraw,
-        Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers
-    ) public override returns (uint128 withdrawn) {
+    ) public override returns (uint128 newBalance, uint128 withdrawn) {
         pool.erc20().approve(address(pool), toppedUp);
-        return pool.updateSubSender(subSenderId, toppedUp, withdraw, currReceivers, newReceivers);
+        return
+            pool.updateSubSender(
+                subSenderId,
+                lastUpdate,
+                lastBalance,
+                currReceivers,
+                toppedUp,
+                withdraw,
+                newReceivers
+            );
     }
 
     function give(address receiver, uint128 amt) public override {
@@ -175,26 +212,39 @@ contract EthPoolUser is PoolUser {
     }
 
     function updateSender(
+        uint64 lastUpdate,
+        uint128 lastBalance,
+        Receiver[] calldata currReceivers,
         uint128 toppedUp,
         uint128 withdraw,
-        Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers
-    ) public override returns (uint128 withdrawn) {
-        return pool.updateSender{value: toppedUp}(withdraw, currReceivers, newReceivers);
+    ) public override returns (uint128 newBalance, uint128 withdrawn) {
+        return
+            pool.updateSender{value: toppedUp}(
+                lastUpdate,
+                lastBalance,
+                currReceivers,
+                withdraw,
+                newReceivers
+            );
     }
 
     function updateSubSender(
         uint256 subSenderId,
+        uint64 lastUpdate,
+        uint128 lastBalance,
+        Receiver[] calldata currReceivers,
         uint128 toppedUp,
         uint128 withdraw,
-        Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers
-    ) public override returns (uint128 withdrawn) {
+    ) public override returns (uint128 newBalance, uint128 withdrawn) {
         return
             pool.updateSubSender{value: toppedUp}(
                 subSenderId,
-                withdraw,
+                lastUpdate,
+                lastBalance,
                 currReceivers,
+                withdraw,
                 newReceivers
             );
     }

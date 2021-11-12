@@ -108,15 +108,15 @@ abstract contract Pool {
 
     /// @notice Emitted when a sender is updated
     /// @param sender The updated sender
-    /// @param balance The sender's balance since the event block's timestamp
-    /// @param receivers The list of the user's receivers.
+    /// @param balance The new sender's balance
+    /// @param receivers The new list of the sender's receivers.
     event SenderUpdated(address indexed sender, uint128 balance, Receiver[] receivers);
 
-    /// @notice Emitted when a sender is updated
+    /// @notice Emitted when a sub-sender is updated
     /// @param senderAddr The address of the sender
     /// @param subSenderId The id of the sender's updated sub-sender
-    /// @param balance The sender's balance since the event block's timestamp
-    /// @param receivers The list of the user's receivers.
+    /// @param balance The sub-sender's balance
+    /// @param receivers The new list of the sub-sender's receivers.
     event SubSenderUpdated(
         address indexed senderAddr,
         uint256 indexed subSenderId,
@@ -160,16 +160,6 @@ abstract contract Pool {
         uint128 amt
     );
 
-    struct Sender {
-        // Timestamp at which the funding period has started
-        uint64 startTime;
-        // The amount available when the funding period has started
-        uint128 startBalance;
-        // --- SLOT BOUNDARY
-        // Keccak256 of the ABI-encoded list of `Receiver`s describing receivers of the sender
-        bytes32 receiversHash;
-    }
-
     struct ReceiverState {
         // The amount collectable independently from cycles
         uint128 collectable;
@@ -200,11 +190,13 @@ abstract contract Pool {
     /// @notice Current drips configuration hash, see `hashDripsReceivers`.
     /// The key is the user address.
     mapping(address => bytes32) public dripsReceiversHash;
+    /// @notice Current sender state hashe, see `hashSenderState`.
+    /// The key is the sender address.
+    mapping(address => bytes32) public senderStateHash;
+    /// @notice Current sub-sender state hashe, see `hashSenderState`.
+    /// The key are the sender address and the sub-sender ID.
+    mapping(address => mapping(uint256 => bytes32)) public subSenderStateHash;
 
-    /// @dev Details about all the senders, the key is the owner's address
-    mapping(address => Sender) internal senders;
-    /// @dev Details about all the sub-senders, the keys is the owner address and the sub-sender ID
-    mapping(address => mapping(uint256 => Sender)) internal subSenders;
     /// @dev Details about all the receivers, the key is the owner's address
     mapping(address => ReceiverState) internal receiverStates;
 
@@ -220,7 +212,7 @@ abstract contract Pool {
     /// @param receiverAddr The address of the receiver
     /// @param currReceivers The list of the user's current drips receivers.
     /// @return collected The collected amount
-    /// @return dripped The amount dripped to the user's receivers
+    /// @return dripped The amount dripped to the sender's receivers
     function collectable(address receiverAddr, DripsReceiver[] calldata currReceivers)
         public
         view
@@ -259,7 +251,7 @@ abstract contract Pool {
     /// @param receiverAddr The address of the receiver
     /// @param currReceivers The list of the user's current drips receivers.
     /// @return collected The collected amount
-    /// @return dripped The amount dripped to the user's receivers
+    /// @return dripped The amount dripped to the sender's receivers
     function collect(address receiverAddr, DripsReceiver[] calldata currReceivers)
         public
         returns (uint128 collected, uint128 dripped)
@@ -307,7 +299,7 @@ abstract contract Pool {
     /// @param receiverAddr The address of the receiver
     /// @param currReceivers The list of the user's current drips receivers.
     /// @return collected The collected amount
-    /// @return dripped The amount dripped to the user's receivers
+    /// @return dripped The amount dripped to the sender's receivers
     function _collectInternal(address receiverAddr, DripsReceiver[] calldata currReceivers)
         internal
         returns (uint128 collected, uint128 dripped)
@@ -388,54 +380,109 @@ abstract contract Pool {
     /// @notice Updates all the sender's parameters.
     /// Tops up and withdraws unsent funds from the balance of the sender.
     /// @param senderId The sender id
+    /// @param lastUpdate The timestamp of the last update of the sender.
+    /// If this is the first update of the sender, pass zero.
+    /// @param lastBalance The balance after the last update of the sender.
+    /// If this is the first update of the sender, pass zero.
+    /// @param currReceivers The list of receivers set in the last update of the sender.
+    /// If this is the first update of the sender, pass an empty array.
     /// @param topUpAmt The topped up amount.
     /// @param withdrawAmt The amount to be withdrawn, must not be higher than available funds.
     /// Can be `WITHDRAW_ALL` to withdraw everything.
-    /// @param currReceivers The list of the user's receivers which is currently in use.
-    /// If this function is called for the first time for the user, should be an empty array.
-    /// @param newReceivers The new list of the user's receivers.
+    /// @param newReceivers The new list of the sender's receivers.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
-    /// @return withdrawn The withdrawn amount which should be sent to the user.
-    /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
+    /// @return newBalance The new sender balance.
+    /// Pass it as `lastBalance` when updating the user for the next time.
+    /// @return withdrawn The actually withdrawn amount.
+    /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` has been used.
     function _updateSender(
         SenderId memory senderId,
+        uint64 lastUpdate,
+        uint128 lastBalance,
+        Receiver[] calldata currReceivers,
         uint128 topUpAmt,
         uint128 withdrawAmt,
-        Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers
-    ) internal returns (uint128 withdrawn) {
-        Sender memory sender = _loadSender(senderId);
-        _assertCurrReceivers(sender, currReceivers);
-
-        uint128 newAmtPerSec = _setReceiversHash(sender, newReceivers);
+    ) internal returns (uint128 newBalance, uint128 withdrawn) {
+        _assertSenderState(senderId, lastUpdate, lastBalance, currReceivers);
+        uint128 newAmtPerSec = _assertReceiversValid(newReceivers);
         uint128 currAmtPerSec = _totalAmtPerSec(currReceivers);
-        uint64 currEndTime = _sendingEndTime(sender, currAmtPerSec);
-        withdrawn = _updateSenderBalance(sender, topUpAmt, withdrawAmt, currAmtPerSec, currEndTime);
-        sender.startTime = _currTimestamp();
-        uint64 newEndTime = _sendingEndTime(sender, newAmtPerSec);
-        _updateStreams(senderId, currReceivers, newReceivers, currEndTime, newEndTime);
-
-        _storeSender(senderId, sender);
-        _emitSenderUpdated(senderId, sender.startBalance, newReceivers);
+        uint64 currEndTime = _sendingEndTime(lastUpdate, lastBalance, currAmtPerSec);
+        (newBalance, withdrawn) = _updateSenderBalance(
+            lastUpdate,
+            lastBalance,
+            currEndTime,
+            topUpAmt,
+            withdrawAmt,
+            currAmtPerSec
+        );
+        uint64 newEndTime = _sendingEndTime(_currTimestamp(), newBalance, newAmtPerSec);
+        _updateStreams(senderId, currReceivers, currEndTime, newReceivers, newEndTime);
+        _storeSenderState(senderId, newBalance, newReceivers);
+        _emitSenderUpdated(senderId, newBalance, newReceivers);
         _transfer(senderId.senderAddr, int128(withdrawn) - int128(topUpAmt));
     }
 
-    function _loadSender(SenderId memory senderId) internal view returns (Sender memory) {
-        if (senderId.isSubSender) {
-            return subSenders[senderId.senderAddr][senderId.subSenderId];
-        } else {
-            return senders[senderId.senderAddr];
+    /// @notice Validates a list of receivers.
+    /// @param receivers The list of sender receivers.
+    /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
+    /// @return totalAmtPerSec The total amount per second of all receivers
+    function _assertReceiversValid(Receiver[] calldata receivers)
+        internal
+        pure
+        returns (uint128 totalAmtPerSec)
+    {
+        require(receivers.length <= MAX_RECEIVERS, "Too many receivers");
+        uint256 amtPerSec = 0;
+        for (uint256 i = 0; i < receivers.length; i++) {
+            require(receivers[i].amtPerSec != 0, "Receiver amtPerSec is zero");
+            amtPerSec += receivers[i].amtPerSec;
+            if (i > 0) {
+                address prevReceiver = receivers[i - 1].receiver;
+                address currReceiver = receivers[i].receiver;
+                require(prevReceiver <= currReceiver, "Receivers not sorted by address");
+                require(prevReceiver != currReceiver, "Duplicate receivers");
+            }
         }
+        require(amtPerSec <= type(uint128).max, "Total amtPerSec too high");
+        return uint128(amtPerSec);
     }
 
-    function _storeSender(SenderId memory senderId, Sender memory sender) internal {
-        if (senderId.isSubSender) {
-            subSenders[senderId.senderAddr][senderId.subSenderId] = sender;
-        } else {
-            senders[senderId.senderAddr] = sender;
-        }
+    /// @notice Updates sender's balance.
+    /// @param lastUpdate The timestamp of the last update of the sender.
+    /// If this is the first update of the sender, pass zero.
+    /// @param lastBalance The balance after the last update of the sender.
+    /// If this is the first update of the sender, pass zero.
+    /// @param currEndTime Time when sending was supposed to end according to the last update.
+    /// @param topUpAmt The topped up amount.
+    /// @param withdrawAmt The amount to be withdrawn, must not be higher than available funds.
+    /// Can be `WITHDRAW_ALL` to withdraw everything.
+    /// @param amtPerSec The sender's total amount per second
+    /// @return newBalance The new sender balance.
+    /// Pass it as `lastBalance` when updating the user for the next time.
+    /// @return withdrawn The actually withdrawn amount.
+    /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` has been used.
+    function _updateSenderBalance(
+        uint64 lastUpdate,
+        uint128 lastBalance,
+        uint64 currEndTime,
+        uint128 topUpAmt,
+        uint128 withdrawAmt,
+        uint128 amtPerSec
+    ) internal view returns (uint128 newBalance, uint128 withdrawn) {
+        if (currEndTime > _currTimestamp()) currEndTime = _currTimestamp();
+        lastBalance -= (currEndTime - lastUpdate) * amtPerSec;
+        lastBalance += topUpAmt;
+        if (withdrawAmt == WITHDRAW_ALL) withdrawAmt = lastBalance;
+        require(withdrawAmt <= lastBalance, "Not enough funds in the sender account");
+        lastBalance -= withdrawAmt;
+        return (lastBalance, withdrawAmt);
     }
 
+    /// @notice Emit a relevant event when a sender is updated.
+    /// @param senderId The id of the sender.
+    /// @param balance The new sender balance.
+    /// @param receivers The new list of the sender's receivers.
     function _emitSenderUpdated(
         SenderId memory senderId,
         uint128 balance,
@@ -448,43 +495,18 @@ abstract contract Pool {
         }
     }
 
-    /// @notice Updates sender's `startBalance`.
-    /// @param sender The updated sender.
-    /// @param topUpAmt The topped up amount.
-    /// @param withdrawAmt The amount to be withdrawn, must not be higher than available funds.
-    /// Can be `WITHDRAW_ALL` to withdraw everything.
-    /// @param amtPerSec The sender's total amount per second
-    /// @param endTime Time when sending was supposed to stop.
-    /// @return withdrawn The withdrawn amount which should be sent to the user.
-    /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
-    function _updateSenderBalance(
-        Sender memory sender,
-        uint128 topUpAmt,
-        uint128 withdrawAmt,
-        uint128 amtPerSec,
-        uint64 endTime
-    ) internal view returns (uint128 withdrawn) {
-        if (endTime > _currTimestamp()) endTime = _currTimestamp();
-        sender.startBalance -= (endTime - sender.startTime) * amtPerSec;
-        sender.startBalance += topUpAmt;
-        if (withdrawAmt == WITHDRAW_ALL) withdrawAmt = sender.startBalance;
-        require(withdrawAmt <= sender.startBalance, "Not enough funds in the sender account");
-        sender.startBalance -= withdrawAmt;
-        return withdrawAmt;
-    }
-
     /// @notice Updates streams in the receivers' `amtDeltas`.
-    /// @param currReceivers The list of the user's receivers which is currently in use.
-    /// If this function is called for the first time for the user, should be an empty array.
-    /// @param newReceivers The new list of the user's receivers.
+    /// @param currReceivers The list of receivers set in the last update of the sender.
+    /// If this is the first update of the sender, pass an empty array.
+    /// @param currEndTime Time when sending was supposed to end according to the last update.
+    /// @param newReceivers The new list of the sender's receivers.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
-    /// @param currEndTime Time when sending using `currReceivers` was supposed to stop.
-    /// @param newEndTime Time when sending using `newReceivers` will be supposed to stop.
+    /// @param newEndTime Time new when sending is supposed to end.
     function _updateStreams(
         SenderId memory senderId,
         Receiver[] calldata currReceivers,
-        Receiver[] calldata newReceivers,
         uint64 currEndTime,
+        Receiver[] calldata newReceivers,
         uint64 newEndTime
     ) internal {
         // Skip iterating over `currReceivers` if funding has run out
@@ -538,11 +560,11 @@ abstract contract Pool {
     }
 
     /// @notice Emit a relevant event when a stream is updated.
-    /// @param senderId The id of the sender of the updated stream
-    /// @param receiver The receiver of the updated stream
+    /// @param senderId The id of the sender of the updated stream.
+    /// @param receiver The receiver of the updated stream.
     /// @param amtPerSec The new amount per second sent from the sender to the receiver
-    /// or 0 if sending is stopped
-    /// @param endTime The timestamp when the funds stop being sent.
+    /// or 0 if sending is stopped.
+    /// @param endTime The timestamp when sending is supposed to end.
     function _emitStreamUpdated(
         SenderId memory senderId,
         address receiver,
@@ -563,110 +585,141 @@ abstract contract Pool {
         }
     }
 
-    /// @notice Calculates the sending end time for a sender.
-    /// @param sender The analyzed sender
-    /// @param totalAmtPerSec The sender's total amount per second
-    /// @return sendingEndTime The sending end time
-    function _sendingEndTime(Sender memory sender, uint128 totalAmtPerSec)
-        internal
-        view
-        returns (uint64 sendingEndTime)
-    {
-        if (totalAmtPerSec == 0) return _currTimestamp();
-        uint256 endTime = sender.startTime + uint256(sender.startBalance / totalAmtPerSec);
+    /// @notice Calculates the timestamp when sending is supposed to end.
+    /// @param startTime Time when sending is started.
+    /// @param startBalance The sender balance when sending is started.
+    /// @param totalAmtPerSec The sender's total amount per second.
+    /// @return sendingEndTime The sending end time.
+    function _sendingEndTime(
+        uint64 startTime,
+        uint128 startBalance,
+        uint128 totalAmtPerSec
+    ) internal pure returns (uint64 sendingEndTime) {
+        if (totalAmtPerSec == 0) return startTime;
+        uint256 endTime = startTime + uint256(startBalance / totalAmtPerSec);
         return endTime > MAX_TIMESTAMP ? MAX_TIMESTAMP : uint64(endTime);
     }
 
     /// @notice Returns amount of unsent funds available for withdrawal for the sender
     /// @param senderAddr The address of the sender
-    /// @param currReceivers The list of the user's current receivers.
+    /// @param lastUpdate The timestamp of the last update of the sender.
+    /// If this is the first update of the sender, pass zero.
+    /// @param lastBalance The balance after the last update of the sender.
+    /// If this is the first update of the sender, pass zero.
+    /// @param currReceivers The list of receivers set in the last update of the sender.
     /// @return withdrawableAmt The withdrawable amount
-    function withdrawable(address senderAddr, Receiver[] calldata currReceivers)
-        public
-        view
-        returns (uint128 withdrawableAmt)
-    {
+    function withdrawable(
+        address senderAddr,
+        uint64 lastUpdate,
+        uint128 lastBalance,
+        Receiver[] calldata currReceivers
+    ) public view returns (uint128 withdrawableAmt) {
         SenderId memory senderId = _senderId(senderAddr);
-        return _withdrawable(senderId, currReceivers);
+        return _withdrawable(senderId, lastUpdate, lastBalance, currReceivers);
     }
 
     /// @notice Returns amount of unsent funds available for withdrawal for the sub-sender
     /// @param senderAddr The address of the sender
     /// @param subSenderId The id of the sender's sub-sender
-    /// @param currReceivers The list of the sub-sender's current receivers.
+    /// @param lastUpdate The timestamp of the last update of the sender.
+    /// If this is the first update of the sender, pass zero.
+    /// @param lastBalance The balance after the last update of the sender.
+    /// If this is the first update of the sender, pass zero.
+    /// @param currReceivers The list of receivers set in the last update of the sender.
     /// @return withdrawableAmt The withdrawable amount
     function withdrawableSubSender(
         address senderAddr,
         uint256 subSenderId,
+        uint64 lastUpdate,
+        uint128 lastBalance,
         Receiver[] calldata currReceivers
     ) public view returns (uint128 withdrawableAmt) {
         SenderId memory senderId = _senderId(senderAddr, subSenderId);
-        return _withdrawable(senderId, currReceivers);
+        return _withdrawable(senderId, lastUpdate, lastBalance, currReceivers);
     }
 
     /// @notice Returns amount of unsent funds available for withdrawal for the sender.
     /// @param senderId The id of the sender
-    /// @param currReceivers The list of the sender's current receivers.
+    /// @param lastUpdate The timestamp of the last update of the sender.
+    /// If this is the first update of the sender, pass zero.
+    /// @param lastBalance The balance after the last update of the sender.
+    /// If this is the first update of the sender, pass zero.
+    /// @param currReceivers The list of receivers set in the last update of the sender.
     /// @return withdrawableAmt The withdrawable amount
-    function _withdrawable(SenderId memory senderId, Receiver[] calldata currReceivers)
-        internal
-        view
-        returns (uint128 withdrawableAmt)
-    {
-        Sender memory sender = _loadSender(senderId);
-        _assertCurrReceivers(sender, currReceivers);
+    function _withdrawable(
+        SenderId memory senderId,
+        uint64 lastUpdate,
+        uint128 lastBalance,
+        Receiver[] calldata currReceivers
+    ) internal view returns (uint128 withdrawableAmt) {
+        _assertSenderState(senderId, lastUpdate, lastBalance, currReceivers);
         uint128 amtPerSec = _totalAmtPerSec(currReceivers);
-        // Hasn't been sending anything
-        if (amtPerSec == 0) {
-            return sender.startBalance;
+        uint192 alreadySent = uint192(_currTimestamp() - lastUpdate) * amtPerSec;
+        if (alreadySent > lastBalance) {
+            return lastBalance % amtPerSec;
         }
-        uint192 alreadySent = uint192(_currTimestamp() - sender.startTime) * amtPerSec;
-        if (alreadySent > sender.startBalance) {
-            return sender.startBalance % amtPerSec;
-        }
-        return sender.startBalance - uint128(alreadySent);
+        return lastBalance - uint128(alreadySent);
     }
 
-    /// @notice Asserts that the list of receivers is the sender's currently used one.
-    /// @param sender The sender
-    /// @param currReceivers The list of the user's current receivers.
-    function _assertCurrReceivers(Sender memory sender, Receiver[] calldata currReceivers)
-        internal
-        pure
-    {
-        require(hashReceivers(currReceivers) == sender.receiversHash, "Invalid current receivers");
+    /// @notice Asserts that the sender state is the currently used one.
+    /// @param senderId The id of the sender
+    /// @param lastUpdate The timestamp of the last update of the sender.
+    /// If this is the first update of the sender, pass zero.
+    /// @param lastBalance The balance after the last update of the sender.
+    /// If this is the first update of the sender, pass zero.
+    /// @param currReceivers The list of receivers set in the last update of the sender.
+    /// If this is the first update of the sender, pass an empty array.
+    function _assertSenderState(
+        SenderId memory senderId,
+        uint64 lastUpdate,
+        uint128 lastBalance,
+        Receiver[] calldata currReceivers
+    ) internal view {
+        bytes32 expectedHash;
+        if (senderId.isSubSender) {
+            expectedHash = subSenderStateHash[senderId.senderAddr][senderId.subSenderId];
+        } else {
+            expectedHash = senderStateHash[senderId.senderAddr];
+        }
+        bytes32 actualHash = hashSenderState(lastUpdate, lastBalance, currReceivers);
+        require(actualHash == expectedHash, "Invalid provided sender state");
     }
 
-    /// @notice Calculates the hash of the list of receivers.
-    /// @param receivers The list of the receivers.
+    /// @notice Stores the hash of the updated sender state to be used in `_assertSenderState`.
+    /// @param senderId The id of the sender
+    /// @param newBalance The new sender balance.
+    /// @param newReceivers The new list of the sender's receivers.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
-    /// @return receiversHash The hash of the list of receivers.
-    function hashReceivers(Receiver[] calldata receivers)
-        public
-        pure
-        returns (bytes32 receiversHash)
-    {
-        if (receivers.length == 0) return bytes32(0);
-        return keccak256(abi.encode(receivers));
+    function _storeSenderState(
+        SenderId memory senderId,
+        uint128 newBalance,
+        Receiver[] calldata newReceivers
+    ) internal {
+        bytes32 stateHash = hashSenderState(_currTimestamp(), newBalance, newReceivers);
+        if (senderId.isSubSender) {
+            subSenderStateHash[senderId.senderAddr][senderId.subSenderId] = stateHash;
+        } else {
+            senderStateHash[senderId.senderAddr] = stateHash;
+        }
     }
 
-    /// @notice Returns the sender's receivers list hash.
-    /// @param senderAddr The address of the sender
-    /// @return receiversHash The receivers list hash.
-    function getReceiversHash(address senderAddr) public view returns (bytes32 receiversHash) {
-        return senders[senderAddr].receiversHash;
-    }
-
-    /// @notice Returns the sub-sender's receivers list hash.
-    /// @param senderAddr The address of the sender
-    /// @param subSenderId The id of the sender's sub-sender
-    /// @return receiversHash The receivers list hash.
-    function getSubSenderReceiversHash(address senderAddr, uint256 subSenderId)
-        public
-        view
-        returns (bytes32 receiversHash)
-    {
-        return subSenders[senderAddr][subSenderId].receiversHash;
+    /// @notice Calculates the hash of the sender state.
+    /// It's used to verify if a sender state is the previously configured one.
+    /// @param update The timestamp of the update of the sender.
+    /// If the sender has never been updated, pass zero.
+    /// @param balance The sender balance.
+    /// If the sender has never been updated, pass zero.
+    /// @param receivers The list of the sender's receivers.
+    /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
+    /// If the sender has never been updated, pass an empty array.
+    /// @return receiversHash The hash of the sender state.
+    function hashSenderState(
+        uint64 update,
+        uint128 balance,
+        Receiver[] calldata receivers
+    ) public pure returns (bytes32 receiversHash) {
+        if (update == 0 && balance == 0 && receivers.length == 0) return bytes32(0);
+        return keccak256(abi.encode(receivers, update, balance));
     }
 
     /// @notice Collects received funds and sets a new list of drips receivers of the user.
@@ -678,7 +731,7 @@ abstract contract Pool {
     /// Each drips receiver will be getting `weight / TOTAL_DRIPS_WEIGHTS`
     /// share of the funds collected by the user.
     /// @return collected The collected amount
-    /// @return dripped The amount dripped to the user's receivers
+    /// @return dripped The amount dripped to the sender's receivers
     function _setDripsReceivers(
         address userAddr,
         DripsReceiver[] calldata currReceivers,
@@ -738,7 +791,7 @@ abstract contract Pool {
 
     /// @notice Calculates the total amount per second of all the passed receivers.
     /// @param receivers The list of the receivers.
-    /// @return totalAmtPerSec The total amount per second
+    /// @return totalAmtPerSec The total amount per second of all receivers
     function _totalAmtPerSec(Receiver[] calldata receivers)
         internal
         pure
@@ -747,33 +800,6 @@ abstract contract Pool {
         for (uint256 i = 0; i < receivers.length; i++) {
             totalAmtPerSec += receivers[i].amtPerSec;
         }
-    }
-
-    /// @notice Validates and sets the receivers of the sender.
-    /// @param sender The updated sender
-    /// @param receivers The new list of the user's receivers.
-    /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
-    /// @return totalAmtPerSec The total amount per second
-    function _setReceiversHash(Sender memory sender, Receiver[] calldata receivers)
-        internal
-        pure
-        returns (uint128 totalAmtPerSec)
-    {
-        require(receivers.length <= MAX_RECEIVERS, "Too many receivers");
-        uint256 amtPerSec = 0;
-        for (uint256 i = 0; i < receivers.length; i++) {
-            require(receivers[i].amtPerSec != 0, "Receiver amtPerSec is zero");
-            amtPerSec += receivers[i].amtPerSec;
-            if (i > 0) {
-                address prevReceiver = receivers[i - 1].receiver;
-                address currReceiver = receivers[i].receiver;
-                require(prevReceiver <= currReceiver, "Receivers not sorted by address");
-                require(prevReceiver != currReceiver, "Duplicate receivers");
-            }
-        }
-        require(amtPerSec <= type(uint128).max, "Total amtPerSec too high");
-        totalAmtPerSec = uint128(amtPerSec);
-        sender.receiversHash = hashReceivers(receivers);
     }
 
     /// @notice Called when funds need to be transferred between the user and the pool.

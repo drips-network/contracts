@@ -6,39 +6,70 @@ import {PoolUser} from "./User.t.sol";
 import {DripsReceiver, Pool, Receiver} from "../Pool.sol";
 
 abstract contract PoolUserUtils is DSTest {
-    mapping(PoolUser => bytes) internal currReceivers;
-    mapping(PoolUser => mapping(uint256 => bytes)) internal currSubSenderReceivers;
+    mapping(PoolUser => bytes) internal senderStates;
+    mapping(PoolUser => mapping(uint256 => bytes)) internal subSenderStates;
     mapping(PoolUser => bytes) internal currDripsReceivers;
 
-    function getCurrReceivers(PoolUser user) internal view returns (Receiver[] memory) {
-        return decodeReceivers(currReceivers[user]);
-    }
-
-    function setCurrReceivers(PoolUser user, Receiver[] memory newReceivers) internal {
-        currReceivers[user] = abi.encode(newReceivers);
-    }
-
-    function getCurrSubSenderReceivers(PoolUser user, uint256 id)
+    function getSenderState(PoolUser user)
         internal
-        view
-        returns (Receiver[] memory)
+        returns (
+            uint64 lastUpdate,
+            uint128 lastBalance,
+            Receiver[] memory currReceivers
+        )
     {
-        return decodeReceivers(currSubSenderReceivers[user][id]);
+        (lastUpdate, lastBalance, currReceivers) = decodeSenderState(senderStates[user]);
+        assertSenderState(user, lastUpdate, lastBalance, currReceivers);
     }
 
-    function setCurrSubSenderReceivers(
+    function setSenderState(
         PoolUser user,
-        uint256 id,
+        uint128 newBalance,
         Receiver[] memory newReceivers
     ) internal {
-        currSubSenderReceivers[user][id] = abi.encode(newReceivers);
+        uint64 currTimestamp = uint64(block.timestamp);
+        assertSenderState(user, currTimestamp, newBalance, newReceivers);
+        senderStates[user] = abi.encode(currTimestamp, newBalance, newReceivers);
     }
 
-    function decodeReceivers(bytes storage encoded) internal view returns (Receiver[] memory) {
+    function getSubSenderState(PoolUser user, uint256 subSenderId)
+        internal
+        returns (
+            uint64 lastUpdate,
+            uint128 lastBalance,
+            Receiver[] memory currReceivers
+        )
+    {
+        (lastUpdate, lastBalance, currReceivers) = decodeSenderState(
+            subSenderStates[user][subSenderId]
+        );
+        assertSubSenderState(user, subSenderId, lastUpdate, lastBalance, currReceivers);
+    }
+
+    function setSubSenderState(
+        PoolUser user,
+        uint256 subSenderId,
+        uint128 newBalance,
+        Receiver[] memory newReceivers
+    ) internal {
+        uint64 currTimestamp = uint64(block.timestamp);
+        assertSubSenderState(user, subSenderId, currTimestamp, newBalance, newReceivers);
+        subSenderStates[user][subSenderId] = abi.encode(currTimestamp, newBalance, newReceivers);
+    }
+
+    function decodeSenderState(bytes storage encoded)
+        internal
+        view
+        returns (
+            uint64 lastUpdate,
+            uint128 lastBalance,
+            Receiver[] memory
+        )
+    {
         if (encoded.length == 0) {
-            return new Receiver[](0);
+            return (0, 0, new Receiver[](0));
         } else {
-            return abi.decode(encoded, (Receiver[]));
+            return abi.decode(encoded, (uint64, uint128, Receiver[]));
         }
     }
 
@@ -89,27 +120,61 @@ abstract contract PoolUserUtils is DSTest {
         uint128 toppedUp = balanceTo > balanceFrom ? balanceTo - balanceFrom : 0;
         uint128 withdraw = balanceTo < balanceFrom ? balanceFrom - balanceTo : 0;
         uint256 expectedBalance = user.balance() + withdraw - toppedUp;
-        Receiver[] memory curr = getCurrReceivers(user);
-        assertReceivers(user, curr);
+        (uint64 lastUpdate, uint128 balance, Receiver[] memory currReceivers) = getSenderState(
+            user
+        );
 
-        uint128 withdrawn = user.updateSender(toppedUp, withdraw, curr, newReceivers);
+        uint128 withdrawn;
+        (balance, withdrawn) = user.updateSender(
+            lastUpdate,
+            balance,
+            currReceivers,
+            toppedUp,
+            withdraw,
+            newReceivers
+        );
 
-        setCurrReceivers(user, newReceivers);
+        setSenderState(user, balance, newReceivers);
+        assertEq(balance, balanceTo, "Invalid sender balance");
         assertEq(withdrawn, withdraw, "Expected amount not withdrawn");
-        assertWithdrawable(user, balanceTo);
+        assertWithdrawable(user, balance);
         assertBalance(user, expectedBalance);
-        assertReceivers(user, newReceivers);
     }
 
-    function assertReceivers(PoolUser user, Receiver[] memory expectedReceivers) internal {
-        bytes32 actual = user.getReceiversHash();
-        bytes32 expected = user.hashReceivers(expectedReceivers);
-        assertEq(actual, expected, "Invalid receivers list hash");
+    function assertSenderState(
+        PoolUser user,
+        uint64 lastUpdate,
+        uint128 balance,
+        Receiver[] memory currReceivers
+    ) internal {
+        bytes32 actual = user.senderStateHash();
+        bytes32 expected = user.hashSenderState(lastUpdate, balance, currReceivers);
+        assertEq(actual, expected, "Invalid sender state");
     }
 
     function assertWithdrawable(PoolUser user, uint128 expected) internal {
-        uint128 actual = user.withdrawable(getCurrReceivers(user));
-        assertEq(actual, expected, "Invalid withdrawable");
+        assertEq(withdrawable(user), expected, "Invalid withdrawable");
+    }
+
+    function withdrawable(PoolUser user) internal returns (uint128 withdrawableAmt) {
+        (uint64 lastUpdate, uint128 lastBalance, Receiver[] memory currReceivers) = getSenderState(
+            user
+        );
+        return user.withdrawable(lastUpdate, lastBalance, currReceivers);
+    }
+
+    function assertWithdrawableReverts(
+        PoolUser user,
+        uint64 lastUpdate,
+        uint128 lastBalance,
+        Receiver[] memory currReceivers,
+        string memory expectedReason
+    ) internal {
+        try user.withdrawable(lastUpdate, lastBalance, currReceivers) {
+            assertTrue(false, "Withdrawable hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, expectedReason, "Invalid withdrawable revert reason");
+        }
     }
 
     function changeBalance(
@@ -117,12 +182,13 @@ abstract contract PoolUserUtils is DSTest {
         uint128 balanceFrom,
         uint128 balanceTo
     ) internal {
-        updateSender(user, balanceFrom, balanceTo, getCurrReceivers(user));
+        (, , Receiver[] memory currReceivers) = getSenderState(user);
+        updateSender(user, balanceFrom, balanceTo, currReceivers);
     }
 
     function setReceivers(PoolUser user, Receiver[] memory newReceivers) internal {
-        uint128 withdrawable = user.withdrawable(getCurrReceivers(user));
-        updateSender(user, withdrawable, withdrawable, newReceivers);
+        uint128 balance = withdrawable(user);
+        updateSender(user, balance, balance, newReceivers);
     }
 
     function assertSetReceiversReverts(
@@ -130,10 +196,44 @@ abstract contract PoolUserUtils is DSTest {
         Receiver[] memory newReceivers,
         string memory expectedReason
     ) internal {
-        try user.updateSender(0, 0, getCurrReceivers(user), newReceivers) {
-            assertTrue(false, "Sender receivers update hasn't reverted");
+        (uint64 lastUpdate, uint128 lastBalance, Receiver[] memory currReceivers) = getSenderState(
+            user
+        );
+        assertUpdateSenderReverts(
+            user,
+            lastUpdate,
+            lastBalance,
+            currReceivers,
+            0,
+            0,
+            newReceivers,
+            expectedReason
+        );
+    }
+
+    function assertUpdateSenderReverts(
+        PoolUser user,
+        uint64 lastUpdate,
+        uint128 lastBalance,
+        Receiver[] memory currReceivers,
+        uint128 toppedUp,
+        uint128 withdraw,
+        Receiver[] memory newReceivers,
+        string memory expectedReason
+    ) internal {
+        try
+            user.updateSender(
+                lastUpdate,
+                lastBalance,
+                currReceivers,
+                toppedUp,
+                withdraw,
+                newReceivers
+            )
+        {
+            assertTrue(false, "Sender update hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, expectedReason, "Invalid sender receivers update revert reason");
+            assertEq(reason, expectedReason, "Invalid sender update revert reason");
         }
     }
 
@@ -148,22 +248,27 @@ abstract contract PoolUserUtils is DSTest {
         uint128 toppedUp = balanceTo > balanceFrom ? balanceTo - balanceFrom : 0;
         uint128 withdraw = balanceTo < balanceFrom ? balanceFrom - balanceTo : 0;
         uint256 expectedBalance = user.balance() + withdraw - toppedUp;
-        Receiver[] memory curr = getCurrSubSenderReceivers(user, subSenderId);
-        assertSubSenderReceivers(user, subSenderId, curr);
+        (uint64 lastUpdate, uint128 balance, Receiver[] memory currReceivers) = getSubSenderState(
+            user,
+            subSenderId
+        );
 
-        uint256 withdrawn = user.updateSubSender(
+        uint128 withdrawn;
+        (balance, withdrawn) = user.updateSubSender(
             subSenderId,
+            lastUpdate,
+            balance,
+            currReceivers,
             toppedUp,
             withdraw,
-            curr,
             newReceivers
         );
 
-        setCurrSubSenderReceivers(user, subSenderId, newReceivers);
-        assertEq(withdrawn, withdraw, "expected amount not withdrawn");
-        assertWithdrawableSubSender(user, subSenderId, balanceTo);
+        setSubSenderState(user, subSenderId, balance, newReceivers);
+        assertEq(balance, balanceTo, "Invalid sender balance");
+        assertEq(withdrawn, withdraw, "Expected amount not withdrawn");
+        assertWithdrawableSubSender(user, subSenderId, balance);
         assertBalance(user, expectedBalance);
-        assertSubSenderReceivers(user, subSenderId, newReceivers);
     }
 
     function assertWithdrawableSubSender(
@@ -171,21 +276,24 @@ abstract contract PoolUserUtils is DSTest {
         uint256 subSenderId,
         uint128 expected
     ) internal {
-        uint128 actual = user.withdrawableSubSender(
-            subSenderId,
-            getCurrSubSenderReceivers(user, subSenderId)
+        (uint64 lastUpdate, uint128 lastBalance, Receiver[] memory curr) = getSubSenderState(
+            user,
+            subSenderId
         );
+        uint128 actual = user.withdrawableSubSender(subSenderId, lastUpdate, lastBalance, curr);
         assertEq(actual, expected, "Invalid withdrawable");
     }
 
-    function assertSubSenderReceivers(
+    function assertSubSenderState(
         PoolUser user,
         uint256 subSenderId,
-        Receiver[] memory expectedReceivers
+        uint64 lastUpdate,
+        uint128 lastBalance,
+        Receiver[] memory currReceivers
     ) internal {
-        bytes32 actual = user.getSubSenderReceiversHash(subSenderId);
-        bytes32 expected = user.hashReceivers(expectedReceivers);
-        assertEq(actual, expected, "Invalid receivers list hash");
+        bytes32 actual = user.subSenderStateHash(subSenderId);
+        bytes32 expected = user.hashSenderState(lastUpdate, lastBalance, currReceivers);
+        assertEq(actual, expected, "Invalid sub-sender state");
     }
 
     function changeBalanceSubSender(
@@ -194,13 +302,8 @@ abstract contract PoolUserUtils is DSTest {
         uint128 balanceFrom,
         uint128 balanceTo
     ) internal {
-        updateSubSender(
-            user,
-            subSenderId,
-            balanceFrom,
-            balanceTo,
-            getCurrSubSenderReceivers(user, subSenderId)
-        );
+        (, , Receiver[] memory curr) = getSubSenderState(user, subSenderId);
+        updateSubSender(user, subSenderId, balanceFrom, balanceTo, curr);
     }
 
     function dripsReceivers() internal pure returns (DripsReceiver[] memory list) {

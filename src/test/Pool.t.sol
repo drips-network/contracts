@@ -200,8 +200,16 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testAllowsSenderUpdateWithTopUpAndWithdrawal() public {
-        sender.updateSender(10, 3, receivers(), receivers());
-        assertWithdrawable(sender, 7);
+        (uint128 balance, uint128 withdrawn) = sender.updateSender(
+            0,
+            0,
+            receivers(),
+            10,
+            3,
+            receivers()
+        );
+        assertEq(balance, 7, "Invalid balance");
+        assertEq(withdrawn, 3, "Invalid withdrawn");
     }
 
     function testAllowsNoSenderUpdate() public {
@@ -286,13 +294,46 @@ abstract contract PoolTest is PoolUserUtils {
         );
     }
 
+    function testUpdateSenderRevertsIfInvalidLastUpdate() public {
+        updateSender(sender, 0, 0, receivers(receiver, 1));
+        assertUpdateSenderReverts(
+            sender,
+            uint64(block.timestamp) + 1,
+            0,
+            receivers(receiver, 1),
+            0,
+            0,
+            receivers(),
+            "Invalid provided sender state"
+        );
+    }
+
+    function testUpdateSenderRevertsIfInvalidLastBalance() public {
+        updateSender(sender, 0, 1, receivers(receiver, 1));
+        assertUpdateSenderReverts(
+            sender,
+            uint64(block.timestamp),
+            2,
+            receivers(receiver, 1),
+            0,
+            0,
+            receivers(),
+            "Invalid provided sender state"
+        );
+    }
+
     function testUpdateSenderRevertsIfInvalidCurrReceivers() public {
         updateSender(sender, 0, 0, receivers(receiver, 1));
-        try sender.updateSender(0, 0, receivers(receiver, 2), receivers()) {
-            assertTrue(false, "Sender update hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, "Invalid current receivers", "Invalid sender update revert reason");
-        }
+        assertUpdateSenderReverts(
+            sender,
+            uint64(block.timestamp),
+            0,
+            receivers(receiver, 2),
+            0,
+            0,
+            receivers(),
+            "Invalid provided sender state"
+        );
     }
 
     function testAllowsAnAddressToBeASenderAndAReceiverIndependently() public {
@@ -307,33 +348,73 @@ abstract contract PoolTest is PoolUserUtils {
 
     function testAllowsWithdrawalOfAllFunds() public {
         updateSender(sender, 0, 10, receivers(receiver, 1));
+        uint64 lastUpdate = uint64(block.timestamp);
         warpBy(4);
         // Sender had 4 second paying 1 per second
         assertWithdrawable(sender, 6);
         uint256 expectedBalance = sender.balance() + 6;
-        sender.updateSender(0, pool.WITHDRAW_ALL(), receivers(receiver, 1), receivers(receiver, 1));
-        assertWithdrawable(sender, 0);
+        (uint128 balance, uint128 withdrawn) = sender.updateSender(
+            lastUpdate,
+            10,
+            receivers(receiver, 1),
+            0,
+            pool.WITHDRAW_ALL(),
+            receivers(receiver, 1)
+        );
+        assertEq(balance, 0, "Invalid balance");
+        assertEq(withdrawn, 6, "Invalid withdrawn");
         assertBalance(sender, expectedBalance);
         warpToCycleEnd();
         // Receiver had 4 seconds paying 1 per second
         collect(receiver, 4);
     }
 
+    function testWithdrawableRevertsIfInvalidLastUpdate() public {
+        updateSender(sender, 0, 0, receivers(receiver, 1));
+        assertWithdrawableReverts(
+            sender,
+            uint64(block.timestamp) + 1,
+            0,
+            receivers(receiver, 1),
+            "Invalid provided sender state"
+        );
+    }
+
+    function testWithdrawableRevertsIfInvalidLastBalance() public {
+        updateSender(sender, 0, 1, receivers(receiver, 1));
+        assertWithdrawableReverts(
+            sender,
+            uint64(block.timestamp),
+            2,
+            receivers(receiver, 1),
+            "Invalid provided sender state"
+        );
+    }
+
     function testWithdrawableRevertsIfInvalidCurrReceivers() public {
         updateSender(sender, 0, 0, receivers(receiver, 1));
-        try sender.withdrawable(receivers(receiver, 2)) {
-            assertTrue(false, "Withdrawable hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, "Invalid current receivers", "Invalid withdrawable revert reason");
-        }
+        assertWithdrawableReverts(
+            sender,
+            uint64(block.timestamp),
+            0,
+            receivers(receiver, 2),
+            "Invalid provided sender state"
+        );
     }
 
     function testWithdrawableSubSenderRevertsIfInvalidCurrReceivers() public {
         updateSubSender(sender, SUB_SENDER_1, 0, 0, receivers(receiver, 1));
-        try sender.withdrawableSubSender(SUB_SENDER_1, receivers(receiver, 2)) {
+        try
+            sender.withdrawableSubSender(
+                SUB_SENDER_1,
+                uint64(block.timestamp),
+                0,
+                receivers(receiver, 2)
+            )
+        {
             assertTrue(false, "Withdrawable hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, "Invalid current receivers", "Invalid withdrawable revert reason");
+            assertEq(reason, "Invalid provided sender state", "Invalid withdrawable revert reason");
         }
     }
 

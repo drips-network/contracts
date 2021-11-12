@@ -45,14 +45,17 @@ contract DaiPool is ERC20Pool {
     /// These parameters will be passed to the Dai contract by this function.
     /// @param permitArgs The Dai permission arguments.
     function updateSenderAndPermit(
+        uint64 lastUpdate,
+        uint128 lastBalance,
+        Receiver[] calldata currReceivers,
         uint128 topUpAmt,
         uint128 withdraw,
-        Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers,
         PermitArgs calldata permitArgs
-    ) public returns (uint128 withdrawn) {
-        permit(permitArgs);
-        return updateSender(topUpAmt, withdraw, currReceivers, newReceivers);
+    ) public returns (uint128 newBalance, uint128 withdrawn) {
+        _permit(permitArgs);
+        return
+            updateSender(lastUpdate, lastBalance, currReceivers, topUpAmt, withdraw, newReceivers);
     }
 
     /// @notice Updates all the parameters of a sub-sender of the sender of the message
@@ -64,14 +67,25 @@ contract DaiPool is ERC20Pool {
     /// @param permitArgs The Dai permission arguments.
     function updateSubSenderAndPermit(
         uint256 subSenderId,
+        uint64 lastUpdate,
+        uint128 lastBalance,
+        Receiver[] calldata currReceivers,
         uint128 topUpAmt,
         uint128 withdraw,
-        Receiver[] calldata currReceivers,
         Receiver[] calldata newReceivers,
         PermitArgs calldata permitArgs
-    ) public returns (uint128 withdrawn) {
-        permit(permitArgs);
-        return updateSubSender(subSenderId, topUpAmt, withdraw, currReceivers, newReceivers);
+    ) public returns (uint128 newBalance, uint128 withdrawn) {
+        _permit(permitArgs);
+        return
+            updateSubSender(
+                subSenderId,
+                lastUpdate,
+                lastBalance,
+                currReceivers,
+                topUpAmt,
+                withdraw,
+                newReceivers
+            );
     }
 
     /// @notice Gives funds from the sender of the message to the receiver
@@ -86,7 +100,7 @@ contract DaiPool is ERC20Pool {
         uint128 amt,
         PermitArgs calldata permitArgs
     ) public {
-        permit(permitArgs);
+        _permit(permitArgs);
         give(receiver, amt);
     }
 
@@ -103,13 +117,13 @@ contract DaiPool is ERC20Pool {
         uint128 amt,
         PermitArgs calldata permitArgs
     ) public {
-        permit(permitArgs);
+        _permit(permitArgs);
         giveFromSubSender(subSenderId, receiver, amt);
     }
 
     /// @notice Permits the pool to spend the message sender's Dai.
     /// @param permitArgs The Dai permission arguments.
-    function permit(PermitArgs calldata permitArgs) internal {
+    function _permit(PermitArgs calldata permitArgs) internal {
         dai.permit(
             msg.sender,
             address(this),

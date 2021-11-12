@@ -14,31 +14,39 @@ contract EthPool is Pool {
         return;
     }
 
-    /// @notice Collects received funds and updates all the sender parameters
-    //// of the sender of the message.
-    ///
+    /// @notice Updates all the sender parameters of the sender of the message.
     /// Tops up and withdraws unsent funds from the balance of the sender.
     /// Tops up with the amount in the message.
     /// Sends the withdrawn funds to the sender of the message.
+    /// @param lastUpdate The timestamp of the last update of the sender.
+    /// If this is the first update of the sender, pass zero.
+    /// @param lastBalance The balance after the last update of the sender.
+    /// If this is the first update of the sender, pass zero.
+    /// @param currReceivers The list of receivers set in the last update of the sender.
+    /// If this is the first update of the sender, pass an empty array.
     /// @param withdraw The amount to be withdrawn, must not be higher than available funds.
     /// Can be `WITHDRAW_ALL` to withdraw everything.
-    /// @param currReceivers The list of the user's receivers which is currently in use.
-    /// If this function is called for the first time for the user, should be an empty array.
-    /// @param newReceivers The new list of the user's receivers.
+    /// @param newReceivers The new list of the sender's receivers.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
+    /// @return newBalance The new sender balance.
+    /// Pass it as `lastBalance` when updating the user for the next time.
     /// @return withdrawn The actually withdrawn amount.
-    /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` is used.
+    /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` has been used.
     function updateSender(
-        uint128 withdraw,
+        uint64 lastUpdate,
+        uint128 lastBalance,
         Receiver[] calldata currReceivers,
+        uint128 withdraw,
         Receiver[] calldata newReceivers
-    ) public payable returns (uint128 withdrawn) {
+    ) public payable returns (uint128 newBalance, uint128 withdrawn) {
         return
             _updateSender(
                 _senderId(msg.sender),
+                lastUpdate,
+                lastBalance,
+                currReceivers,
                 uint128(msg.value),
                 withdraw,
-                currReceivers,
                 newReceivers
             );
     }
@@ -48,16 +56,20 @@ contract EthPool is Pool {
     /// @param subSenderId The id of the sender's sub-sender
     function updateSubSender(
         uint256 subSenderId,
-        uint128 withdraw,
+        uint64 lastUpdate,
+        uint128 lastBalance,
         Receiver[] calldata currReceivers,
+        uint128 withdraw,
         Receiver[] calldata newReceivers
-    ) public payable returns (uint128 withdrawn) {
+    ) public payable returns (uint128 newBalance, uint128 withdrawn) {
         return
             _updateSender(
                 _senderId(msg.sender, subSenderId),
+                lastUpdate,
+                lastBalance,
+                currReceivers,
                 uint128(msg.value),
                 withdraw,
-                currReceivers,
                 newReceivers
             );
     }
