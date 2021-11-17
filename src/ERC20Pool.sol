@@ -21,40 +21,35 @@ contract ERC20Pool is Pool {
     }
 
     /// @notice Updates all the sender parameters of the sender of the message.
-    /// Tops up and withdraws unsent funds from the balance of the sender.
-    /// The sender must first grant the contract a sufficient allowance to top up.
-    /// Sends the withdrawn funds to the sender of the message.
+    /// Transfers funds to or from the sender to fulfill the update of the balance.
+    /// The sender must first grant the contract a sufficient allowance.
     /// @param lastUpdate The timestamp of the last update of the sender.
     /// If this is the first update of the sender, pass zero.
     /// @param lastBalance The balance after the last update of the sender.
     /// If this is the first update of the sender, pass zero.
     /// @param currReceivers The list of receivers set in the last update of the sender.
     /// If this is the first update of the sender, pass an empty array.
-    /// @param topUpAmt The topped up amount.
-    /// @param withdraw The amount to be withdrawn, must not be higher than available funds.
-    /// Can be `WITHDRAW_ALL` to withdraw everything.
+    /// @param balanceDelta The sender balance change to be applied.
+    /// Positive to add funds to the sender balance, negative to remove them.
     /// @param newReceivers The new list of the sender's receivers.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
     /// @return newBalance The new sender balance.
     /// Pass it as `lastBalance` when updating the user for the next time.
-    /// @return withdrawn The actually withdrawn amount.
-    /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` has been used.
+    /// @return realBalanceDelta The actually applied balance change.
     function updateSender(
         uint64 lastUpdate,
         uint128 lastBalance,
         Receiver[] calldata currReceivers,
-        uint128 topUpAmt,
-        uint128 withdraw,
+        int128 balanceDelta,
         Receiver[] calldata newReceivers
-    ) public returns (uint128 newBalance, uint128 withdrawn) {
+    ) public returns (uint128 newBalance, int128 realBalanceDelta) {
         return
             _updateSender(
                 _senderId(msg.sender),
                 lastUpdate,
                 lastBalance,
                 currReceivers,
-                topUpAmt,
-                withdraw,
+                balanceDelta,
                 newReceivers
             );
     }
@@ -67,18 +62,16 @@ contract ERC20Pool is Pool {
         uint64 lastUpdate,
         uint128 lastBalance,
         Receiver[] calldata currReceivers,
-        uint128 topUpAmt,
-        uint128 withdraw,
+        int128 balanceDelta,
         Receiver[] calldata newReceivers
-    ) public payable returns (uint128 newBalance, uint128 withdrawn) {
+    ) public payable returns (uint128 newBalance, int128 realBalanceDelta) {
         return
             _updateSender(
                 _senderId(msg.sender, subSenderId),
                 lastUpdate,
                 lastBalance,
                 currReceivers,
-                topUpAmt,
-                withdraw,
+                balanceDelta,
                 newReceivers
             );
     }

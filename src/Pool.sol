@@ -15,18 +15,11 @@ struct DripsReceiver {
 ///
 /// The contract has 2 types of users: the senders and the receivers.
 ///
-/// A sender has some funds and a set of addresses of receivers, to whom he wants to send funds.
-/// In order to send there are 2 conditions, which must be fulfilled:
-///
-/// 1. There must be funds on his account in this contract.
-///    They can be added with `topUp` and removed with `withdraw`.
-/// 2. A set of receivers must be non-empty.
-///    Receivers can be added, removed and updated with `setReceiver`.
-///
-/// Each of these functions can be called in any order and at any time, they have immediate effects.
-/// When both conditions are fulfilled, every second the configured amount is being sent.
-/// It's extracted from the `withdraw`able balance and transferred to the receivers.
-/// The process continues automatically until the sender's balance is empty.
+/// A sender has some funds and a set of addresses of receivers, to whom they want to send funds.
+/// As soon as the sender balance is enough to cover at least 1 second of funding
+/// of the configured receivers, sending automatically begins.
+/// Every second funds are deducted from the sender balance and sent to their receivers.
+/// The process stops automatically when the sender's balance is not enough to cover another second.
 ///
 /// A single address can act as any number of independent senders by using sub-senders.
 /// A sub-sender is identified by a user address and an ID.
@@ -37,13 +30,13 @@ struct DripsReceiver {
 /// so recently sent funds may not be `collect`able immediately.
 /// `cycleSecs` is a constant configured when the pool is deployed.
 ///
-/// A single address can be used as a receiver, a sender or any number of sub-senders,
-/// even at the same time.
+/// A single address can be used as a receiver, a sender
+/// or any number of sub-senders, even at the same time.
 /// It will have multiple balances in the contract, one with received funds, one with funds
 /// being sent and one with funds being sent for each used sub-sender.
 /// These balances have no connection between them and no shared configuration.
-/// In order to send received funds, they must be first collected and then used to tup up
-/// if they are to be sent through the contract.
+/// In order to send received funds, they must be first collected and then
+/// added to the sender balance if they are to be sent through the contract.
 ///
 /// The concept of something happening periodically, e.g. every second or every `cycleSecs` are
 /// only high-level abstractions for the user, Ethereum isn't really capable of scheduling work.
@@ -66,8 +59,6 @@ abstract contract Pool {
     uint32 public constant MAX_DRIPS_RECEIVERS = 200;
     /// @notice The total drips weights of a user
     uint32 public constant TOTAL_DRIPS_WEIGHTS = 1_000_000;
-    /// @notice The amount passed as the withdraw amount to withdraw all the funds
-    uint128 public constant WITHDRAW_ALL = type(uint128).max;
 
     /// @notice Emitted when a direct stream of funds between a sender and a receiver is updated.
     /// This is caused by a sender updating their parameters.
@@ -117,7 +108,7 @@ abstract contract Pool {
     /// @param subSenderId The id of the sender's updated sub-sender
     /// @param balance The sub-sender's balance
     /// @param receivers The new list of the sub-sender's receivers.
-    event SubSenderUpdated(
+    event SenderUpdated(
         address indexed senderAddr,
         uint256 indexed subSenderId,
         uint128 balance,
@@ -378,7 +369,7 @@ abstract contract Pool {
     }
 
     /// @notice Updates all the sender's parameters.
-    /// Tops up and withdraws unsent funds from the balance of the sender.
+    /// Transfers funds to or from the sender to fulfill the update of the balance.
     /// @param senderId The sender id
     /// @param lastUpdate The timestamp of the last update of the sender.
     /// If this is the first update of the sender, pass zero.
@@ -386,41 +377,37 @@ abstract contract Pool {
     /// If this is the first update of the sender, pass zero.
     /// @param currReceivers The list of receivers set in the last update of the sender.
     /// If this is the first update of the sender, pass an empty array.
-    /// @param topUpAmt The topped up amount.
-    /// @param withdrawAmt The amount to be withdrawn, must not be higher than available funds.
-    /// Can be `WITHDRAW_ALL` to withdraw everything.
+    /// @param balanceDelta The sender balance change to be applied.
+    /// Positive to add funds to the sender balance, negative to remove them.
     /// @param newReceivers The new list of the sender's receivers.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
     /// @return newBalance The new sender balance.
     /// Pass it as `lastBalance` when updating the user for the next time.
-    /// @return withdrawn The actually withdrawn amount.
-    /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` has been used.
+    /// @return realBalanceDelta The actually applied balance change.
     function _updateSender(
         SenderId memory senderId,
         uint64 lastUpdate,
         uint128 lastBalance,
         Receiver[] calldata currReceivers,
-        uint128 topUpAmt,
-        uint128 withdrawAmt,
+        int128 balanceDelta,
         Receiver[] calldata newReceivers
-    ) internal returns (uint128 newBalance, uint128 withdrawn) {
+    ) internal returns (uint128 newBalance, int128 realBalanceDelta) {
         _assertSenderState(senderId, lastUpdate, lastBalance, currReceivers);
         uint128 newAmtPerSec = _assertReceiversValid(newReceivers);
         uint128 currAmtPerSec = _totalAmtPerSec(currReceivers);
         uint64 currEndTime = _sendingEndTime(lastUpdate, lastBalance, currAmtPerSec);
-        (newBalance, withdrawn) = _updateSenderBalance(
+        (newBalance, realBalanceDelta) = _updateSenderBalance(
             lastUpdate,
             lastBalance,
             currEndTime,
-            topUpAmt,
-            withdrawAmt,
-            currAmtPerSec
+            currAmtPerSec,
+            balanceDelta
         );
         uint64 newEndTime = _sendingEndTime(_currTimestamp(), newBalance, newAmtPerSec);
         _updateStreams(senderId, currReceivers, currEndTime, newReceivers, newEndTime);
         _storeSenderState(senderId, newBalance, newReceivers);
         _emitSenderUpdated(senderId, newBalance, newReceivers);
-        _transfer(senderId.senderAddr, int128(withdrawn) - int128(topUpAmt));
+        _transfer(senderId.senderAddr, -realBalanceDelta);
     }
 
     /// @notice Validates a list of receivers.
@@ -454,29 +441,25 @@ abstract contract Pool {
     /// @param lastBalance The balance after the last update of the sender.
     /// If this is the first update of the sender, pass zero.
     /// @param currEndTime Time when sending was supposed to end according to the last update.
-    /// @param topUpAmt The topped up amount.
-    /// @param withdrawAmt The amount to be withdrawn, must not be higher than available funds.
-    /// Can be `WITHDRAW_ALL` to withdraw everything.
-    /// @param amtPerSec The sender's total amount per second
+    /// @param currAmtPerSec The sender's total amount per second
+    /// @param balanceDelta The sender balance change to be applied.
+    /// Positive to add funds to the sender balance, negative to remove them.
     /// @return newBalance The new sender balance.
     /// Pass it as `lastBalance` when updating the user for the next time.
-    /// @return withdrawn The actually withdrawn amount.
-    /// Equal to `withdrawAmt` unless `WITHDRAW_ALL` has been used.
+    /// @return realBalanceDelta The actually applied balance change.
     function _updateSenderBalance(
         uint64 lastUpdate,
         uint128 lastBalance,
         uint64 currEndTime,
-        uint128 topUpAmt,
-        uint128 withdrawAmt,
-        uint128 amtPerSec
-    ) internal view returns (uint128 newBalance, uint128 withdrawn) {
+        uint128 currAmtPerSec,
+        int128 balanceDelta
+    ) internal view returns (uint128 newBalance, int128 realBalanceDelta) {
         if (currEndTime > _currTimestamp()) currEndTime = _currTimestamp();
-        lastBalance -= (currEndTime - lastUpdate) * amtPerSec;
-        lastBalance += topUpAmt;
-        if (withdrawAmt == WITHDRAW_ALL) withdrawAmt = lastBalance;
-        require(withdrawAmt <= lastBalance, "Not enough funds in the sender account");
-        lastBalance -= withdrawAmt;
-        return (lastBalance, withdrawAmt);
+        uint128 sent = (currEndTime - lastUpdate) * currAmtPerSec;
+        int128 currBalance = int128(lastBalance - sent);
+        int136 balance = currBalance + int136(balanceDelta);
+        if (balance < 0) balance = 0;
+        return (uint128(uint136(balance)), int128(balance - currBalance));
     }
 
     /// @notice Emit a relevant event when a sender is updated.
@@ -489,7 +472,7 @@ abstract contract Pool {
         Receiver[] calldata receivers
     ) internal {
         if (senderId.isSubSender) {
-            emit SubSenderUpdated(senderId.senderAddr, senderId.subSenderId, balance, receivers);
+            emit SenderUpdated(senderId.senderAddr, senderId.subSenderId, balance, receivers);
         } else {
             emit SenderUpdated(senderId.senderAddr, balance, receivers);
         }

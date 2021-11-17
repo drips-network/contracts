@@ -48,14 +48,12 @@ contract DaiPool is ERC20Pool {
         uint64 lastUpdate,
         uint128 lastBalance,
         Receiver[] calldata currReceivers,
-        uint128 topUpAmt,
-        uint128 withdraw,
+        int128 balanceDelta,
         Receiver[] calldata newReceivers,
         PermitArgs calldata permitArgs
-    ) public returns (uint128 newBalance, uint128 withdrawn) {
+    ) public returns (uint128 newBalance, int128 realBalanceDelta) {
         _permit(permitArgs);
-        return
-            updateSender(lastUpdate, lastBalance, currReceivers, topUpAmt, withdraw, newReceivers);
+        return updateSender(lastUpdate, lastBalance, currReceivers, balanceDelta, newReceivers);
     }
 
     /// @notice Updates all the parameters of a sub-sender of the sender of the message
@@ -70,11 +68,10 @@ contract DaiPool is ERC20Pool {
         uint64 lastUpdate,
         uint128 lastBalance,
         Receiver[] calldata currReceivers,
-        uint128 topUpAmt,
-        uint128 withdraw,
+        int128 balanceDelta,
         Receiver[] calldata newReceivers,
         PermitArgs calldata permitArgs
-    ) public returns (uint128 newBalance, uint128 withdrawn) {
+    ) public returns (uint128 newBalance, int128 realBalanceDelta) {
         _permit(permitArgs);
         return
             updateSubSender(
@@ -82,8 +79,7 @@ contract DaiPool is ERC20Pool {
                 lastUpdate,
                 lastBalance,
                 currReceivers,
-                topUpAmt,
-                withdraw,
+                balanceDelta,
                 newReceivers
             );
     }

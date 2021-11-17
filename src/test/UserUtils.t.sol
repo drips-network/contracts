@@ -117,27 +117,24 @@ abstract contract PoolUserUtils is DSTest {
         Receiver[] memory newReceivers
     ) internal {
         assertWithdrawable(user, balanceFrom);
-        uint128 toppedUp = balanceTo > balanceFrom ? balanceTo - balanceFrom : 0;
-        uint128 withdraw = balanceTo < balanceFrom ? balanceFrom - balanceTo : 0;
-        uint256 expectedBalance = user.balance() + withdraw - toppedUp;
-        (uint64 lastUpdate, uint128 balance, Receiver[] memory currReceivers) = getSenderState(
+        int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
+        uint256 expectedBalance = uint256(int256(user.balance()) - balanceDelta);
+        (uint64 lastUpdate, uint128 lastBalance, Receiver[] memory currReceivers) = getSenderState(
             user
         );
 
-        uint128 withdrawn;
-        (balance, withdrawn) = user.updateSender(
+        (uint128 newBalance, int128 realBalanceDelta) = user.updateSender(
             lastUpdate,
-            balance,
+            lastBalance,
             currReceivers,
-            toppedUp,
-            withdraw,
+            balanceDelta,
             newReceivers
         );
 
-        setSenderState(user, balance, newReceivers);
-        assertEq(balance, balanceTo, "Invalid sender balance");
-        assertEq(withdrawn, withdraw, "Expected amount not withdrawn");
-        assertWithdrawable(user, balance);
+        setSenderState(user, newBalance, newReceivers);
+        assertEq(newBalance, balanceTo, "Invalid sender balance");
+        assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
+        assertWithdrawable(user, newBalance);
         assertBalance(user, expectedBalance);
     }
 
@@ -205,7 +202,6 @@ abstract contract PoolUserUtils is DSTest {
             lastBalance,
             currReceivers,
             0,
-            0,
             newReceivers,
             expectedReason
         );
@@ -216,21 +212,11 @@ abstract contract PoolUserUtils is DSTest {
         uint64 lastUpdate,
         uint128 lastBalance,
         Receiver[] memory currReceivers,
-        uint128 toppedUp,
-        uint128 withdraw,
+        int128 balanceDelta,
         Receiver[] memory newReceivers,
         string memory expectedReason
     ) internal {
-        try
-            user.updateSender(
-                lastUpdate,
-                lastBalance,
-                currReceivers,
-                toppedUp,
-                withdraw,
-                newReceivers
-            )
-        {
+        try user.updateSender(lastUpdate, lastBalance, currReceivers, balanceDelta, newReceivers) {
             assertTrue(false, "Sender update hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, expectedReason, "Invalid sender update revert reason");
@@ -245,29 +231,27 @@ abstract contract PoolUserUtils is DSTest {
         Receiver[] memory newReceivers
     ) internal {
         assertWithdrawableSubSender(user, subSenderId, balanceFrom);
-        uint128 toppedUp = balanceTo > balanceFrom ? balanceTo - balanceFrom : 0;
-        uint128 withdraw = balanceTo < balanceFrom ? balanceFrom - balanceTo : 0;
-        uint256 expectedBalance = user.balance() + withdraw - toppedUp;
-        (uint64 lastUpdate, uint128 balance, Receiver[] memory currReceivers) = getSubSenderState(
-            user,
-            subSenderId
-        );
+        int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
+        uint256 expectedBalance = uint256(int256(user.balance()) - balanceDelta);
+        (
+            uint64 lastUpdate,
+            uint128 lastBalance,
+            Receiver[] memory currReceivers
+        ) = getSubSenderState(user, subSenderId);
 
-        uint128 withdrawn;
-        (balance, withdrawn) = user.updateSubSender(
+        (uint128 newBalance, int128 realBalanceDelta) = user.updateSubSender(
             subSenderId,
             lastUpdate,
-            balance,
+            lastBalance,
             currReceivers,
-            toppedUp,
-            withdraw,
+            balanceDelta,
             newReceivers
         );
 
-        setSubSenderState(user, subSenderId, balance, newReceivers);
-        assertEq(balance, balanceTo, "Invalid sender balance");
-        assertEq(withdrawn, withdraw, "Expected amount not withdrawn");
-        assertWithdrawableSubSender(user, subSenderId, balance);
+        setSubSenderState(user, subSenderId, newBalance, newReceivers);
+        assertEq(newBalance, balanceTo, "Invalid sender balance");
+        assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
+        assertWithdrawableSubSender(user, subSenderId, newBalance);
         assertBalance(user, expectedBalance);
     }
 

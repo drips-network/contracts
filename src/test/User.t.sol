@@ -14,20 +14,18 @@ abstract contract PoolUser {
         uint64 lastUpdate,
         uint128 lastBalance,
         Receiver[] calldata currReceivers,
-        uint128 toppedUp,
-        uint128 withdraw,
+        int128 balanceDelta,
         Receiver[] calldata newReceivers
-    ) public virtual returns (uint128 newBalance, uint128 withdrawn);
+    ) public virtual returns (uint128 newBalance, int128 realBalanceDelta);
 
     function updateSubSender(
         uint256 subSenderId,
         uint64 lastUpdate,
         uint128 lastBalance,
         Receiver[] calldata currReceivers,
-        uint128 toppedUp,
-        uint128 withdraw,
+        int128 balanceDelta,
         Receiver[] calldata newReceivers
-    ) public virtual returns (uint128 newBalance, uint128 withdrawn);
+    ) public virtual returns (uint128 newBalance, int128 realBalanceDelta);
 
     function give(address receiver, uint128 amt) public virtual;
 
@@ -133,20 +131,12 @@ contract ERC20PoolUser is PoolUser {
         uint64 lastUpdate,
         uint128 lastBalance,
         Receiver[] calldata currReceivers,
-        uint128 toppedUp,
-        uint128 withdraw,
+        int128 balanceDelta,
         Receiver[] calldata newReceivers
-    ) public override returns (uint128 newBalance, uint128 withdrawn) {
-        pool.erc20().approve(address(pool), toppedUp);
+    ) public override returns (uint128 newBalance, int128 realBalanceDelta) {
+        if (balanceDelta > 0) pool.erc20().approve(address(pool), uint128(balanceDelta));
         return
-            pool.updateSender(
-                lastUpdate,
-                lastBalance,
-                currReceivers,
-                toppedUp,
-                withdraw,
-                newReceivers
-            );
+            pool.updateSender(lastUpdate, lastBalance, currReceivers, balanceDelta, newReceivers);
     }
 
     function updateSubSender(
@@ -154,19 +144,17 @@ contract ERC20PoolUser is PoolUser {
         uint64 lastUpdate,
         uint128 lastBalance,
         Receiver[] calldata currReceivers,
-        uint128 toppedUp,
-        uint128 withdraw,
+        int128 balanceDelta,
         Receiver[] calldata newReceivers
-    ) public override returns (uint128 newBalance, uint128 withdrawn) {
-        pool.erc20().approve(address(pool), toppedUp);
+    ) public override returns (uint128 newBalance, int128 realBalanceDelta) {
+        if (balanceDelta > 0) pool.erc20().approve(address(pool), uint128(balanceDelta));
         return
             pool.updateSubSender(
                 subSenderId,
                 lastUpdate,
                 lastBalance,
                 currReceivers,
-                toppedUp,
-                withdraw,
+                balanceDelta,
                 newReceivers
             );
     }
@@ -215,16 +203,17 @@ contract EthPoolUser is PoolUser {
         uint64 lastUpdate,
         uint128 lastBalance,
         Receiver[] calldata currReceivers,
-        uint128 toppedUp,
-        uint128 withdraw,
+        int128 balanceDelta,
         Receiver[] calldata newReceivers
-    ) public override returns (uint128 newBalance, uint128 withdrawn) {
+    ) public override returns (uint128 newBalance, int128 realBalanceDelta) {
+        uint256 value = balanceDelta > 0 ? uint128(balanceDelta) : 0;
+        uint128 reduceBalance = balanceDelta < 0 ? uint128(uint136(-int136(balanceDelta))) : 0;
         return
-            pool.updateSender{value: toppedUp}(
+            pool.updateSender{value: value}(
                 lastUpdate,
                 lastBalance,
                 currReceivers,
-                withdraw,
+                reduceBalance,
                 newReceivers
             );
     }
@@ -234,17 +223,18 @@ contract EthPoolUser is PoolUser {
         uint64 lastUpdate,
         uint128 lastBalance,
         Receiver[] calldata currReceivers,
-        uint128 toppedUp,
-        uint128 withdraw,
+        int128 balanceDelta,
         Receiver[] calldata newReceivers
-    ) public override returns (uint128 newBalance, uint128 withdrawn) {
+    ) public override returns (uint128 newBalance, int128 realBalanceDelta) {
+        uint256 value = balanceDelta > 0 ? uint128(balanceDelta) : 0;
+        uint128 reduceBalance = balanceDelta < 0 ? uint128(-balanceDelta) : 0;
         return
-            pool.updateSubSender{value: toppedUp}(
+            pool.updateSubSender{value: value}(
                 subSenderId,
                 lastUpdate,
                 lastBalance,
                 currReceivers,
-                withdraw,
+                reduceBalance,
                 newReceivers
             );
     }

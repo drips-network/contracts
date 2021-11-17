@@ -199,19 +199,6 @@ abstract contract PoolTest is PoolUserUtils {
         collect(receiver, 10);
     }
 
-    function testAllowsSenderUpdateWithTopUpAndWithdrawal() public {
-        (uint128 balance, uint128 withdrawn) = sender.updateSender(
-            0,
-            0,
-            receivers(),
-            10,
-            3,
-            receivers()
-        );
-        assertEq(balance, 7, "Invalid balance");
-        assertEq(withdrawn, 3, "Invalid withdrawn");
-    }
-
     function testAllowsNoSenderUpdate() public {
         updateSender(sender, 0, 6, receivers(receiver, 3));
         warpBy(1);
@@ -302,7 +289,6 @@ abstract contract PoolTest is PoolUserUtils {
             0,
             receivers(receiver, 1),
             0,
-            0,
             receivers(),
             "Invalid provided sender state"
         );
@@ -316,7 +302,6 @@ abstract contract PoolTest is PoolUserUtils {
             2,
             receivers(receiver, 1),
             0,
-            0,
             receivers(),
             "Invalid provided sender state"
         );
@@ -329,7 +314,6 @@ abstract contract PoolTest is PoolUserUtils {
             uint64(block.timestamp),
             0,
             receivers(receiver, 2),
-            0,
             0,
             receivers(),
             "Invalid provided sender state"
@@ -346,23 +330,25 @@ abstract contract PoolTest is PoolUserUtils {
         collect(sender, 10);
     }
 
-    function testAllowsWithdrawalOfAllFunds() public {
-        updateSender(sender, 0, 10, receivers(receiver, 1));
+    function testAllowsWithdrawalOfMoreThanSenderBalance() public {
+        Receiver[] memory receivers = receivers(receiver, 1);
+        updateSender(sender, 0, 10, receivers);
         uint64 lastUpdate = uint64(block.timestamp);
         warpBy(4);
         // Sender had 4 second paying 1 per second
         assertWithdrawable(sender, 6);
         uint256 expectedBalance = sender.balance() + 6;
-        (uint128 balance, uint128 withdrawn) = sender.updateSender(
+        (uint128 newBalance, int128 realBalanceDelta) = sender.updateSender(
             lastUpdate,
             10,
-            receivers(receiver, 1),
-            0,
-            pool.WITHDRAW_ALL(),
-            receivers(receiver, 1)
+            receivers,
+            type(int128).min,
+            receivers
         );
-        assertEq(balance, 0, "Invalid balance");
-        assertEq(withdrawn, 6, "Invalid withdrawn");
+        setSenderState(sender, newBalance, receivers);
+        assertEq(newBalance, 0, "Invalid balance");
+        assertEq(realBalanceDelta, -6, "Invalid real balance delta");
+        assertWithdrawable(sender, 0);
         assertBalance(sender, expectedBalance);
         warpToCycleEnd();
         // Receiver had 4 seconds paying 1 per second
