@@ -135,10 +135,10 @@ abstract contract PoolTest is PoolUserUtils {
         updateSender(sender, 0, 100, receivers(receiver, 9));
         warpBy(10);
         // Sender had 10 seconds paying 9 per second, funds are about to run out
-        assertWithdrawable(sender, 10);
+        assertSenderBalance(sender, 10);
         warpBy(1);
         // Sender had 11 seconds paying 9 per second, funds have run out
-        assertWithdrawable(sender, 1);
+        assertSenderBalance(sender, 1);
         // Nothing more will be sent
         warpToCycleEnd();
         changeBalance(sender, 1, 0);
@@ -175,7 +175,7 @@ abstract contract PoolTest is PoolUserUtils {
         updateSender(sender, 0, 100, receivers(receiver, 10));
         warpBy(10);
         // Sender had 10 seconds paying 10 per second
-        assertWithdrawable(sender, 0);
+        assertSenderBalance(sender, 0);
         warpToCycleEnd();
         // Receiver had 10 seconds paying 10 per second
         assertCollectable(receiver, 100);
@@ -211,7 +211,7 @@ abstract contract PoolTest is PoolUserUtils {
     function testAllowsChangingReceiversWhileSending() public {
         updateSender(sender, 0, 100, receivers(receiver1, 6, receiver2, 6));
         warpBy(3);
-        setReceivers(sender, receivers(receiver1, 4, receiver2, 8));
+        updateSender(sender, 64, 64, receivers(receiver1, 4, receiver2, 8));
         warpBy(4);
         // Sender had 7 seconds paying 12 per second
         changeBalance(sender, 16, 0);
@@ -225,9 +225,9 @@ abstract contract PoolTest is PoolUserUtils {
     function testAllowsRemovingReceiversWhileSending() public {
         updateSender(sender, 0, 100, receivers(receiver1, 5, receiver2, 5));
         warpBy(3);
-        setReceivers(sender, receivers(receiver2, 10));
+        updateSender(sender, 70, 70, receivers(receiver2, 10));
         warpBy(4);
-        setReceivers(sender, receivers());
+        updateSender(sender, 30, 30, receivers());
         warpBy(10);
         // Sender had 7 seconds paying 10 per second
         changeBalance(sender, 30, 0);
@@ -248,12 +248,12 @@ abstract contract PoolTest is PoolUserUtils {
         }
         receiversBad[countMax] = Receiver(address(countMax + 1), 1);
 
-        setReceivers(sender, receiversGood);
+        updateSender(sender, 0, 0, receiversGood);
         assertSetReceiversReverts(sender, receiversBad, "Too many receivers");
     }
 
     function testRejectsOverflowingTotalAmtPerSec() public {
-        setReceivers(sender, receivers(receiver1, type(uint128).max));
+        updateSender(sender, 0, 0, receivers(receiver1, type(uint128).max));
         assertSetReceiversReverts(
             sender,
             receivers(receiver1, type(uint128).max, receiver2, 1),
@@ -324,7 +324,7 @@ abstract contract PoolTest is PoolUserUtils {
         updateSender(sender, 0, 10, receivers(sender, 10));
         warpBy(1);
         // Sender had 1 second paying 10 per second
-        assertWithdrawable(sender, 0);
+        assertSenderBalance(sender, 0);
         warpToCycleEnd();
         // Sender had 1 second paying 10 per second
         collect(sender, 10);
@@ -336,7 +336,6 @@ abstract contract PoolTest is PoolUserUtils {
         uint64 lastUpdate = uint64(block.timestamp);
         warpBy(4);
         // Sender had 4 second paying 1 per second
-        assertWithdrawable(sender, 6);
         uint256 expectedBalance = sender.balance() + 6;
         (uint128 newBalance, int128 realBalanceDelta) = sender.updateSender(
             lastUpdate,
@@ -348,60 +347,11 @@ abstract contract PoolTest is PoolUserUtils {
         setSenderState(sender, newBalance, receivers);
         assertEq(newBalance, 0, "Invalid balance");
         assertEq(realBalanceDelta, -6, "Invalid real balance delta");
-        assertWithdrawable(sender, 0);
+        assertSenderBalance(sender, 0);
         assertBalance(sender, expectedBalance);
         warpToCycleEnd();
         // Receiver had 4 seconds paying 1 per second
         collect(receiver, 4);
-    }
-
-    function testWithdrawableRevertsIfInvalidLastUpdate() public {
-        updateSender(sender, 0, 0, receivers(receiver, 1));
-        assertWithdrawableReverts(
-            sender,
-            uint64(block.timestamp) + 1,
-            0,
-            receivers(receiver, 1),
-            "Invalid provided sender state"
-        );
-    }
-
-    function testWithdrawableRevertsIfInvalidLastBalance() public {
-        updateSender(sender, 0, 1, receivers(receiver, 1));
-        assertWithdrawableReverts(
-            sender,
-            uint64(block.timestamp),
-            2,
-            receivers(receiver, 1),
-            "Invalid provided sender state"
-        );
-    }
-
-    function testWithdrawableRevertsIfInvalidCurrReceivers() public {
-        updateSender(sender, 0, 0, receivers(receiver, 1));
-        assertWithdrawableReverts(
-            sender,
-            uint64(block.timestamp),
-            0,
-            receivers(receiver, 2),
-            "Invalid provided sender state"
-        );
-    }
-
-    function testWithdrawableSubSenderRevertsIfInvalidCurrReceivers() public {
-        updateSubSender(sender, SUB_SENDER_1, 0, 0, receivers(receiver, 1));
-        try
-            sender.withdrawableSubSender(
-                SUB_SENDER_1,
-                uint64(block.timestamp),
-                0,
-                receivers(receiver, 2)
-            )
-        {
-            assertTrue(false, "Withdrawable hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, "Invalid provided sender state", "Invalid withdrawable revert reason");
-        }
     }
 
     function testAnybodyCanCallCollect() public {

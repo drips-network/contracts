@@ -116,7 +116,6 @@ abstract contract PoolUserUtils is DSTest {
         uint128 balanceTo,
         Receiver[] memory newReceivers
     ) internal {
-        assertWithdrawable(user, balanceFrom);
         int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
         uint256 expectedBalance = uint256(int256(user.balance()) - balanceDelta);
         (uint64 lastUpdate, uint128 lastBalance, Receiver[] memory currReceivers) = getSenderState(
@@ -134,7 +133,6 @@ abstract contract PoolUserUtils is DSTest {
         setSenderState(user, newBalance, newReceivers);
         assertEq(newBalance, balanceTo, "Invalid sender balance");
         assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
-        assertWithdrawable(user, newBalance);
         assertBalance(user, expectedBalance);
     }
 
@@ -149,29 +147,8 @@ abstract contract PoolUserUtils is DSTest {
         assertEq(actual, expected, "Invalid sender state");
     }
 
-    function assertWithdrawable(PoolUser user, uint128 expected) internal {
-        assertEq(withdrawable(user), expected, "Invalid withdrawable");
-    }
-
-    function withdrawable(PoolUser user) internal returns (uint128 withdrawableAmt) {
-        (uint64 lastUpdate, uint128 lastBalance, Receiver[] memory currReceivers) = getSenderState(
-            user
-        );
-        return user.withdrawable(lastUpdate, lastBalance, currReceivers);
-    }
-
-    function assertWithdrawableReverts(
-        PoolUser user,
-        uint64 lastUpdate,
-        uint128 lastBalance,
-        Receiver[] memory currReceivers,
-        string memory expectedReason
-    ) internal {
-        try user.withdrawable(lastUpdate, lastBalance, currReceivers) {
-            assertTrue(false, "Withdrawable hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, expectedReason, "Invalid withdrawable revert reason");
-        }
+    function assertSenderBalance(PoolUser user, uint128 expected) internal {
+        changeBalance(user, expected, expected);
     }
 
     function changeBalance(
@@ -181,11 +158,6 @@ abstract contract PoolUserUtils is DSTest {
     ) internal {
         (, , Receiver[] memory currReceivers) = getSenderState(user);
         updateSender(user, balanceFrom, balanceTo, currReceivers);
-    }
-
-    function setReceivers(PoolUser user, Receiver[] memory newReceivers) internal {
-        uint128 balance = withdrawable(user);
-        updateSender(user, balance, balance, newReceivers);
     }
 
     function assertSetReceiversReverts(
@@ -230,7 +202,6 @@ abstract contract PoolUserUtils is DSTest {
         uint128 balanceTo,
         Receiver[] memory newReceivers
     ) internal {
-        assertWithdrawableSubSender(user, subSenderId, balanceFrom);
         int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
         uint256 expectedBalance = uint256(int256(user.balance()) - balanceDelta);
         (
@@ -251,21 +222,7 @@ abstract contract PoolUserUtils is DSTest {
         setSubSenderState(user, subSenderId, newBalance, newReceivers);
         assertEq(newBalance, balanceTo, "Invalid sender balance");
         assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
-        assertWithdrawableSubSender(user, subSenderId, newBalance);
         assertBalance(user, expectedBalance);
-    }
-
-    function assertWithdrawableSubSender(
-        PoolUser user,
-        uint256 subSenderId,
-        uint128 expected
-    ) internal {
-        (uint64 lastUpdate, uint128 lastBalance, Receiver[] memory curr) = getSubSenderState(
-            user,
-            subSenderId
-        );
-        uint128 actual = user.withdrawableSubSender(subSenderId, lastUpdate, lastBalance, curr);
-        assertEq(actual, expected, "Invalid withdrawable");
     }
 
     function assertSubSenderState(

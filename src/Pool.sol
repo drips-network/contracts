@@ -583,67 +583,6 @@ abstract contract Pool {
         return endTime > MAX_TIMESTAMP ? MAX_TIMESTAMP : uint64(endTime);
     }
 
-    /// @notice Returns amount of unsent funds available for withdrawal for the sender
-    /// @param senderAddr The address of the sender
-    /// @param lastUpdate The timestamp of the last update of the sender.
-    /// If this is the first update of the sender, pass zero.
-    /// @param lastBalance The balance after the last update of the sender.
-    /// If this is the first update of the sender, pass zero.
-    /// @param currReceivers The list of receivers set in the last update of the sender.
-    /// @return withdrawableAmt The withdrawable amount
-    function withdrawable(
-        address senderAddr,
-        uint64 lastUpdate,
-        uint128 lastBalance,
-        Receiver[] calldata currReceivers
-    ) public view returns (uint128 withdrawableAmt) {
-        SenderId memory senderId = _senderId(senderAddr);
-        return _withdrawable(senderId, lastUpdate, lastBalance, currReceivers);
-    }
-
-    /// @notice Returns amount of unsent funds available for withdrawal for the sub-sender
-    /// @param senderAddr The address of the sender
-    /// @param subSenderId The id of the sender's sub-sender
-    /// @param lastUpdate The timestamp of the last update of the sender.
-    /// If this is the first update of the sender, pass zero.
-    /// @param lastBalance The balance after the last update of the sender.
-    /// If this is the first update of the sender, pass zero.
-    /// @param currReceivers The list of receivers set in the last update of the sender.
-    /// @return withdrawableAmt The withdrawable amount
-    function withdrawableSubSender(
-        address senderAddr,
-        uint256 subSenderId,
-        uint64 lastUpdate,
-        uint128 lastBalance,
-        Receiver[] calldata currReceivers
-    ) public view returns (uint128 withdrawableAmt) {
-        SenderId memory senderId = _senderId(senderAddr, subSenderId);
-        return _withdrawable(senderId, lastUpdate, lastBalance, currReceivers);
-    }
-
-    /// @notice Returns amount of unsent funds available for withdrawal for the sender.
-    /// @param senderId The id of the sender
-    /// @param lastUpdate The timestamp of the last update of the sender.
-    /// If this is the first update of the sender, pass zero.
-    /// @param lastBalance The balance after the last update of the sender.
-    /// If this is the first update of the sender, pass zero.
-    /// @param currReceivers The list of receivers set in the last update of the sender.
-    /// @return withdrawableAmt The withdrawable amount
-    function _withdrawable(
-        SenderId memory senderId,
-        uint64 lastUpdate,
-        uint128 lastBalance,
-        Receiver[] calldata currReceivers
-    ) internal view returns (uint128 withdrawableAmt) {
-        _assertSenderState(senderId, lastUpdate, lastBalance, currReceivers);
-        uint128 amtPerSec = _totalAmtPerSec(currReceivers);
-        uint192 alreadySent = uint192(_currTimestamp() - lastUpdate) * amtPerSec;
-        if (alreadySent > lastBalance) {
-            return lastBalance % amtPerSec;
-        }
-        return lastBalance - uint128(alreadySent);
-    }
-
     /// @notice Asserts that the sender state is the currently used one.
     /// @param senderId The id of the sender
     /// @param lastUpdate The timestamp of the last update of the sender.

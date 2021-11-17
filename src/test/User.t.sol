@@ -63,30 +63,6 @@ abstract contract PoolUser {
         return getPool().flushCycles(address(this), maxCycles);
     }
 
-    function withdrawable(
-        uint64 lastUpdate,
-        uint128 lastBalance,
-        Receiver[] calldata currReceivers
-    ) public view returns (uint128) {
-        return getPool().withdrawable(address(this), lastUpdate, lastBalance, currReceivers);
-    }
-
-    function withdrawableSubSender(
-        uint256 subSenderId,
-        uint64 lastUpdate,
-        uint128 lastBalance,
-        Receiver[] calldata currReceivers
-    ) public view returns (uint128) {
-        return
-            getPool().withdrawableSubSender(
-                address(this),
-                subSenderId,
-                lastUpdate,
-                lastBalance,
-                currReceivers
-            );
-    }
-
     function hashSenderState(
         uint64 lastUpdate,
         uint128 lastBalance,
