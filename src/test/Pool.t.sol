@@ -4,7 +4,7 @@ pragma solidity ^0.8.7;
 import {DSTest} from "ds-test/test.sol";
 import {PoolUserUtils} from "./UserUtils.t.sol";
 import {PoolUser} from "./User.t.sol";
-import {Hevm} from "./BaseTest.t.sol";
+import {Hevm} from "./Hevm.t.sol";
 import {DripsReceiver, Pool, Receiver} from "../Pool.sol";
 
 abstract contract PoolTest is PoolUserUtils {
