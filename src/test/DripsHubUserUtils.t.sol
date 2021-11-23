@@ -7,7 +7,7 @@ import {DripsReceiver, DripsHub, Receiver} from "../DripsHub.sol";
 
 abstract contract DripsHubUserUtils is DSTest {
     mapping(DripsHubUser => bytes) internal senderStates;
-    mapping(DripsHubUser => mapping(uint256 => bytes)) internal subSenderStates;
+    mapping(DripsHubUser => mapping(uint256 => bytes)) internal senderAccountStates;
     mapping(DripsHubUser => bytes) internal currDripsReceivers;
 
     function getSenderState(DripsHubUser user)
@@ -22,7 +22,7 @@ abstract contract DripsHubUserUtils is DSTest {
         assertSenderState(user, lastUpdate, lastBalance, currReceivers);
     }
 
-    function getSenderState(DripsHubUser user, uint256 subSenderId)
+    function getSenderState(DripsHubUser user, uint256 account)
         internal
         returns (
             uint64 lastUpdate,
@@ -31,9 +31,9 @@ abstract contract DripsHubUserUtils is DSTest {
         )
     {
         (lastUpdate, lastBalance, currReceivers) = decodeSenderState(
-            subSenderStates[user][subSenderId]
+            senderAccountStates[user][account]
         );
-        assertSenderState(user, subSenderId, lastUpdate, lastBalance, currReceivers);
+        assertSenderState(user, account, lastUpdate, lastBalance, currReceivers);
     }
 
     function setSenderState(
@@ -48,13 +48,13 @@ abstract contract DripsHubUserUtils is DSTest {
 
     function setSenderState(
         DripsHubUser user,
-        uint256 subSenderId,
+        uint256 account,
         uint128 newBalance,
         Receiver[] memory newReceivers
     ) internal {
         uint64 currTimestamp = uint64(block.timestamp);
-        assertSenderState(user, subSenderId, currTimestamp, newBalance, newReceivers);
-        subSenderStates[user][subSenderId] = abi.encode(currTimestamp, newBalance, newReceivers);
+        assertSenderState(user, account, currTimestamp, newBalance, newReceivers);
+        senderAccountStates[user][account] = abi.encode(currTimestamp, newBalance, newReceivers);
     }
 
     function decodeSenderState(bytes storage encoded)
@@ -203,7 +203,7 @@ abstract contract DripsHubUserUtils is DSTest {
 
     function updateSender(
         DripsHubUser user,
-        uint256 subSenderId,
+        uint256 account,
         uint128 balanceFrom,
         uint128 balanceTo,
         Receiver[] memory newReceivers
@@ -212,11 +212,11 @@ abstract contract DripsHubUserUtils is DSTest {
         uint256 expectedBalance = uint256(int256(user.balance()) - balanceDelta);
         (uint64 lastUpdate, uint128 lastBalance, Receiver[] memory currReceivers) = getSenderState(
             user,
-            subSenderId
+            account
         );
 
         (uint128 newBalance, int128 realBalanceDelta) = user.updateSender(
-            subSenderId,
+            account,
             lastUpdate,
             lastBalance,
             currReceivers,
@@ -224,7 +224,7 @@ abstract contract DripsHubUserUtils is DSTest {
             newReceivers
         );
 
-        setSenderState(user, subSenderId, newBalance, newReceivers);
+        setSenderState(user, account, newBalance, newReceivers);
         assertEq(newBalance, balanceTo, "Invalid sender balance");
         assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
         assertBalance(user, expectedBalance);
@@ -232,24 +232,24 @@ abstract contract DripsHubUserUtils is DSTest {
 
     function assertSenderState(
         DripsHubUser user,
-        uint256 subSenderId,
+        uint256 account,
         uint64 lastUpdate,
         uint128 lastBalance,
         Receiver[] memory currReceivers
     ) internal {
-        bytes32 actual = user.senderStateHash(subSenderId);
+        bytes32 actual = user.senderStateHash(account);
         bytes32 expected = user.hashSenderState(lastUpdate, lastBalance, currReceivers);
-        assertEq(actual, expected, "Invalid sub-sender state");
+        assertEq(actual, expected, "Invalid account state");
     }
 
     function changeBalance(
         DripsHubUser user,
-        uint256 subSenderId,
+        uint256 account,
         uint128 balanceFrom,
         uint128 balanceTo
     ) internal {
-        (, , Receiver[] memory curr) = getSenderState(user, subSenderId);
-        updateSender(user, subSenderId, balanceFrom, balanceTo, curr);
+        (, , Receiver[] memory curr) = getSenderState(user, account);
+        updateSender(user, account, balanceFrom, balanceTo, curr);
     }
 
     function dripsReceivers() internal pure returns (DripsReceiver[] memory list) {

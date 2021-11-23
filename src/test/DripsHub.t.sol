@@ -17,8 +17,8 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     DripsHubUser private sender2;
     DripsHubUser private receiver2;
     DripsHubUser private receiver3;
-    uint256 private constant SUB_SENDER_1 = 1;
-    uint256 private constant SUB_SENDER_2 = 2;
+    uint256 private constant ACCOUNT_1 = 1;
+    uint256 private constant ACCOUNT_2 = 2;
 
     // Must be called once from child contract `setUp`
     function setUp(DripsHub dripsHub_) internal {
@@ -361,16 +361,16 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         collect(sender2, receiver, 10);
     }
 
-    function testSenderAndSubSenderAreIndependent() public {
+    function testSenderAndTheirAccountAreIndependent() public {
         updateSender(sender, 0, 5, receivers(receiver1, 1));
         warpBy(3);
-        updateSender(sender, SUB_SENDER_1, 0, 8, receivers(receiver1, 2, receiver2, 1));
+        updateSender(sender, ACCOUNT_1, 0, 8, receivers(receiver1, 2, receiver2, 1));
         warpBy(1);
         // Sender had 4 seconds paying 1 per second
         changeBalance(sender, 1, 0);
         warpBy(1);
-        // Sender sub-sender1 had 2 seconds paying 3 per second
-        changeBalance(sender, SUB_SENDER_1, 2, 0);
+        // Sender account1 had 2 seconds paying 3 per second
+        changeBalance(sender, ACCOUNT_1, 2, 0);
         warpToCycleEnd();
         // Receiver1 had 4 second paying 1 per second and 2 seconds paying 2 per second
         collect(receiver1, 8);
@@ -378,16 +378,16 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         collect(receiver2, 2);
     }
 
-    function testUserSubSendersAreIndependent() public {
-        updateSender(sender, SUB_SENDER_1, 0, 5, receivers(receiver1, 1));
+    function testUserTheirAccountAreIndependent() public {
+        updateSender(sender, ACCOUNT_1, 0, 5, receivers(receiver1, 1));
         warpBy(3);
-        updateSender(sender, SUB_SENDER_2, 0, 8, receivers(receiver1, 2, receiver2, 1));
+        updateSender(sender, ACCOUNT_2, 0, 8, receivers(receiver1, 2, receiver2, 1));
         warpBy(1);
-        // Sender sub-sender1 had 4 seconds paying 1 per second
-        changeBalance(sender, SUB_SENDER_1, 1, 0);
+        // Sender account1 had 4 seconds paying 1 per second
+        changeBalance(sender, ACCOUNT_1, 1, 0);
         warpBy(1);
-        // Sender sub-sender2 had 2 seconds paying 3 per second
-        changeBalance(sender, SUB_SENDER_2, 2, 0);
+        // Sender account2 had 2 seconds paying 3 per second
+        changeBalance(sender, ACCOUNT_2, 2, 0);
         warpToCycleEnd();
         // Receiver1 had 4 second paying 1 per second and 2 seconds paying 2 per second
         collect(receiver1, 8);
@@ -395,16 +395,16 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         collect(receiver2, 2);
     }
 
-    function testSubSendersOfDifferentUsersAreIndependent() public {
-        updateSender(sender1, SUB_SENDER_1, 0, 5, receivers(receiver1, 1));
+    function testAccountsOfDifferentUsersAreIndependent() public {
+        updateSender(sender1, ACCOUNT_1, 0, 5, receivers(receiver1, 1));
         warpBy(3);
-        updateSender(sender2, SUB_SENDER_1, 0, 8, receivers(receiver1, 2, receiver2, 1));
+        updateSender(sender2, ACCOUNT_1, 0, 8, receivers(receiver1, 2, receiver2, 1));
         warpBy(1);
-        // Sender1 sub-sender1 had 4 seconds paying 1 per second
-        changeBalance(sender1, SUB_SENDER_1, 1, 0);
+        // Sender1 account1 had 4 seconds paying 1 per second
+        changeBalance(sender1, ACCOUNT_1, 1, 0);
         warpBy(1);
-        // Sender2 sub-sender1 had 2 seconds paying 3 per second
-        changeBalance(sender2, SUB_SENDER_1, 2, 0);
+        // Sender2 account1 had 2 seconds paying 3 per second
+        changeBalance(sender2, ACCOUNT_1, 2, 0);
         warpToCycleEnd();
         // Receiver1 had 4 second paying 1 per second and 2 seconds paying 2 per second
         collect(receiver1, 8);
@@ -592,8 +592,8 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         collect(receiver, 10);
     }
 
-    function testFundsGivenFromSubSenderCanBeCollected() public {
-        sender.give(SUB_SENDER_1, address(receiver), 10);
+    function testFundsGivenFromAccountCanBeCollected() public {
+        sender.give(ACCOUNT_1, address(receiver), 10);
         collect(receiver, 10);
     }
 }

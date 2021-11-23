@@ -47,11 +47,11 @@ contract EthDripsHub is DripsHub {
             );
     }
 
-    /// @notice Updates all the parameters of a sub-sender of the sender of the message.
+    /// @notice Updates all the parameters of an account of the sender of the message.
     /// See `updateSender` for more details
-    /// @param subSenderId The id of the sender's sub-sender
+    /// @param account The sender's account
     function updateSender(
-        uint256 subSenderId,
+        uint256 account,
         uint64 lastUpdate,
         uint128 lastBalance,
         Receiver[] calldata currReceivers,
@@ -60,7 +60,7 @@ contract EthDripsHub is DripsHub {
     ) public payable returns (uint128 newBalance, int128 realBalanceDelta) {
         return
             _updateSender(
-                _senderId(msg.sender, subSenderId),
+                _senderId(msg.sender, account),
                 lastUpdate,
                 lastBalance,
                 currReceivers,
@@ -85,12 +85,12 @@ contract EthDripsHub is DripsHub {
         _give(_senderId(msg.sender), receiver, uint128(msg.value));
     }
 
-    /// @notice Gives funds from the sub-sender of the sender of the message to the receiver.
+    /// @notice Gives funds from the account of the sender of the message to the receiver.
     /// The receiver can collect them immediately.
-    /// @param subSenderId The id of the giver's sub-sender
+    /// @param account The user's account
     /// @param receiver The receiver
-    function give(uint256 subSenderId, address receiver) public payable {
-        _give(_senderId(msg.sender, subSenderId), receiver, uint128(msg.value));
+    function give(uint256 account, address receiver) public payable {
+        _give(_senderId(msg.sender, account), receiver, uint128(msg.value));
     }
 
     /// @notice Collects received funds and sets a new list of drips receivers

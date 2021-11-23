@@ -21,19 +21,19 @@ struct DripsReceiver {
 /// Every second funds are deducted from the sender balance and sent to their receivers.
 /// The process stops automatically when the sender's balance is not enough to cover another second.
 ///
-/// A single address can act as any number of independent senders by using sub-senders.
-/// A sub-sender is identified by a user address and an ID.
-/// The sender and all sub-senders' configurations are independent and they have separate balances.
+/// A single address can act as any number of independent senders by using accounts.
+/// An account is identified by a user address and an account identifier.
+/// The sender and their accounts' configurations are independent and they have separate balances.
 ///
-/// A receiver has an account, from which they can `collect` funds sent by the senders.
+/// A receiver has a balance, from which they can `collect` funds sent by the senders.
 /// The available amount is updated every `cycleSecs` seconds,
 /// so recently sent funds may not be `collect`able immediately.
 /// `cycleSecs` is a constant configured when the drips hub is deployed.
 ///
 /// A single address can be used as a receiver, a sender
-/// or any number of sub-senders, even at the same time.
+/// or any number of accounts, even at the same time.
 /// It will have multiple balances in the contract, one with received funds, one with funds
-/// being sent and one with funds being sent for each used sub-sender.
+/// being sent and one with funds being sent for each used account.
 /// These balances have no connection between them and no shared configuration.
 /// In order to send received funds, they must be first collected and then
 /// added to the sender balance if they are to be sent through the contract.
@@ -49,7 +49,7 @@ abstract contract DripsHub {
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
     /// gain access to funds collected during `T - cycleSecs` to `T - 1`.
     uint64 public immutable cycleSecs;
-    /// @dev Timestamp at which all funding periods must be finished
+    /// @notice Timestamp at which all funding periods must be finished
     uint64 internal constant MAX_TIMESTAMP = type(uint64).max - 2;
     /// @notice Maximum number of receivers of a single sender.
     /// Limits costs of changes in sender's configuration.
@@ -78,12 +78,12 @@ abstract contract DripsHub {
     );
 
     /// @notice Emitted when a direct stream of funds between
-    /// a sender's sub-sender and a receiver is updated.
-    /// This is caused by a sender updating their sub-sender's parameters.
+    /// a sender's account and a receiver is updated.
+    /// This is caused by the sender updating their account's parameters.
     /// Funds are being sent on every second between the event block's timestamp (inclusively) and
     /// `endTime` (exclusively) or until the timestamp of the next stream update (exclusively).
     /// @param senderAddr The address of the sender of the updated stream
-    /// @param subSenderId The id of the sender's sub-sender
+    /// @param account The sender's account
     /// @param receiver The receiver of the updated stream
     /// @param amtPerSec The new amount per second sent from the sender to the receiver
     /// or 0 if sending is stopped
@@ -91,7 +91,7 @@ abstract contract DripsHub {
     /// always larger than the block timestamp or equal to it if sending is stopped
     event SenderToReceiverUpdated(
         address indexed senderAddr,
-        uint256 indexed subSenderId,
+        uint256 indexed account,
         address indexed receiver,
         uint128 amtPerSec,
         uint64 endTime
@@ -103,14 +103,14 @@ abstract contract DripsHub {
     /// @param receivers The new list of the sender's receivers.
     event SenderUpdated(address indexed sender, uint128 balance, Receiver[] receivers);
 
-    /// @notice Emitted when a sub-sender is updated
+    /// @notice Emitted when a sender account is updated
     /// @param senderAddr The address of the sender
-    /// @param subSenderId The id of the sender's updated sub-sender
-    /// @param balance The sub-sender's balance
-    /// @param receivers The new list of the sub-sender's receivers.
+    /// @param account The sender's account
+    /// @param balance The account's balance
+    /// @param receivers The new list of the account's receivers.
     event SenderUpdated(
         address indexed senderAddr,
-        uint256 indexed subSenderId,
+        uint256 indexed account,
         uint128 balance,
         Receiver[] receivers
     );
@@ -133,20 +133,20 @@ abstract contract DripsHub {
     /// @param amt The dripped amount
     event Dripped(address indexed sender, address indexed receiver, uint128 amt);
 
-    /// @notice Emitted when funds are given to the receiver.
-    /// @param giver The address of the giver
+    /// @notice Emitted when funds are given from the user to the receiver.
+    /// @param user The address of the user
     /// @param receiver The receiver
     /// @param amt The given amount
-    event Given(address indexed giver, address indexed receiver, uint128 amt);
+    event Given(address indexed user, address indexed receiver, uint128 amt);
 
-    /// @notice Emitted when funds are given from the sub-sender to the receiver.
-    /// @param giver The address of the giver
-    /// @param subSenderId The ID of the giver's sub-sender
+    /// @notice Emitted when funds are given from the user's account to the receiver.
+    /// @param user The address of the user
+    /// @param account The user's account
     /// @param receiver The receiver
     /// @param amt The given amount
     event Given(
-        address indexed giver,
-        uint256 indexed subSenderId,
+        address indexed user,
+        uint256 indexed account,
         address indexed receiver,
         uint128 amt
     );
@@ -173,9 +173,9 @@ abstract contract DripsHub {
     }
 
     struct SenderId {
-        bool isSubSender;
+        bool isAccount;
         address senderAddr;
-        uint256 subSenderId;
+        uint256 account;
     }
 
     /// @notice Current drips configuration hash, see `hashDripsReceivers`.
@@ -184,11 +184,11 @@ abstract contract DripsHub {
     /// @notice Current sender state hash, see `hashSenderState`.
     /// The key is the sender address.
     mapping(address => bytes32) internal senderStateHashes;
-    /// @dev Current sub-sender state hash, see `hashSenderState`.
-    /// The key are the sender address and the sub-sender ID.
-    mapping(address => mapping(uint256 => bytes32)) internal subSenderStateHashes;
+    /// @notice Current sender's account state hash, see `hashSenderState`.
+    /// The key are the sender address and the account.
+    mapping(address => mapping(uint256 => bytes32)) internal senderAccountStateHashes;
 
-    /// @dev Details about all the receivers, the key is the owner's address
+    /// @notice Details about all the receivers, the key is the owner's address
     mapping(address => ReceiverState) internal receiverStates;
 
     /// @param _cycleSecs The length of cycleSecs to be used in the contract instance.
@@ -349,7 +349,7 @@ abstract contract DripsHub {
         receiver.nextCollectedCycle = cycle;
     }
 
-    /// @notice Gives funds to the receiver.
+    /// @notice Gives funds from the user or their account to the receiver.
     /// The receiver can collect them immediately.
     /// @param senderId The sender id of the giver
     /// @param receiverAddr The receiver
@@ -360,8 +360,8 @@ abstract contract DripsHub {
         uint128 amt
     ) internal {
         receiverStates[receiverAddr].collectable += amt;
-        if (senderId.isSubSender) {
-            emit Given(senderId.senderAddr, senderId.subSenderId, receiverAddr, amt);
+        if (senderId.isAccount) {
+            emit Given(senderId.senderAddr, senderId.account, receiverAddr, amt);
         } else {
             emit Given(senderId.senderAddr, receiverAddr, amt);
         }
@@ -373,9 +373,9 @@ abstract contract DripsHub {
         return senderStateHashes[sender];
     }
 
-    /// @notice Current sub-sender state hash, see `hashSenderState`.
-    function senderStateHash(address sender, uint256 subSenderId) public view returns (bytes32) {
-        return subSenderStateHashes[sender][subSenderId];
+    /// @notice Current sender's account state hash, see `hashSenderState`.
+    function senderStateHash(address sender, uint256 account) public view returns (bytes32) {
+        return senderAccountStateHashes[sender][account];
     }
 
     /// @notice Updates all the sender's parameters.
@@ -481,8 +481,8 @@ abstract contract DripsHub {
         uint128 balance,
         Receiver[] calldata receivers
     ) internal {
-        if (senderId.isSubSender) {
-            emit SenderUpdated(senderId.senderAddr, senderId.subSenderId, balance, receivers);
+        if (senderId.isAccount) {
+            emit SenderUpdated(senderId.senderAddr, senderId.account, balance, receivers);
         } else {
             emit SenderUpdated(senderId.senderAddr, balance, receivers);
         }
@@ -565,10 +565,10 @@ abstract contract DripsHub {
         uint64 endTime
     ) internal {
         if (amtPerSec == 0) endTime = _currTimestamp();
-        if (senderId.isSubSender) {
+        if (senderId.isAccount) {
             emit SenderToReceiverUpdated(
                 senderId.senderAddr,
-                senderId.subSenderId,
+                senderId.account,
                 receiver,
                 amtPerSec,
                 endTime
@@ -608,8 +608,8 @@ abstract contract DripsHub {
         Receiver[] calldata currReceivers
     ) internal view {
         bytes32 expectedHash;
-        if (senderId.isSubSender) {
-            expectedHash = subSenderStateHashes[senderId.senderAddr][senderId.subSenderId];
+        if (senderId.isAccount) {
+            expectedHash = senderAccountStateHashes[senderId.senderAddr][senderId.account];
         } else {
             expectedHash = senderStateHashes[senderId.senderAddr];
         }
@@ -628,8 +628,8 @@ abstract contract DripsHub {
         Receiver[] calldata newReceivers
     ) internal {
         bytes32 stateHash = hashSenderState(_currTimestamp(), newBalance, newReceivers);
-        if (senderId.isSubSender) {
-            subSenderStateHashes[senderId.senderAddr][senderId.subSenderId] = stateHash;
+        if (senderId.isAccount) {
+            senderAccountStateHashes[senderId.senderAddr][senderId.account] = stateHash;
         } else {
             senderStateHashes[senderId.senderAddr] = stateHash;
         }
@@ -763,15 +763,15 @@ abstract contract DripsHub {
     }
 
     function _senderId(address senderAddr) internal pure returns (SenderId memory) {
-        return SenderId({isSubSender: false, senderAddr: senderAddr, subSenderId: 0});
+        return SenderId({isAccount: false, senderAddr: senderAddr, account: 0});
     }
 
-    function _senderId(address senderAddr, uint256 subSenderId)
+    function _senderId(address senderAddr, uint256 account)
         internal
         pure
         returns (SenderId memory)
     {
-        return SenderId({isSubSender: true, senderAddr: senderAddr, subSenderId: subSenderId});
+        return SenderId({isAccount: true, senderAddr: senderAddr, account: account});
     }
 
     function _currTimestamp() internal view returns (uint64) {

@@ -56,7 +56,7 @@ contract DaiDripsHub is ERC20DripsHub {
         return updateSender(lastUpdate, lastBalance, currReceivers, balanceDelta, newReceivers);
     }
 
-    /// @notice Updates all the parameters of a sub-sender of the sender of the message
+    /// @notice Updates all the parameters of an account of the sender of the message
     /// and permits spending sender's Dai by the drips hub.
     /// This function is an extension of `updateSender`, see its documentation for more details.
     ///
@@ -64,7 +64,7 @@ contract DaiDripsHub is ERC20DripsHub {
     /// These parameters will be passed to the Dai contract by this function.
     /// @param permitArgs The Dai permission arguments.
     function updateSenderAndPermit(
-        uint256 subSenderId,
+        uint256 account,
         uint64 lastUpdate,
         uint128 lastBalance,
         Receiver[] calldata currReceivers,
@@ -75,7 +75,7 @@ contract DaiDripsHub is ERC20DripsHub {
         _permit(permitArgs);
         return
             updateSender(
-                subSenderId,
+                account,
                 lastUpdate,
                 lastBalance,
                 currReceivers,
@@ -100,7 +100,7 @@ contract DaiDripsHub is ERC20DripsHub {
         give(receiver, amt);
     }
 
-    /// @notice Gives funds from the sub-sender of the sender of the message to the receiver
+    /// @notice Gives funds from the account of the sender of the message to the receiver
     /// and permits spending sender's Dai by the drips hub.
     /// This function is an extension of `give` see its documentation for more details.
     ///
@@ -108,13 +108,13 @@ contract DaiDripsHub is ERC20DripsHub {
     /// These parameters will be passed to the Dai contract by this function.
     /// @param permitArgs The Dai permission arguments.
     function giveAndPermit(
-        uint256 subSenderId,
+        uint256 account,
         address receiver,
         uint128 amt,
         PermitArgs calldata permitArgs
     ) public {
         _permit(permitArgs);
-        give(subSenderId, receiver, amt);
+        give(account, receiver, amt);
     }
 
     /// @notice Permits the drips hub to spend the message sender's Dai.
