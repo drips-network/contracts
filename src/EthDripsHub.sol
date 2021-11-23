@@ -50,7 +50,7 @@ contract EthDripsHub is DripsHub {
     /// @notice Updates all the parameters of a sub-sender of the sender of the message.
     /// See `updateSender` for more details
     /// @param subSenderId The id of the sender's sub-sender
-    function updateSubSender(
+    function updateSender(
         uint256 subSenderId,
         uint64 lastUpdate,
         uint128 lastBalance,
@@ -89,7 +89,7 @@ contract EthDripsHub is DripsHub {
     /// The receiver can collect them immediately.
     /// @param subSenderId The id of the giver's sub-sender
     /// @param receiver The receiver
-    function giveFromSubSender(uint256 subSenderId, address receiver) public payable {
+    function give(uint256 subSenderId, address receiver) public payable {
         _give(_senderId(msg.sender, subSenderId), receiver, uint128(msg.value));
     }
 

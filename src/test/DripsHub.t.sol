@@ -364,13 +364,13 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     function testSenderAndSubSenderAreIndependent() public {
         updateSender(sender, 0, 5, receivers(receiver1, 1));
         warpBy(3);
-        updateSubSender(sender, SUB_SENDER_1, 0, 8, receivers(receiver1, 2, receiver2, 1));
+        updateSender(sender, SUB_SENDER_1, 0, 8, receivers(receiver1, 2, receiver2, 1));
         warpBy(1);
         // Sender had 4 seconds paying 1 per second
         changeBalance(sender, 1, 0);
         warpBy(1);
         // Sender sub-sender1 had 2 seconds paying 3 per second
-        changeBalanceSubSender(sender, SUB_SENDER_1, 2, 0);
+        changeBalance(sender, SUB_SENDER_1, 2, 0);
         warpToCycleEnd();
         // Receiver1 had 4 second paying 1 per second and 2 seconds paying 2 per second
         collect(receiver1, 8);
@@ -379,15 +379,15 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testUserSubSendersAreIndependent() public {
-        updateSubSender(sender, SUB_SENDER_1, 0, 5, receivers(receiver1, 1));
+        updateSender(sender, SUB_SENDER_1, 0, 5, receivers(receiver1, 1));
         warpBy(3);
-        updateSubSender(sender, SUB_SENDER_2, 0, 8, receivers(receiver1, 2, receiver2, 1));
+        updateSender(sender, SUB_SENDER_2, 0, 8, receivers(receiver1, 2, receiver2, 1));
         warpBy(1);
         // Sender sub-sender1 had 4 seconds paying 1 per second
-        changeBalanceSubSender(sender, SUB_SENDER_1, 1, 0);
+        changeBalance(sender, SUB_SENDER_1, 1, 0);
         warpBy(1);
         // Sender sub-sender2 had 2 seconds paying 3 per second
-        changeBalanceSubSender(sender, SUB_SENDER_2, 2, 0);
+        changeBalance(sender, SUB_SENDER_2, 2, 0);
         warpToCycleEnd();
         // Receiver1 had 4 second paying 1 per second and 2 seconds paying 2 per second
         collect(receiver1, 8);
@@ -396,15 +396,15 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testSubSendersOfDifferentUsersAreIndependent() public {
-        updateSubSender(sender1, SUB_SENDER_1, 0, 5, receivers(receiver1, 1));
+        updateSender(sender1, SUB_SENDER_1, 0, 5, receivers(receiver1, 1));
         warpBy(3);
-        updateSubSender(sender2, SUB_SENDER_1, 0, 8, receivers(receiver1, 2, receiver2, 1));
+        updateSender(sender2, SUB_SENDER_1, 0, 8, receivers(receiver1, 2, receiver2, 1));
         warpBy(1);
         // Sender1 sub-sender1 had 4 seconds paying 1 per second
-        changeBalanceSubSender(sender1, SUB_SENDER_1, 1, 0);
+        changeBalance(sender1, SUB_SENDER_1, 1, 0);
         warpBy(1);
         // Sender2 sub-sender1 had 2 seconds paying 3 per second
-        changeBalanceSubSender(sender2, SUB_SENDER_1, 2, 0);
+        changeBalance(sender2, SUB_SENDER_1, 2, 0);
         warpToCycleEnd();
         // Receiver1 had 4 second paying 1 per second and 2 seconds paying 2 per second
         collect(receiver1, 8);
@@ -593,7 +593,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testFundsGivenFromSubSenderCanBeCollected() public {
-        sender.giveFromSubSender(SUB_SENDER_1, address(receiver), 10);
+        sender.give(SUB_SENDER_1, address(receiver), 10);
         collect(receiver, 10);
     }
 }

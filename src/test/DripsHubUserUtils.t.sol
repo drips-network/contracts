@@ -22,17 +22,7 @@ abstract contract DripsHubUserUtils is DSTest {
         assertSenderState(user, lastUpdate, lastBalance, currReceivers);
     }
 
-    function setSenderState(
-        DripsHubUser user,
-        uint128 newBalance,
-        Receiver[] memory newReceivers
-    ) internal {
-        uint64 currTimestamp = uint64(block.timestamp);
-        assertSenderState(user, currTimestamp, newBalance, newReceivers);
-        senderStates[user] = abi.encode(currTimestamp, newBalance, newReceivers);
-    }
-
-    function getSubSenderState(DripsHubUser user, uint256 subSenderId)
+    function getSenderState(DripsHubUser user, uint256 subSenderId)
         internal
         returns (
             uint64 lastUpdate,
@@ -43,17 +33,27 @@ abstract contract DripsHubUserUtils is DSTest {
         (lastUpdate, lastBalance, currReceivers) = decodeSenderState(
             subSenderStates[user][subSenderId]
         );
-        assertSubSenderState(user, subSenderId, lastUpdate, lastBalance, currReceivers);
+        assertSenderState(user, subSenderId, lastUpdate, lastBalance, currReceivers);
     }
 
-    function setSubSenderState(
+    function setSenderState(
+        DripsHubUser user,
+        uint128 newBalance,
+        Receiver[] memory newReceivers
+    ) internal {
+        uint64 currTimestamp = uint64(block.timestamp);
+        assertSenderState(user, currTimestamp, newBalance, newReceivers);
+        senderStates[user] = abi.encode(currTimestamp, newBalance, newReceivers);
+    }
+
+    function setSenderState(
         DripsHubUser user,
         uint256 subSenderId,
         uint128 newBalance,
         Receiver[] memory newReceivers
     ) internal {
         uint64 currTimestamp = uint64(block.timestamp);
-        assertSubSenderState(user, subSenderId, currTimestamp, newBalance, newReceivers);
+        assertSenderState(user, subSenderId, currTimestamp, newBalance, newReceivers);
         subSenderStates[user][subSenderId] = abi.encode(currTimestamp, newBalance, newReceivers);
     }
 
@@ -201,7 +201,7 @@ abstract contract DripsHubUserUtils is DSTest {
         }
     }
 
-    function updateSubSender(
+    function updateSender(
         DripsHubUser user,
         uint256 subSenderId,
         uint128 balanceFrom,
@@ -210,13 +210,12 @@ abstract contract DripsHubUserUtils is DSTest {
     ) internal {
         int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
         uint256 expectedBalance = uint256(int256(user.balance()) - balanceDelta);
-        (
-            uint64 lastUpdate,
-            uint128 lastBalance,
-            Receiver[] memory currReceivers
-        ) = getSubSenderState(user, subSenderId);
+        (uint64 lastUpdate, uint128 lastBalance, Receiver[] memory currReceivers) = getSenderState(
+            user,
+            subSenderId
+        );
 
-        (uint128 newBalance, int128 realBalanceDelta) = user.updateSubSender(
+        (uint128 newBalance, int128 realBalanceDelta) = user.updateSender(
             subSenderId,
             lastUpdate,
             lastBalance,
@@ -225,32 +224,32 @@ abstract contract DripsHubUserUtils is DSTest {
             newReceivers
         );
 
-        setSubSenderState(user, subSenderId, newBalance, newReceivers);
+        setSenderState(user, subSenderId, newBalance, newReceivers);
         assertEq(newBalance, balanceTo, "Invalid sender balance");
         assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
         assertBalance(user, expectedBalance);
     }
 
-    function assertSubSenderState(
+    function assertSenderState(
         DripsHubUser user,
         uint256 subSenderId,
         uint64 lastUpdate,
         uint128 lastBalance,
         Receiver[] memory currReceivers
     ) internal {
-        bytes32 actual = user.subSenderStateHash(subSenderId);
+        bytes32 actual = user.senderStateHash(subSenderId);
         bytes32 expected = user.hashSenderState(lastUpdate, lastBalance, currReceivers);
         assertEq(actual, expected, "Invalid sub-sender state");
     }
 
-    function changeBalanceSubSender(
+    function changeBalance(
         DripsHubUser user,
         uint256 subSenderId,
         uint128 balanceFrom,
         uint128 balanceTo
     ) internal {
-        (, , Receiver[] memory curr) = getSubSenderState(user, subSenderId);
-        updateSubSender(user, subSenderId, balanceFrom, balanceTo, curr);
+        (, , Receiver[] memory curr) = getSenderState(user, subSenderId);
+        updateSender(user, subSenderId, balanceFrom, balanceTo, curr);
     }
 
     function dripsReceivers() internal pure returns (DripsReceiver[] memory list) {

@@ -57,7 +57,7 @@ contract ERC20DripsHub is DripsHub {
     /// @notice Updates all the parameters of a sub-sender of the sender of the message.
     /// See `updateSender` for more details
     /// @param subSenderId The id of the sender's sub-sender
-    function updateSubSender(
+    function updateSender(
         uint256 subSenderId,
         uint64 lastUpdate,
         uint128 lastBalance,
@@ -89,7 +89,7 @@ contract ERC20DripsHub is DripsHub {
     /// @param subSenderId The ID of the sub-sender
     /// @param receiver The receiver
     /// @param amt The given amount
-    function giveFromSubSender(
+    function give(
         uint256 subSenderId,
         address receiver,
         uint128 amt

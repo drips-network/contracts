@@ -89,7 +89,7 @@ abstract contract DripsHub {
     /// or 0 if sending is stopped
     /// @param endTime The timestamp when the funds stop being sent,
     /// always larger than the block timestamp or equal to it if sending is stopped
-    event SubSenderToReceiverUpdated(
+    event SenderToReceiverUpdated(
         address indexed senderAddr,
         uint256 indexed subSenderId,
         address indexed receiver,
@@ -144,7 +144,7 @@ abstract contract DripsHub {
     /// @param subSenderId The ID of the giver's sub-sender
     /// @param receiver The receiver
     /// @param amt The given amount
-    event GivenFromSubSender(
+    event Given(
         address indexed giver,
         uint256 indexed subSenderId,
         address indexed receiver,
@@ -181,12 +181,12 @@ abstract contract DripsHub {
     /// @notice Current drips configuration hash, see `hashDripsReceivers`.
     /// The key is the user address.
     mapping(address => bytes32) public dripsReceiversHash;
-    /// @notice Current sender state hashe, see `hashSenderState`.
+    /// @notice Current sender state hash, see `hashSenderState`.
     /// The key is the sender address.
-    mapping(address => bytes32) public senderStateHash;
-    /// @notice Current sub-sender state hashe, see `hashSenderState`.
+    mapping(address => bytes32) internal senderStateHashes;
+    /// @dev Current sub-sender state hash, see `hashSenderState`.
     /// The key are the sender address and the sub-sender ID.
-    mapping(address => mapping(uint256 => bytes32)) public subSenderStateHash;
+    mapping(address => mapping(uint256 => bytes32)) internal subSenderStateHashes;
 
     /// @dev Details about all the receivers, the key is the owner's address
     mapping(address => ReceiverState) internal receiverStates;
@@ -361,11 +361,21 @@ abstract contract DripsHub {
     ) internal {
         receiverStates[receiverAddr].collectable += amt;
         if (senderId.isSubSender) {
-            emit GivenFromSubSender(senderId.senderAddr, senderId.subSenderId, receiverAddr, amt);
+            emit Given(senderId.senderAddr, senderId.subSenderId, receiverAddr, amt);
         } else {
             emit Given(senderId.senderAddr, receiverAddr, amt);
         }
         _transfer(senderId.senderAddr, -int128(amt));
+    }
+
+    /// @notice Current sender state hash, see `hashSenderState`.
+    function senderStateHash(address sender) public view returns (bytes32) {
+        return senderStateHashes[sender];
+    }
+
+    /// @notice Current sub-sender state hash, see `hashSenderState`.
+    function senderStateHash(address sender, uint256 subSenderId) public view returns (bytes32) {
+        return subSenderStateHashes[sender][subSenderId];
     }
 
     /// @notice Updates all the sender's parameters.
@@ -556,7 +566,7 @@ abstract contract DripsHub {
     ) internal {
         if (amtPerSec == 0) endTime = _currTimestamp();
         if (senderId.isSubSender) {
-            emit SubSenderToReceiverUpdated(
+            emit SenderToReceiverUpdated(
                 senderId.senderAddr,
                 senderId.subSenderId,
                 receiver,
@@ -599,9 +609,9 @@ abstract contract DripsHub {
     ) internal view {
         bytes32 expectedHash;
         if (senderId.isSubSender) {
-            expectedHash = subSenderStateHash[senderId.senderAddr][senderId.subSenderId];
+            expectedHash = subSenderStateHashes[senderId.senderAddr][senderId.subSenderId];
         } else {
-            expectedHash = senderStateHash[senderId.senderAddr];
+            expectedHash = senderStateHashes[senderId.senderAddr];
         }
         bytes32 actualHash = hashSenderState(lastUpdate, lastBalance, currReceivers);
         require(actualHash == expectedHash, "Invalid provided sender state");
@@ -619,9 +629,9 @@ abstract contract DripsHub {
     ) internal {
         bytes32 stateHash = hashSenderState(_currTimestamp(), newBalance, newReceivers);
         if (senderId.isSubSender) {
-            subSenderStateHash[senderId.senderAddr][senderId.subSenderId] = stateHash;
+            subSenderStateHashes[senderId.senderAddr][senderId.subSenderId] = stateHash;
         } else {
-            senderStateHash[senderId.senderAddr] = stateHash;
+            senderStateHashes[senderId.senderAddr] = stateHash;
         }
     }
 
