@@ -3,7 +3,7 @@
 pragma solidity ^0.8.7;
 
 import "openzeppelin-contracts/token/ERC20/ERC20.sol";
-import {IDai} from "../DaiPool.sol";
+import {IDai} from "../DaiDripsHub.sol";
 
 contract Dai is ERC20, IDai {
     bytes32 private immutable domainSeparator;

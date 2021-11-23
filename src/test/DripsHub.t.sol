@@ -2,27 +2,27 @@
 pragma solidity ^0.8.7;
 
 import {DSTest} from "ds-test/test.sol";
-import {PoolUserUtils} from "./UserUtils.t.sol";
-import {PoolUser} from "./User.t.sol";
+import {DripsHubUserUtils} from "./DripsHubUserUtils.t.sol";
+import {DripsHubUser} from "./DripsHubUser.t.sol";
 import {Hevm} from "./Hevm.t.sol";
-import {DripsReceiver, Pool, Receiver} from "../Pool.sol";
+import {DripsReceiver, DripsHub, Receiver} from "../DripsHub.sol";
 
-abstract contract PoolTest is PoolUserUtils {
-    Pool private pool;
+abstract contract DripsHubTest is DripsHubUserUtils {
+    DripsHub private dripsHub;
 
-    PoolUser private sender;
-    PoolUser private receiver;
-    PoolUser private sender1;
-    PoolUser private receiver1;
-    PoolUser private sender2;
-    PoolUser private receiver2;
-    PoolUser private receiver3;
+    DripsHubUser private sender;
+    DripsHubUser private receiver;
+    DripsHubUser private sender1;
+    DripsHubUser private receiver1;
+    DripsHubUser private sender2;
+    DripsHubUser private receiver2;
+    DripsHubUser private receiver3;
     uint256 private constant SUB_SENDER_1 = 1;
     uint256 private constant SUB_SENDER_2 = 2;
 
     // Must be called once from child contract `setUp`
-    function setUp(Pool pool_) internal {
-        pool = pool_;
+    function setUp(DripsHub dripsHub_) internal {
+        dripsHub = dripsHub_;
         sender = createUser();
         sender1 = createUser();
         sender2 = createUser();
@@ -36,10 +36,10 @@ abstract contract PoolTest is PoolUserUtils {
         if (receiver1 > receiver2) (receiver1, receiver2) = (receiver2, receiver1);
     }
 
-    function createUser() internal virtual returns (PoolUser);
+    function createUser() internal virtual returns (DripsHubUser);
 
     function warpToCycleEnd() internal {
-        warpBy(pool.cycleSecs() - (block.timestamp % pool.cycleSecs()));
+        warpBy(dripsHub.cycleSecs() - (block.timestamp % dripsHub.cycleSecs()));
     }
 
     function warpBy(uint256 secs) internal {
@@ -59,8 +59,8 @@ abstract contract PoolTest is PoolUserUtils {
     function testAllowsSendingToASingleReceiverForFuzzyTime(uint8 cycles, uint8 timeInCycle)
         public
     {
-        uint128 time = (cycles / 10) * pool.cycleSecs() + (timeInCycle % pool.cycleSecs());
-        uint128 balance = 25 * pool.cycleSecs() + 256;
+        uint128 time = (cycles / 10) * dripsHub.cycleSecs() + (timeInCycle % dripsHub.cycleSecs());
+        uint128 balance = 25 * dripsHub.cycleSecs() + 256;
         updateSender(sender, 0, balance, receivers(receiver, 1));
         warpBy(time);
         // Sender had `time` seconds paying 1 per second
@@ -110,10 +110,10 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testAllowsCollectingFundsWhileTheyAreBeingSent() public {
-        updateSender(sender, 0, pool.cycleSecs() + 10, receivers(receiver, 1));
+        updateSender(sender, 0, dripsHub.cycleSecs() + 10, receivers(receiver, 1));
         warpToCycleEnd();
         // Receiver had cycleSecs seconds paying 1 per second
-        collect(receiver, pool.cycleSecs());
+        collect(receiver, dripsHub.cycleSecs());
         warpBy(7);
         // Sender had cycleSecs + 7 seconds paying 1 per second
         changeBalance(sender, 3, 0);
@@ -239,7 +239,7 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testLimitsTheTotalReceiversCount() public {
-        uint160 countMax = pool.MAX_RECEIVERS();
+        uint160 countMax = dripsHub.MAX_RECEIVERS();
         Receiver[] memory receiversGood = new Receiver[](countMax);
         Receiver[] memory receiversBad = new Receiver[](countMax + 1);
         for (uint160 i = 0; i < countMax; i++) {
@@ -413,7 +413,7 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testLimitsTheTotalDripsReceiversCount() public {
-        uint160 countMax = pool.MAX_DRIPS_RECEIVERS();
+        uint160 countMax = dripsHub.MAX_DRIPS_RECEIVERS();
         DripsReceiver[] memory receiversGood = new DripsReceiver[](countMax);
         DripsReceiver[] memory receiversBad = new DripsReceiver[](countMax + 1);
         for (uint160 i = 0; i < countMax; i++) {
@@ -427,7 +427,7 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testRejectsTooHighTotalWeightDripsReceivers() public {
-        uint32 totalWeight = pool.TOTAL_DRIPS_WEIGHTS();
+        uint32 totalWeight = dripsHub.TOTAL_DRIPS_WEIGHTS();
         setDripsReceivers(sender, dripsReceivers(receiver, totalWeight));
         assertSetDripsReceiversReverts(
             sender,
@@ -480,7 +480,7 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testSetDripsReceiversDrips() public {
-        uint32 totalWeight = pool.TOTAL_DRIPS_WEIGHTS();
+        uint32 totalWeight = dripsHub.TOTAL_DRIPS_WEIGHTS();
         updateSender(sender, 0, 10, receivers(receiver1, 10));
         setDripsReceivers(receiver1, dripsReceivers(receiver2, totalWeight));
         warpToCycleEnd();
@@ -489,7 +489,7 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testCollectDrips() public {
-        uint32 totalWeight = pool.TOTAL_DRIPS_WEIGHTS();
+        uint32 totalWeight = dripsHub.TOTAL_DRIPS_WEIGHTS();
         updateSender(sender, 0, 10, receivers(receiver1, 10));
         setDripsReceivers(receiver1, dripsReceivers(receiver2, totalWeight));
         warpToCycleEnd();
@@ -501,7 +501,7 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testCollectDripsFundsFromDrips() public {
-        uint32 totalWeight = pool.TOTAL_DRIPS_WEIGHTS();
+        uint32 totalWeight = dripsHub.TOTAL_DRIPS_WEIGHTS();
         updateSender(sender, 0, 10, receivers(receiver1, 10));
         setDripsReceivers(receiver1, dripsReceivers(receiver2, totalWeight));
         setDripsReceivers(receiver2, dripsReceivers(receiver3, totalWeight));
@@ -517,7 +517,7 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testCollectMixesStreamsAndDrips() public {
-        uint32 totalWeight = pool.TOTAL_DRIPS_WEIGHTS();
+        uint32 totalWeight = dripsHub.TOTAL_DRIPS_WEIGHTS();
         updateSender(sender, 0, 10, receivers(receiver1, 5, receiver2, 5));
         setDripsReceivers(receiver1, dripsReceivers(receiver2, totalWeight));
         warpToCycleEnd();
@@ -530,7 +530,7 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testCollectSplitsFundsBetweenReceiverAndDrips() public {
-        uint32 totalWeight = pool.TOTAL_DRIPS_WEIGHTS();
+        uint32 totalWeight = dripsHub.TOTAL_DRIPS_WEIGHTS();
         updateSender(sender, 0, 10, receivers(receiver1, 10));
         setDripsReceivers(
             receiver1,
@@ -548,7 +548,7 @@ abstract contract PoolTest is PoolUserUtils {
     }
 
     function testCanDripAllWhenCollectedDoesntSplitEvenly() public {
-        uint32 totalWeight = pool.TOTAL_DRIPS_WEIGHTS();
+        uint32 totalWeight = dripsHub.TOTAL_DRIPS_WEIGHTS();
         updateSender(sender, 0, 3, receivers(receiver1, 3));
         setDripsReceivers(
             receiver1,
@@ -565,7 +565,7 @@ abstract contract PoolTest is PoolUserUtils {
 
     function testFlushSomeCycles() public {
         // Enough for 3 cycles
-        uint128 amt = pool.cycleSecs() * 3;
+        uint128 amt = dripsHub.cycleSecs() * 3;
         warpToCycleEnd();
         updateSender(sender, 0, amt, receivers(receiver, 1));
         warpToCycleEnd();
@@ -577,7 +577,7 @@ abstract contract PoolTest is PoolUserUtils {
 
     function testFlushAllCycles() public {
         // Enough for 3 cycles
-        uint128 amt = pool.cycleSecs() * 3;
+        uint128 amt = dripsHub.cycleSecs() * 3;
         warpToCycleEnd();
         updateSender(sender, 0, amt, receivers(receiver, 1));
         warpToCycleEnd();

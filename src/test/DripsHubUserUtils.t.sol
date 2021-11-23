@@ -2,15 +2,15 @@
 pragma solidity ^0.8.7;
 
 import {DSTest} from "ds-test/test.sol";
-import {PoolUser} from "./User.t.sol";
-import {DripsReceiver, Pool, Receiver} from "../Pool.sol";
+import {DripsHubUser} from "./DripsHubUser.t.sol";
+import {DripsReceiver, DripsHub, Receiver} from "../DripsHub.sol";
 
-abstract contract PoolUserUtils is DSTest {
-    mapping(PoolUser => bytes) internal senderStates;
-    mapping(PoolUser => mapping(uint256 => bytes)) internal subSenderStates;
-    mapping(PoolUser => bytes) internal currDripsReceivers;
+abstract contract DripsHubUserUtils is DSTest {
+    mapping(DripsHubUser => bytes) internal senderStates;
+    mapping(DripsHubUser => mapping(uint256 => bytes)) internal subSenderStates;
+    mapping(DripsHubUser => bytes) internal currDripsReceivers;
 
-    function getSenderState(PoolUser user)
+    function getSenderState(DripsHubUser user)
         internal
         returns (
             uint64 lastUpdate,
@@ -23,7 +23,7 @@ abstract contract PoolUserUtils is DSTest {
     }
 
     function setSenderState(
-        PoolUser user,
+        DripsHubUser user,
         uint128 newBalance,
         Receiver[] memory newReceivers
     ) internal {
@@ -32,7 +32,7 @@ abstract contract PoolUserUtils is DSTest {
         senderStates[user] = abi.encode(currTimestamp, newBalance, newReceivers);
     }
 
-    function getSubSenderState(PoolUser user, uint256 subSenderId)
+    function getSubSenderState(DripsHubUser user, uint256 subSenderId)
         internal
         returns (
             uint64 lastUpdate,
@@ -47,7 +47,7 @@ abstract contract PoolUserUtils is DSTest {
     }
 
     function setSubSenderState(
-        PoolUser user,
+        DripsHubUser user,
         uint256 subSenderId,
         uint128 newBalance,
         Receiver[] memory newReceivers
@@ -73,7 +73,11 @@ abstract contract PoolUserUtils is DSTest {
         }
     }
 
-    function getCurrDripsReceivers(PoolUser user) internal view returns (DripsReceiver[] memory) {
+    function getCurrDripsReceivers(DripsHubUser user)
+        internal
+        view
+        returns (DripsReceiver[] memory)
+    {
         bytes storage encoded = currDripsReceivers[user];
         if (encoded.length == 0) {
             return new DripsReceiver[](0);
@@ -82,7 +86,9 @@ abstract contract PoolUserUtils is DSTest {
         }
     }
 
-    function setCurrDripsReceivers(PoolUser user, DripsReceiver[] memory newReceivers) internal {
+    function setCurrDripsReceivers(DripsHubUser user, DripsReceiver[] memory newReceivers)
+        internal
+    {
         currDripsReceivers[user] = abi.encode(newReceivers);
     }
 
@@ -90,7 +96,7 @@ abstract contract PoolUserUtils is DSTest {
         list = new Receiver[](0);
     }
 
-    function receivers(PoolUser user, uint128 amtPerSec)
+    function receivers(DripsHubUser user, uint128 amtPerSec)
         internal
         pure
         returns (Receiver[] memory list)
@@ -100,9 +106,9 @@ abstract contract PoolUserUtils is DSTest {
     }
 
     function receivers(
-        PoolUser user1,
+        DripsHubUser user1,
         uint128 amtPerSec1,
-        PoolUser user2,
+        DripsHubUser user2,
         uint128 amtPerSec2
     ) internal pure returns (Receiver[] memory list) {
         list = new Receiver[](2);
@@ -111,7 +117,7 @@ abstract contract PoolUserUtils is DSTest {
     }
 
     function updateSender(
-        PoolUser user,
+        DripsHubUser user,
         uint128 balanceFrom,
         uint128 balanceTo,
         Receiver[] memory newReceivers
@@ -137,7 +143,7 @@ abstract contract PoolUserUtils is DSTest {
     }
 
     function assertSenderState(
-        PoolUser user,
+        DripsHubUser user,
         uint64 lastUpdate,
         uint128 balance,
         Receiver[] memory currReceivers
@@ -147,12 +153,12 @@ abstract contract PoolUserUtils is DSTest {
         assertEq(actual, expected, "Invalid sender state");
     }
 
-    function assertSenderBalance(PoolUser user, uint128 expected) internal {
+    function assertSenderBalance(DripsHubUser user, uint128 expected) internal {
         changeBalance(user, expected, expected);
     }
 
     function changeBalance(
-        PoolUser user,
+        DripsHubUser user,
         uint128 balanceFrom,
         uint128 balanceTo
     ) internal {
@@ -161,7 +167,7 @@ abstract contract PoolUserUtils is DSTest {
     }
 
     function assertSetReceiversReverts(
-        PoolUser user,
+        DripsHubUser user,
         Receiver[] memory newReceivers,
         string memory expectedReason
     ) internal {
@@ -180,7 +186,7 @@ abstract contract PoolUserUtils is DSTest {
     }
 
     function assertUpdateSenderReverts(
-        PoolUser user,
+        DripsHubUser user,
         uint64 lastUpdate,
         uint128 lastBalance,
         Receiver[] memory currReceivers,
@@ -196,7 +202,7 @@ abstract contract PoolUserUtils is DSTest {
     }
 
     function updateSubSender(
-        PoolUser user,
+        DripsHubUser user,
         uint256 subSenderId,
         uint128 balanceFrom,
         uint128 balanceTo,
@@ -226,7 +232,7 @@ abstract contract PoolUserUtils is DSTest {
     }
 
     function assertSubSenderState(
-        PoolUser user,
+        DripsHubUser user,
         uint256 subSenderId,
         uint64 lastUpdate,
         uint128 lastBalance,
@@ -238,7 +244,7 @@ abstract contract PoolUserUtils is DSTest {
     }
 
     function changeBalanceSubSender(
-        PoolUser user,
+        DripsHubUser user,
         uint256 subSenderId,
         uint128 balanceFrom,
         uint128 balanceTo
@@ -251,7 +257,7 @@ abstract contract PoolUserUtils is DSTest {
         list = new DripsReceiver[](0);
     }
 
-    function dripsReceivers(PoolUser user, uint32 weight)
+    function dripsReceivers(DripsHubUser user, uint32 weight)
         internal
         pure
         returns (DripsReceiver[] memory list)
@@ -261,9 +267,9 @@ abstract contract PoolUserUtils is DSTest {
     }
 
     function dripsReceivers(
-        PoolUser user1,
+        DripsHubUser user1,
         uint32 weight1,
-        PoolUser user2,
+        DripsHubUser user2,
         uint32 weight2
     ) internal pure returns (DripsReceiver[] memory list) {
         list = new DripsReceiver[](2);
@@ -271,12 +277,12 @@ abstract contract PoolUserUtils is DSTest {
         list[1] = DripsReceiver(address(user2), weight2);
     }
 
-    function setDripsReceivers(PoolUser user, DripsReceiver[] memory newReceivers) internal {
+    function setDripsReceivers(DripsHubUser user, DripsReceiver[] memory newReceivers) internal {
         setDripsReceivers(user, newReceivers, 0, 0);
     }
 
     function setDripsReceivers(
-        PoolUser user,
+        DripsHubUser user,
         DripsReceiver[] memory newReceivers,
         uint128 expectedCollected,
         uint128 expectedDripped
@@ -297,7 +303,7 @@ abstract contract PoolUserUtils is DSTest {
     }
 
     function assertSetDripsReceiversReverts(
-        PoolUser user,
+        DripsHubUser user,
         DripsReceiver[] memory newReceivers,
         string memory expectedReason
     ) internal {
@@ -310,7 +316,7 @@ abstract contract PoolUserUtils is DSTest {
         }
     }
 
-    function assertDripsReceivers(PoolUser user, DripsReceiver[] memory expectedReceivers)
+    function assertDripsReceivers(DripsHubUser user, DripsReceiver[] memory expectedReceivers)
         internal
     {
         bytes32 actual = user.dripsReceiversHash();
@@ -318,12 +324,12 @@ abstract contract PoolUserUtils is DSTest {
         assertEq(actual, expected, "Invalid drips receivers list hash");
     }
 
-    function collect(PoolUser user, uint128 expectedAmt) internal {
+    function collect(DripsHubUser user, uint128 expectedAmt) internal {
         collect(user, user, expectedAmt, 0);
     }
 
     function collect(
-        PoolUser user,
+        DripsHubUser user,
         uint128 expectedCollected,
         uint128 expectedDripped
     ) internal {
@@ -331,16 +337,16 @@ abstract contract PoolUserUtils is DSTest {
     }
 
     function collect(
-        PoolUser user,
-        PoolUser collected,
+        DripsHubUser user,
+        DripsHubUser collected,
         uint128 expectedAmt
     ) internal {
         collect(user, collected, expectedAmt, 0);
     }
 
     function collect(
-        PoolUser user,
-        PoolUser collected,
+        DripsHubUser user,
+        DripsHubUser collected,
         uint128 expectedCollected,
         uint128 expectedDripped
     ) internal {
@@ -358,12 +364,12 @@ abstract contract PoolUserUtils is DSTest {
         assertBalance(collected, expectedBalance);
     }
 
-    function assertCollectable(PoolUser user, uint128 expected) internal {
+    function assertCollectable(DripsHubUser user, uint128 expected) internal {
         assertCollectable(user, expected, 0);
     }
 
     function assertCollectable(
-        PoolUser user,
+        DripsHubUser user,
         uint128 expectedCollected,
         uint128 expectedDripped
     ) internal {
@@ -375,7 +381,7 @@ abstract contract PoolUserUtils is DSTest {
     }
 
     function flushCycles(
-        PoolUser user,
+        DripsHubUser user,
         uint64 expectedFlushableBefore,
         uint64 maxCycles,
         uint64 expectedFlushableAfter
@@ -386,12 +392,12 @@ abstract contract PoolUserUtils is DSTest {
         assertFlushableCycles(user, expectedFlushableAfter);
     }
 
-    function assertFlushableCycles(PoolUser user, uint64 expectedFlushable) internal {
+    function assertFlushableCycles(DripsHubUser user, uint64 expectedFlushable) internal {
         uint64 actualFlushable = user.flushableCycles();
         assertEq(actualFlushable, expectedFlushable, "Invalid flushable cycles");
     }
 
-    function assertBalance(PoolUser user, uint256 expected) internal {
+    function assertBalance(DripsHubUser user, uint256 expected) internal {
         assertEq(user.balance(), expected, "Invalid balance");
     }
 }

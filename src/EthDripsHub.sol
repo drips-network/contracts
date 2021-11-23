@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.7;
 
-import {DripsReceiver, Pool, Receiver} from "./Pool.sol";
+import {DripsReceiver, DripsHub, Receiver} from "./DripsHub.sol";
 
-/// @notice Funding pool contract for Ether.
-/// See the base `Pool` contract docs for more details.
-contract EthPool is Pool {
+/// @notice Drips hub contract for Ether.
+/// See the base `DripsHub` contract docs for more details.
+contract EthDripsHub is DripsHub {
     /// @param cycleSecs The length of cycleSecs to be used in the contract instance.
     /// Low values make funds more available by shortening the average duration of Ether being
     /// frozen between being taken from senders' balances and being collectable by the receiver.
     /// High values make collecting cheaper by making it process less cycles for a given time range.
-    constructor(uint64 cycleSecs) Pool(cycleSecs) {
+    constructor(uint64 cycleSecs) DripsHub(cycleSecs) {
         return;
     }
 
@@ -111,7 +111,7 @@ contract EthPool is Pool {
     }
 
     function _transfer(address userAddr, int128 amt) internal override {
-        // Take into account the amount already transferred into the pool
+        // Take into account the amount already transferred into the drips hub
         amt += int128(uint128(msg.value));
         if (amt == 0) return;
         require(amt > 0, "Sending a negative ether amount");

@@ -11,7 +11,7 @@ struct DripsReceiver {
     uint32 weight;
 }
 
-/// @notice Funding pool contract. Automatically sends funds to a configurable set of receivers.
+/// @notice Drips hub contract. Automatically sends funds to a configurable set of receivers.
 ///
 /// The contract has 2 types of users: the senders and the receivers.
 ///
@@ -28,7 +28,7 @@ struct DripsReceiver {
 /// A receiver has an account, from which they can `collect` funds sent by the senders.
 /// The available amount is updated every `cycleSecs` seconds,
 /// so recently sent funds may not be `collect`able immediately.
-/// `cycleSecs` is a constant configured when the pool is deployed.
+/// `cycleSecs` is a constant configured when the drips hub is deployed.
 ///
 /// A single address can be used as a receiver, a sender
 /// or any number of sub-senders, even at the same time.
@@ -45,7 +45,7 @@ struct DripsReceiver {
 ///
 /// The contract assumes that all amounts in the system can be stored in signed 128-bit integers.
 /// It's guaranteed to be safe only when working with assets with supply lower than `2 ^ 127`.
-abstract contract Pool {
+abstract contract DripsHub {
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
     /// gain access to funds collected during `T - cycleSecs` to `T - 1`.
     uint64 public immutable cycleSecs;
@@ -724,7 +724,7 @@ abstract contract Pool {
         }
     }
 
-    /// @notice Called when funds need to be transferred between the user and the pool.
+    /// @notice Called when funds need to be transferred between the user and the drips hub.
     /// The function must be called no more than once per transaction.
     /// @param userAddr The address of the user.
     /// @param amt The transferred amount.

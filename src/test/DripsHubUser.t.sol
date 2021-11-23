@@ -2,11 +2,11 @@
 
 pragma solidity ^0.8.7;
 
-import {EthPool, Pool} from "../EthPool.sol";
-import {DripsReceiver, ERC20Pool, Receiver} from "../ERC20Pool.sol";
+import {EthDripsHub, DripsHub} from "../EthDripsHub.sol";
+import {DripsReceiver, ERC20DripsHub, Receiver} from "../ERC20DripsHub.sol";
 
-abstract contract PoolUser {
-    function getPool() internal view virtual returns (Pool);
+abstract contract DripsHubUser {
+    function getDripsHub() internal view virtual returns (DripsHub);
 
     function balance() public view virtual returns (uint256);
 
@@ -44,7 +44,7 @@ abstract contract PoolUser {
         public
         returns (uint128 collected, uint128 dripped)
     {
-        return getPool().collect(receiverAddr, currReceivers);
+        return getDripsHub().collect(receiverAddr, currReceivers);
     }
 
     function collectable(DripsReceiver[] calldata currReceivers)
@@ -52,15 +52,15 @@ abstract contract PoolUser {
         view
         returns (uint128 collected, uint128 dripped)
     {
-        return getPool().collectable(address(this), currReceivers);
+        return getDripsHub().collectable(address(this), currReceivers);
     }
 
     function flushableCycles() public view returns (uint64 flushable) {
-        return getPool().flushableCycles(address(this));
+        return getDripsHub().flushableCycles(address(this));
     }
 
     function flushCycles(uint64 maxCycles) public returns (uint64 flushable) {
-        return getPool().flushCycles(address(this), maxCycles);
+        return getDripsHub().flushCycles(address(this), maxCycles);
     }
 
     function hashSenderState(
@@ -68,39 +68,39 @@ abstract contract PoolUser {
         uint128 lastBalance,
         Receiver[] calldata receivers
     ) public view returns (bytes32) {
-        return getPool().hashSenderState(lastUpdate, lastBalance, receivers);
+        return getDripsHub().hashSenderState(lastUpdate, lastBalance, receivers);
     }
 
     function senderStateHash() public view returns (bytes32) {
-        return getPool().senderStateHash(address(this));
+        return getDripsHub().senderStateHash(address(this));
     }
 
     function subSenderStateHash(uint256 subSenderId) public view returns (bytes32 weightsHash) {
-        return getPool().subSenderStateHash(address(this), subSenderId);
+        return getDripsHub().subSenderStateHash(address(this), subSenderId);
     }
 
     function hashDripsReceivers(DripsReceiver[] calldata receivers) public view returns (bytes32) {
-        return getPool().hashDripsReceivers(receivers);
+        return getDripsHub().hashDripsReceivers(receivers);
     }
 
     function dripsReceiversHash() public view returns (bytes32) {
-        return getPool().dripsReceiversHash(address(this));
+        return getDripsHub().dripsReceiversHash(address(this));
     }
 }
 
-contract ERC20PoolUser is PoolUser {
-    ERC20Pool internal immutable pool;
+contract ERC20DripsHubUser is DripsHubUser {
+    ERC20DripsHub internal immutable dripsHub;
 
-    constructor(ERC20Pool pool_) {
-        pool = pool_;
+    constructor(ERC20DripsHub dripsHub_) {
+        dripsHub = dripsHub_;
     }
 
-    function getPool() internal view override returns (Pool) {
-        return Pool(pool);
+    function getDripsHub() internal view override returns (DripsHub) {
+        return DripsHub(dripsHub);
     }
 
     function balance() public view override returns (uint256) {
-        return pool.erc20().balanceOf(address(this));
+        return dripsHub.erc20().balanceOf(address(this));
     }
 
     function updateSender(
@@ -110,9 +110,15 @@ contract ERC20PoolUser is PoolUser {
         int128 balanceDelta,
         Receiver[] calldata newReceivers
     ) public override returns (uint128 newBalance, int128 realBalanceDelta) {
-        if (balanceDelta > 0) pool.erc20().approve(address(pool), uint128(balanceDelta));
+        if (balanceDelta > 0) dripsHub.erc20().approve(address(dripsHub), uint128(balanceDelta));
         return
-            pool.updateSender(lastUpdate, lastBalance, currReceivers, balanceDelta, newReceivers);
+            dripsHub.updateSender(
+                lastUpdate,
+                lastBalance,
+                currReceivers,
+                balanceDelta,
+                newReceivers
+            );
     }
 
     function updateSubSender(
@@ -123,9 +129,9 @@ contract ERC20PoolUser is PoolUser {
         int128 balanceDelta,
         Receiver[] calldata newReceivers
     ) public override returns (uint128 newBalance, int128 realBalanceDelta) {
-        if (balanceDelta > 0) pool.erc20().approve(address(pool), uint128(balanceDelta));
+        if (balanceDelta > 0) dripsHub.erc20().approve(address(dripsHub), uint128(balanceDelta));
         return
-            pool.updateSubSender(
+            dripsHub.updateSubSender(
                 subSenderId,
                 lastUpdate,
                 lastBalance,
@@ -136,8 +142,8 @@ contract ERC20PoolUser is PoolUser {
     }
 
     function give(address receiver, uint128 amt) public override {
-        pool.erc20().approve(address(pool), amt);
-        pool.give(receiver, amt);
+        dripsHub.erc20().approve(address(dripsHub), amt);
+        dripsHub.give(receiver, amt);
     }
 
     function giveFromSubSender(
@@ -145,30 +151,30 @@ contract ERC20PoolUser is PoolUser {
         address receiver,
         uint128 amt
     ) public override {
-        pool.erc20().approve(address(pool), amt);
-        pool.giveFromSubSender(subSenderId, receiver, amt);
+        dripsHub.erc20().approve(address(dripsHub), amt);
+        dripsHub.giveFromSubSender(subSenderId, receiver, amt);
     }
 
     function setDripsReceivers(
         DripsReceiver[] calldata currReceivers,
         DripsReceiver[] calldata newReceivers
     ) public override returns (uint128 collected, uint128 dripped) {
-        return pool.setDripsReceivers(currReceivers, newReceivers);
+        return dripsHub.setDripsReceivers(currReceivers, newReceivers);
     }
 }
 
-contract EthPoolUser is PoolUser {
-    EthPool internal immutable pool;
+contract EthDripsHubUser is DripsHubUser {
+    EthDripsHub internal immutable dripsHub;
 
-    constructor(EthPool pool_) payable {
-        pool = pool_;
+    constructor(EthDripsHub dripsHub_) payable {
+        dripsHub = dripsHub_;
     }
 
     // solhint-disable-next-line no-empty-blocks
     receive() external payable {}
 
-    function getPool() internal view override returns (Pool) {
-        return Pool(pool);
+    function getDripsHub() internal view override returns (DripsHub) {
+        return DripsHub(dripsHub);
     }
 
     function balance() public view override returns (uint256) {
@@ -185,7 +191,7 @@ contract EthPoolUser is PoolUser {
         uint256 value = balanceDelta > 0 ? uint128(balanceDelta) : 0;
         uint128 reduceBalance = balanceDelta < 0 ? uint128(uint136(-int136(balanceDelta))) : 0;
         return
-            pool.updateSender{value: value}(
+            dripsHub.updateSender{value: value}(
                 lastUpdate,
                 lastBalance,
                 currReceivers,
@@ -205,7 +211,7 @@ contract EthPoolUser is PoolUser {
         uint256 value = balanceDelta > 0 ? uint128(balanceDelta) : 0;
         uint128 reduceBalance = balanceDelta < 0 ? uint128(-balanceDelta) : 0;
         return
-            pool.updateSubSender{value: value}(
+            dripsHub.updateSubSender{value: value}(
                 subSenderId,
                 lastUpdate,
                 lastBalance,
@@ -216,7 +222,7 @@ contract EthPoolUser is PoolUser {
     }
 
     function give(address receiver, uint128 amt) public override {
-        pool.give{value: amt}(receiver);
+        dripsHub.give{value: amt}(receiver);
     }
 
     function giveFromSubSender(
@@ -224,13 +230,13 @@ contract EthPoolUser is PoolUser {
         address receiver,
         uint128 amt
     ) public override {
-        pool.giveFromSubSender{value: amt}(subSenderId, receiver);
+        dripsHub.giveFromSubSender{value: amt}(subSenderId, receiver);
     }
 
     function setDripsReceivers(
         DripsReceiver[] calldata currReceivers,
         DripsReceiver[] calldata newReceivers
     ) public override returns (uint128 collected, uint128 dripped) {
-        return pool.setDripsReceivers(currReceivers, newReceivers);
+        return dripsHub.setDripsReceivers(currReceivers, newReceivers);
     }
 }

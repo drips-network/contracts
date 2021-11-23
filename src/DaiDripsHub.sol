@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.7;
 
-import {ERC20Pool, Receiver} from "./ERC20Pool.sol";
+import {ERC20DripsHub, Receiver} from "./ERC20DripsHub.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
 interface IDai is IERC20 {
@@ -25,23 +25,23 @@ struct PermitArgs {
     bytes32 s;
 }
 
-/// @notice Funding pool contract for DAI token.
-/// See the base `Pool` contract docs for more details.
-contract DaiPool is ERC20Pool {
-    /// @notice The address of the Dai contract which tokens the pool works with.
+/// @notice Drips hub contract for DAI token.
+/// See the base `DripsHub` contract docs for more details.
+contract DaiDripsHub is ERC20DripsHub {
+    /// @notice The address of the Dai contract which tokens the drips hub works with.
     /// Always equal to `erc20`, but more strictly typed.
     IDai public immutable dai;
 
-    /// @notice See `ERC20Pool` constructor documentation for more details.
-    constructor(uint64 cycleSecs, IDai _dai) ERC20Pool(cycleSecs, _dai) {
+    /// @notice See `ERC20DripsHub` constructor documentation for more details.
+    constructor(uint64 cycleSecs, IDai _dai) ERC20DripsHub(cycleSecs, _dai) {
         dai = _dai;
     }
 
     /// @notice Updates all the sender parameters of the sender of the message
-    /// and permits spending sender's Dai by the pool.
+    /// and permits spending sender's Dai by the drips hub.
     /// This function is an extension of `updateSender`, see its documentation for more details.
     ///
-    /// The sender must sign a Dai permission document allowing the pool to spend their funds.
+    /// The sender must sign a Dai permission document allowing the drips hub to spend their funds.
     /// These parameters will be passed to the Dai contract by this function.
     /// @param permitArgs The Dai permission arguments.
     function updateSenderAndPermit(
@@ -57,10 +57,10 @@ contract DaiPool is ERC20Pool {
     }
 
     /// @notice Updates all the parameters of a sub-sender of the sender of the message
-    /// and permits spending sender's Dai by the pool.
+    /// and permits spending sender's Dai by the drips hub.
     /// This function is an extension of `updateSubSender`, see its documentation for more details.
     ///
-    /// The sender must sign a Dai permission document allowing the pool to spend their funds.
+    /// The sender must sign a Dai permission document allowing the drips hub to spend their funds.
     /// These parameters will be passed to the Dai contract by this function.
     /// @param permitArgs The Dai permission arguments.
     function updateSubSenderAndPermit(
@@ -85,10 +85,10 @@ contract DaiPool is ERC20Pool {
     }
 
     /// @notice Gives funds from the sender of the message to the receiver
-    /// and permits spending sender's Dai by the pool.
+    /// and permits spending sender's Dai by the drips hub.
     /// This function is an extension of `give`, see its documentation for more details.
     ///
-    /// The sender must sign a Dai permission document allowing the pool to spend their funds.
+    /// The sender must sign a Dai permission document allowing the drips hub to spend their funds.
     /// These parameters will be passed to the Dai contract by this function.
     /// @param permitArgs The Dai permission arguments.
     function giveAndPermit(
@@ -101,10 +101,10 @@ contract DaiPool is ERC20Pool {
     }
 
     /// @notice Gives funds from the sub-sender of the sender of the message to the receiver
-    /// and permits spending sender's Dai by the pool.
+    /// and permits spending sender's Dai by the drips hub.
     /// This function is an extension of `giveFromSubSender` see its documentation for more details.
     ///
-    /// The sender must sign a Dai permission document allowing the pool to spend their funds.
+    /// The sender must sign a Dai permission document allowing the drips hub to spend their funds.
     /// These parameters will be passed to the Dai contract by this function.
     /// @param permitArgs The Dai permission arguments.
     function giveFromSubSenderAndPermit(
@@ -117,7 +117,7 @@ contract DaiPool is ERC20Pool {
         giveFromSubSender(subSenderId, receiver, amt);
     }
 
-    /// @notice Permits the pool to spend the message sender's Dai.
+    /// @notice Permits the drips hub to spend the message sender's Dai.
     /// @param permitArgs The Dai permission arguments.
     function _permit(PermitArgs calldata permitArgs) internal {
         dai.permit(

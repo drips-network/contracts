@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.7;
 
-import {DripsReceiver, Pool, Receiver} from "./Pool.sol";
+import {DripsReceiver, DripsHub, Receiver} from "./DripsHub.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
-/// @notice Funding pool contract for any ERC-20 token.
-/// See the base `Pool` contract docs for more details.
-contract ERC20Pool is Pool {
-    /// @notice The address of the ERC-20 contract which tokens the pool works with
+/// @notice Drips hub contract for any ERC-20 token.
+/// See the base `DripsHub` contract docs for more details.
+contract ERC20DripsHub is DripsHub {
+    /// @notice The address of the ERC-20 contract which tokens the drips hub works with
     IERC20 public immutable erc20;
 
     /// @param cycleSecs The length of cycleSecs to be used in the contract instance.
     /// Low values make funds more available by shortening the average duration of tokens being
     /// frozen between being taken from senders' balances and being collectable by the receiver.
     /// High values make collecting cheaper by making it process less cycles for a given time range.
-    /// @param _erc20 The address of an ERC-20 contract which tokens the pool will work with.
+    /// @param _erc20 The address of an ERC-20 contract which tokens the drips hub will work with.
     /// To guarantee safety the supply of the tokens must be lower than `2 ^ 127`.
-    constructor(uint64 cycleSecs, IERC20 _erc20) Pool(cycleSecs) {
+    constructor(uint64 cycleSecs, IERC20 _erc20) DripsHub(cycleSecs) {
         erc20 = _erc20;
     }
 
