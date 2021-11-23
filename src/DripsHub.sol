@@ -172,9 +172,9 @@ abstract contract DripsHub {
         int128 nextCycle;
     }
 
-    struct SenderId {
+    struct UserOrAccount {
         bool isAccount;
-        address senderAddr;
+        address user;
         uint256 account;
     }
 
@@ -351,21 +351,21 @@ abstract contract DripsHub {
 
     /// @notice Gives funds from the user or their account to the receiver.
     /// The receiver can collect them immediately.
-    /// @param senderId The sender id of the giver
+    /// @param userOrAccount The user or their account
     /// @param receiverAddr The receiver
     /// @param amt The given amount
     function _give(
-        SenderId memory senderId,
+        UserOrAccount memory userOrAccount,
         address receiverAddr,
         uint128 amt
     ) internal {
         receiverStates[receiverAddr].collectable += amt;
-        if (senderId.isAccount) {
-            emit Given(senderId.senderAddr, senderId.account, receiverAddr, amt);
+        if (userOrAccount.isAccount) {
+            emit Given(userOrAccount.user, userOrAccount.account, receiverAddr, amt);
         } else {
-            emit Given(senderId.senderAddr, receiverAddr, amt);
+            emit Given(userOrAccount.user, receiverAddr, amt);
         }
-        _transfer(senderId.senderAddr, -int128(amt));
+        _transfer(userOrAccount.user, -int128(amt));
     }
 
     /// @notice Current sender state hash, see `hashSenderState`.
@@ -380,7 +380,7 @@ abstract contract DripsHub {
 
     /// @notice Updates all the sender's parameters.
     /// Transfers funds to or from the sender to fulfill the update of the balance.
-    /// @param senderId The sender id
+    /// @param userOrAccount The user or their account
     /// @param lastUpdate The timestamp of the last update of the sender.
     /// If this is the first update of the sender, pass zero.
     /// @param lastBalance The balance after the last update of the sender.
@@ -395,14 +395,14 @@ abstract contract DripsHub {
     /// Pass it as `lastBalance` when updating the user for the next time.
     /// @return realBalanceDelta The actually applied balance change.
     function _updateSender(
-        SenderId memory senderId,
+        UserOrAccount memory userOrAccount,
         uint64 lastUpdate,
         uint128 lastBalance,
         Receiver[] calldata currReceivers,
         int128 balanceDelta,
         Receiver[] calldata newReceivers
     ) internal returns (uint128 newBalance, int128 realBalanceDelta) {
-        _assertSenderState(senderId, lastUpdate, lastBalance, currReceivers);
+        _assertSenderState(userOrAccount, lastUpdate, lastBalance, currReceivers);
         uint128 newAmtPerSec = _assertReceiversValid(newReceivers);
         uint128 currAmtPerSec = _totalAmtPerSec(currReceivers);
         uint64 currEndTime = _sendingEndTime(lastUpdate, lastBalance, currAmtPerSec);
@@ -414,10 +414,10 @@ abstract contract DripsHub {
             balanceDelta
         );
         uint64 newEndTime = _sendingEndTime(_currTimestamp(), newBalance, newAmtPerSec);
-        _updateStreams(senderId, currReceivers, currEndTime, newReceivers, newEndTime);
-        _storeSenderState(senderId, newBalance, newReceivers);
-        _emitSenderUpdated(senderId, newBalance, newReceivers);
-        _transfer(senderId.senderAddr, -realBalanceDelta);
+        _updateStreams(userOrAccount, currReceivers, currEndTime, newReceivers, newEndTime);
+        _storeSenderState(userOrAccount, newBalance, newReceivers);
+        _emitSenderUpdated(userOrAccount, newBalance, newReceivers);
+        _transfer(userOrAccount.user, -realBalanceDelta);
     }
 
     /// @notice Validates a list of receivers.
@@ -473,18 +473,18 @@ abstract contract DripsHub {
     }
 
     /// @notice Emit a relevant event when a sender is updated.
-    /// @param senderId The id of the sender.
+    /// @param userOrAccount The user or their account
     /// @param balance The new sender balance.
     /// @param receivers The new list of the sender's receivers.
     function _emitSenderUpdated(
-        SenderId memory senderId,
+        UserOrAccount memory userOrAccount,
         uint128 balance,
         Receiver[] calldata receivers
     ) internal {
-        if (senderId.isAccount) {
-            emit SenderUpdated(senderId.senderAddr, senderId.account, balance, receivers);
+        if (userOrAccount.isAccount) {
+            emit SenderUpdated(userOrAccount.user, userOrAccount.account, balance, receivers);
         } else {
-            emit SenderUpdated(senderId.senderAddr, balance, receivers);
+            emit SenderUpdated(userOrAccount.user, balance, receivers);
         }
     }
 
@@ -496,7 +496,7 @@ abstract contract DripsHub {
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
     /// @param newEndTime Time new when sending is supposed to end.
     function _updateStreams(
-        SenderId memory senderId,
+        UserOrAccount memory userOrAccount,
         Receiver[] calldata currReceivers,
         uint64 currEndTime,
         Receiver[] calldata newReceivers,
@@ -544,7 +544,7 @@ abstract contract DripsHub {
             }
             // Apply the stream update since now
             _setDelta(receiver, _currTimestamp(), newAmt - currAmt);
-            _emitStreamUpdated(senderId, receiver, uint128(newAmt), newEndTime);
+            _emitStreamUpdated(userOrAccount, receiver, uint128(newAmt), newEndTime);
             // The receiver was never used, initialize it.
             if (!pickCurr && receiverStates[receiver].nextCollectedCycle == 0) {
                 receiverStates[receiver].nextCollectedCycle = _currTimestamp() / cycleSecs + 1;
@@ -553,28 +553,28 @@ abstract contract DripsHub {
     }
 
     /// @notice Emit a relevant event when a stream is updated.
-    /// @param senderId The id of the sender of the updated stream.
+    /// @param userOrAccount The user or their account
     /// @param receiver The receiver of the updated stream.
     /// @param amtPerSec The new amount per second sent from the sender to the receiver
     /// or 0 if sending is stopped.
     /// @param endTime The timestamp when sending is supposed to end.
     function _emitStreamUpdated(
-        SenderId memory senderId,
+        UserOrAccount memory userOrAccount,
         address receiver,
         uint128 amtPerSec,
         uint64 endTime
     ) internal {
         if (amtPerSec == 0) endTime = _currTimestamp();
-        if (senderId.isAccount) {
+        if (userOrAccount.isAccount) {
             emit SenderToReceiverUpdated(
-                senderId.senderAddr,
-                senderId.account,
+                userOrAccount.user,
+                userOrAccount.account,
                 receiver,
                 amtPerSec,
                 endTime
             );
         } else {
-            emit SenderToReceiverUpdated(senderId.senderAddr, receiver, amtPerSec, endTime);
+            emit SenderToReceiverUpdated(userOrAccount.user, receiver, amtPerSec, endTime);
         }
     }
 
@@ -594,7 +594,7 @@ abstract contract DripsHub {
     }
 
     /// @notice Asserts that the sender state is the currently used one.
-    /// @param senderId The id of the sender
+    /// @param userOrAccount The user or their account
     /// @param lastUpdate The timestamp of the last update of the sender.
     /// If this is the first update of the sender, pass zero.
     /// @param lastBalance The balance after the last update of the sender.
@@ -602,36 +602,36 @@ abstract contract DripsHub {
     /// @param currReceivers The list of receivers set in the last update of the sender.
     /// If this is the first update of the sender, pass an empty array.
     function _assertSenderState(
-        SenderId memory senderId,
+        UserOrAccount memory userOrAccount,
         uint64 lastUpdate,
         uint128 lastBalance,
         Receiver[] calldata currReceivers
     ) internal view {
         bytes32 expectedHash;
-        if (senderId.isAccount) {
-            expectedHash = senderAccountStateHashes[senderId.senderAddr][senderId.account];
+        if (userOrAccount.isAccount) {
+            expectedHash = senderAccountStateHashes[userOrAccount.user][userOrAccount.account];
         } else {
-            expectedHash = senderStateHashes[senderId.senderAddr];
+            expectedHash = senderStateHashes[userOrAccount.user];
         }
         bytes32 actualHash = hashSenderState(lastUpdate, lastBalance, currReceivers);
         require(actualHash == expectedHash, "Invalid provided sender state");
     }
 
     /// @notice Stores the hash of the updated sender state to be used in `_assertSenderState`.
-    /// @param senderId The id of the sender
+    /// @param userOrAccount The user or their account
     /// @param newBalance The new sender balance.
     /// @param newReceivers The new list of the sender's receivers.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
     function _storeSenderState(
-        SenderId memory senderId,
+        UserOrAccount memory userOrAccount,
         uint128 newBalance,
         Receiver[] calldata newReceivers
     ) internal {
         bytes32 stateHash = hashSenderState(_currTimestamp(), newBalance, newReceivers);
-        if (senderId.isAccount) {
-            senderAccountStateHashes[senderId.senderAddr][senderId.account] = stateHash;
+        if (userOrAccount.isAccount) {
+            senderAccountStateHashes[userOrAccount.user][userOrAccount.account] = stateHash;
         } else {
-            senderStateHashes[senderId.senderAddr] = stateHash;
+            senderStateHashes[userOrAccount.user] = stateHash;
         }
     }
 
@@ -762,16 +762,16 @@ abstract contract DripsHub {
         amtDeltas[thisCycle].nextCycle += int128(uint128(nextCycleSecs)) * amtPerSecDelta;
     }
 
-    function _senderId(address senderAddr) internal pure returns (SenderId memory) {
-        return SenderId({isAccount: false, senderAddr: senderAddr, account: 0});
+    function _userOrAccount(address user) internal pure returns (UserOrAccount memory) {
+        return UserOrAccount({isAccount: false, user: user, account: 0});
     }
 
-    function _senderId(address senderAddr, uint256 account)
+    function _userOrAccount(address user, uint256 account)
         internal
         pure
-        returns (SenderId memory)
+        returns (UserOrAccount memory)
     {
-        return SenderId({isAccount: true, senderAddr: senderAddr, account: account});
+        return UserOrAccount({isAccount: true, user: user, account: account});
     }
 
     function _currTimestamp() internal view returns (uint64) {

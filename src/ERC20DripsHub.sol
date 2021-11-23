@@ -45,7 +45,7 @@ contract ERC20DripsHub is DripsHub {
     ) public returns (uint128 newBalance, int128 realBalanceDelta) {
         return
             _updateSender(
-                _senderId(msg.sender),
+                _userOrAccount(msg.sender),
                 lastUpdate,
                 lastBalance,
                 currReceivers,
@@ -67,7 +67,7 @@ contract ERC20DripsHub is DripsHub {
     ) public payable returns (uint128 newBalance, int128 realBalanceDelta) {
         return
             _updateSender(
-                _senderId(msg.sender, account),
+                _userOrAccount(msg.sender, account),
                 lastUpdate,
                 lastBalance,
                 currReceivers,
@@ -81,7 +81,7 @@ contract ERC20DripsHub is DripsHub {
     /// @param receiver The receiver
     /// @param amt The sent amount
     function give(address receiver, uint128 amt) public {
-        _give(_senderId(msg.sender), receiver, amt);
+        _give(_userOrAccount(msg.sender), receiver, amt);
     }
 
     /// @notice Gives funds from the account of the sender of the message to the receiver.
@@ -94,7 +94,7 @@ contract ERC20DripsHub is DripsHub {
         address receiver,
         uint128 amt
     ) public {
-        _give(_senderId(msg.sender, account), receiver, amt);
+        _give(_userOrAccount(msg.sender, account), receiver, amt);
     }
 
     /// @notice Collects received funds and sets a new list of drips receivers

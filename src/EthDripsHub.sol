@@ -38,7 +38,7 @@ contract EthDripsHub is DripsHub {
     ) public payable returns (uint128 newBalance, int128 realBalanceDelta) {
         return
             _updateSender(
-                _senderId(msg.sender),
+                _userOrAccount(msg.sender),
                 lastUpdate,
                 lastBalance,
                 currReceivers,
@@ -60,7 +60,7 @@ contract EthDripsHub is DripsHub {
     ) public payable returns (uint128 newBalance, int128 realBalanceDelta) {
         return
             _updateSender(
-                _senderId(msg.sender, account),
+                _userOrAccount(msg.sender, account),
                 lastUpdate,
                 lastBalance,
                 currReceivers,
@@ -82,7 +82,7 @@ contract EthDripsHub is DripsHub {
     /// The receiver can collect them immediately.
     /// @param receiver The receiver
     function give(address receiver) public payable {
-        _give(_senderId(msg.sender), receiver, uint128(msg.value));
+        _give(_userOrAccount(msg.sender), receiver, uint128(msg.value));
     }
 
     /// @notice Gives funds from the account of the sender of the message to the receiver.
@@ -90,7 +90,7 @@ contract EthDripsHub is DripsHub {
     /// @param account The user's account
     /// @param receiver The receiver
     function give(uint256 account, address receiver) public payable {
-        _give(_senderId(msg.sender, account), receiver, uint128(msg.value));
+        _give(_userOrAccount(msg.sender, account), receiver, uint128(msg.value));
     }
 
     /// @notice Collects received funds and sets a new list of drips receivers
