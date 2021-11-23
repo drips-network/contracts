@@ -6,7 +6,7 @@ struct Receiver {
     uint128 amtPerSec;
 }
 
-struct DripsReceiver {
+struct SplitsReceiver {
     address receiver;
     uint32 weight;
 }
@@ -52,13 +52,13 @@ abstract contract DripsHub {
     /// @notice Timestamp at which all funding periods must be finished
     uint64 internal constant MAX_TIMESTAMP = type(uint64).max - 2;
     /// @notice Maximum number of receivers of a single sender.
-    /// Limits costs of changes in sender's configuration.
+    /// Limits cost of changes in sender's configuration.
     uint32 public constant MAX_RECEIVERS = 100;
-    /// @notice Maximum number of drips receivers of a single user.
-    /// Limits costs of dripping.
-    uint32 public constant MAX_DRIPS_RECEIVERS = 200;
-    /// @notice The total drips weights of a user
-    uint32 public constant TOTAL_DRIPS_WEIGHTS = 1_000_000;
+    /// @notice Maximum number of splits receivers of a single user.
+    /// Limits cost of collecting.
+    uint32 public constant MAX_SPLITS_RECEIVERS = 200;
+    /// @notice The total splits weight of a user
+    uint32 public constant TOTAL_SPLITS_WEIGHT = 1_000_000;
 
     /// @notice Emitted when a direct stream of funds between a sender and a receiver is updated.
     /// This is caused by a sender updating their parameters.
@@ -115,23 +115,23 @@ abstract contract DripsHub {
         Receiver[] receivers
     );
 
-    /// @notice Emitted when the user's drips receivers list is updated.
+    /// @notice Emitted when the user's splits are updated.
     /// @param user The user
-    /// @param receivers The list of the user's drips receivers.
-    event DripsReceiversUpdated(address indexed user, DripsReceiver[] receivers);
+    /// @param receivers The list of the user's splits receivers.
+    event SplitsUpdated(address indexed user, SplitsReceiver[] receivers);
 
-    /// @notice Emitted when a receiver collects funds
-    /// @param receiver The collecting receiver
-    /// @param collectedAmt The collected amount
-    /// @param drippedAmt The amount dripped to the collecting receiver's receivers
-    event Collected(address indexed receiver, uint128 collectedAmt, uint128 drippedAmt);
+    /// @notice Emitted when a user collects funds
+    /// @param user The user
+    /// @param collected The collected amount
+    /// @param split The amount split to the user's splits receivers
+    event Collected(address indexed user, uint128 collected, uint128 split);
 
-    /// @notice Emitted when funds are dripped from the sender to the receiver.
-    /// This is caused by the sender collecting received funds.
-    /// @param sender The user which is dripping
-    /// @param receiver The user which is receiving the drips
-    /// @param amt The dripped amount
-    event Dripped(address indexed sender, address indexed receiver, uint128 amt);
+    /// @notice Emitted when funds are split from a user to a receiver.
+    /// This is caused by the user collecting received funds.
+    /// @param user The user
+    /// @param receiver The splits receiver
+    /// @param amt The amount split to the receiver
+    event Split(address indexed user, address indexed receiver, uint128 amt);
 
     /// @notice Emitted when funds are given from the user to the receiver.
     /// @param user The address of the user
@@ -178,9 +178,9 @@ abstract contract DripsHub {
         uint256 account;
     }
 
-    /// @notice Current drips configuration hash, see `hashDripsReceivers`.
+    /// @notice Current splits configuration hash, see `hashSplits`.
     /// The key is the user address.
-    mapping(address => bytes32) public dripsReceiversHash;
+    mapping(address => bytes32) public splitsHash;
     /// @notice Current sender state hash, see `hashSenderState`.
     /// The key is the sender address.
     mapping(address => bytes32) internal senderStateHashes;
@@ -201,16 +201,16 @@ abstract contract DripsHub {
 
     /// @notice Returns amount of received funds available for collection for a user
     /// @param user The user
-    /// @param currReceivers The list of the user's current drips receivers.
+    /// @param currReceivers The list of the user's current splits receivers.
     /// @return collected The collected amount
-    /// @return dripped The amount dripped to the sender's receivers
-    function collectable(address user, DripsReceiver[] calldata currReceivers)
+    /// @return split The amount split to the user's splits receivers
+    function collectable(address user, SplitsReceiver[] calldata currReceivers)
         public
         view
-        returns (uint128 collected, uint128 dripped)
+        returns (uint128 collected, uint128 split)
     {
         ReceiverState storage receiver = receiverStates[user];
-        _assertCurrDripsReceivers(user, currReceivers);
+        _assertCurrSplits(user, currReceivers);
 
         // Collectable independently from cycles
         collected = receiver.collectable;
@@ -227,27 +227,27 @@ abstract contract DripsHub {
             }
         }
 
-        // Dripped when collected
+        // split when collected
         if (collected > 0 && currReceivers.length > 0) {
-            uint32 drippedWeight = 0;
+            uint32 splitsWeight = 0;
             for (uint256 i = 0; i < currReceivers.length; i++) {
-                drippedWeight += currReceivers[i].weight;
+                splitsWeight += currReceivers[i].weight;
             }
-            dripped = uint128((uint160(collected) * drippedWeight) / TOTAL_DRIPS_WEIGHTS);
-            collected -= dripped;
+            split = uint128((uint160(collected) * splitsWeight) / TOTAL_SPLITS_WEIGHT);
+            collected -= split;
         }
     }
 
     /// @notice Collects all received funds available for the user and sends them to that user
     /// @param user The user
-    /// @param currReceivers The list of the user's current drips receivers.
+    /// @param currReceivers The list of the user's current splits receivers.
     /// @return collected The collected amount
-    /// @return dripped The amount dripped to the sender's receivers
-    function collect(address user, DripsReceiver[] calldata currReceivers)
+    /// @return split The amount split to the user's splits receivers
+    function collect(address user, SplitsReceiver[] calldata currReceivers)
         public
-        returns (uint128 collected, uint128 dripped)
+        returns (uint128 collected, uint128 split)
     {
-        (collected, dripped) = _collectInternal(user, currReceivers);
+        (collected, split) = _collectInternal(user, currReceivers);
         _transfer(user, int128(collected));
     }
 
@@ -287,15 +287,15 @@ abstract contract DripsHub {
     /// @notice Removes from the history and returns the amount of received
     /// funds available for collection by the user
     /// @param user The user
-    /// @param currReceivers The list of the user's current drips receivers.
+    /// @param currReceivers The list of the user's current splits receivers.
     /// @return collected The collected amount
-    /// @return dripped The amount dripped to the sender's receivers
-    function _collectInternal(address user, DripsReceiver[] calldata currReceivers)
+    /// @return split The amount split to the user's splits receivers
+    function _collectInternal(address user, SplitsReceiver[] calldata currReceivers)
         internal
-        returns (uint128 collected, uint128 dripped)
+        returns (uint128 collected, uint128 split)
     {
         ReceiverState storage receiver = receiverStates[user];
-        _assertCurrDripsReceivers(user, currReceivers);
+        _assertCurrSplits(user, currReceivers);
 
         // Collectable independently from cycles
         collected = receiver.collectable;
@@ -305,22 +305,22 @@ abstract contract DripsHub {
         uint64 cycles = flushableCycles(user);
         collected += _flushCyclesInternal(user, cycles);
 
-        // Dripped when collected
+        // split when collected
         if (collected > 0 && currReceivers.length > 0) {
-            uint32 drippedWeight = 0;
+            uint32 splitsWeight = 0;
             for (uint256 i = 0; i < currReceivers.length; i++) {
-                drippedWeight += currReceivers[i].weight;
-                uint128 dripAmt = uint128(
-                    (uint160(collected) * drippedWeight) / TOTAL_DRIPS_WEIGHTS - dripped
+                splitsWeight += currReceivers[i].weight;
+                uint128 splitsAmt = uint128(
+                    (uint160(collected) * splitsWeight) / TOTAL_SPLITS_WEIGHT - split
                 );
-                dripped += dripAmt;
-                address dripsAddr = currReceivers[i].receiver;
-                receiverStates[dripsAddr].collectable += dripAmt;
-                emit Dripped(user, dripsAddr, dripAmt);
+                split += splitsAmt;
+                address splitsReceiver = currReceivers[i].receiver;
+                receiverStates[splitsReceiver].collectable += splitsAmt;
+                emit Split(user, splitsReceiver, splitsAmt);
             }
-            collected -= dripped;
+            collected -= split;
         }
-        emit Collected(user, collected, dripped);
+        emit Collected(user, collected, split);
     }
 
     /// @notice Collects and clears user's cycles
@@ -653,65 +653,63 @@ abstract contract DripsHub {
         return keccak256(abi.encode(receivers, update, balance));
     }
 
-    /// @notice Collects received funds and sets a new list of drips receivers of the user.
+    /// @notice Collects funds received by the user and sets their splits.
+    /// The collected funds are split according to `currReceivers`.
     /// @param user The user
-    /// @param currReceivers The list of the user's drips receivers which is currently in use.
+    /// @param currReceivers The list of the user's splits receivers which is currently in use.
     /// If this function is called for the first time for the user, should be an empty array.
-    /// @param newReceivers The new list of the user's drips receivers.
-    /// Must be sorted by the drips receivers' addresses, deduplicated and without 0 weights.
-    /// Each drips receiver will be getting `weight / TOTAL_DRIPS_WEIGHTS`
+    /// @param newReceivers The new list of the user's splits receivers.
+    /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
+    /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the user.
     /// @return collected The collected amount
-    /// @return dripped The amount dripped to the sender's receivers
-    function _setDripsReceivers(
+    /// @return split The amount split to the user's splits receivers
+    function _setSplits(
         address user,
-        DripsReceiver[] calldata currReceivers,
-        DripsReceiver[] calldata newReceivers
-    ) internal returns (uint128 collected, uint128 dripped) {
-        (collected, dripped) = _collectInternal(user, currReceivers);
-        _assertDripsReceiversValid(newReceivers);
-        dripsReceiversHash[user] = hashDripsReceivers(newReceivers);
-        emit DripsReceiversUpdated(user, newReceivers);
+        SplitsReceiver[] calldata currReceivers,
+        SplitsReceiver[] calldata newReceivers
+    ) internal returns (uint128 collected, uint128 split) {
+        (collected, split) = _collectInternal(user, currReceivers);
+        _assertSplitsValid(newReceivers);
+        splitsHash[user] = hashSplits(newReceivers);
+        emit SplitsUpdated(user, newReceivers);
         _transfer(user, int128(collected));
     }
 
-    /// @notice Validates a list of drips receivers
-    /// @param receivers The list of drips receivers
-    /// Must be sorted by the drips receivers' addresses, deduplicated and without 0 weights.
-    function _assertDripsReceiversValid(DripsReceiver[] calldata receivers) internal pure {
-        require(receivers.length <= MAX_DRIPS_RECEIVERS, "Too many drips receivers");
+    /// @notice Validates a list of splits receivers
+    /// @param receivers The list of splits receivers
+    /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
+    function _assertSplitsValid(SplitsReceiver[] calldata receivers) internal pure {
+        require(receivers.length <= MAX_SPLITS_RECEIVERS, "Too many splits receivers");
         uint64 totalWeight = 0;
         for (uint256 i = 0; i < receivers.length; i++) {
-            require(receivers[i].weight != 0, "Drips receiver weight is zero");
+            require(receivers[i].weight != 0, "Splits receiver weight is zero");
             totalWeight += receivers[i].weight;
             if (i > 0) {
                 address prevReceiver = receivers[i - 1].receiver;
                 address currReceiver = receivers[i].receiver;
-                require(prevReceiver <= currReceiver, "Drips receivers not sorted by address");
-                require(prevReceiver != currReceiver, "Duplicate drips receivers");
+                require(prevReceiver <= currReceiver, "Splits receivers not sorted by address");
+                require(prevReceiver != currReceiver, "Duplicate splits receivers");
             }
         }
-        require(totalWeight <= TOTAL_DRIPS_WEIGHTS, "Drips weights sum too high");
+        require(totalWeight <= TOTAL_SPLITS_WEIGHT, "Splits weights sum too high");
     }
 
-    /// @notice Asserts that the list of drips receivers is the user's currently used one.
+    /// @notice Asserts that the list of splits receivers is the user's currently used one.
     /// @param user The user
-    /// @param currReceivers The list of the user's current drips receivers.
-    function _assertCurrDripsReceivers(address user, DripsReceiver[] calldata currReceivers)
+    /// @param currReceivers The list of the user's current splits receivers.
+    function _assertCurrSplits(address user, SplitsReceiver[] calldata currReceivers)
         internal
         view
     {
-        require(
-            hashDripsReceivers(currReceivers) == dripsReceiversHash[user],
-            "Invalid current drips receivers"
-        );
+        require(hashSplits(currReceivers) == splitsHash[user], "Invalid current splits receivers");
     }
 
-    /// @notice Calculates the hash of the list of drips receivers.
-    /// @param receivers The list of the drips receivers.
-    /// Must be sorted by the drips receivers' addresses, deduplicated and without 0 weights.
-    /// @return receiversHash The hash of the list of drips receivers.
-    function hashDripsReceivers(DripsReceiver[] calldata receivers)
+    /// @notice Calculates the hash of the list of splits receivers.
+    /// @param receivers The list of the splits receivers.
+    /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
+    /// @return receiversHash The hash of the list of splits receivers.
+    function hashSplits(SplitsReceiver[] calldata receivers)
         public
         pure
         returns (bytes32 receiversHash)

@@ -5,7 +5,7 @@ import {DSTest} from "ds-test/test.sol";
 import {DripsHubUserUtils} from "./DripsHubUserUtils.t.sol";
 import {DripsHubUser} from "./DripsHubUser.t.sol";
 import {Hevm} from "./Hevm.t.sol";
-import {DripsReceiver, DripsHub, Receiver} from "../DripsHub.sol";
+import {SplitsReceiver, DripsHub, Receiver} from "../DripsHub.sol";
 
 abstract contract DripsHubTest is DripsHubUserUtils {
     DripsHub private dripsHub;
@@ -122,12 +122,12 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         collect(receiver, 7);
     }
 
-    function testCollectRevertsIfInvalidCurrDripsReceivers() public {
-        setDripsReceivers(sender, dripsReceivers(receiver, 1));
-        try sender.collect(address(sender), dripsReceivers(receiver, 2)) {
+    function testCollectRevertsIfInvalidCurrSplitsReceivers() public {
+        setSplits(sender, splitsReceivers(receiver, 1));
+        try sender.collect(address(sender), splitsReceivers(receiver, 2)) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, "Invalid current drips receivers", "Invalid collect revert reason");
+            assertEq(reason, "Invalid current splits receivers", "Invalid collect revert reason");
         }
     }
 
@@ -145,14 +145,14 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         collect(receiver, 99);
     }
 
-    function testCollectableRevertsIfInvalidCurrDripsReceivers() public {
-        setDripsReceivers(sender, dripsReceivers(receiver, 1));
-        try sender.collectable(dripsReceivers(receiver, 2)) {
+    function testCollectableRevertsIfInvalidCurrSplitsReceivers() public {
+        setSplits(sender, splitsReceivers(receiver, 1));
+        try sender.collectable(splitsReceivers(receiver, 2)) {
             assertTrue(false, "Collectable hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(
                 reason,
-                "Invalid current drips receivers",
+                "Invalid current splits receivers",
                 "Invalid collectable revert reason"
             );
         }
@@ -412,154 +412,154 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         collect(receiver2, 2);
     }
 
-    function testLimitsTheTotalDripsReceiversCount() public {
-        uint160 countMax = dripsHub.MAX_DRIPS_RECEIVERS();
-        DripsReceiver[] memory receiversGood = new DripsReceiver[](countMax);
-        DripsReceiver[] memory receiversBad = new DripsReceiver[](countMax + 1);
+    function testLimitsTheTotalSplitsReceiversCount() public {
+        uint160 countMax = dripsHub.MAX_SPLITS_RECEIVERS();
+        SplitsReceiver[] memory receiversGood = new SplitsReceiver[](countMax);
+        SplitsReceiver[] memory receiversBad = new SplitsReceiver[](countMax + 1);
         for (uint160 i = 0; i < countMax; i++) {
-            receiversGood[i] = DripsReceiver(address(i + 1), 1);
+            receiversGood[i] = SplitsReceiver(address(i + 1), 1);
             receiversBad[i] = receiversGood[i];
         }
-        receiversBad[countMax] = DripsReceiver(address(countMax + 1), 1);
+        receiversBad[countMax] = SplitsReceiver(address(countMax + 1), 1);
 
-        setDripsReceivers(sender, receiversGood);
-        assertSetDripsReceiversReverts(sender, receiversBad, "Too many drips receivers");
+        setSplits(sender, receiversGood);
+        assertSetSplitsReverts(sender, receiversBad, "Too many splits receivers");
     }
 
-    function testRejectsTooHighTotalWeightDripsReceivers() public {
-        uint32 totalWeight = dripsHub.TOTAL_DRIPS_WEIGHTS();
-        setDripsReceivers(sender, dripsReceivers(receiver, totalWeight));
-        assertSetDripsReceiversReverts(
+    function testRejectsTooHighTotalWeightSplitsReceivers() public {
+        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
+        setSplits(sender, splitsReceivers(receiver, totalWeight));
+        assertSetSplitsReverts(
             sender,
-            dripsReceivers(receiver, totalWeight + 1),
-            "Drips weights sum too high"
+            splitsReceivers(receiver, totalWeight + 1),
+            "Splits weights sum too high"
         );
     }
 
-    function testRejectsZeroWeightDripsReceivers() public {
-        assertSetDripsReceiversReverts(
+    function testRejectsZeroWeightSplitsReceivers() public {
+        assertSetSplitsReverts(
             sender,
-            dripsReceivers(receiver, 0),
-            "Drips receiver weight is zero"
+            splitsReceivers(receiver, 0),
+            "Splits receiver weight is zero"
         );
     }
 
-    function testRejectsUnsortedDripsReceivers() public {
-        assertSetDripsReceiversReverts(
+    function testRejectsUnsortedSplitsReceivers() public {
+        assertSetSplitsReverts(
             sender,
-            dripsReceivers(receiver2, 1, receiver1, 1),
-            "Drips receivers not sorted by address"
+            splitsReceivers(receiver2, 1, receiver1, 1),
+            "Splits receivers not sorted by address"
         );
     }
 
-    function testRejectsDuplicateDripsReceivers() public {
-        assertSetDripsReceiversReverts(
+    function testRejectsDuplicateSplitsReceivers() public {
+        assertSetSplitsReverts(
             sender,
-            dripsReceivers(receiver, 1, receiver, 2),
-            "Duplicate drips receivers"
+            splitsReceivers(receiver, 1, receiver, 2),
+            "Duplicate splits receivers"
         );
     }
 
-    function testSetDripsReceiversRevertsIfInvalidCurrDripsReceivers() public {
-        setDripsReceivers(sender, dripsReceivers(receiver, 1));
-        try sender.setDripsReceivers(dripsReceivers(receiver, 2), dripsReceivers()) {
+    function testSetSplitsRevertsIfInvalidCurrSplitsReceivers() public {
+        setSplits(sender, splitsReceivers(receiver, 1));
+        try sender.setSplits(splitsReceivers(receiver, 2), splitsReceivers()) {
             assertTrue(false, "Sender update hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(
                 reason,
-                "Invalid current drips receivers",
+                "Invalid current splits receivers",
                 "Invalid sender update revert reason"
             );
         }
     }
 
-    function testSetDripsReceiversCollects() public {
+    function testSetSplitsCollects() public {
         updateSender(sender, 0, 10, receivers(receiver, 10));
         warpToCycleEnd();
-        setDripsReceivers(receiver, dripsReceivers(), 10, 0);
+        setSplits(receiver, splitsReceivers(), 10, 0);
     }
 
-    function testSetDripsReceiversDrips() public {
-        uint32 totalWeight = dripsHub.TOTAL_DRIPS_WEIGHTS();
+    function testSetSplitsSplits() public {
+        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
         updateSender(sender, 0, 10, receivers(receiver1, 10));
-        setDripsReceivers(receiver1, dripsReceivers(receiver2, totalWeight));
+        setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
         warpToCycleEnd();
-        setDripsReceivers(receiver1, dripsReceivers(), 0, 10);
+        setSplits(receiver1, splitsReceivers(), 0, 10);
         collect(receiver2, 10);
     }
 
-    function testCollectDrips() public {
-        uint32 totalWeight = dripsHub.TOTAL_DRIPS_WEIGHTS();
+    function testCollectSplits() public {
+        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
         updateSender(sender, 0, 10, receivers(receiver1, 10));
-        setDripsReceivers(receiver1, dripsReceivers(receiver2, totalWeight));
+        setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
         warpToCycleEnd();
         assertCollectable(receiver2, 0);
-        // Receiver1 had 1 second paying 10 per second of which 10 is dripped
+        // Receiver1 had 1 second paying 10 per second of which 10 is split
         collect(receiver1, 0, 10);
-        // Receiver2 got 10 dripped from receiver1
+        // Receiver2 got 10 split from receiver1
         collect(receiver2, 10);
     }
 
-    function testCollectDripsFundsFromDrips() public {
-        uint32 totalWeight = dripsHub.TOTAL_DRIPS_WEIGHTS();
+    function testCollectSplitsFundsFromSplits() public {
+        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
         updateSender(sender, 0, 10, receivers(receiver1, 10));
-        setDripsReceivers(receiver1, dripsReceivers(receiver2, totalWeight));
-        setDripsReceivers(receiver2, dripsReceivers(receiver3, totalWeight));
+        setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
+        setSplits(receiver2, splitsReceivers(receiver3, totalWeight));
         warpToCycleEnd();
         assertCollectable(receiver2, 0);
         assertCollectable(receiver3, 0);
-        // Receiver1 had 1 second paying 10 per second of which 10 is dripped
+        // Receiver1 had 1 second paying 10 per second of which 10 is split
         collect(receiver1, 0, 10);
-        // Receiver2 got 10 dripped from receiver1 of which 10 is dripped
+        // Receiver2 got 10 split from receiver1 of which 10 is split
         collect(receiver2, 0, 10);
-        // Receiver3 got 10 dripped from receiver2
+        // Receiver3 got 10 split from receiver2
         collect(receiver3, 10);
     }
 
-    function testCollectMixesStreamsAndDrips() public {
-        uint32 totalWeight = dripsHub.TOTAL_DRIPS_WEIGHTS();
+    function testCollectMixesStreamsAndSplits() public {
+        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
         updateSender(sender, 0, 10, receivers(receiver1, 5, receiver2, 5));
-        setDripsReceivers(receiver1, dripsReceivers(receiver2, totalWeight));
+        setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
         warpToCycleEnd();
         // Receiver2 had 1 second paying 5 per second
         assertCollectable(receiver2, 5);
         // Receiver1 had 1 second paying 5 per second
         collect(receiver1, 0, 5);
-        // Receiver2 had 1 second paying 5 per second and got 5 dripped from receiver1
+        // Receiver2 had 1 second paying 5 per second and got 5 split from receiver1
         collect(receiver2, 10);
     }
 
-    function testCollectSplitsFundsBetweenReceiverAndDrips() public {
-        uint32 totalWeight = dripsHub.TOTAL_DRIPS_WEIGHTS();
+    function testCollectSplitsFundsBetweenReceiverAndSplits() public {
+        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
         updateSender(sender, 0, 10, receivers(receiver1, 10));
-        setDripsReceivers(
+        setSplits(
             receiver1,
-            dripsReceivers(receiver2, totalWeight / 4, receiver3, totalWeight / 2)
+            splitsReceivers(receiver2, totalWeight / 4, receiver3, totalWeight / 2)
         );
         warpToCycleEnd();
         assertCollectable(receiver2, 0);
         assertCollectable(receiver3, 0);
-        // Receiver1 had 1 second paying 10 per second, of which 3/4 is dripped, which is 7
+        // Receiver1 had 1 second paying 10 per second, of which 3/4 is split, which is 7
         collect(receiver1, 3, 7);
-        // Receiver2 got 1/3 of 7 dripped from receiver1, which is 2
+        // Receiver2 got 1/3 of 7 split from receiver1, which is 2
         collect(receiver2, 2);
-        // Receiver3 got 2/3 of 7 dripped from receiver1, which is 5
+        // Receiver3 got 2/3 of 7 split from receiver1, which is 5
         collect(receiver3, 5);
     }
 
-    function testCanDripAllWhenCollectedDoesntSplitEvenly() public {
-        uint32 totalWeight = dripsHub.TOTAL_DRIPS_WEIGHTS();
+    function testCanSplitAllWhenCollectedDoesntSplitEvenly() public {
+        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
         updateSender(sender, 0, 3, receivers(receiver1, 3));
-        setDripsReceivers(
+        setSplits(
             receiver1,
-            dripsReceivers(receiver2, totalWeight / 2, receiver3, totalWeight / 2)
+            splitsReceivers(receiver2, totalWeight / 2, receiver3, totalWeight / 2)
         );
         warpToCycleEnd();
-        // Receiver1 had 1 second paying 3 per second of which 3 is dripped
+        // Receiver1 had 1 second paying 3 per second of which 3 is split
         collect(receiver1, 0, 3);
-        // Receiver2 got 1 dripped from receiver
+        // Receiver2 got 1 split from receiver
         collect(receiver2, 1);
-        // Receiver3 got 2 dripped from receiver
+        // Receiver3 got 2 split from receiver
         collect(receiver3, 2);
     }
 

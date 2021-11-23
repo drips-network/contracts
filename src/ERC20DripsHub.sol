@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.7;
 
-import {DripsReceiver, DripsHub, Receiver} from "./DripsHub.sol";
+import {SplitsReceiver, DripsHub, Receiver} from "./DripsHub.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
 /// @notice Drips hub contract for any ERC-20 token.
@@ -97,21 +97,21 @@ contract ERC20DripsHub is DripsHub {
         _give(_userOrAccount(msg.sender, account), receiver, amt);
     }
 
-    /// @notice Collects received funds and sets a new list of drips receivers
-    /// of the sender of the message.
-    /// @param currReceivers The list of the user's drips receivers which is currently in use.
+    /// @notice Collects funds received by the sender of the message and sets their splits.
+    /// The collected funds are split according to `currReceivers`.
+    /// @param currReceivers The list of the user's splits receivers which is currently in use.
     /// If this function is called for the first time for the user, should be an empty array.
-    /// @param newReceivers The new list of the user's drips receivers.
-    /// Must be sorted by the drips receivers' addresses, deduplicated and without 0 weights.
-    /// Each drips receiver will be getting `weight / TOTAL_DRIPS_WEIGHTS`
+    /// @param newReceivers The new list of the user's splits receivers.
+    /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
+    /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the user.
     /// @return collected The collected amount
-    /// @return dripped The amount dripped to the user's receivers
-    function setDripsReceivers(
-        DripsReceiver[] calldata currReceivers,
-        DripsReceiver[] calldata newReceivers
-    ) public returns (uint128 collected, uint128 dripped) {
-        return _setDripsReceivers(msg.sender, currReceivers, newReceivers);
+    /// @return split The amount split to the user's splits receivers
+    function setSplits(
+        SplitsReceiver[] calldata currReceivers,
+        SplitsReceiver[] calldata newReceivers
+    ) public returns (uint128 collected, uint128 split) {
+        return _setSplits(msg.sender, currReceivers, newReceivers);
     }
 
     function _transfer(address user, int128 amt) internal override {

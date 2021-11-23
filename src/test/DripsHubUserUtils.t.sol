@@ -3,12 +3,12 @@ pragma solidity ^0.8.7;
 
 import {DSTest} from "ds-test/test.sol";
 import {DripsHubUser} from "./DripsHubUser.t.sol";
-import {DripsReceiver, DripsHub, Receiver} from "../DripsHub.sol";
+import {SplitsReceiver, DripsHub, Receiver} from "../DripsHub.sol";
 
 abstract contract DripsHubUserUtils is DSTest {
     mapping(DripsHubUser => bytes) internal senderStates;
     mapping(DripsHubUser => mapping(uint256 => bytes)) internal senderAccountStates;
-    mapping(DripsHubUser => bytes) internal currDripsReceivers;
+    mapping(DripsHubUser => bytes) internal currSplitsReceivers;
 
     function getSenderState(DripsHubUser user)
         internal
@@ -73,23 +73,23 @@ abstract contract DripsHubUserUtils is DSTest {
         }
     }
 
-    function getCurrDripsReceivers(DripsHubUser user)
+    function getCurrSplitsReceivers(DripsHubUser user)
         internal
         view
-        returns (DripsReceiver[] memory)
+        returns (SplitsReceiver[] memory)
     {
-        bytes storage encoded = currDripsReceivers[user];
+        bytes storage encoded = currSplitsReceivers[user];
         if (encoded.length == 0) {
-            return new DripsReceiver[](0);
+            return new SplitsReceiver[](0);
         } else {
-            return abi.decode(encoded, (DripsReceiver[]));
+            return abi.decode(encoded, (SplitsReceiver[]));
         }
     }
 
-    function setCurrDripsReceivers(DripsHubUser user, DripsReceiver[] memory newReceivers)
+    function setCurrSplitsReceivers(DripsHubUser user, SplitsReceiver[] memory newReceivers)
         internal
     {
-        currDripsReceivers[user] = abi.encode(newReceivers);
+        currSplitsReceivers[user] = abi.encode(newReceivers);
     }
 
     function receivers() internal pure returns (Receiver[] memory list) {
@@ -252,75 +252,73 @@ abstract contract DripsHubUserUtils is DSTest {
         updateSender(user, account, balanceFrom, balanceTo, curr);
     }
 
-    function dripsReceivers() internal pure returns (DripsReceiver[] memory list) {
-        list = new DripsReceiver[](0);
+    function splitsReceivers() internal pure returns (SplitsReceiver[] memory list) {
+        list = new SplitsReceiver[](0);
     }
 
-    function dripsReceivers(DripsHubUser user, uint32 weight)
+    function splitsReceivers(DripsHubUser user, uint32 weight)
         internal
         pure
-        returns (DripsReceiver[] memory list)
+        returns (SplitsReceiver[] memory list)
     {
-        list = new DripsReceiver[](1);
-        list[0] = DripsReceiver(address(user), weight);
+        list = new SplitsReceiver[](1);
+        list[0] = SplitsReceiver(address(user), weight);
     }
 
-    function dripsReceivers(
+    function splitsReceivers(
         DripsHubUser user1,
         uint32 weight1,
         DripsHubUser user2,
         uint32 weight2
-    ) internal pure returns (DripsReceiver[] memory list) {
-        list = new DripsReceiver[](2);
-        list[0] = DripsReceiver(address(user1), weight1);
-        list[1] = DripsReceiver(address(user2), weight2);
+    ) internal pure returns (SplitsReceiver[] memory list) {
+        list = new SplitsReceiver[](2);
+        list[0] = SplitsReceiver(address(user1), weight1);
+        list[1] = SplitsReceiver(address(user2), weight2);
     }
 
-    function setDripsReceivers(DripsHubUser user, DripsReceiver[] memory newReceivers) internal {
-        setDripsReceivers(user, newReceivers, 0, 0);
+    function setSplits(DripsHubUser user, SplitsReceiver[] memory newReceivers) internal {
+        setSplits(user, newReceivers, 0, 0);
     }
 
-    function setDripsReceivers(
+    function setSplits(
         DripsHubUser user,
-        DripsReceiver[] memory newReceivers,
+        SplitsReceiver[] memory newReceivers,
         uint128 expectedCollected,
-        uint128 expectedDripped
+        uint128 expectedsplit
     ) internal {
-        DripsReceiver[] memory curr = getCurrDripsReceivers(user);
-        assertDripsReceivers(user, curr);
-        assertCollectable(user, expectedCollected, expectedDripped);
+        SplitsReceiver[] memory curr = getCurrSplitsReceivers(user);
+        assertSplits(user, curr);
+        assertCollectable(user, expectedCollected, expectedsplit);
         uint256 expectedBalance = user.balance() + expectedCollected;
 
-        (uint128 collected, uint128 dripped) = user.setDripsReceivers(curr, newReceivers);
+        (uint128 collected, uint128 split) = user.setSplits(curr, newReceivers);
 
-        setCurrDripsReceivers(user, newReceivers);
-        assertDripsReceivers(user, newReceivers);
+        setCurrSplitsReceivers(user, newReceivers);
+        assertSplits(user, newReceivers);
         assertEq(collected, expectedCollected, "Invalid collected amount");
-        assertEq(dripped, expectedDripped, "Invalid dripped amount");
+        assertEq(split, expectedsplit, "Invalid split amount");
         assertCollectable(user, 0, 0);
         assertBalance(user, expectedBalance);
     }
 
-    function assertSetDripsReceiversReverts(
+    function assertSetSplitsReverts(
         DripsHubUser user,
-        DripsReceiver[] memory newReceivers,
+        SplitsReceiver[] memory newReceivers,
         string memory expectedReason
     ) internal {
-        DripsReceiver[] memory curr = getCurrDripsReceivers(user);
-        assertDripsReceivers(user, curr);
-        try user.setDripsReceivers(curr, newReceivers) {
-            assertTrue(false, "Drips receivers update hasn't reverted");
+        SplitsReceiver[] memory curr = getCurrSplitsReceivers(user);
+        assertSplits(user, curr);
+        try user.setSplits(curr, newReceivers) {
+            assertTrue(false, "setSplits hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, expectedReason, "Invalid drips receivers update revert reason");
+            assertEq(reason, expectedReason, "Invalid setSplits revert reason");
         }
     }
 
-    function assertDripsReceivers(DripsHubUser user, DripsReceiver[] memory expectedReceivers)
-        internal
-    {
-        bytes32 actual = user.dripsReceiversHash();
-        bytes32 expected = user.hashDripsReceivers(expectedReceivers);
-        assertEq(actual, expected, "Invalid drips receivers list hash");
+    function assertSplits(DripsHubUser user, SplitsReceiver[] memory expectedReceivers) internal {
+        bytes32 actual = user.splitsHash();
+        bytes32 expected = user.hashSplits(expectedReceivers);
+        assertEq(actual, expected, "Invalid splits hash");
     }
 
     function collect(DripsHubUser user, uint128 expectedAmt) internal {
@@ -330,9 +328,9 @@ abstract contract DripsHubUserUtils is DSTest {
     function collect(
         DripsHubUser user,
         uint128 expectedCollected,
-        uint128 expectedDripped
+        uint128 expectedsplit
     ) internal {
-        collect(user, user, expectedCollected, expectedDripped);
+        collect(user, user, expectedCollected, expectedsplit);
     }
 
     function collect(
@@ -347,18 +345,18 @@ abstract contract DripsHubUserUtils is DSTest {
         DripsHubUser user,
         DripsHubUser collected,
         uint128 expectedCollected,
-        uint128 expectedDripped
+        uint128 expectedsplit
     ) internal {
-        assertCollectable(collected, expectedCollected, expectedDripped);
+        assertCollectable(collected, expectedCollected, expectedsplit);
         uint256 expectedBalance = collected.balance() + expectedCollected;
 
-        (uint128 collectedAmt, uint128 drippedAmt) = user.collect(
+        (uint128 collectedAmt, uint128 splitAmt) = user.collect(
             address(collected),
-            getCurrDripsReceivers(user)
+            getCurrSplitsReceivers(user)
         );
 
         assertEq(collectedAmt, expectedCollected, "Invalid collected amount");
-        assertEq(drippedAmt, expectedDripped, "Invalid dripped amount");
+        assertEq(splitAmt, expectedsplit, "Invalid split amount");
         assertCollectable(collected, 0);
         assertBalance(collected, expectedBalance);
     }
@@ -370,13 +368,13 @@ abstract contract DripsHubUserUtils is DSTest {
     function assertCollectable(
         DripsHubUser user,
         uint128 expectedCollected,
-        uint128 expectedDripped
+        uint128 expectedsplit
     ) internal {
-        (uint128 actualCollected, uint128 actualDripped) = user.collectable(
-            getCurrDripsReceivers(user)
+        (uint128 actualCollected, uint128 actualsplit) = user.collectable(
+            getCurrSplitsReceivers(user)
         );
-        assertEq(actualCollected, expectedCollected, "Invalid collectable");
-        assertEq(actualDripped, expectedDripped, "Invalid drippable");
+        assertEq(actualCollected, expectedCollected, "Invalid collected");
+        assertEq(actualsplit, expectedsplit, "Invalid split");
     }
 
     function flushCycles(

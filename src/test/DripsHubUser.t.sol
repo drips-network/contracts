@@ -3,7 +3,7 @@
 pragma solidity ^0.8.7;
 
 import {EthDripsHub, DripsHub} from "../EthDripsHub.sol";
-import {DripsReceiver, ERC20DripsHub, Receiver} from "../ERC20DripsHub.sol";
+import {SplitsReceiver, ERC20DripsHub, Receiver} from "../ERC20DripsHub.sol";
 
 abstract contract DripsHubUser {
     function getDripsHub() internal view virtual returns (DripsHub);
@@ -35,22 +35,22 @@ abstract contract DripsHubUser {
         uint128 amt
     ) public virtual;
 
-    function setDripsReceivers(
-        DripsReceiver[] calldata currReceivers,
-        DripsReceiver[] calldata newReceivers
-    ) public virtual returns (uint128 collected, uint128 dripped);
+    function setSplits(
+        SplitsReceiver[] calldata currReceivers,
+        SplitsReceiver[] calldata newReceivers
+    ) public virtual returns (uint128 collected, uint128 split);
 
-    function collect(address receiver, DripsReceiver[] calldata currReceivers)
+    function collect(address receiver, SplitsReceiver[] calldata currReceivers)
         public
-        returns (uint128 collected, uint128 dripped)
+        returns (uint128 collected, uint128 split)
     {
         return getDripsHub().collect(receiver, currReceivers);
     }
 
-    function collectable(DripsReceiver[] calldata currReceivers)
+    function collectable(SplitsReceiver[] calldata currReceivers)
         public
         view
-        returns (uint128 collected, uint128 dripped)
+        returns (uint128 collected, uint128 split)
     {
         return getDripsHub().collectable(address(this), currReceivers);
     }
@@ -79,12 +79,12 @@ abstract contract DripsHubUser {
         return getDripsHub().senderStateHash(address(this), account);
     }
 
-    function hashDripsReceivers(DripsReceiver[] calldata receivers) public view returns (bytes32) {
-        return getDripsHub().hashDripsReceivers(receivers);
+    function hashSplits(SplitsReceiver[] calldata receivers) public view returns (bytes32) {
+        return getDripsHub().hashSplits(receivers);
     }
 
-    function dripsReceiversHash() public view returns (bytes32) {
-        return getDripsHub().dripsReceiversHash(address(this));
+    function splitsHash() public view returns (bytes32) {
+        return getDripsHub().splitsHash(address(this));
     }
 }
 
@@ -155,11 +155,11 @@ contract ERC20DripsHubUser is DripsHubUser {
         dripsHub.give(account, receiver, amt);
     }
 
-    function setDripsReceivers(
-        DripsReceiver[] calldata currReceivers,
-        DripsReceiver[] calldata newReceivers
-    ) public override returns (uint128 collected, uint128 dripped) {
-        return dripsHub.setDripsReceivers(currReceivers, newReceivers);
+    function setSplits(
+        SplitsReceiver[] calldata currReceivers,
+        SplitsReceiver[] calldata newReceivers
+    ) public override returns (uint128 collected, uint128 split) {
+        return dripsHub.setSplits(currReceivers, newReceivers);
     }
 }
 
@@ -233,10 +233,10 @@ contract EthDripsHubUser is DripsHubUser {
         dripsHub.give{value: amt}(account, receiver);
     }
 
-    function setDripsReceivers(
-        DripsReceiver[] calldata currReceivers,
-        DripsReceiver[] calldata newReceivers
-    ) public override returns (uint128 collected, uint128 dripped) {
-        return dripsHub.setDripsReceivers(currReceivers, newReceivers);
+    function setSplits(
+        SplitsReceiver[] calldata currReceivers,
+        SplitsReceiver[] calldata newReceivers
+    ) public override returns (uint128 collected, uint128 split) {
+        return dripsHub.setSplits(currReceivers, newReceivers);
     }
 }
