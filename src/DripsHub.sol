@@ -116,9 +116,9 @@ abstract contract DripsHub {
     );
 
     /// @notice Emitted when the user's drips receivers list is updated.
-    /// @param userAddr The user address
+    /// @param user The user
     /// @param receivers The list of the user's drips receivers.
-    event DripsReceiversUpdated(address indexed userAddr, DripsReceiver[] receivers);
+    event DripsReceiversUpdated(address indexed user, DripsReceiver[] receivers);
 
     /// @notice Emitted when a receiver collects funds
     /// @param receiver The collecting receiver
@@ -199,18 +199,18 @@ abstract contract DripsHub {
         cycleSecs = _cycleSecs;
     }
 
-    /// @notice Returns amount of received funds available for collection
-    /// @param receiverAddr The address of the receiver
+    /// @notice Returns amount of received funds available for collection for a user
+    /// @param user The user
     /// @param currReceivers The list of the user's current drips receivers.
     /// @return collected The collected amount
     /// @return dripped The amount dripped to the sender's receivers
-    function collectable(address receiverAddr, DripsReceiver[] calldata currReceivers)
+    function collectable(address user, DripsReceiver[] calldata currReceivers)
         public
         view
         returns (uint128 collected, uint128 dripped)
     {
-        ReceiverState storage receiver = receiverStates[receiverAddr];
-        _assertCurrDripsReceivers(receiverAddr, currReceivers);
+        ReceiverState storage receiver = receiverStates[user];
+        _assertCurrDripsReceivers(user, currReceivers);
 
         // Collectable independently from cycles
         collected = receiver.collectable;
@@ -239,25 +239,25 @@ abstract contract DripsHub {
     }
 
     /// @notice Collects all received funds available for the user and sends them to that user
-    /// @param receiverAddr The address of the receiver
+    /// @param user The user
     /// @param currReceivers The list of the user's current drips receivers.
     /// @return collected The collected amount
     /// @return dripped The amount dripped to the sender's receivers
-    function collect(address receiverAddr, DripsReceiver[] calldata currReceivers)
+    function collect(address user, DripsReceiver[] calldata currReceivers)
         public
         returns (uint128 collected, uint128 dripped)
     {
-        (collected, dripped) = _collectInternal(receiverAddr, currReceivers);
-        _transfer(receiverAddr, int128(collected));
+        (collected, dripped) = _collectInternal(user, currReceivers);
+        _transfer(user, int128(collected));
     }
 
     /// @notice Counts cycles which will need to be analyzed when collecting or flushing.
     /// This function can be used to detect that there are too many cycles
     /// to analyze in a single transaction and flushing is needed.
-    /// @param receiverAddr The address of the receiver
+    /// @param user The user
     /// @return flushable The number of cycles which can be flushed
-    function flushableCycles(address receiverAddr) public view returns (uint64 flushable) {
-        uint64 nextCollectedCycle = receiverStates[receiverAddr].nextCollectedCycle;
+    function flushableCycles(address user) public view returns (uint64 flushable) {
+        uint64 nextCollectedCycle = receiverStates[user].nextCollectedCycle;
         if (nextCollectedCycle == 0) return 0;
         uint64 currFinishedCycle = _currTimestamp() / cycleSecs;
         return currFinishedCycle + 1 - nextCollectedCycle;
@@ -271,40 +271,39 @@ abstract contract DripsHub {
     /// needed for analyzing all the uncollected cycles can't fit in a single transaction.
     /// Calling this function allows spreading the analysis cost over multiple transactions.
     /// A cycle is never flushed more than once, even if this function is called many times.
-    /// @param receiverAddr The address of the receiver
+    /// @param user The user
     /// @param maxCycles The maximum number of flushed cycles.
     /// If too low, flushing will be cheap, but will cut little gas from the next collection.
     /// If too high, flushing may become too expensive to fit in a single transaction.
     /// @return flushable The number of cycles which can be flushed
-    function flushCycles(address receiverAddr, uint64 maxCycles) public returns (uint64 flushable) {
-        ReceiverState storage receiver = receiverStates[receiverAddr];
-        flushable = flushableCycles(receiverAddr);
+    function flushCycles(address user, uint64 maxCycles) public returns (uint64 flushable) {
+        flushable = flushableCycles(user);
         uint64 cycles = maxCycles < flushable ? maxCycles : flushable;
         flushable -= cycles;
-        uint128 collected = _flushCyclesInternal(receiverAddr, cycles);
-        if (collected > 0) receiver.collectable += collected;
+        uint128 collected = _flushCyclesInternal(user, cycles);
+        if (collected > 0) receiverStates[user].collectable += collected;
     }
 
     /// @notice Removes from the history and returns the amount of received
     /// funds available for collection by the user
-    /// @param receiverAddr The address of the receiver
+    /// @param user The user
     /// @param currReceivers The list of the user's current drips receivers.
     /// @return collected The collected amount
     /// @return dripped The amount dripped to the sender's receivers
-    function _collectInternal(address receiverAddr, DripsReceiver[] calldata currReceivers)
+    function _collectInternal(address user, DripsReceiver[] calldata currReceivers)
         internal
         returns (uint128 collected, uint128 dripped)
     {
-        ReceiverState storage receiver = receiverStates[receiverAddr];
-        _assertCurrDripsReceivers(receiverAddr, currReceivers);
+        ReceiverState storage receiver = receiverStates[user];
+        _assertCurrDripsReceivers(user, currReceivers);
 
         // Collectable independently from cycles
         collected = receiver.collectable;
         if (collected > 0) receiver.collectable = 0;
 
         // Collectable from cycles
-        uint64 cycles = flushableCycles(receiverAddr);
-        collected += _flushCyclesInternal(receiverAddr, cycles);
+        uint64 cycles = flushableCycles(user);
+        collected += _flushCyclesInternal(user, cycles);
 
         // Dripped when collected
         if (collected > 0 && currReceivers.length > 0) {
@@ -317,23 +316,23 @@ abstract contract DripsHub {
                 dripped += dripAmt;
                 address dripsAddr = currReceivers[i].receiver;
                 receiverStates[dripsAddr].collectable += dripAmt;
-                emit Dripped(receiverAddr, dripsAddr, dripAmt);
+                emit Dripped(user, dripsAddr, dripAmt);
             }
             collected -= dripped;
         }
-        emit Collected(receiverAddr, collected, dripped);
+        emit Collected(user, collected, dripped);
     }
 
-    /// @notice Collects and clears receiver's cycles
-    /// @param receiverAddr The address of the receiver
+    /// @notice Collects and clears user's cycles
+    /// @param user The user
     /// @param count The number of flushed cycles.
     /// @return collectedAmt The collected amount
-    function _flushCyclesInternal(address receiverAddr, uint64 count)
+    function _flushCyclesInternal(address user, uint64 count)
         internal
         returns (uint128 collectedAmt)
     {
         if (count == 0) return 0;
-        ReceiverState storage receiver = receiverStates[receiverAddr];
+        ReceiverState storage receiver = receiverStates[user];
         uint64 cycle = receiver.nextCollectedCycle;
         int128 cycleAmt = 0;
         for (uint256 i = 0; i < count; i++) {
@@ -352,18 +351,18 @@ abstract contract DripsHub {
     /// @notice Gives funds from the user or their account to the receiver.
     /// The receiver can collect them immediately.
     /// @param userOrAccount The user or their account
-    /// @param receiverAddr The receiver
+    /// @param receiver The receiver
     /// @param amt The given amount
     function _give(
         UserOrAccount memory userOrAccount,
-        address receiverAddr,
+        address receiver,
         uint128 amt
     ) internal {
-        receiverStates[receiverAddr].collectable += amt;
+        receiverStates[receiver].collectable += amt;
         if (userOrAccount.isAccount) {
-            emit Given(userOrAccount.user, userOrAccount.account, receiverAddr, amt);
+            emit Given(userOrAccount.user, userOrAccount.account, receiver, amt);
         } else {
-            emit Given(userOrAccount.user, receiverAddr, amt);
+            emit Given(userOrAccount.user, receiver, amt);
         }
         _transfer(userOrAccount.user, -int128(amt));
     }
@@ -655,7 +654,7 @@ abstract contract DripsHub {
     }
 
     /// @notice Collects received funds and sets a new list of drips receivers of the user.
-    /// @param userAddr The user address
+    /// @param user The user
     /// @param currReceivers The list of the user's drips receivers which is currently in use.
     /// If this function is called for the first time for the user, should be an empty array.
     /// @param newReceivers The new list of the user's drips receivers.
@@ -665,15 +664,15 @@ abstract contract DripsHub {
     /// @return collected The collected amount
     /// @return dripped The amount dripped to the sender's receivers
     function _setDripsReceivers(
-        address userAddr,
+        address user,
         DripsReceiver[] calldata currReceivers,
         DripsReceiver[] calldata newReceivers
     ) internal returns (uint128 collected, uint128 dripped) {
-        (collected, dripped) = _collectInternal(userAddr, currReceivers);
+        (collected, dripped) = _collectInternal(user, currReceivers);
         _assertDripsReceiversValid(newReceivers);
-        dripsReceiversHash[userAddr] = hashDripsReceivers(newReceivers);
-        emit DripsReceiversUpdated(userAddr, newReceivers);
-        _transfer(userAddr, int128(collected));
+        dripsReceiversHash[user] = hashDripsReceivers(newReceivers);
+        emit DripsReceiversUpdated(user, newReceivers);
+        _transfer(user, int128(collected));
     }
 
     /// @notice Validates a list of drips receivers
@@ -696,14 +695,14 @@ abstract contract DripsHub {
     }
 
     /// @notice Asserts that the list of drips receivers is the user's currently used one.
-    /// @param userAddr The user address
+    /// @param user The user
     /// @param currReceivers The list of the user's current drips receivers.
-    function _assertCurrDripsReceivers(address userAddr, DripsReceiver[] calldata currReceivers)
+    function _assertCurrDripsReceivers(address user, DripsReceiver[] calldata currReceivers)
         internal
         view
     {
         require(
-            hashDripsReceivers(currReceivers) == dripsReceiversHash[userAddr],
+            hashDripsReceivers(currReceivers) == dripsReceiversHash[user],
             "Invalid current drips receivers"
         );
     }
@@ -736,22 +735,22 @@ abstract contract DripsHub {
 
     /// @notice Called when funds need to be transferred between the user and the drips hub.
     /// The function must be called no more than once per transaction.
-    /// @param userAddr The address of the user.
+    /// @param user The user
     /// @param amt The transferred amount.
     /// Positive to send funds to the user, negative to send from them.
-    function _transfer(address userAddr, int128 amt) internal virtual;
+    function _transfer(address user, int128 amt) internal virtual;
 
-    /// @notice Sets delta of a single receiver on a given timestamp
-    /// @param receiverAddr The address of the receiver
+    /// @notice Sets amt delta of a user on a given timestamp
+    /// @param user The user
     /// @param timestamp The timestamp from which the delta takes effect
     /// @param amtPerSecDelta Change of the per-second receiving rate
     function _setDelta(
-        address receiverAddr,
+        address user,
         uint64 timestamp,
         int128 amtPerSecDelta
     ) internal {
         if (amtPerSecDelta == 0) return;
-        mapping(uint64 => AmtDelta) storage amtDeltas = receiverStates[receiverAddr].amtDeltas;
+        mapping(uint64 => AmtDelta) storage amtDeltas = receiverStates[user].amtDeltas;
         // In order to set a delta on a specific timestamp it must be introduced in two cycles.
         // The cycle delta is split proportionally based on how much this cycle is affected.
         // The next cycle has the rest of the delta applied, so the update is fully completed.

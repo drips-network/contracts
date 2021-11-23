@@ -110,11 +110,11 @@ contract EthDripsHub is DripsHub {
         return _setDripsReceivers(msg.sender, currReceivers, newReceivers);
     }
 
-    function _transfer(address userAddr, int128 amt) internal override {
+    function _transfer(address user, int128 amt) internal override {
         // Take into account the amount already transferred into the drips hub
         amt += int128(uint128(msg.value));
         if (amt == 0) return;
         require(amt > 0, "Sending a negative ether amount");
-        payable(userAddr).transfer(uint128(amt));
+        payable(user).transfer(uint128(amt));
     }
 }

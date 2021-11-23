@@ -40,11 +40,11 @@ abstract contract DripsHubUser {
         DripsReceiver[] calldata newReceivers
     ) public virtual returns (uint128 collected, uint128 dripped);
 
-    function collect(address receiverAddr, DripsReceiver[] calldata currReceivers)
+    function collect(address receiver, DripsReceiver[] calldata currReceivers)
         public
         returns (uint128 collected, uint128 dripped)
     {
-        return getDripsHub().collect(receiverAddr, currReceivers);
+        return getDripsHub().collect(receiver, currReceivers);
     }
 
     function collectable(DripsReceiver[] calldata currReceivers)

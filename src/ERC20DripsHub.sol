@@ -114,8 +114,8 @@ contract ERC20DripsHub is DripsHub {
         return _setDripsReceivers(msg.sender, currReceivers, newReceivers);
     }
 
-    function _transfer(address userAddr, int128 amt) internal override {
-        if (amt > 0) erc20.transfer(userAddr, uint128(amt));
-        else if (amt < 0) erc20.transferFrom(userAddr, address(this), uint128(-amt));
+    function _transfer(address user, int128 amt) internal override {
+        if (amt > 0) erc20.transfer(user, uint128(amt));
+        else if (amt < 0) erc20.transferFrom(user, address(this), uint128(-amt));
     }
 }
