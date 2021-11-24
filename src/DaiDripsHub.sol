@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.7;
 
-import {ERC20DripsHub, Receiver} from "./ERC20DripsHub.sol";
+import {ERC20DripsHub, DripsReceiver} from "./ERC20DripsHub.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
 interface IDai is IERC20 {
@@ -37,58 +37,51 @@ contract DaiDripsHub is ERC20DripsHub {
         dai = _dai;
     }
 
-    /// @notice Updates all the sender parameters of the sender of the message
-    /// and permits spending sender's Dai by the drips hub.
-    /// This function is an extension of `updateSender`, see its documentation for more details.
+    /// @notice Sets the drips configuration of the `msg.sender`
+    /// and permits spending their Dai by the drips hub.
+    /// This function is an extension of `setDrips`, see its documentation for more details.
     ///
-    /// The sender must sign a Dai permission document allowing the drips hub to spend their funds.
+    /// The user must sign a Dai permission document allowing the drips hub to spend their funds.
     /// These parameters will be passed to the Dai contract by this function.
     /// @param permitArgs The Dai permission arguments.
-    function updateSenderAndPermit(
+    function setDripsAndPermit(
         uint64 lastUpdate,
         uint128 lastBalance,
-        Receiver[] calldata currReceivers,
+        DripsReceiver[] calldata currReceivers,
         int128 balanceDelta,
-        Receiver[] calldata newReceivers,
+        DripsReceiver[] calldata newReceivers,
         PermitArgs calldata permitArgs
     ) public returns (uint128 newBalance, int128 realBalanceDelta) {
         _permit(permitArgs);
-        return updateSender(lastUpdate, lastBalance, currReceivers, balanceDelta, newReceivers);
+        return setDrips(lastUpdate, lastBalance, currReceivers, balanceDelta, newReceivers);
     }
 
-    /// @notice Updates all the parameters of an account of the sender of the message
-    /// and permits spending sender's Dai by the drips hub.
-    /// This function is an extension of `updateSender`, see its documentation for more details.
+    /// @notice Sets the drips configuration of an account of the `msg.sender`
+    /// and permits spending their Dai by the drips hub.
+    /// This function is an extension of `setDrips`, see its documentation for more details.
     ///
-    /// The sender must sign a Dai permission document allowing the drips hub to spend their funds.
+    /// The user must sign a Dai permission document allowing the drips hub to spend their funds.
     /// These parameters will be passed to the Dai contract by this function.
     /// @param permitArgs The Dai permission arguments.
-    function updateSenderAndPermit(
+    function setDripsAndPermit(
         uint256 account,
         uint64 lastUpdate,
         uint128 lastBalance,
-        Receiver[] calldata currReceivers,
+        DripsReceiver[] calldata currReceivers,
         int128 balanceDelta,
-        Receiver[] calldata newReceivers,
+        DripsReceiver[] calldata newReceivers,
         PermitArgs calldata permitArgs
     ) public returns (uint128 newBalance, int128 realBalanceDelta) {
         _permit(permitArgs);
         return
-            updateSender(
-                account,
-                lastUpdate,
-                lastBalance,
-                currReceivers,
-                balanceDelta,
-                newReceivers
-            );
+            setDrips(account, lastUpdate, lastBalance, currReceivers, balanceDelta, newReceivers);
     }
 
-    /// @notice Gives funds from the sender of the message to the receiver
+    /// @notice Gives funds from the `msg.sender` to the receiver
     /// and permits spending sender's Dai by the drips hub.
     /// This function is an extension of `give`, see its documentation for more details.
     ///
-    /// The sender must sign a Dai permission document allowing the drips hub to spend their funds.
+    /// The user must sign a Dai permission document allowing the drips hub to spend their funds.
     /// These parameters will be passed to the Dai contract by this function.
     /// @param permitArgs The Dai permission arguments.
     function giveAndPermit(
@@ -100,11 +93,11 @@ contract DaiDripsHub is ERC20DripsHub {
         give(receiver, amt);
     }
 
-    /// @notice Gives funds from the account of the sender of the message to the receiver
+    /// @notice Gives funds from the account of the `msg.sender` to the receiver
     /// and permits spending sender's Dai by the drips hub.
     /// This function is an extension of `give` see its documentation for more details.
     ///
-    /// The sender must sign a Dai permission document allowing the drips hub to spend their funds.
+    /// The user must sign a Dai permission document allowing the drips hub to spend their funds.
     /// These parameters will be passed to the Dai contract by this function.
     /// @param permitArgs The Dai permission arguments.
     function giveAndPermit(

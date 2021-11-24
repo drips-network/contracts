@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.7;
 
-struct Receiver {
+struct DripsReceiver {
     address receiver;
     uint128 amtPerSec;
 }
@@ -11,37 +11,40 @@ struct SplitsReceiver {
     uint32 weight;
 }
 
-/// @notice Drips hub contract. Automatically sends funds to a configurable set of receivers.
+/// @notice Drips hub contract. Automatically drips and splits funds between users.
 ///
-/// The contract has 2 types of users: the senders and the receivers.
+/// The user can transfer some funds to their drips balance in the contract
+/// and configure a list of receivers, to whom they want to drip these funds.
+/// As soon as the drips balance is enough to cover at least 1 second of dripping
+/// to the configured receivers, the funds start dripping automatically.
+/// Every second funds are deducted from the drips balance and moved to their receivers' accounts.
+/// The process stops automatically when the drips balance is not enough to cover another second.
 ///
-/// A sender has some funds and a set of addresses of receivers, to whom they want to send funds.
-/// As soon as the sender balance is enough to cover at least 1 second of funding
-/// of the configured receivers, sending automatically begins.
-/// Every second funds are deducted from the sender balance and sent to their receivers.
-/// The process stops automatically when the sender's balance is not enough to cover another second.
+/// The user can have any number of independent configurations and drips balances by using accounts.
+/// An account is identified by the user address and an account identifier.
+/// Accounts of different users are separate entities, even if they have the same identifiers.
+/// An account can be used to drip or give, but not to receive funds.
 ///
-/// A single address can act as any number of independent senders by using accounts.
-/// An account is identified by a user address and an account identifier.
-/// The sender and their accounts' configurations are independent and they have separate balances.
-///
-/// A receiver has a balance, from which they can `collect` funds sent by the senders.
-/// The available amount is updated every `cycleSecs` seconds,
-/// so recently sent funds may not be `collect`able immediately.
+/// Every user has a receiver balance, in which they have funds received from other users.
+/// The dripped funds are added to the receiver balances in global cycles.
+/// Every `cycleSecs` seconds the drips hub adds dripped funds to the receivers' balances,
+/// so recently dripped funds may not be collectable immediately.
 /// `cycleSecs` is a constant configured when the drips hub is deployed.
+/// The receiver balance is independent from the drips balance,
+/// to drip received funds they need to be first collected and then added to the drips balance.
 ///
-/// A single address can be used as a receiver, a sender
-/// or any number of accounts, even at the same time.
-/// It will have multiple balances in the contract, one with received funds, one with funds
-/// being sent and one with funds being sent for each used account.
-/// These balances have no connection between them and no shared configuration.
-/// In order to send received funds, they must be first collected and then
-/// added to the sender balance if they are to be sent through the contract.
+/// The user can share collected funds with other users by using splits.
+/// When collecting, the user gives each of their splits receivers a fraction of the received funds.
+/// Funds received from splits are available for collection immediately regardless of the cycle.
+/// They aren't exempt from being split, so they too can be split when collected.
+/// Users can build chains and networks of splits between each other.
+/// Anybody can request collection of funds for any user,
+/// which can be used to enforce the flow of funds in the network of splits.
 ///
 /// The concept of something happening periodically, e.g. every second or every `cycleSecs` are
 /// only high-level abstractions for the user, Ethereum isn't really capable of scheduling work.
 /// The actual implementation emulates that behavior by calculating the results of the scheduled
-/// events based on how many seconds have passed and only when a user needs their outcomes.
+/// events based on how many seconds have passed and only when the user needs their outcomes.
 ///
 /// The contract assumes that all amounts in the system can be stored in signed 128-bit integers.
 /// It's guaranteed to be safe only when working with assets with supply lower than `2 ^ 127`.
@@ -51,68 +54,65 @@ abstract contract DripsHub {
     uint64 public immutable cycleSecs;
     /// @notice Timestamp at which all funding periods must be finished
     uint64 internal constant MAX_TIMESTAMP = type(uint64).max - 2;
-    /// @notice Maximum number of receivers of a single sender.
-    /// Limits cost of changes in sender's configuration.
-    uint32 public constant MAX_RECEIVERS = 100;
+    /// @notice Maximum number of drips receivers of a single user.
+    /// Limits cost of changes in drips configuration.
+    uint32 public constant MAX_DRIPS_RECEIVERS = 100;
     /// @notice Maximum number of splits receivers of a single user.
     /// Limits cost of collecting.
     uint32 public constant MAX_SPLITS_RECEIVERS = 200;
     /// @notice The total splits weight of a user
     uint32 public constant TOTAL_SPLITS_WEIGHT = 1_000_000;
 
-    /// @notice Emitted when a direct stream of funds between a sender and a receiver is updated.
-    /// This is caused by a sender updating their parameters.
-    /// Funds are being sent on every second between the event block's timestamp (inclusively) and
-    /// `endTime` (exclusively) or until the timestamp of the next stream update (exclusively).
-    /// @param sender The sender of the updated stream
-    /// @param receiver The receiver of the updated stream
-    /// @param amtPerSec The new amount per second sent from the sender to the receiver
-    /// or 0 if sending is stopped
-    /// @param endTime The timestamp when the funds stop being sent,
-    /// always larger than the block timestamp or equal to it if sending is stopped
-    event SenderToReceiverUpdated(
-        address indexed sender,
+    /// @notice Emitted when drips from a user to a receiver are updated.
+    /// Funds are being dripped on every second between the event block's timestamp (inclusively)
+    /// and`endTime` (exclusively) or until the timestamp of the next drips update (exclusively).
+    /// @param user The dripping user
+    /// @param receiver The receiver of the updated drips
+    /// @param amtPerSec The new amount per second dripped from the user
+    /// to the receiver or 0 if the drips are stopped
+    /// @param endTime The timestamp when dripping will stop,
+    /// always larger than the block timestamp or equal to it if the drips are stopped
+    event Dripping(
+        address indexed user,
         address indexed receiver,
         uint128 amtPerSec,
         uint64 endTime
     );
 
-    /// @notice Emitted when a direct stream of funds between
-    /// a sender's account and a receiver is updated.
-    /// This is caused by the sender updating their account's parameters.
-    /// Funds are being sent on every second between the event block's timestamp (inclusively) and
-    /// `endTime` (exclusively) or until the timestamp of the next stream update (exclusively).
-    /// @param senderAddr The address of the sender of the updated stream
-    /// @param account The sender's account
-    /// @param receiver The receiver of the updated stream
-    /// @param amtPerSec The new amount per second sent from the sender to the receiver
-    /// or 0 if sending is stopped
-    /// @param endTime The timestamp when the funds stop being sent,
-    /// always larger than the block timestamp or equal to it if sending is stopped
-    event SenderToReceiverUpdated(
-        address indexed senderAddr,
+    /// @notice Emitted when drips from a user's account to a receiver are updated.
+    /// Funds are being dripped on every second between the event block's timestamp (inclusively)
+    /// and`endTime` (exclusively) or until the timestamp of the next drips update (exclusively).
+    /// @param user The user
+    /// @param account The dripping account
+    /// @param receiver The receiver of the updated drips
+    /// @param amtPerSec The new amount per second dripped from the user's account
+    /// to the receiver or 0 if the drips are stopped
+    /// @param endTime The timestamp when dripping will stop,
+    /// always larger than the block timestamp or equal to it if the drips are stopped
+    event Dripping(
+        address indexed user,
         uint256 indexed account,
         address indexed receiver,
         uint128 amtPerSec,
         uint64 endTime
     );
 
-    /// @notice Emitted when a sender is updated
-    /// @param sender The updated sender
-    /// @param balance The new sender's balance
-    /// @param receivers The new list of the sender's receivers.
-    event SenderUpdated(address indexed sender, uint128 balance, Receiver[] receivers);
+    /// @notice Emitted when the drips configuration of a user is updated.
+    /// @param user The user
+    /// @param balance The new drips balance. These funds will be dripped to the receivers.
+    /// @param receivers The new list of the drips receivers.
+    event DripsUpdated(address indexed user, uint128 balance, DripsReceiver[] receivers);
 
-    /// @notice Emitted when a sender account is updated
-    /// @param senderAddr The address of the sender
-    /// @param account The sender's account
-    /// @param balance The account's balance
-    /// @param receivers The new list of the account's receivers.
-    event SenderUpdated(
-        address indexed senderAddr,
+    /// @notice Emitted when the drips configuration of a user's account is updated.
+    /// @param user The user
+    /// @param account The account
+    /// @param balance The new drips balance. These funds will be dripped to the receivers.
+    /// @param receivers The new list of the drips receivers.
+    event DripsUpdated(
+        address indexed user,
         uint256 indexed account,
         uint128 balance,
-        Receiver[] receivers
+        DripsReceiver[] receivers
     );
 
     /// @notice Emitted when the user's splits are updated.
@@ -178,28 +178,28 @@ abstract contract DripsHub {
         uint256 account;
     }
 
-    /// @notice Current splits configuration hash, see `hashSplits`.
+    /// @notice Users' splits configuration hashes, see `hashSplits`.
     /// The key is the user address.
     mapping(address => bytes32) public splitsHash;
-    /// @notice Current sender state hash, see `hashSenderState`.
-    /// The key is the sender address.
-    mapping(address => bytes32) internal senderStateHashes;
-    /// @notice Current sender's account state hash, see `hashSenderState`.
-    /// The key are the sender address and the account.
-    mapping(address => mapping(uint256 => bytes32)) internal senderAccountStateHashes;
-
-    /// @notice Details about all the receivers, the key is the owner's address
+    /// @notice Users' drips configuration hashes, see `hashDrips`.
+    /// The key is the user address.
+    mapping(address => bytes32) internal userDripsHashes;
+    /// @notice Users' accounts' configuration hashes, see `hashDrips`.
+    /// The key are the user address and the account.
+    mapping(address => mapping(uint256 => bytes32)) internal accountDripsHashes;
+    /// @notice Users' receiver states.
+    /// The key is the user address.
     mapping(address => ReceiverState) internal receiverStates;
 
     /// @param _cycleSecs The length of cycleSecs to be used in the contract instance.
-    /// Low values make funds more available by shortening the average duration of funds being
-    /// frozen between being taken from senders' balances and being collectable by the receiver.
-    /// High values make collecting cheaper by making it process less cycles for a given time range.
+    /// Low value makes funds more available by shortening the average time of funds being frozen
+    /// between being taken from the users' drips balances and being collectable by their receivers.
+    /// High value makes collecting cheaper by making it process less cycles for a given time range.
     constructor(uint64 _cycleSecs) {
         cycleSecs = _cycleSecs;
     }
 
-    /// @notice Returns amount of received funds available for collection for a user
+    /// @notice Returns amount of received funds available for collection for a user.
     /// @param user The user
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collected The collected amount
@@ -238,7 +238,8 @@ abstract contract DripsHub {
         }
     }
 
-    /// @notice Collects all received funds available for the user and sends them to that user
+    /// @notice Collects all received funds available for the user
+    /// and transfers them out of the drips hub contract to that user's wallet.
     /// @param user The user
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collected The collected amount
@@ -284,8 +285,8 @@ abstract contract DripsHub {
         if (collected > 0) receiverStates[user].collectable += collected;
     }
 
-    /// @notice Removes from the history and returns the amount of received
-    /// funds available for collection by the user
+    /// @notice Collects all received funds available for the user,
+    /// but doesn't transfer them to the user's wallet.
     /// @param user The user
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collected The collected amount
@@ -350,6 +351,7 @@ abstract contract DripsHub {
 
     /// @notice Gives funds from the user or their account to the receiver.
     /// The receiver can collect them immediately.
+    /// Transfers the funds to be given from the user's wallet to the drips hub contract.
     /// @param userOrAccount The user or their account
     /// @param receiver The receiver
     /// @param amt The given amount
@@ -367,96 +369,112 @@ abstract contract DripsHub {
         _transfer(userOrAccount.user, -int128(amt));
     }
 
-    /// @notice Current sender state hash, see `hashSenderState`.
-    function senderStateHash(address sender) public view returns (bytes32) {
-        return senderStateHashes[sender];
+    /// @notice Current user's drips hash, see `hashDrips`.
+    /// @param user The user
+    /// @return currDripsHash The current user's drips hash
+    function dripsHash(address user) public view returns (bytes32 currDripsHash) {
+        return userDripsHashes[user];
     }
 
-    /// @notice Current sender's account state hash, see `hashSenderState`.
-    function senderStateHash(address sender, uint256 account) public view returns (bytes32) {
-        return senderAccountStateHashes[sender][account];
+    /// @notice Current user account's drips hash, see `hashDrips`.
+    /// @param user The user
+    /// @param account The account
+    /// @return currDripsHash The current user account's drips hash
+    function dripsHash(address user, uint256 account) public view returns (bytes32 currDripsHash) {
+        return accountDripsHashes[user][account];
     }
 
-    /// @notice Updates all the sender's parameters.
-    /// Transfers funds to or from the sender to fulfill the update of the balance.
+    /// @notice Sets the user's or the account's drips configuration.
+    /// Transfers funds between the user's wallet and the drips hub contract
+    /// to fulfill the change of the drips balance.
     /// @param userOrAccount The user or their account
-    /// @param lastUpdate The timestamp of the last update of the sender.
-    /// If this is the first update of the sender, pass zero.
-    /// @param lastBalance The balance after the last update of the sender.
-    /// If this is the first update of the sender, pass zero.
-    /// @param currReceivers The list of receivers set in the last update of the sender.
-    /// If this is the first update of the sender, pass an empty array.
-    /// @param balanceDelta The sender balance change to be applied.
-    /// Positive to add funds to the sender balance, negative to remove them.
-    /// @param newReceivers The new list of the sender's receivers.
+    /// @param lastUpdate The timestamp of the last drips update of the user or the account.
+    /// If this is the first update, pass zero.
+    /// @param lastBalance The drips balance after the last drips update of the user or the account.
+    /// If this is the first update, pass zero.
+    /// @param currReceivers The list of the drips receivers set in the last drips update
+    /// of the user or the account.
+    /// If this is the first update, pass an empty array.
+    /// @param balanceDelta The drips balance change to be applied.
+    /// Positive to add funds to the drips balance, negative to remove them.
+    /// @param newReceivers The list of the drips receivers of the user or the account to be set.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
-    /// @return newBalance The new sender balance.
-    /// Pass it as `lastBalance` when updating the user for the next time.
-    /// @return realBalanceDelta The actually applied balance change.
-    function _updateSender(
+    /// @return newBalance The new drips balance of the user or the account.
+    /// Pass it as `lastBalance` when updating that user or the account for the next time.
+    /// @return realBalanceDelta The actually applied drips balance change.
+    function _setDrips(
         UserOrAccount memory userOrAccount,
         uint64 lastUpdate,
         uint128 lastBalance,
-        Receiver[] calldata currReceivers,
+        DripsReceiver[] calldata currReceivers,
         int128 balanceDelta,
-        Receiver[] calldata newReceivers
+        DripsReceiver[] calldata newReceivers
     ) internal returns (uint128 newBalance, int128 realBalanceDelta) {
-        _assertSenderState(userOrAccount, lastUpdate, lastBalance, currReceivers);
-        uint128 newAmtPerSec = _assertReceiversValid(newReceivers);
-        uint128 currAmtPerSec = _totalAmtPerSec(currReceivers);
-        uint64 currEndTime = _sendingEndTime(lastUpdate, lastBalance, currAmtPerSec);
-        (newBalance, realBalanceDelta) = _updateSenderBalance(
+        _assertCurrDrips(userOrAccount, lastUpdate, lastBalance, currReceivers);
+        uint128 newAmtPerSec = _assertDripsReceiversValid(newReceivers);
+        uint128 currAmtPerSec = _totalDripsAmtPerSec(currReceivers);
+        uint64 currEndTime = _dripsEndTime(lastUpdate, lastBalance, currAmtPerSec);
+        (newBalance, realBalanceDelta) = _updateDripsBalance(
             lastUpdate,
             lastBalance,
             currEndTime,
             currAmtPerSec,
             balanceDelta
         );
-        uint64 newEndTime = _sendingEndTime(_currTimestamp(), newBalance, newAmtPerSec);
-        _updateStreams(userOrAccount, currReceivers, currEndTime, newReceivers, newEndTime);
-        _storeSenderState(userOrAccount, newBalance, newReceivers);
-        _emitSenderUpdated(userOrAccount, newBalance, newReceivers);
+        uint64 newEndTime = _dripsEndTime(_currTimestamp(), newBalance, newAmtPerSec);
+        _updateDripsReceiversStates(
+            userOrAccount,
+            currReceivers,
+            currEndTime,
+            newReceivers,
+            newEndTime
+        );
+        _storeCurrDrips(userOrAccount, newBalance, newReceivers);
+        _emitDripsUpdated(userOrAccount, newBalance, newReceivers);
         _transfer(userOrAccount.user, -realBalanceDelta);
     }
 
-    /// @notice Validates a list of receivers.
-    /// @param receivers The list of sender receivers.
+    /// @notice Validates a list of drips receivers.
+    /// @param receivers The list of drips receivers.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
-    /// @return totalAmtPerSec The total amount per second of all receivers
-    function _assertReceiversValid(Receiver[] calldata receivers)
+    /// @return totalAmtPerSec The total amount per second of all drips receivers.
+    function _assertDripsReceiversValid(DripsReceiver[] calldata receivers)
         internal
         pure
         returns (uint128 totalAmtPerSec)
     {
-        require(receivers.length <= MAX_RECEIVERS, "Too many receivers");
+        require(receivers.length <= MAX_DRIPS_RECEIVERS, "Too many drips receivers");
         uint256 amtPerSec = 0;
         for (uint256 i = 0; i < receivers.length; i++) {
-            require(receivers[i].amtPerSec != 0, "Receiver amtPerSec is zero");
+            require(receivers[i].amtPerSec != 0, "Drips receiver amtPerSec is zero");
             amtPerSec += receivers[i].amtPerSec;
             if (i > 0) {
                 address prevReceiver = receivers[i - 1].receiver;
                 address currReceiver = receivers[i].receiver;
-                require(prevReceiver <= currReceiver, "Receivers not sorted by address");
-                require(prevReceiver != currReceiver, "Duplicate receivers");
+                require(prevReceiver <= currReceiver, "Drips receivers not sorted by address");
+                require(prevReceiver != currReceiver, "Duplicate drips receivers");
             }
         }
-        require(amtPerSec <= type(uint128).max, "Total amtPerSec too high");
+        require(amtPerSec <= type(uint128).max, "Total drips receivers amtPerSec too high");
         return uint128(amtPerSec);
     }
 
-    /// @notice Updates sender's balance.
-    /// @param lastUpdate The timestamp of the last update of the sender.
-    /// If this is the first update of the sender, pass zero.
-    /// @param lastBalance The balance after the last update of the sender.
-    /// If this is the first update of the sender, pass zero.
-    /// @param currEndTime Time when sending was supposed to end according to the last update.
-    /// @param currAmtPerSec The sender's total amount per second
-    /// @param balanceDelta The sender balance change to be applied.
-    /// Positive to add funds to the sender balance, negative to remove them.
-    /// @return newBalance The new sender balance.
-    /// Pass it as `lastBalance` when updating the user for the next time.
-    /// @return realBalanceDelta The actually applied balance change.
-    function _updateSenderBalance(
+    /// @notice Updates drips balance.
+    /// @param lastUpdate The timestamp of the last drips update.
+    /// If this is the first update, pass zero.
+    /// @param lastBalance The drips balance after the last drips update.
+    /// If this is the first update, pass zero.
+    /// @param currEndTime Time when drips were supposed to end according to the last drips update.
+    /// @param currAmtPerSec The total amount per second of all drips receivers
+    /// according to the last drips update.
+    /// @param balanceDelta The drips balance change to be applied.
+    /// Positive to add funds to the drips balance, negative to remove them.
+    /// @return newBalance The new drips balance.
+    /// Pass it as `lastBalance` when updating for the next time.
+    /// @return realBalanceDelta The actually applied drips balance change.
+    /// If positive, this is the amount which should be transferred from the user to the drips hub,
+    /// or if negative, from the drips hub to the user.
+    function _updateDripsBalance(
         uint64 lastUpdate,
         uint128 lastBalance,
         uint64 currEndTime,
@@ -464,100 +482,104 @@ abstract contract DripsHub {
         int128 balanceDelta
     ) internal view returns (uint128 newBalance, int128 realBalanceDelta) {
         if (currEndTime > _currTimestamp()) currEndTime = _currTimestamp();
-        uint128 sent = (currEndTime - lastUpdate) * currAmtPerSec;
-        int128 currBalance = int128(lastBalance - sent);
+        uint128 dripped = (currEndTime - lastUpdate) * currAmtPerSec;
+        int128 currBalance = int128(lastBalance - dripped);
         int136 balance = currBalance + int136(balanceDelta);
         if (balance < 0) balance = 0;
         return (uint128(uint136(balance)), int128(balance - currBalance));
     }
 
-    /// @notice Emit a relevant event when a sender is updated.
+    /// @notice Emit an event when drips are updated.
     /// @param userOrAccount The user or their account
-    /// @param balance The new sender balance.
-    /// @param receivers The new list of the sender's receivers.
-    function _emitSenderUpdated(
+    /// @param balance The new drips balance.
+    /// @param receivers The new list of the drips receivers.
+    function _emitDripsUpdated(
         UserOrAccount memory userOrAccount,
         uint128 balance,
-        Receiver[] calldata receivers
+        DripsReceiver[] calldata receivers
     ) internal {
         if (userOrAccount.isAccount) {
-            emit SenderUpdated(userOrAccount.user, userOrAccount.account, balance, receivers);
+            emit DripsUpdated(userOrAccount.user, userOrAccount.account, balance, receivers);
         } else {
-            emit SenderUpdated(userOrAccount.user, balance, receivers);
+            emit DripsUpdated(userOrAccount.user, balance, receivers);
         }
     }
 
-    /// @notice Updates streams in the receivers' `amtDeltas`.
-    /// @param currReceivers The list of receivers set in the last update of the sender.
-    /// If this is the first update of the sender, pass an empty array.
-    /// @param currEndTime Time when sending was supposed to end according to the last update.
-    /// @param newReceivers The new list of the sender's receivers.
+    /// @notice Updates the user's or the account's drips receivers' states.
+    /// It applies the effects of the change of the drips configuration.
+    /// @param userOrAccount The user or their account
+    /// @param currReceivers The list of the drips receivers set in the last drips update
+    /// of the user or the account.
+    /// If this is the first update, pass an empty array.
+    /// @param currEndTime Time when drips were supposed to end according to the last drips update.
+    /// @param newReceivers  The list of the drips receivers of the user or the account to be set.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
-    /// @param newEndTime Time new when sending is supposed to end.
-    function _updateStreams(
+    /// @param newEndTime Time when drips will end according to the new drips configuration.
+    function _updateDripsReceiversStates(
         UserOrAccount memory userOrAccount,
-        Receiver[] calldata currReceivers,
+        DripsReceiver[] calldata currReceivers,
         uint64 currEndTime,
-        Receiver[] calldata newReceivers,
+        DripsReceiver[] calldata newReceivers,
         uint64 newEndTime
     ) internal {
-        // Skip iterating over `currReceivers` if funding has run out
+        // Skip iterating over `currReceivers` if dripping has run out
         uint256 currIdx = currEndTime > _currTimestamp() ? 0 : currReceivers.length;
-        // Skip iterating over `newReceivers` if no new funding is started
+        // Skip iterating over `newReceivers` if no new dripping is started
         uint256 newIdx = newEndTime > _currTimestamp() ? 0 : newReceivers.length;
         while (true) {
-            // Each iteration gets the next stream update and applies it on the receiver.
-            // A stream update is composed of two receiver configurations, one current and one new,
-            // or from a single receiver configuration if the receiver is being added or removed.
+            // Each iteration gets the next drips update and applies it on the receiver state.
+            // A drips update is composed of two drips receiver configurations,
+            // one current and one new, or from a single drips receiver configuration
+            // if the drips receiver is being added or removed.
             bool pickCurr = currIdx < currReceivers.length;
             bool pickNew = newIdx < newReceivers.length;
             if (!pickCurr && !pickNew) break;
             if (pickCurr && pickNew) {
-                // There are two candidate receiver configurations to create a stream update.
+                // There are two candidate drips receiver configurations to create a drips update.
                 // Pick both if they describe the same receiver or the one with a lower address.
                 // The one with a higher address won't be used in this iteration.
-                // Because receiver lists are sorted by addresses and deduplicated,
-                // this guarantees that all matching pairs of receiver configurations will be found.
+                // Because drips receivers lists are sorted by addresses and deduplicated,
+                // all matching pairs of drips receiver configurations will be found.
                 address currReceiver = currReceivers[currIdx].receiver;
                 address newReceiver = newReceivers[newIdx].receiver;
                 pickCurr = currReceiver <= newReceiver;
                 pickNew = newReceiver <= currReceiver;
             }
-            // The stream update parameters
+            // The drips update parameters
             address receiver;
-            int128 currAmt = 0;
-            int128 newAmt = 0;
+            int128 currAmtPerSec = 0;
+            int128 newAmtPerSec = 0;
             if (pickCurr) {
                 receiver = currReceivers[currIdx].receiver;
-                currAmt = int128(currReceivers[currIdx].amtPerSec);
-                // Clear the obsolete stream end
-                _setDelta(receiver, currEndTime, currAmt);
+                currAmtPerSec = int128(currReceivers[currIdx].amtPerSec);
+                // Clear the obsolete drips end
+                _setDelta(receiver, currEndTime, currAmtPerSec);
                 currIdx++;
             }
             if (pickNew) {
                 receiver = newReceivers[newIdx].receiver;
-                newAmt = int128(newReceivers[newIdx].amtPerSec);
-                // Apply the new stream end
-                _setDelta(receiver, newEndTime, -newAmt);
+                newAmtPerSec = int128(newReceivers[newIdx].amtPerSec);
+                // Apply the new drips end
+                _setDelta(receiver, newEndTime, -newAmtPerSec);
                 newIdx++;
             }
-            // Apply the stream update since now
-            _setDelta(receiver, _currTimestamp(), newAmt - currAmt);
-            _emitStreamUpdated(userOrAccount, receiver, uint128(newAmt), newEndTime);
-            // The receiver was never used, initialize it.
+            // Apply the drips update since now
+            _setDelta(receiver, _currTimestamp(), newAmtPerSec - currAmtPerSec);
+            _emitDripping(userOrAccount, receiver, uint128(newAmtPerSec), newEndTime);
+            // The receiver has never been used, initialize it
             if (!pickCurr && receiverStates[receiver].nextCollectedCycle == 0) {
                 receiverStates[receiver].nextCollectedCycle = _currTimestamp() / cycleSecs + 1;
             }
         }
     }
 
-    /// @notice Emit a relevant event when a stream is updated.
+    /// @notice Emit an event when drips from a user to a receiver are updated.
     /// @param userOrAccount The user or their account
-    /// @param receiver The receiver of the updated stream.
-    /// @param amtPerSec The new amount per second sent from the sender to the receiver
-    /// or 0 if sending is stopped.
-    /// @param endTime The timestamp when sending is supposed to end.
-    function _emitStreamUpdated(
+    /// @param receiver The receiver
+    /// @param amtPerSec The new amount per second dripped from the user or the account
+    /// to the receiver or 0 if the drips are stopped
+    /// @param endTime The timestamp when dripping will stop
+    function _emitDripping(
         UserOrAccount memory userOrAccount,
         address receiver,
         uint128 amtPerSec,
@@ -565,90 +587,85 @@ abstract contract DripsHub {
     ) internal {
         if (amtPerSec == 0) endTime = _currTimestamp();
         if (userOrAccount.isAccount) {
-            emit SenderToReceiverUpdated(
-                userOrAccount.user,
-                userOrAccount.account,
-                receiver,
-                amtPerSec,
-                endTime
-            );
+            emit Dripping(userOrAccount.user, userOrAccount.account, receiver, amtPerSec, endTime);
         } else {
-            emit SenderToReceiverUpdated(userOrAccount.user, receiver, amtPerSec, endTime);
+            emit Dripping(userOrAccount.user, receiver, amtPerSec, endTime);
         }
     }
 
-    /// @notice Calculates the timestamp when sending is supposed to end.
-    /// @param startTime Time when sending is started.
-    /// @param startBalance The sender balance when sending is started.
-    /// @param totalAmtPerSec The sender's total amount per second.
-    /// @return sendingEndTime The sending end time.
-    function _sendingEndTime(
+    /// @notice Calculates the timestamp when dripping will end.
+    /// @param startTime Time when dripping is started.
+    /// @param startBalance The drips balance when dripping is started.
+    /// @param totalAmtPerSec The total amount per second of all the drips receivers
+    /// @return dripsEndTime The dripping end time.
+    function _dripsEndTime(
         uint64 startTime,
         uint128 startBalance,
         uint128 totalAmtPerSec
-    ) internal pure returns (uint64 sendingEndTime) {
+    ) internal pure returns (uint64 dripsEndTime) {
         if (totalAmtPerSec == 0) return startTime;
         uint256 endTime = startTime + uint256(startBalance / totalAmtPerSec);
         return endTime > MAX_TIMESTAMP ? MAX_TIMESTAMP : uint64(endTime);
     }
 
-    /// @notice Asserts that the sender state is the currently used one.
+    /// @notice Asserts that the drips configuration is the currently used one.
     /// @param userOrAccount The user or their account
-    /// @param lastUpdate The timestamp of the last update of the sender.
-    /// If this is the first update of the sender, pass zero.
-    /// @param lastBalance The balance after the last update of the sender.
-    /// If this is the first update of the sender, pass zero.
-    /// @param currReceivers The list of receivers set in the last update of the sender.
-    /// If this is the first update of the sender, pass an empty array.
-    function _assertSenderState(
+    /// @param lastUpdate The timestamp of the last drips update of the user or the account.
+    /// If this is the first update, pass zero.
+    /// @param lastBalance The drips balance after the last drips update of the user or the account.
+    /// If this is the first update, pass zero.
+    /// @param currReceivers The list of the drips receivers set in the last drips update
+    /// of the user or the account.
+    /// If this is the first update, pass an empty array.
+    function _assertCurrDrips(
         UserOrAccount memory userOrAccount,
         uint64 lastUpdate,
         uint128 lastBalance,
-        Receiver[] calldata currReceivers
+        DripsReceiver[] calldata currReceivers
     ) internal view {
         bytes32 expectedHash;
         if (userOrAccount.isAccount) {
-            expectedHash = senderAccountStateHashes[userOrAccount.user][userOrAccount.account];
+            expectedHash = accountDripsHashes[userOrAccount.user][userOrAccount.account];
         } else {
-            expectedHash = senderStateHashes[userOrAccount.user];
+            expectedHash = userDripsHashes[userOrAccount.user];
         }
-        bytes32 actualHash = hashSenderState(lastUpdate, lastBalance, currReceivers);
-        require(actualHash == expectedHash, "Invalid provided sender state");
+        bytes32 actualHash = hashDrips(lastUpdate, lastBalance, currReceivers);
+        require(actualHash == expectedHash, "Invalid current drips configuration");
     }
 
-    /// @notice Stores the hash of the updated sender state to be used in `_assertSenderState`.
+    /// @notice Stores the hash of the current drips configuration to be used in `_assertCurrDrips`.
     /// @param userOrAccount The user or their account
-    /// @param newBalance The new sender balance.
-    /// @param newReceivers The new list of the sender's receivers.
+    /// @param newBalance The user or the account drips balance.
+    /// @param newReceivers The list of the drips receivers of the user or the account.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
-    function _storeSenderState(
+    function _storeCurrDrips(
         UserOrAccount memory userOrAccount,
         uint128 newBalance,
-        Receiver[] calldata newReceivers
+        DripsReceiver[] calldata newReceivers
     ) internal {
-        bytes32 stateHash = hashSenderState(_currTimestamp(), newBalance, newReceivers);
+        bytes32 currDripsHash = hashDrips(_currTimestamp(), newBalance, newReceivers);
         if (userOrAccount.isAccount) {
-            senderAccountStateHashes[userOrAccount.user][userOrAccount.account] = stateHash;
+            accountDripsHashes[userOrAccount.user][userOrAccount.account] = currDripsHash;
         } else {
-            senderStateHashes[userOrAccount.user] = stateHash;
+            userDripsHashes[userOrAccount.user] = currDripsHash;
         }
     }
 
-    /// @notice Calculates the hash of the sender state.
-    /// It's used to verify if a sender state is the previously configured one.
-    /// @param update The timestamp of the update of the sender.
-    /// If the sender has never been updated, pass zero.
-    /// @param balance The sender balance.
-    /// If the sender has never been updated, pass zero.
-    /// @param receivers The list of the sender's receivers.
+    /// @notice Calculates the hash of the drips configuration.
+    /// It's used to verify if drips configuration is the previously set one.
+    /// @param update The timestamp of the drips update.
+    /// If the drips have never been updated, pass zero.
+    /// @param balance The drips balance.
+    /// If the drips have never been updated, pass zero.
+    /// @param receivers The list of the drips receivers.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
-    /// If the sender has never been updated, pass an empty array.
-    /// @return receiversHash The hash of the sender state.
-    function hashSenderState(
+    /// If the drips have never been updated, pass an empty array.
+    /// @return dripsConfigurationHash The hash of the drips configuration
+    function hashDrips(
         uint64 update,
         uint128 balance,
-        Receiver[] calldata receivers
-    ) public pure returns (bytes32 receiversHash) {
+        DripsReceiver[] calldata receivers
+    ) public pure returns (bytes32 dripsConfigurationHash) {
         if (update == 0 && balance == 0 && receivers.length == 0) return bytes32(0);
         return keccak256(abi.encode(receivers, update, balance));
     }
@@ -718,10 +735,10 @@ abstract contract DripsHub {
         return keccak256(abi.encode(receivers));
     }
 
-    /// @notice Calculates the total amount per second of all the passed receivers.
+    /// @notice Calculates the total amount per second of all the drips receivers.
     /// @param receivers The list of the receivers.
-    /// @return totalAmtPerSec The total amount per second of all receivers
-    function _totalAmtPerSec(Receiver[] calldata receivers)
+    /// @return totalAmtPerSec The total amount per second of all the drips receivers
+    function _totalDripsAmtPerSec(DripsReceiver[] calldata receivers)
         internal
         pure
         returns (uint128 totalAmtPerSec)
@@ -735,7 +752,7 @@ abstract contract DripsHub {
     /// The function must be called no more than once per transaction.
     /// @param user The user
     /// @param amt The transferred amount.
-    /// Positive to send funds to the user, negative to send from them.
+    /// Positive to transfer funds to the user, negative to transfer from them.
     function _transfer(address user, int128 amt) internal virtual;
 
     /// @notice Sets amt delta of a user on a given timestamp

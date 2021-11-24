@@ -18,13 +18,13 @@ contract EthDripsHubTest is DripsHubTest {
     }
 
     function testRevertsIfBalanceReductionAndValueNonZero() public {
-        try dripsHub.updateSender{value: 1}(0, 0, receivers(), 1, receivers()) {
-            assertTrue(false, "Update sender hasn't reverted");
+        try dripsHub.setDrips{value: 1}(0, 0, dripsReceivers(), 1, dripsReceivers()) {
+            assertTrue(false, "Set drips hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(
                 reason,
                 "Both message value and balance reduction non-zero",
-                "Invalid update sender revert reason"
+                "Invalid set drips revert reason"
             );
         }
     }
