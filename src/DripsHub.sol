@@ -204,7 +204,7 @@ abstract contract DripsHub {
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collected The collected amount
     /// @return split The amount split to the user's splits receivers
-    function collectable(address user, SplitsReceiver[] calldata currReceivers)
+    function collectable(address user, SplitsReceiver[] memory currReceivers)
         public
         view
         returns (uint128 collected, uint128 split)
@@ -244,7 +244,7 @@ abstract contract DripsHub {
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collected The collected amount
     /// @return split The amount split to the user's splits receivers
-    function collect(address user, SplitsReceiver[] calldata currReceivers)
+    function collect(address user, SplitsReceiver[] memory currReceivers)
         public
         returns (uint128 collected, uint128 split)
     {
@@ -291,7 +291,7 @@ abstract contract DripsHub {
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collected The collected amount
     /// @return split The amount split to the user's splits receivers
-    function _collectInternal(address user, SplitsReceiver[] calldata currReceivers)
+    function _collectInternal(address user, SplitsReceiver[] memory currReceivers)
         internal
         returns (uint128 collected, uint128 split)
     {
@@ -683,8 +683,8 @@ abstract contract DripsHub {
     /// @return split The amount split to the user's splits receivers
     function _setSplits(
         address user,
-        SplitsReceiver[] calldata currReceivers,
-        SplitsReceiver[] calldata newReceivers
+        SplitsReceiver[] memory currReceivers,
+        SplitsReceiver[] memory newReceivers
     ) internal returns (uint128 collected, uint128 split) {
         (collected, split) = _collectInternal(user, currReceivers);
         _assertSplitsValid(newReceivers);
@@ -696,18 +696,20 @@ abstract contract DripsHub {
     /// @notice Validates a list of splits receivers
     /// @param receivers The list of splits receivers
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
-    function _assertSplitsValid(SplitsReceiver[] calldata receivers) internal pure {
+    function _assertSplitsValid(SplitsReceiver[] memory receivers) internal pure {
         require(receivers.length <= MAX_SPLITS_RECEIVERS, "Too many splits receivers");
         uint64 totalWeight = 0;
+        address prevReceiver;
         for (uint256 i = 0; i < receivers.length; i++) {
-            require(receivers[i].weight != 0, "Splits receiver weight is zero");
-            totalWeight += receivers[i].weight;
+            uint32 weight = receivers[i].weight;
+            require(weight != 0, "Splits receiver weight is zero");
+            totalWeight += weight;
+            address receiver = receivers[i].receiver;
             if (i > 0) {
-                address prevReceiver = receivers[i - 1].receiver;
-                address currReceiver = receivers[i].receiver;
-                require(prevReceiver <= currReceiver, "Splits receivers not sorted by address");
-                require(prevReceiver != currReceiver, "Duplicate splits receivers");
+                require(prevReceiver != receiver, "Duplicate splits receivers");
+                require(prevReceiver < receiver, "Splits receivers not sorted by address");
             }
+            prevReceiver = receiver;
         }
         require(totalWeight <= TOTAL_SPLITS_WEIGHT, "Splits weights sum too high");
     }
@@ -715,10 +717,7 @@ abstract contract DripsHub {
     /// @notice Asserts that the list of splits receivers is the user's currently used one.
     /// @param user The user
     /// @param currReceivers The list of the user's current splits receivers.
-    function _assertCurrSplits(address user, SplitsReceiver[] calldata currReceivers)
-        internal
-        view
-    {
+    function _assertCurrSplits(address user, SplitsReceiver[] memory currReceivers) internal view {
         require(hashSplits(currReceivers) == splitsHash[user], "Invalid current splits receivers");
     }
 
@@ -726,7 +725,7 @@ abstract contract DripsHub {
     /// @param receivers The list of the splits receivers.
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
     /// @return receiversHash The hash of the list of splits receivers.
-    function hashSplits(SplitsReceiver[] calldata receivers)
+    function hashSplits(SplitsReceiver[] memory receivers)
         public
         pure
         returns (bytes32 receiversHash)

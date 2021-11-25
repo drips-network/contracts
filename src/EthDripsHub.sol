@@ -107,10 +107,10 @@ contract EthDripsHub is DripsHub {
     /// share of the funds collected by the user.
     /// @return collected The collected amount
     /// @return split The amount split to the user's splits receivers
-    function setSplits(
-        SplitsReceiver[] calldata currReceivers,
-        SplitsReceiver[] calldata newReceivers
-    ) public returns (uint128 collected, uint128 split) {
+    function setSplits(SplitsReceiver[] memory currReceivers, SplitsReceiver[] memory newReceivers)
+        public
+        returns (uint128 collected, uint128 split)
+    {
         return _setSplits(msg.sender, currReceivers, newReceivers);
     }
 
