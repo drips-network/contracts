@@ -34,9 +34,9 @@ contract EthDripsHub is DripsHub {
     function setDrips(
         uint64 lastUpdate,
         uint128 lastBalance,
-        DripsReceiver[] calldata currReceivers,
+        DripsReceiver[] memory currReceivers,
         uint128 reduceBalance,
-        DripsReceiver[] calldata newReceivers
+        DripsReceiver[] memory newReceivers
     ) public payable returns (uint128 newBalance, int128 realBalanceDelta) {
         return
             _setDrips(
@@ -56,9 +56,9 @@ contract EthDripsHub is DripsHub {
         uint256 account,
         uint64 lastUpdate,
         uint128 lastBalance,
-        DripsReceiver[] calldata currReceivers,
+        DripsReceiver[] memory currReceivers,
         uint128 reduceBalance,
-        DripsReceiver[] calldata newReceivers
+        DripsReceiver[] memory newReceivers
     ) public payable returns (uint128 newBalance, int128 realBalanceDelta) {
         return
             _setDrips(

@@ -40,9 +40,9 @@ contract ERC20DripsHub is DripsHub {
     function setDrips(
         uint64 lastUpdate,
         uint128 lastBalance,
-        DripsReceiver[] calldata currReceivers,
+        DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
-        DripsReceiver[] calldata newReceivers
+        DripsReceiver[] memory newReceivers
     ) public returns (uint128 newBalance, int128 realBalanceDelta) {
         return
             _setDrips(
@@ -62,9 +62,9 @@ contract ERC20DripsHub is DripsHub {
         uint256 account,
         uint64 lastUpdate,
         uint128 lastBalance,
-        DripsReceiver[] calldata currReceivers,
+        DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
-        DripsReceiver[] calldata newReceivers
+        DripsReceiver[] memory newReceivers
     ) public payable returns (uint128 newBalance, int128 realBalanceDelta) {
         return
             _setDrips(

@@ -406,9 +406,9 @@ abstract contract DripsHub {
         UserOrAccount memory userOrAccount,
         uint64 lastUpdate,
         uint128 lastBalance,
-        DripsReceiver[] calldata currReceivers,
+        DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
-        DripsReceiver[] calldata newReceivers
+        DripsReceiver[] memory newReceivers
     ) internal returns (uint128 newBalance, int128 realBalanceDelta) {
         _assertCurrDrips(userOrAccount, lastUpdate, lastBalance, currReceivers);
         uint128 newAmtPerSec = _assertDripsReceiversValid(newReceivers);
@@ -438,22 +438,24 @@ abstract contract DripsHub {
     /// @param receivers The list of drips receivers.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
     /// @return totalAmtPerSec The total amount per second of all drips receivers.
-    function _assertDripsReceiversValid(DripsReceiver[] calldata receivers)
+    function _assertDripsReceiversValid(DripsReceiver[] memory receivers)
         internal
         pure
         returns (uint128 totalAmtPerSec)
     {
         require(receivers.length <= MAX_DRIPS_RECEIVERS, "Too many drips receivers");
         uint256 amtPerSec = 0;
+        address prevReceiver;
         for (uint256 i = 0; i < receivers.length; i++) {
-            require(receivers[i].amtPerSec != 0, "Drips receiver amtPerSec is zero");
-            amtPerSec += receivers[i].amtPerSec;
+            uint128 amt = receivers[i].amtPerSec;
+            require(amt != 0, "Drips receiver amtPerSec is zero");
+            amtPerSec += amt;
+            address receiver = receivers[i].receiver;
             if (i > 0) {
-                address prevReceiver = receivers[i - 1].receiver;
-                address currReceiver = receivers[i].receiver;
-                require(prevReceiver <= currReceiver, "Drips receivers not sorted by address");
-                require(prevReceiver != currReceiver, "Duplicate drips receivers");
+                require(prevReceiver != receiver, "Duplicate drips receivers");
+                require(prevReceiver < receiver, "Drips receivers not sorted by address");
             }
+            prevReceiver = receiver;
         }
         require(amtPerSec <= type(uint128).max, "Total drips receivers amtPerSec too high");
         return uint128(amtPerSec);
@@ -496,7 +498,7 @@ abstract contract DripsHub {
     function _emitDripsUpdated(
         UserOrAccount memory userOrAccount,
         uint128 balance,
-        DripsReceiver[] calldata receivers
+        DripsReceiver[] memory receivers
     ) internal {
         if (userOrAccount.isAccount) {
             emit DripsUpdated(userOrAccount.user, userOrAccount.account, balance, receivers);
@@ -517,9 +519,9 @@ abstract contract DripsHub {
     /// @param newEndTime Time when drips will end according to the new drips configuration.
     function _updateDripsReceiversStates(
         UserOrAccount memory userOrAccount,
-        DripsReceiver[] calldata currReceivers,
+        DripsReceiver[] memory currReceivers,
         uint64 currEndTime,
-        DripsReceiver[] calldata newReceivers,
+        DripsReceiver[] memory newReceivers,
         uint64 newEndTime
     ) internal {
         // Skip iterating over `currReceivers` if dripping has run out
@@ -621,7 +623,7 @@ abstract contract DripsHub {
         UserOrAccount memory userOrAccount,
         uint64 lastUpdate,
         uint128 lastBalance,
-        DripsReceiver[] calldata currReceivers
+        DripsReceiver[] memory currReceivers
     ) internal view {
         bytes32 expectedHash;
         if (userOrAccount.isAccount) {
@@ -641,7 +643,7 @@ abstract contract DripsHub {
     function _storeCurrDrips(
         UserOrAccount memory userOrAccount,
         uint128 newBalance,
-        DripsReceiver[] calldata newReceivers
+        DripsReceiver[] memory newReceivers
     ) internal {
         bytes32 currDripsHash = hashDrips(_currTimestamp(), newBalance, newReceivers);
         if (userOrAccount.isAccount) {
@@ -664,7 +666,7 @@ abstract contract DripsHub {
     function hashDrips(
         uint64 update,
         uint128 balance,
-        DripsReceiver[] calldata receivers
+        DripsReceiver[] memory receivers
     ) public pure returns (bytes32 dripsConfigurationHash) {
         if (update == 0 && balance == 0 && receivers.length == 0) return bytes32(0);
         return keccak256(abi.encode(receivers, update, balance));
@@ -737,7 +739,7 @@ abstract contract DripsHub {
     /// @notice Calculates the total amount per second of all the drips receivers.
     /// @param receivers The list of the receivers.
     /// @return totalAmtPerSec The total amount per second of all the drips receivers
-    function _totalDripsAmtPerSec(DripsReceiver[] calldata receivers)
+    function _totalDripsAmtPerSec(DripsReceiver[] memory receivers)
         internal
         pure
         returns (uint128 totalAmtPerSec)

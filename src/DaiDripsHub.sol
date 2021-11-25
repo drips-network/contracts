@@ -47,9 +47,9 @@ contract DaiDripsHub is ERC20DripsHub {
     function setDripsAndPermit(
         uint64 lastUpdate,
         uint128 lastBalance,
-        DripsReceiver[] calldata currReceivers,
+        DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
-        DripsReceiver[] calldata newReceivers,
+        DripsReceiver[] memory newReceivers,
         PermitArgs calldata permitArgs
     ) public returns (uint128 newBalance, int128 realBalanceDelta) {
         _permit(permitArgs);
@@ -67,9 +67,9 @@ contract DaiDripsHub is ERC20DripsHub {
         uint256 account,
         uint64 lastUpdate,
         uint128 lastBalance,
-        DripsReceiver[] calldata currReceivers,
+        DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
-        DripsReceiver[] calldata newReceivers,
+        DripsReceiver[] memory newReceivers,
         PermitArgs calldata permitArgs
     ) public returns (uint128 newBalance, int128 realBalanceDelta) {
         _permit(permitArgs);
