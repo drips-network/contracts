@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.7;
 
-import {ERC20DripsHub, DripsReceiver} from "./ERC20DripsHub.sol";
+import {ERC20DripsHub, DripsReceiver, SplitsReceiver} from "./ERC20DripsHub.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
 interface IDai is IERC20 {

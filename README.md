@@ -1,8 +1,9 @@
-# Radicle Streaming Contracts
+# Radicle Drips Hub Contracts
 
+Radicle Drips Hub is the smart contract running the drips and splits ecosystem.
 
 ## Getting started
-Radicle Streaming uses [dapp.tools](https://github.com/dapphub/dapptools) for development. Please install the `dapp` client. Then, run the following command to install the dependencies:
+Radicle Drips Hub uses [dapp.tools](https://github.com/dapphub/dapptools) for development. Please install the `dapp` client. Then, run the following command to install the dependencies:
 
 ```bash
 make install

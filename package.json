@@ -1,5 +1,5 @@
 {
-    "name": "radicle-streaming",
+    "name": "radicle-drips-hub",
     "license": "GPL-3.0-only",
     "devDependencies": {
         "prettier": "^2.4.0",

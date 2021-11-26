@@ -134,10 +134,10 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     function testDripsFundsUntilTheyRunOut() public {
         setDrips(user, 0, 100, dripsReceivers(receiver, 9));
         warpBy(10);
-        // User had 10 seconds paying 9 per second, funds are about to run out
+        // User had 10 seconds paying 9 per second, drips balance is about to run out
         assertDripsBalance(user, 10);
         warpBy(1);
-        // User had 11 seconds paying 9 per second, funds have run out
+        // User had 11 seconds paying 9 per second, drips balance has run out
         assertDripsBalance(user, 1);
         // Nothing more will be dripped
         warpToCycleEnd();
@@ -520,7 +520,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         collect(receiver3, 10);
     }
 
-    function testCollectMixesStreamsAndSplits() public {
+    function testCollectMixesDripsAndSplits() public {
         uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
         setDrips(user, 0, 10, dripsReceivers(receiver1, 5, receiver2, 5));
         setSplits(receiver1, splitsReceivers(receiver2, totalWeight));

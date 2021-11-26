@@ -50,9 +50,9 @@ struct SplitsReceiver {
 /// It's guaranteed to be safe only when working with assets with supply lower than `2 ^ 127`.
 abstract contract DripsHub {
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
-    /// gain access to funds collected during `T - cycleSecs` to `T - 1`.
+    /// gain access to drips collected during `T - cycleSecs` to `T - 1`.
     uint64 public immutable cycleSecs;
-    /// @notice Timestamp at which all funding periods must be finished
+    /// @notice Timestamp at which all drips must be finished
     uint64 internal constant MAX_TIMESTAMP = type(uint64).max - 2;
     /// @notice Maximum number of drips receivers of a single user.
     /// Limits cost of changes in drips configuration.

@@ -8,7 +8,7 @@ let
 in
   pkgs.mkShell {
     src = null;
-    name = "funding-contracts";
+    name = "radicle-drips-hub";
     buildInputs = with pkgs; [
       pkgs.dapp
     ];

@@ -12,7 +12,7 @@ jobs:
       - uses: cachix/install-nix-action@v13
       - uses: cachix/cachix-action@v10
         with:
-          name: radicle-streaming
+          name: radicle-drips-hub
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - name: install
         run: nix-shell --run "make install"
