@@ -461,6 +461,25 @@ abstract contract DripsHub {
         return uint128(amtPerSec);
     }
 
+    /// @notice Calculates the total amount per second of all the drips receivers.
+    /// @param receivers The list of the receivers.
+    /// It must have passed `_assertDripsReceiversValid` in the past.
+    /// @return totalAmtPerSec The total amount per second of all the drips receivers
+    function _totalDripsAmtPerSec(DripsReceiver[] memory receivers)
+        internal
+        pure
+        returns (uint128 totalAmtPerSec)
+    {
+        uint256 length = receivers.length;
+        uint256 i = 0;
+        while (i < length) {
+            // Safe, because `receivers` passed `_assertDripsReceiversValid` in the past
+            unchecked {
+                totalAmtPerSec += receivers[i++].amtPerSec;
+            }
+        }
+    }
+
     /// @notice Updates drips balance.
     /// @param lastUpdate The timestamp of the last drips update.
     /// If this is the first update, pass zero.
@@ -734,19 +753,6 @@ abstract contract DripsHub {
     {
         if (receivers.length == 0) return bytes32(0);
         return keccak256(abi.encode(receivers));
-    }
-
-    /// @notice Calculates the total amount per second of all the drips receivers.
-    /// @param receivers The list of the receivers.
-    /// @return totalAmtPerSec The total amount per second of all the drips receivers
-    function _totalDripsAmtPerSec(DripsReceiver[] memory receivers)
-        internal
-        pure
-        returns (uint128 totalAmtPerSec)
-    {
-        for (uint256 i = 0; i < receivers.length; i++) {
-            totalAmtPerSec += receivers[i].amtPerSec;
-        }
     }
 
     /// @notice Called when funds need to be transferred between the user and the drips hub.
