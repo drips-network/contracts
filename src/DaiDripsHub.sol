@@ -2,20 +2,8 @@
 pragma solidity ^0.8.7;
 
 import {ERC20DripsHub, DripsReceiver, SplitsReceiver} from "./ERC20DripsHub.sol";
-import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
-
-interface IDai is IERC20 {
-    function permit(
-        address holder,
-        address spender,
-        uint256 nonce,
-        uint256 expiry,
-        bool allowed,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external;
-}
+import {IDai} from "./Dai.sol";
+import {IDaiReserve} from "./DaiReserve.sol";
 
 struct PermitArgs {
     uint256 nonce;
@@ -36,9 +24,9 @@ contract DaiDripsHub is ERC20DripsHub {
     constructor(
         uint64 cycleSecs,
         address owner,
-        IDai _dai
-    ) ERC20DripsHub(cycleSecs, owner, _dai) {
-        dai = _dai;
+        IDaiReserve reserve
+    ) ERC20DripsHub(cycleSecs, owner, reserve) {
+        dai = reserve.dai();
     }
 
     /// @notice Sets the drips configuration of the `msg.sender`

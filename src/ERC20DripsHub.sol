@@ -2,6 +2,7 @@
 pragma solidity ^0.8.7;
 
 import {SplitsReceiver, DripsHub, DripsReceiver} from "./DripsHub.sol";
+import {IERC20Reserve} from "./ERC20Reserve.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
 /// @notice Drips hub contract for any ERC-20 token.
@@ -9,20 +10,28 @@ import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 contract ERC20DripsHub is DripsHub {
     /// @notice The address of the ERC-20 contract which tokens the drips hub works with
     IERC20 public immutable erc20;
+    /// @notice The address of the reserve to store funds
+    IERC20Reserve public reserve;
+
+    /// @notice Emitted when the reserve address is set
+    event ReserveSet(IERC20Reserve oldReserve, IERC20Reserve newReserve);
 
     /// @param cycleSecs The length of cycleSecs to be used in the contract instance.
     /// Low value makes funds more available by shortening the average time of funds being frozen
     /// between being taken from the users' drips balances and being collectable by their receivers.
     /// High value makes collecting cheaper by making it process less cycles for a given time range.
     /// @param owner The initial owner of the contract with managerial abilities.
-    /// @param _erc20 The address of an ERC-20 contract which tokens the drips hub will work with.
+    /// @param _reserve The address of the funds reserve to be used.
+    /// The drips hub will work with the ERC-20 token of the reserve.
     /// The supply of the tokens must be lower than `2 ^ 127`.
     constructor(
         uint64 cycleSecs,
         address owner,
-        IERC20 _erc20
+        IERC20Reserve _reserve
     ) DripsHub(cycleSecs, owner) {
+        IERC20 _erc20 = _reserve.erc20();
         erc20 = _erc20;
+        _setReserve(_erc20, _reserve);
     }
 
     /// @notice Sets the drips configuration of the `msg.sender`.
@@ -123,8 +132,30 @@ contract ERC20DripsHub is DripsHub {
         return _setSplits(msg.sender, currReceivers, newReceivers);
     }
 
+    /// @notice Set the new reserve address.
+    /// @param newReserve The new reserve.
+    function setReserve(IERC20Reserve newReserve) public onlyOwner {
+        require(newReserve.erc20() == erc20, "Invalid reserve ERC-20 address");
+        erc20.approve(address(reserve), 0);
+        _setReserve(erc20, newReserve);
+    }
+
+    function _setReserve(IERC20 _erc20, IERC20Reserve newReserve) internal {
+        IERC20Reserve oldReserve = reserve;
+        reserve = newReserve;
+        _erc20.approve(address(newReserve), type(uint256).max);
+        emit ReserveSet(oldReserve, newReserve);
+    }
+
     function _transfer(address user, int128 amt) internal override {
-        if (amt > 0) erc20.transfer(user, uint128(amt));
-        else if (amt < 0) erc20.transferFrom(user, address(this), uint128(-amt));
+        if (amt > 0) {
+            uint256 withdraw = uint128(amt);
+            reserve.withdraw(withdraw);
+            erc20.transfer(user, withdraw);
+        } else if (amt < 0) {
+            uint256 deposit = uint128(-amt);
+            erc20.transferFrom(user, address(this), deposit);
+            reserve.deposit(deposit);
+        }
     }
 }
