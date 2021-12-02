@@ -10,7 +10,8 @@ contract EthDripsHub is DripsHub {
     /// Low value makes funds more available by shortening the average time of funds being frozen
     /// between being taken from the users' drips balances and being collectable by their receivers.
     /// High value makes collecting cheaper by making it process less cycles for a given time range.
-    constructor(uint64 cycleSecs) DripsHub(cycleSecs) {
+    /// @param owner The initial owner of the contract with managerial abilities.
+    constructor(uint64 cycleSecs, address owner) DripsHub(cycleSecs, owner) {
         return;
     }
 
@@ -37,7 +38,7 @@ contract EthDripsHub is DripsHub {
         DripsReceiver[] memory currReceivers,
         uint128 reduceBalance,
         DripsReceiver[] memory newReceivers
-    ) public payable returns (uint128 newBalance, int128 realBalanceDelta) {
+    ) public payable whenNotPaused returns (uint128 newBalance, int128 realBalanceDelta) {
         return
             _setDrips(
                 _userOrAccount(msg.sender),
@@ -59,7 +60,7 @@ contract EthDripsHub is DripsHub {
         DripsReceiver[] memory currReceivers,
         uint128 reduceBalance,
         DripsReceiver[] memory newReceivers
-    ) public payable returns (uint128 newBalance, int128 realBalanceDelta) {
+    ) public payable whenNotPaused returns (uint128 newBalance, int128 realBalanceDelta) {
         return
             _setDrips(
                 _userOrAccount(msg.sender, account),
@@ -84,7 +85,7 @@ contract EthDripsHub is DripsHub {
     /// The receiver can collect them immediately.
     /// The funds to be given must be the value of the message.
     /// @param receiver The receiver
-    function give(address receiver) public payable {
+    function give(address receiver) public payable whenNotPaused {
         _give(_userOrAccount(msg.sender), receiver, uint128(msg.value));
     }
 
@@ -93,7 +94,7 @@ contract EthDripsHub is DripsHub {
     /// The funds to be given must be the value of the message.
     /// @param account The user's account
     /// @param receiver The receiver
-    function give(uint256 account, address receiver) public payable {
+    function give(uint256 account, address receiver) public payable whenNotPaused {
         _give(_userOrAccount(msg.sender, account), receiver, uint128(msg.value));
     }
 
@@ -109,6 +110,7 @@ contract EthDripsHub is DripsHub {
     /// @return split The amount split to the user's splits receivers
     function setSplits(SplitsReceiver[] memory currReceivers, SplitsReceiver[] memory newReceivers)
         public
+        whenNotPaused
         returns (uint128 collected, uint128 split)
     {
         return _setSplits(msg.sender, currReceivers, newReceivers);

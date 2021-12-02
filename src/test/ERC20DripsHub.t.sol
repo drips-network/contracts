@@ -11,7 +11,7 @@ contract ERC20DripsHubTest is DripsHubTest {
 
     function setUp() public {
         IERC20 erc20 = new ERC20PresetFixedSupply("test", "test", 10**6 * 1 ether, address(this));
-        dripsHub = new ERC20DripsHub(10, erc20);
+        dripsHub = new ERC20DripsHub(10, address(this), erc20);
         setUp(dripsHub);
     }
 

@@ -9,7 +9,7 @@ contract EthDripsHubTest is DripsHubTest {
     EthDripsHub private dripsHub;
 
     function setUp() public {
-        dripsHub = new EthDripsHub(10);
+        dripsHub = new EthDripsHub(10, address(this));
         setUp(dripsHub);
     }
 

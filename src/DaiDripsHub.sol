@@ -33,7 +33,11 @@ contract DaiDripsHub is ERC20DripsHub {
     IDai public immutable dai;
 
     /// @notice See `ERC20DripsHub` constructor documentation for more details.
-    constructor(uint64 cycleSecs, IDai _dai) ERC20DripsHub(cycleSecs, _dai) {
+    constructor(
+        uint64 cycleSecs,
+        address owner,
+        IDai _dai
+    ) ERC20DripsHub(cycleSecs, owner, _dai) {
         dai = _dai;
     }
 
@@ -51,7 +55,7 @@ contract DaiDripsHub is ERC20DripsHub {
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers,
         PermitArgs calldata permitArgs
-    ) public returns (uint128 newBalance, int128 realBalanceDelta) {
+    ) public whenNotPaused returns (uint128 newBalance, int128 realBalanceDelta) {
         _permit(permitArgs);
         return setDrips(lastUpdate, lastBalance, currReceivers, balanceDelta, newReceivers);
     }
@@ -71,7 +75,7 @@ contract DaiDripsHub is ERC20DripsHub {
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers,
         PermitArgs calldata permitArgs
-    ) public returns (uint128 newBalance, int128 realBalanceDelta) {
+    ) public whenNotPaused returns (uint128 newBalance, int128 realBalanceDelta) {
         _permit(permitArgs);
         return
             setDrips(account, lastUpdate, lastBalance, currReceivers, balanceDelta, newReceivers);
@@ -88,7 +92,7 @@ contract DaiDripsHub is ERC20DripsHub {
         address receiver,
         uint128 amt,
         PermitArgs calldata permitArgs
-    ) public {
+    ) public whenNotPaused {
         _permit(permitArgs);
         give(receiver, amt);
     }
@@ -105,7 +109,7 @@ contract DaiDripsHub is ERC20DripsHub {
         address receiver,
         uint128 amt,
         PermitArgs calldata permitArgs
-    ) public {
+    ) public whenNotPaused {
         _permit(permitArgs);
         give(account, receiver, amt);
     }

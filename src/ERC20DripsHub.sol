@@ -14,9 +14,14 @@ contract ERC20DripsHub is DripsHub {
     /// Low value makes funds more available by shortening the average time of funds being frozen
     /// between being taken from the users' drips balances and being collectable by their receivers.
     /// High value makes collecting cheaper by making it process less cycles for a given time range.
+    /// @param owner The initial owner of the contract with managerial abilities.
     /// @param _erc20 The address of an ERC-20 contract which tokens the drips hub will work with.
     /// The supply of the tokens must be lower than `2 ^ 127`.
-    constructor(uint64 cycleSecs, IERC20 _erc20) DripsHub(cycleSecs) {
+    constructor(
+        uint64 cycleSecs,
+        address owner,
+        IERC20 _erc20
+    ) DripsHub(cycleSecs, owner) {
         erc20 = _erc20;
     }
 
@@ -43,7 +48,7 @@ contract ERC20DripsHub is DripsHub {
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers
-    ) public returns (uint128 newBalance, int128 realBalanceDelta) {
+    ) public whenNotPaused returns (uint128 newBalance, int128 realBalanceDelta) {
         return
             _setDrips(
                 _userOrAccount(msg.sender),
@@ -65,7 +70,7 @@ contract ERC20DripsHub is DripsHub {
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers
-    ) public payable returns (uint128 newBalance, int128 realBalanceDelta) {
+    ) public whenNotPaused returns (uint128 newBalance, int128 realBalanceDelta) {
         return
             _setDrips(
                 _userOrAccount(msg.sender, account),
@@ -82,7 +87,7 @@ contract ERC20DripsHub is DripsHub {
     /// Transfers the funds to be given from the sender's wallet to the drips hub contract.
     /// @param receiver The receiver
     /// @param amt The given amount
-    function give(address receiver, uint128 amt) public {
+    function give(address receiver, uint128 amt) public whenNotPaused {
         _give(_userOrAccount(msg.sender), receiver, amt);
     }
 
@@ -96,7 +101,7 @@ contract ERC20DripsHub is DripsHub {
         uint256 account,
         address receiver,
         uint128 amt
-    ) public {
+    ) public whenNotPaused {
         _give(_userOrAccount(msg.sender, account), receiver, amt);
     }
 
@@ -112,6 +117,7 @@ contract ERC20DripsHub is DripsHub {
     /// @return split The amount split to the user's splits receivers
     function setSplits(SplitsReceiver[] memory currReceivers, SplitsReceiver[] memory newReceivers)
         public
+        whenNotPaused
         returns (uint128 collected, uint128 split)
     {
         return _setSplits(msg.sender, currReceivers, newReceivers);
