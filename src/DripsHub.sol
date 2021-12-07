@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.7;
 
-import {Ownable} from "openzeppelin-contracts/access/Ownable.sol";
-import {Pausable} from "openzeppelin-contracts/security/Pausable.sol";
-
 struct DripsReceiver {
     address receiver;
     uint128 amtPerSec;
@@ -51,7 +48,7 @@ struct SplitsReceiver {
 ///
 /// The contract assumes that all amounts in the system can be stored in signed 128-bit integers.
 /// It's guaranteed to be safe only when working with assets with supply lower than `2 ^ 127`.
-abstract contract DripsHub is Ownable, Pausable {
+abstract contract DripsHub {
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
     /// gain access to drips collected during `T - cycleSecs` to `T - 1`.
     uint64 public immutable cycleSecs;
@@ -198,22 +195,8 @@ abstract contract DripsHub is Ownable, Pausable {
     /// Low value makes funds more available by shortening the average time of funds being frozen
     /// between being taken from the users' drips balances and being collectable by their receivers.
     /// High value makes collecting cheaper by making it process less cycles for a given time range.
-    /// @param owner The initial owner of the contract with managerial abilities.
-    constructor(uint64 _cycleSecs, address owner) {
+    constructor(uint64 _cycleSecs) {
         cycleSecs = _cycleSecs;
-        transferOwnership(owner);
-    }
-
-    /// @notice Pauses any functions changing the state of the contract.
-    /// Callable only by the owner.
-    function pause() public onlyOwner {
-        _pause();
-    }
-
-    /// @notice Unpauses any functions changing the state of the contract.
-    /// Callable only by the owner.
-    function unpause() public onlyOwner {
-        _unpause();
     }
 
     /// @notice Returns amount of received funds available for collection for a user.
@@ -263,7 +246,7 @@ abstract contract DripsHub is Ownable, Pausable {
     /// @return split The amount split to the user's splits receivers
     function collect(address user, SplitsReceiver[] memory currReceivers)
         public
-        whenNotPaused
+        virtual
         returns (uint128 collected, uint128 split)
     {
         (collected, split) = _collectInternal(user, currReceivers);
@@ -295,11 +278,7 @@ abstract contract DripsHub is Ownable, Pausable {
     /// If too low, flushing will be cheap, but will cut little gas from the next collection.
     /// If too high, flushing may become too expensive to fit in a single transaction.
     /// @return flushable The number of cycles which can be flushed
-    function flushCycles(address user, uint64 maxCycles)
-        public
-        whenNotPaused
-        returns (uint64 flushable)
-    {
+    function flushCycles(address user, uint64 maxCycles) public virtual returns (uint64 flushable) {
         flushable = flushableCycles(user);
         uint64 cycles = maxCycles < flushable ? maxCycles : flushable;
         flushable -= cycles;

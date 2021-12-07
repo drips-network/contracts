@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.7;
 
-import {SplitsReceiver, DripsHub, DripsReceiver} from "./DripsHub.sol";
+import {SplitsReceiver, DripsReceiver} from "./DripsHub.sol";
+import {ManagedDripsHub} from "./ManagedDripsHub.sol";
 
-/// @notice Drips hub contract for Ether.
+/// @notice Drips hub contract for Ether. Must be used via a proxy.
 /// See the base `DripsHub` contract docs for more details.
-contract EthDripsHub is DripsHub {
+contract EthDripsHub is ManagedDripsHub {
     /// @param cycleSecs The length of cycleSecs to be used in the contract instance.
     /// Low value makes funds more available by shortening the average time of funds being frozen
     /// between being taken from the users' drips balances and being collectable by their receivers.
     /// High value makes collecting cheaper by making it process less cycles for a given time range.
-    /// @param owner The initial owner of the contract with managerial abilities.
-    constructor(uint64 cycleSecs, address owner) DripsHub(cycleSecs, owner) {
+    constructor(uint64 cycleSecs) ManagedDripsHub(cycleSecs) {
         return;
     }
 

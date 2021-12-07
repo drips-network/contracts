@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.7;
 
-import {SplitsReceiver, DripsHub, DripsReceiver} from "./DripsHub.sol";
+import {SplitsReceiver, DripsReceiver} from "./DripsHub.sol";
+import {ManagedDripsHub} from "./ManagedDripsHub.sol";
 import {IERC20Reserve} from "./ERC20Reserve.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
-/// @notice Drips hub contract for any ERC-20 token.
-/// See the base `DripsHub` contract docs for more details.
-contract ERC20DripsHub is DripsHub {
+/// @notice Drips hub contract for any ERC-20 token. Must be used via a proxy.
+/// See the base `DripsHub` and `ManagedDripsHub` contract docs for more details.
+contract ERC20DripsHub is ManagedDripsHub {
     /// @notice The address of the ERC-20 contract which tokens the drips hub works with
     IERC20 public immutable erc20;
     /// @notice The address of the reserve to store funds
@@ -20,18 +21,9 @@ contract ERC20DripsHub is DripsHub {
     /// Low value makes funds more available by shortening the average time of funds being frozen
     /// between being taken from the users' drips balances and being collectable by their receivers.
     /// High value makes collecting cheaper by making it process less cycles for a given time range.
-    /// @param owner The initial owner of the contract with managerial abilities.
-    /// @param _reserve The address of the funds reserve to be used.
-    /// The drips hub will work with the ERC-20 token of the reserve.
-    /// The supply of the tokens must be lower than `2 ^ 127`.
-    constructor(
-        uint64 cycleSecs,
-        address owner,
-        IERC20Reserve _reserve
-    ) DripsHub(cycleSecs, owner) {
-        IERC20 _erc20 = _reserve.erc20();
+    /// @param _erc20 The address of an ERC-20 contract which tokens the drips hub will work with.
+    constructor(uint64 cycleSecs, IERC20 _erc20) ManagedDripsHub(cycleSecs) {
         erc20 = _erc20;
-        _setReserve(_erc20, _reserve);
     }
 
     /// @notice Sets the drips configuration of the `msg.sender`.
@@ -136,14 +128,10 @@ contract ERC20DripsHub is DripsHub {
     /// @param newReserve The new reserve.
     function setReserve(IERC20Reserve newReserve) public onlyOwner {
         require(newReserve.erc20() == erc20, "Invalid reserve ERC-20 address");
-        erc20.approve(address(reserve), 0);
-        _setReserve(erc20, newReserve);
-    }
-
-    function _setReserve(IERC20 _erc20, IERC20Reserve newReserve) internal {
         IERC20Reserve oldReserve = reserve;
+        if (address(oldReserve) != address(0)) erc20.approve(address(oldReserve), 0);
         reserve = newReserve;
-        _erc20.approve(address(newReserve), type(uint256).max);
+        erc20.approve(address(newReserve), type(uint256).max);
         emit ReserveSet(oldReserve, newReserve);
     }
 
