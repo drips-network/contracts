@@ -13,7 +13,7 @@ struct PermitArgs {
     bytes32 s;
 }
 
-/// @notice Drips hub contract for DAI token.
+/// @notice Drips hub contract for DAI token. Must be used via a proxy.
 /// See the base `DripsHub` contract docs for more details.
 contract DaiDripsHub is ERC20DripsHub {
     /// @notice The address of the Dai contract which tokens the drips hub works with.
@@ -21,12 +21,8 @@ contract DaiDripsHub is ERC20DripsHub {
     IDai public immutable dai;
 
     /// @notice See `ERC20DripsHub` constructor documentation for more details.
-    constructor(
-        uint64 cycleSecs,
-        address owner,
-        IDaiReserve reserve
-    ) ERC20DripsHub(cycleSecs, owner, reserve) {
-        dai = reserve.dai();
+    constructor(uint64 cycleSecs, IDai _dai) ERC20DripsHub(cycleSecs, _dai) {
+        dai = _dai;
     }
 
     /// @notice Sets the drips configuration of the `msg.sender`

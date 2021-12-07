@@ -2,7 +2,8 @@
 
 pragma solidity ^0.8.7;
 
-import {EthDripsHub, DripsHub} from "../EthDripsHub.sol";
+import {DripsHub} from "../DripsHub.sol";
+import {EthDripsHub} from "../EthDripsHub.sol";
 import {SplitsReceiver, ERC20DripsHub, DripsReceiver} from "../ERC20DripsHub.sol";
 
 abstract contract DripsHubUser {
@@ -164,8 +165,9 @@ contract EthDripsHubUser is DripsHubUser {
         dripsHub = dripsHub_;
     }
 
-    // solhint-disable-next-line no-empty-blocks
-    receive() external payable {}
+    receive() external payable {
+        return;
+    }
 
     function getDripsHub() internal view override returns (DripsHub) {
         return DripsHub(dripsHub);
