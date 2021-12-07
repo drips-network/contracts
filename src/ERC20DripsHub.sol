@@ -5,14 +5,17 @@ import {SplitsReceiver, DripsReceiver} from "./DripsHub.sol";
 import {ManagedDripsHub} from "./ManagedDripsHub.sol";
 import {IERC20Reserve} from "./ERC20Reserve.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
+import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 
 /// @notice Drips hub contract for any ERC-20 token. Must be used via a proxy.
 /// See the base `DripsHub` and `ManagedDripsHub` contract docs for more details.
 contract ERC20DripsHub is ManagedDripsHub {
+    /// @notice The ERC-1967 storage slot for the contract.
+    /// It holds a single address of the ERC-20 reserve.
+    bytes32 private constant SLOT_RESERVE =
+        bytes32(uint256(keccak256("eip1967.erc20DripsHub.reserve")) - 1);
     /// @notice The address of the ERC-20 contract which tokens the drips hub works with
     IERC20 public immutable erc20;
-    /// @notice The address of the reserve to store funds
-    IERC20Reserve public reserve;
 
     /// @notice Emitted when the reserve address is set
     event ReserveSet(IERC20Reserve oldReserve, IERC20Reserve newReserve);
@@ -124,26 +127,37 @@ contract ERC20DripsHub is ManagedDripsHub {
         return _setSplits(msg.sender, currReceivers, newReceivers);
     }
 
-    /// @notice Set the new reserve address.
+    /// @notice Gets the the reserve where funds are stored.
+    function reserve() public view returns (IERC20Reserve) {
+        return IERC20Reserve(_reserveSlot().value);
+    }
+
+    /// @notice Set the new reserve address to store funds.
     /// @param newReserve The new reserve.
     function setReserve(IERC20Reserve newReserve) public onlyAdmin {
         require(newReserve.erc20() == erc20, "Invalid reserve ERC-20 address");
-        IERC20Reserve oldReserve = reserve;
+        IERC20Reserve oldReserve = reserve();
         if (address(oldReserve) != address(0)) erc20.approve(address(oldReserve), 0);
-        reserve = newReserve;
+        _reserveSlot().value = address(newReserve);
         erc20.approve(address(newReserve), type(uint256).max);
         emit ReserveSet(oldReserve, newReserve);
     }
 
+    function _reserveSlot() private pure returns (StorageSlot.AddressSlot storage) {
+        return StorageSlot.getAddressSlot(SLOT_RESERVE);
+    }
+
     function _transfer(address user, int128 amt) internal override {
+        IERC20Reserve erc20Reserve = reserve();
+        require(address(erc20Reserve) != address(0), "Reserve unset");
         if (amt > 0) {
             uint256 withdraw = uint128(amt);
-            reserve.withdraw(withdraw);
+            erc20Reserve.withdraw(withdraw);
             erc20.transfer(user, withdraw);
         } else if (amt < 0) {
             uint256 deposit = uint128(-amt);
             erc20.transferFrom(user, address(this), deposit);
-            reserve.deposit(deposit);
+            erc20Reserve.deposit(deposit);
         }
     }
 }
