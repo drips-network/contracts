@@ -12,7 +12,8 @@ import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 contract ERC20DripsHub is DripsHubUpgradeable {
     /// @notice The ERC-1967 storage slot for the contract.
     /// It holds a single address of the ERC-20 reserve.
-    bytes32 private constant RESERVE_SLOT = bytes32(uint256(keccak256("eip1967.erc20DripsHub.RESERVE_SLOT")) - 1);
+    bytes32 private constant RESERVE_SLOT =
+        bytes32(uint256(keccak256("eip1967.erc20DripsHub.RESERVE_SLOT")) - 1);
     /// @notice The address of the ERC-20 contract which tokens the drips hub works with
     IERC20 public immutable erc20;
 

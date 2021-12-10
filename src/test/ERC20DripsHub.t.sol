@@ -12,7 +12,7 @@ import "ds-test/test.sol";
 contract ERC20DripsHubTest is DripsHubTest {
     ERC20DripsHub private dripsHub;
 
-        function setUp() public {
+    function setUp() public {
         address owner = address(this);
         IERC20 erc20 = new ERC20PresetFixedSupply("test", "test", 10**6 * 1 ether, owner);
         ERC20DripsHub hubLogic = new ERC20DripsHub(10, erc20);
