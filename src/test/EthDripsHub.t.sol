@@ -1,24 +1,29 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.7;
 
-import {DripsHubUser, EthDripsHubUser} from "./DripsHubUser.t.sol";
-import {DripsHubTest} from "./DripsHub.t.sol";
+import {EthDripsHubUser, ManagedDripsHubUser} from "./DripsHubUser.t.sol";
+import {ManagedDripsHubTest} from "./ManagedDripsHub.t.sol";
 import {EthDripsHub} from "../EthDripsHub.sol";
 import {ManagedDripsHubProxy} from "../ManagedDripsHub.sol";
 
-contract EthDripsHubTest is DripsHubTest {
+contract EthDripsHubTest is ManagedDripsHubTest {
     EthDripsHub private dripsHub;
 
     function setUp() public {
         EthDripsHub hubLogic = new EthDripsHub(10);
-        address owner = address(this);
-        ManagedDripsHubProxy proxy = new ManagedDripsHubProxy(hubLogic, owner);
-        dripsHub = EthDripsHub(address(proxy));
-        setUp(dripsHub);
+        dripsHub = EthDripsHub(address(wrapInProxy(hubLogic)));
+        ManagedDripsHubTest.setUp(dripsHub);
     }
 
-    function createUser() internal override returns (DripsHubUser) {
+    function createManagedUser() internal override returns (ManagedDripsHubUser) {
         return new EthDripsHubUser{value: 100 ether}(dripsHub);
+    }
+
+    function testContractCanBeUpgraded() public override {
+        uint64 newCycleLength = dripsHub.cycleSecs() + 1;
+        EthDripsHub newLogic = new EthDripsHub(newCycleLength);
+        admin.upgradeTo(address(newLogic));
+        assertEq(dripsHub.cycleSecs(), newCycleLength, "Invalid new cycle length");
     }
 
     function testRevertsIfBalanceReductionAndValueNonZero() public {

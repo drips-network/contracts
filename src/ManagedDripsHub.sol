@@ -106,13 +106,13 @@ abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable {
     }
 
     /// @notice Triggers stopped state.
-    function pause() public whenNotPaused onlyAdmin {
+    function pause() public onlyAdmin whenNotPaused {
         _pausedSlot().value = true;
         emit Paused(msg.sender);
     }
 
     /// @notice Returns to normal state.
-    function unpause() public whenPaused onlyAdmin {
+    function unpause() public onlyAdmin whenPaused {
         _pausedSlot().value = false;
         emit Unpaused(msg.sender);
     }

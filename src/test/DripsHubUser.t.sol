@@ -4,10 +4,15 @@ pragma solidity ^0.8.7;
 
 import {DripsHub} from "../DripsHub.sol";
 import {EthDripsHub} from "../EthDripsHub.sol";
+import {ManagedDripsHub} from "../ManagedDripsHub.sol";
 import {SplitsReceiver, ERC20DripsHub, DripsReceiver} from "../ERC20DripsHub.sol";
 
 abstract contract DripsHubUser {
-    function getDripsHub() internal view virtual returns (DripsHub);
+    DripsHub private immutable dripsHub;
+
+    constructor(DripsHub dripsHub_) {
+        dripsHub = dripsHub_;
+    }
 
     function balance() public view virtual returns (uint256);
 
@@ -45,7 +50,7 @@ abstract contract DripsHubUser {
         public
         returns (uint128 collected, uint128 split)
     {
-        return getDripsHub().collect(receiver, currReceivers);
+        return dripsHub.collect(receiver, currReceivers);
     }
 
     function collectable(SplitsReceiver[] calldata currReceivers)
@@ -53,15 +58,15 @@ abstract contract DripsHubUser {
         view
         returns (uint128 collected, uint128 split)
     {
-        return getDripsHub().collectable(address(this), currReceivers);
+        return dripsHub.collectable(address(this), currReceivers);
     }
 
     function flushableCycles() public view returns (uint64 flushable) {
-        return getDripsHub().flushableCycles(address(this));
+        return dripsHub.flushableCycles(address(this));
     }
 
     function flushCycles(uint64 maxCycles) public returns (uint64 flushable) {
-        return getDripsHub().flushCycles(address(this), maxCycles);
+        return dripsHub.flushCycles(address(this), maxCycles);
     }
 
     function hashDrips(
@@ -69,35 +74,63 @@ abstract contract DripsHubUser {
         uint128 lastBalance,
         DripsReceiver[] calldata receivers
     ) public view returns (bytes32) {
-        return getDripsHub().hashDrips(lastUpdate, lastBalance, receivers);
+        return dripsHub.hashDrips(lastUpdate, lastBalance, receivers);
     }
 
     function dripsHash() public view returns (bytes32) {
-        return getDripsHub().dripsHash(address(this));
+        return dripsHub.dripsHash(address(this));
     }
 
     function dripsHash(uint256 account) public view returns (bytes32 weightsHash) {
-        return getDripsHub().dripsHash(address(this), account);
+        return dripsHub.dripsHash(address(this), account);
     }
 
     function hashSplits(SplitsReceiver[] calldata receivers) public view returns (bytes32) {
-        return getDripsHub().hashSplits(receivers);
+        return dripsHub.hashSplits(receivers);
     }
 
     function splitsHash() public view returns (bytes32) {
-        return getDripsHub().splitsHash(address(this));
+        return dripsHub.splitsHash(address(this));
     }
 }
 
-contract ERC20DripsHubUser is DripsHubUser {
-    ERC20DripsHub internal immutable dripsHub;
+abstract contract ManagedDripsHubUser is DripsHubUser {
+    ManagedDripsHub private immutable dripsHub;
 
-    constructor(ERC20DripsHub dripsHub_) {
+    constructor(ManagedDripsHub dripsHub_) DripsHubUser(dripsHub_) {
         dripsHub = dripsHub_;
     }
 
-    function getDripsHub() internal view override returns (DripsHub) {
-        return DripsHub(dripsHub);
+    function admin() public view returns (address) {
+        return dripsHub.admin();
+    }
+
+    function changeAdmin(address newAdmin) public {
+        dripsHub.changeAdmin(newAdmin);
+    }
+
+    function paused() public view returns (bool) {
+        return dripsHub.paused();
+    }
+
+    function pause() public {
+        dripsHub.pause();
+    }
+
+    function unpause() public {
+        dripsHub.unpause();
+    }
+
+    function upgradeTo(address newImplementation) public {
+        dripsHub.upgradeTo(newImplementation);
+    }
+}
+
+contract ERC20DripsHubUser is ManagedDripsHubUser {
+    ERC20DripsHub private immutable dripsHub;
+
+    constructor(ERC20DripsHub dripsHub_) ManagedDripsHubUser(dripsHub_) {
+        dripsHub = dripsHub_;
     }
 
     function balance() public view override returns (uint256) {
@@ -158,19 +191,15 @@ contract ERC20DripsHubUser is DripsHubUser {
     }
 }
 
-contract EthDripsHubUser is DripsHubUser {
-    EthDripsHub internal immutable dripsHub;
+contract EthDripsHubUser is ManagedDripsHubUser {
+    EthDripsHub private immutable dripsHub;
 
-    constructor(EthDripsHub dripsHub_) payable {
+    constructor(EthDripsHub dripsHub_) payable ManagedDripsHubUser(dripsHub_) {
         dripsHub = dripsHub_;
     }
 
     receive() external payable {
         return;
-    }
-
-    function getDripsHub() internal view override returns (DripsHub) {
-        return DripsHub(dripsHub);
     }
 
     function balance() public view override returns (uint256) {
