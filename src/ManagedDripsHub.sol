@@ -6,7 +6,6 @@ import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.so
 import {ERC1967Upgrade} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Upgrade.sol";
 import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 import {DripsHub, SplitsReceiver} from "./DripsHub.sol";
-import {ERC1967Pausable} from "./ERC1967Pausable.sol";
 
 /// @notice The DripsHub which is UUPS-upgradable, pausable and has an owner.
 /// It can't be used directly, only via a proxy.
@@ -14,13 +13,44 @@ import {ERC1967Pausable} from "./ERC1967Pausable.sol";
 /// ManagedDripsHub uses the ERC-1967 admin slot to store the owner address.
 /// While this contract is capable of updating the owner,
 /// the proxy is expected to set up the initial value of the ERC-1967 admin.
-abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable, ERC1967Pausable {
+abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable {
+    bytes32 private constant PAUSE_SLOT =
+        bytes32(uint256(keccak256("ManagedDripsHub.PAUSE_SLOT")) - 1);
+
+    /// @notice Throws if called by any account other than the owner.
+    modifier onlyOwner() {
+        require(owner() == msg.sender, "Ownable: caller is not the owner");
+        _;
+    }
+
+    /// @notice Modifier to make a function callable only when the contract is not paused.
+    modifier whenNotPaused() {
+        require(!paused(), "Pausable: paused");
+        _;
+    }
+
+    /// @notice Modifier to make a function callable only when the contract is paused.
+    modifier whenPaused() {
+        require(paused(), "Pausable: not paused");
+        _;
+    }
+
+    /// @notice Emitted when the pause is triggered.
+    /// @param account The account which triggered the change.
+    event Paused(address account);
+
+    /// @notice Emitted when the pause is lifted.
+    /// @param account The account which triggered the change.
+    event Unpaused(address account);
+
     /// @param cycleSecs The length of cycleSecs to be used in the contract instance.
     /// Low value makes funds more available by shortening the average time of funds being frozen
     /// between being taken from the users' drips balances and being collectable by their receivers.
     /// High value makes collecting cheaper by making it process less cycles for a given time range.
     // solhint-disable-next-line no-empty-blocks
-    constructor(uint64 cycleSecs) DripsHub(cycleSecs) {}
+    constructor(uint64 cycleSecs) DripsHub(cycleSecs) {
+        StorageSlot.getBooleanSlot(PAUSE_SLOT).value = true;
+    }
 
     /// @notice Collects all received funds available for the user
     /// and transfers them out of the drips hub contract to that user's wallet.
@@ -64,24 +94,21 @@ abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable, ERC1967Pausable 
         newImplementation;
     }
 
+    /// @notice Returns true if the contract is paused, and false otherwise.
+    function paused() public view returns (bool isPaused) {
+        return StorageSlot.getBooleanSlot(PAUSE_SLOT).value;
+    }
+
     /// @notice Triggers stopped state.
-    function pause() public override whenNotPaused onlyOwner {
-        _setPaused(true);
+    function pause() public onlyOwner whenNotPaused {
+        StorageSlot.getBooleanSlot(PAUSE_SLOT).value = true;
         emit Paused(msg.sender);
     }
 
     /// @notice Returns to normal state.
-    function unpause() public override whenPaused onlyOwner {
-        _setPaused(false);
+    function unpause() public onlyOwner whenPaused {
+        StorageSlot.getBooleanSlot(PAUSE_SLOT).value = false;
         emit Unpaused(msg.sender);
-    }
-
-    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
-
-    /// @notice Throws if called by any account other than the owner.
-    modifier onlyOwner() {
-        require(owner() == msg.sender, "Ownable: caller is not the owner");
-        _;
     }
 
     /// @notice Returns the address of the current owner.
@@ -93,9 +120,7 @@ abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable, ERC1967Pausable 
     /// Can only be called by the current owner.
     function transferOwnership(address newOwner) public onlyOwner {
         require(newOwner != address(0), "Ownable: new owner is the zero address");
-        address oldOwner = owner();
         _changeAdmin(newOwner);
-        emit OwnershipTransferred(oldOwner, newOwner);
     }
 }
 
