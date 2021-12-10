@@ -15,7 +15,7 @@ import {DripsHub, SplitsReceiver} from "./DripsHub.sol";
 /// the proxy is expected to set up the initial value of the ERC-1967 admin.
 abstract contract DripsHubUpgradeable is DripsHub, UUPSUpgradeable {
     bytes32 private constant PAUSE_SLOT =
-        bytes32(uint256(keccak256("eip1967.ManagedDripsHub.PAUSE_SLOT")) - 1);
+        bytes32(uint256(keccak256("eip1967.DripsHubUpgradeable.PAUSE_SLOT")) - 1);
 
     /// @notice Throws if called by any account other than the owner.
     modifier onlyOwner() {
