@@ -2,16 +2,16 @@
 pragma solidity ^0.8.7;
 
 import {SplitsReceiver, DripsReceiver} from "./DripsHub.sol";
-import {ManagedDripsHub} from "./ManagedDripsHub.sol";
+import {DripsHubUpgradeable} from "./DripsHubUpgradeable.sol";
 
 /// @notice Drips hub contract for Ether. Must be used via a proxy.
 /// See the base `DripsHub` contract docs for more details.
-contract EthDripsHub is ManagedDripsHub {
+contract EthDripsHub is DripsHubUpgradeable {
     /// @param cycleSecs The length of cycleSecs to be used in the contract instance.
     /// Low value makes funds more available by shortening the average time of funds being frozen
     /// between being taken from the users' drips balances and being collectable by their receivers.
     /// High value makes collecting cheaper by making it process less cycles for a given time range.
-    constructor(uint64 cycleSecs) ManagedDripsHub(cycleSecs) {
+    constructor(uint64 cycleSecs) DripsHubUpgradeable(cycleSecs) {
         return;
     }
 

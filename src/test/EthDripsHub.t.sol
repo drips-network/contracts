@@ -4,7 +4,7 @@ pragma solidity ^0.8.7;
 import {DripsHubUser, EthDripsHubUser} from "./DripsHubUser.t.sol";
 import {DripsHubTest} from "./DripsHub.t.sol";
 import {EthDripsHub} from "../EthDripsHub.sol";
-import {ManagedDripsHubProxy} from "../ManagedDripsHub.sol";
+import {DripsHubProxy} from "../DripsHubUpgradeable.sol";
 
 contract EthDripsHubTest is DripsHubTest {
     EthDripsHub private dripsHub;
@@ -12,7 +12,7 @@ contract EthDripsHubTest is DripsHubTest {
     function setUp() public {
         EthDripsHub hubLogic = new EthDripsHub(10);
         address owner = address(this);
-        ManagedDripsHubProxy proxy = new ManagedDripsHubProxy(hubLogic, owner);
+        DripsHubProxy proxy = new DripsHubProxy(hubLogic, owner);
         dripsHub = EthDripsHub(address(proxy));
         setUp(dripsHub);
     }

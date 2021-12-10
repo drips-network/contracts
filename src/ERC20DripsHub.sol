@@ -2,17 +2,17 @@
 pragma solidity ^0.8.7;
 
 import {SplitsReceiver, DripsReceiver} from "./DripsHub.sol";
-import {ManagedDripsHub} from "./ManagedDripsHub.sol";
+import {DripsHubUpgradeable} from "./DripsHubUpgradeable.sol";
 import {IERC20Reserve} from "./ERC20Reserve.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 
 /// @notice Drips hub contract for any ERC-20 token. Must be used via a proxy.
-/// See the base `DripsHub` and `ManagedDripsHub` contract docs for more details.
-contract ERC20DripsHub is ManagedDripsHub {
+/// See the base `DripsHub` and `DripsHubUpgradeable` contract docs for more details.
+contract ERC20DripsHub is DripsHubUpgradeable {
     /// @notice The ERC-1967 storage slot for the contract.
     /// It holds a single address of the ERC-20 reserve.
-    bytes32 private constant SLOT = bytes32(uint256(keccak256("eip1967.erc20DripsHub")) - 1);
+    bytes32 private constant RESERVE_SLOT = bytes32(uint256(keccak256("eip1967.erc20DripsHub.RESERVE_SLOT")) - 1);
     /// @notice The address of the ERC-20 contract which tokens the drips hub works with
     IERC20 public immutable erc20;
 
@@ -24,7 +24,7 @@ contract ERC20DripsHub is ManagedDripsHub {
     /// between being taken from the users' drips balances and being collectable by their receivers.
     /// High value makes collecting cheaper by making it process less cycles for a given time range.
     /// @param _erc20 The address of an ERC-20 contract which tokens the drips hub will work with.
-    constructor(uint64 cycleSecs, IERC20 _erc20) ManagedDripsHub(cycleSecs) {
+    constructor(uint64 cycleSecs, IERC20 _erc20) DripsHubUpgradeable(cycleSecs) {
         erc20 = _erc20;
     }
 
@@ -128,7 +128,7 @@ contract ERC20DripsHub is ManagedDripsHub {
 
     /// @notice Gets the the reserve where funds are stored.
     function reserve() public view returns (IERC20Reserve) {
-        return IERC20Reserve(StorageSlot.getAddressSlot(SLOT).value);
+        return IERC20Reserve(StorageSlot.getAddressSlot(RESERVE_SLOT).value);
     }
 
     /// @notice Set the new reserve address to store funds.
@@ -137,7 +137,7 @@ contract ERC20DripsHub is ManagedDripsHub {
         require(newReserve.erc20() == erc20, "Invalid reserve ERC-20 address");
         IERC20Reserve oldReserve = reserve();
         if (address(oldReserve) != address(0)) erc20.approve(address(oldReserve), 0);
-        StorageSlot.getAddressSlot(SLOT).value = address(newReserve);
+        StorageSlot.getAddressSlot(RESERVE_SLOT).value = address(newReserve);
         erc20.approve(address(newReserve), type(uint256).max);
         emit ReserveSet(oldReserve, newReserve);
     }

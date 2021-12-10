@@ -10,12 +10,12 @@ import {DripsHub, SplitsReceiver} from "./DripsHub.sol";
 /// @notice The DripsHub which is UUPS-upgradable, pausable and has an owner.
 /// It can't be used directly, only via a proxy.
 ///
-/// ManagedDripsHub uses the ERC-1967 admin slot to store the owner address.
+/// DripsHubUpgradeable uses the ERC-1967 admin slot to store the owner address.
 /// While this contract is capable of updating the owner,
 /// the proxy is expected to set up the initial value of the ERC-1967 admin.
-abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable {
+abstract contract DripsHubUpgradeable is DripsHub, UUPSUpgradeable {
     bytes32 private constant PAUSE_SLOT =
-        bytes32(uint256(keccak256("ManagedDripsHub.PAUSE_SLOT")) - 1);
+        bytes32(uint256(keccak256("eip1967.ManagedDripsHub.PAUSE_SLOT")) - 1);
 
     /// @notice Throws if called by any account other than the owner.
     modifier onlyOwner() {
@@ -124,9 +124,9 @@ abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable {
     }
 }
 
-/// @notice A generic ManagedDripsHub proxy.
-contract ManagedDripsHubProxy is ERC1967Proxy {
-    constructor(ManagedDripsHub hubLogic, address owner)
+/// @notice A generic DripsHubProxy proxy.
+contract DripsHubProxy is ERC1967Proxy {
+    constructor(DripsHubUpgradeable hubLogic, address owner)
         ERC1967Proxy(address(hubLogic), new bytes(0))
     {
         _changeAdmin(owner);
