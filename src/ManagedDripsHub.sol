@@ -63,6 +63,40 @@ abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable, ERC1967Pausable 
     function _authorizeUpgrade(address newImplementation) internal view override onlyOwner {
         newImplementation;
     }
+
+    /// @notice Triggers stopped state.
+    function pause() public override whenNotPaused onlyOwner {
+        _setPaused(true);
+        emit Paused(msg.sender);
+    }
+
+    /// @notice Returns to normal state.
+    function unpause() public override whenPaused onlyOwner {
+        _setPaused(false);
+        emit Unpaused(msg.sender);
+    }
+
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+    /// @notice Throws if called by any account other than the owner.
+    modifier onlyOwner() {
+        require(owner() == msg.sender, "Ownable: caller is not the owner");
+        _;
+    }
+
+    /// @notice Returns the address of the current owner.
+    function owner() public view returns (address) {
+        return _getAdmin();
+    }
+
+    /// @notice Transfers ownership of the contract to a new account (`newOwner`).
+    /// Can only be called by the current owner.
+    function transferOwnership(address newOwner) public onlyOwner {
+        require(newOwner != address(0), "Ownable: new owner is the zero address");
+        address oldOwner = owner();
+        _changeAdmin(newOwner);
+        emit OwnershipTransferred(oldOwner, newOwner);
+    }
 }
 
 /// @notice A generic ManagedDripsHub proxy.

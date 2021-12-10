@@ -7,6 +7,7 @@ import {ERC20Reserve, IERC20Reserve} from "../ERC20Reserve.sol";
 import {ERC20DripsHub} from "../ERC20DripsHub.sol";
 import {ManagedDripsHubProxy} from "../ManagedDripsHub.sol";
 import {IERC20, ERC20PresetFixedSupply} from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
+import "ds-test/test.sol";
 
 contract ERC20DripsHubTest is DripsHubTest {
     ERC20DripsHub private dripsHub;

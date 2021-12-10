@@ -2,7 +2,6 @@
 pragma solidity ^0.8.7;
 
 import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
-import {ERC1967Ownable} from "./ERC1967Ownable.sol";
 
 /// @notice The proxy-safe pausability mix-in.
 /// Only the owner can pause or unpause the contract.
@@ -11,7 +10,7 @@ import {ERC1967Ownable} from "./ERC1967Ownable.sol";
 /// This contract uses a custom ERC-1967 slot to store its state.
 /// All instances of `ERC1967Pausable` contracts are paused and can't be unpaused.
 /// When a proxy uses such contract via delegation, it's initially unpaused.
-abstract contract ERC1967Pausable is ERC1967Ownable {
+abstract contract ERC1967Pausable {
     /// @notice The ERC-1967 storage slot for the contract.
     /// It holds a single boolean indicating if the contract is paused.
     bytes32 private constant SLOT = bytes32(uint256(keccak256("eip1967.erc1967Pausable")) - 1);
@@ -47,13 +46,13 @@ abstract contract ERC1967Pausable is ERC1967Ownable {
     }
 
     /// @notice Triggers stopped state.
-    function pause() public whenNotPaused onlyOwner {
+    function pause() public virtual whenNotPaused {
         _setPaused(true);
         emit Paused(msg.sender);
     }
 
     /// @notice Returns to normal state.
-    function unpause() public whenPaused onlyOwner {
+    function unpause() public virtual whenPaused {
         _setPaused(false);
         emit Unpaused(msg.sender);
     }
@@ -63,7 +62,7 @@ abstract contract ERC1967Pausable is ERC1967Ownable {
         return StorageSlot.getBooleanSlot(SLOT);
     }
 
-    function _setPaused(bool isPaused) private {
+    function _setPaused(bool isPaused) internal {
         pausedSlot().value = isPaused;
     }
 }
