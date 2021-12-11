@@ -28,8 +28,8 @@ contract ERC20Reserve is IERC20Reserve, Ownable {
         address _user
     ) {
         erc20 = _erc20;
-        transferOwnership(owner);
         setUser(_user);
+        transferOwnership(owner);
     }
 
     modifier onlyUser() {
