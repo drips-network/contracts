@@ -2,7 +2,7 @@
 pragma solidity ^0.8.7;
 
 import {ERC20DripsHub, DripsReceiver, SplitsReceiver} from "./ERC20DripsHub.sol";
-import {IDai} from "./Dai.sol";
+import {IDai} from "./IDai.sol";
 import {IDaiReserve} from "./DaiReserve.sol";
 
 struct PermitArgs {
