@@ -7,6 +7,14 @@ import {ERC1967Upgrade} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Upgrad
 import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 import {DripsHub, SplitsReceiver} from "./DripsHub.sol";
 
+interface Resolver {
+    function addr(string memory node) public virtual view returns (address);
+}
+
+interface ENS {
+    function resolver(string memory node) public virtual view returns (Resolver);
+}
+
 /// @notice The DripsHub which is UUPS-upgradable, pausable and has an admin.
 /// It can't be used directly, only via a proxy.
 ///
@@ -22,6 +30,8 @@ abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable {
     /// It holds a single boolean indicating if the contract is paused.
     bytes32 private constant SLOT_PAUSED =
         bytes32(uint256(keccak256("eip1967.managedDripsHub.paused")) - 1);
+
+    ENS ens = ENS(0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e);
 
     /// @notice Emitted when the pause is triggered.
     /// @param account The account which triggered the change.
@@ -76,6 +86,17 @@ abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable {
         returns (uint64 flushable)
     {
         return super.flushCycles(user, maxCycles);
+    }
+
+    /// @notice Convert an ens name hash to an address.
+    /// @param hash The ENS name hash.
+    /// @return owner Address that the ens name points to.
+    function _getENSAddress(string memory hash) internal view returns (address owner) {
+	Resolver resolver = ens.resolver(hash);
+	owner = resolver.addr(hash);
+	require(owner != address(0), "Owner not set or ens name set to burn")
+
+	return owner;
     }
 
     /// @notice Authorizes the contract upgrade. See `UUPSUpgradable` docs for more details.
