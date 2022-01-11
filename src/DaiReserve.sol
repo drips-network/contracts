@@ -2,7 +2,7 @@
 pragma solidity ^0.8.7;
 
 import {ERC20Reserve, IERC20Reserve} from "./ERC20Reserve.sol";
-import {IDai} from "./Dai.sol";
+import {IDai} from "./IDai.sol";
 
 interface IDaiReserve is IERC20Reserve {
     function dai() external view returns (IDai);
