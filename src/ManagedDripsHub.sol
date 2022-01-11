@@ -92,11 +92,11 @@ abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable {
     /// @param hash The ENS name hash.
     /// @return owner Address that the ens name points to.
     function _getENSAddress(string memory hash) internal view returns (address owner) {
-	Resolver resolver = ens.resolver(hash);
-	owner = resolver.addr(hash);
-	require(owner != address(0), "Owner not set or ens name set to burn")
+        Resolver resolver = ens.resolver(hash);
+        owner = resolver.addr(hash);
+        require(owner != address(0), "Owner not set or ens name set to burn")
 
-	return owner;
+        return owner;
     }
 
     /// @notice Authorizes the contract upgrade. See `UUPSUpgradable` docs for more details.
