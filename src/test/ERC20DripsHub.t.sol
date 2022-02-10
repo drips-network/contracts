@@ -13,10 +13,10 @@ contract ERC20DripsHubTest is ManagedDripsHubTest {
 
     function setUp() public {
         IERC20 erc20 = new ERC20PresetFixedSupply("test", "test", 10**6 * 1 ether, address(this));
-        ERC20Reserve reserve = new ERC20Reserve(erc20, address(this), address(0));
+        ERC20Reserve reserve = new ERC20Reserve(address(this));
         ERC20DripsHub hubLogic = new ERC20DripsHub(10, erc20, reserve);
         dripsHub = ERC20DripsHub(address(wrapInProxy(hubLogic)));
-        reserve.setUser(address(dripsHub));
+        reserve.addUser(address(dripsHub));
         ManagedDripsHubTest.setUp(dripsHub);
     }
 

@@ -131,13 +131,13 @@ contract ERC20DripsHub is ManagedDripsHub {
     function _transfer(address user, int128 amt) internal override {
         if (amt > 0) {
             uint256 withdraw = uint128(amt);
-            reserve.withdraw(withdraw);
+            reserve.withdraw(erc20, withdraw);
             erc20.transfer(user, withdraw);
         } else if (amt < 0) {
             uint256 deposit = uint128(-amt);
             erc20.transferFrom(user, address(this), deposit);
             erc20.approve(address(reserve), deposit);
-            reserve.deposit(deposit);
+            reserve.deposit(erc20, deposit);
         }
     }
 }

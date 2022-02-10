@@ -5,58 +5,56 @@ import {Ownable} from "openzeppelin-contracts/access/Ownable.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
 interface IERC20Reserve {
-    function erc20() external view returns (IERC20);
+    function withdraw(IERC20 token, uint256 amt) external;
 
-    function withdraw(uint256 amt) external;
-
-    function deposit(uint256 amt) external;
+    function deposit(IERC20 token, uint256 amt) external;
 }
 
 contract ERC20Reserve is IERC20Reserve, Ownable {
-    IERC20 public immutable override erc20;
-    address public user;
-    uint256 public balance;
+    mapping(address => bool) public isUser;
+    mapping(IERC20 => uint256) public withdrawable;
 
-    event Withdrawn(address to, uint256 amt);
-    event Deposited(address from, uint256 amt);
-    event ForceWithdrawn(address to, uint256 amt);
-    event UserSet(address oldUser, address newUser);
+    event Withdrawn(address indexed user, IERC20 indexed token, uint256 amt);
+    event Deposited(address indexed user, IERC20 indexed token, uint256 amt);
+    event ForceWithdrawn(address indexed owner, IERC20 indexed token, uint256 amt);
+    event UserAdded(address indexed owner, address indexed user);
+    event UserRemoved(address indexed owner, address indexed user);
 
-    constructor(
-        IERC20 _erc20,
-        address owner,
-        address _user
-    ) {
-        erc20 = _erc20;
-        setUser(_user);
+    constructor(address owner) {
         transferOwnership(owner);
     }
 
     modifier onlyUser() {
-        require(_msgSender() == user, "Reserve: caller is not the user");
+        require(isUser[msg.sender], "Reserve: caller is not the user");
         _;
     }
 
-    function withdraw(uint256 amt) public override onlyUser {
+    function withdraw(IERC20 token, uint256 amt) public override onlyUser {
+        uint256 balance = withdrawable[token];
         require(balance >= amt, "Reserve: withdrawal over balance");
-        balance -= amt;
-        emit Withdrawn(_msgSender(), amt);
-        require(erc20.transfer(_msgSender(), amt), "Reserve: transfer failed");
+        withdrawable[token] = balance - amt;
+        require(token.transfer(msg.sender, amt), "Reserve: transfer failed");
+        emit Withdrawn(msg.sender, token, amt);
     }
 
-    function deposit(uint256 amt) public override onlyUser {
-        balance += amt;
-        emit Deposited(_msgSender(), amt);
-        require(erc20.transferFrom(_msgSender(), address(this), amt), "Reserve: transfer failed");
+    function deposit(IERC20 token, uint256 amt) public override onlyUser {
+        withdrawable[token] += amt;
+        require(token.transferFrom(msg.sender, address(this), amt), "Reserve: transfer failed");
+        emit Deposited(msg.sender, token, amt);
     }
 
-    function forceWithdraw(uint256 amt) public onlyOwner {
-        emit ForceWithdrawn(_msgSender(), amt);
-        require(erc20.transfer(_msgSender(), amt), "Reserve: transfer failed");
+    function forceWithdraw(IERC20 token, uint256 amt) public onlyOwner {
+        require(token.transfer(msg.sender, amt), "Reserve: transfer failed");
+        emit ForceWithdrawn(msg.sender, token, amt);
     }
 
-    function setUser(address newUser) public onlyOwner {
-        emit UserSet(user, newUser);
-        user = newUser;
+    function addUser(address user) public onlyOwner {
+        isUser[user] = true;
+        emit UserAdded(msg.sender, user);
+    }
+
+    function removeUser(address user) public onlyOwner {
+        isUser[user] = false;
+        emit UserRemoved(msg.sender, user);
     }
 }
