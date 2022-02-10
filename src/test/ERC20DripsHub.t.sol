@@ -13,10 +13,10 @@ contract ERC20DripsHubTest is ManagedDripsHubTest {
 
     function setUp() public {
         IERC20 erc20 = new ERC20PresetFixedSupply("test", "test", 10**6 * 1 ether, address(this));
-        ERC20DripsHub hubLogic = new ERC20DripsHub(10, erc20);
+        ERC20Reserve reserve = new ERC20Reserve(erc20, address(this), address(0));
+        ERC20DripsHub hubLogic = new ERC20DripsHub(10, erc20, reserve);
         dripsHub = ERC20DripsHub(address(wrapInProxy(hubLogic)));
-        ERC20Reserve reserve = new ERC20Reserve(erc20, address(this), address(dripsHub));
-        dripsHub.setReserve(reserve);
+        reserve.setUser(address(dripsHub));
         ManagedDripsHubTest.setUp(dripsHub);
     }
 
@@ -27,7 +27,11 @@ contract ERC20DripsHubTest is ManagedDripsHubTest {
 
     function testContractCanBeUpgraded() public override {
         uint64 newCycleLength = dripsHub.cycleSecs() + 1;
-        ERC20DripsHub newLogic = new ERC20DripsHub(newCycleLength, dripsHub.erc20());
+        ERC20DripsHub newLogic = new ERC20DripsHub(
+            newCycleLength,
+            dripsHub.erc20(),
+            dripsHub.reserve()
+        );
         admin.upgradeTo(address(newLogic));
         assertEq(dripsHub.cycleSecs(), newCycleLength, "Invalid new cycle length");
     }

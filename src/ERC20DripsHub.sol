@@ -10,23 +10,24 @@ import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 /// @notice Drips hub contract for any ERC-20 token. Must be used via a proxy.
 /// See the base `DripsHub` and `ManagedDripsHub` contract docs for more details.
 contract ERC20DripsHub is ManagedDripsHub {
-    /// @notice The ERC-1967 storage slot for the contract.
-    /// It holds a single address of the ERC-20 reserve.
-    bytes32 private constant SLOT_RESERVE =
-        bytes32(uint256(keccak256("eip1967.erc20DripsHub.reserve")) - 1);
     /// @notice The address of the ERC-20 contract which tokens the drips hub works with
     IERC20 public immutable erc20;
-
-    /// @notice Emitted when the reserve address is set
-    event ReserveSet(IERC20Reserve oldReserve, IERC20Reserve newReserve);
+    /// @notice The address of the ERC-20 reserve which the drips hub works with
+    IERC20Reserve public immutable reserve;
 
     /// @param cycleSecs The length of cycleSecs to be used in the contract instance.
     /// Low value makes funds more available by shortening the average time of funds being frozen
     /// between being taken from the users' drips balances and being collectable by their receivers.
     /// High value makes collecting cheaper by making it process less cycles for a given time range.
     /// @param _erc20 The address of an ERC-20 contract which tokens the drips hub will work with.
-    constructor(uint64 cycleSecs, IERC20 _erc20) ManagedDripsHub(cycleSecs) {
+    /// @param _reserve The address of the ERC-20 reserve which the drips hub will work with
+    constructor(
+        uint64 cycleSecs,
+        IERC20 _erc20,
+        IERC20Reserve _reserve
+    ) ManagedDripsHub(cycleSecs) {
         erc20 = _erc20;
+        reserve = _reserve;
     }
 
     /// @notice Sets the drips configuration of the `msg.sender`.
@@ -127,37 +128,16 @@ contract ERC20DripsHub is ManagedDripsHub {
         return _setSplits(msg.sender, currReceivers, newReceivers);
     }
 
-    /// @notice Gets the the reserve where funds are stored.
-    function reserve() public view returns (IERC20Reserve) {
-        return IERC20Reserve(_reserveSlot().value);
-    }
-
-    /// @notice Set the new reserve address to store funds.
-    /// @param newReserve The new reserve.
-    function setReserve(IERC20Reserve newReserve) public onlyAdmin {
-        require(newReserve.erc20() == erc20, "Invalid reserve ERC-20 address");
-        IERC20Reserve oldReserve = reserve();
-        if (address(oldReserve) != address(0)) erc20.approve(address(oldReserve), 0);
-        _reserveSlot().value = address(newReserve);
-        erc20.approve(address(newReserve), type(uint256).max);
-        emit ReserveSet(oldReserve, newReserve);
-    }
-
-    function _reserveSlot() private pure returns (StorageSlot.AddressSlot storage) {
-        return StorageSlot.getAddressSlot(SLOT_RESERVE);
-    }
-
     function _transfer(address user, int128 amt) internal override {
-        IERC20Reserve erc20Reserve = reserve();
-        require(address(erc20Reserve) != address(0), "Reserve unset");
         if (amt > 0) {
             uint256 withdraw = uint128(amt);
-            erc20Reserve.withdraw(withdraw);
+            reserve.withdraw(withdraw);
             erc20.transfer(user, withdraw);
         } else if (amt < 0) {
             uint256 deposit = uint128(-amt);
             erc20.transferFrom(user, address(this), deposit);
-            erc20Reserve.deposit(deposit);
+            erc20.approve(address(reserve), deposit);
+            reserve.deposit(deposit);
         }
     }
 }

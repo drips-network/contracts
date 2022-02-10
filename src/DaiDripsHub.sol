@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.7;
 
-import {ERC20DripsHub, DripsReceiver, SplitsReceiver} from "./ERC20DripsHub.sol";
+import {ERC20DripsHub, DripsReceiver, IERC20Reserve, SplitsReceiver} from "./ERC20DripsHub.sol";
 import {IDai} from "./IDai.sol";
-import {IDaiReserve} from "./DaiReserve.sol";
 
 struct PermitArgs {
     uint256 nonce;
@@ -21,7 +20,11 @@ contract DaiDripsHub is ERC20DripsHub {
     IDai public immutable dai;
 
     /// @notice See `ERC20DripsHub` constructor documentation for more details.
-    constructor(uint64 cycleSecs, IDai _dai) ERC20DripsHub(cycleSecs, _dai) {
+    constructor(
+        uint64 cycleSecs,
+        IDai _dai,
+        IERC20Reserve reserve
+    ) ERC20DripsHub(cycleSecs, _dai, reserve) {
         dai = _dai;
     }
 
