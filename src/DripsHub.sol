@@ -692,25 +692,23 @@ abstract contract DripsHub {
         address user = userOrAccount.user;
         if (userOrAccount.isAccount) {
             // in assembly => _storage().accountDripsHashes[userOrAccount.user][userOrAccount.account] = newDripsHash;
-            uint256 account = userOrAccount.account;
+            uint account = userOrAccount.account;
             assembly {
-                // 2 is the position in the SLOT Storage Struct of the accountDripsHashes
-                mstore(0x20, add(sp, 2))
+                mstore(0x20, add(sp, 2)) // 2: position of accountsDripsHash in struct
                 mstore(0x00, user)
-                let p := keccak256(0x00, 0x40)
-                mstore(0x00, account)
-                mstore(0x20, p)
+                let userp := keccak256(0x00, 0x40)
+                mstore(0x00, account) // position account
+                mstore(0x20, userp)
                 sstore(keccak256(0x00, 0x40), newDripsHash)
-            }
+            }            
         } else {
             // in assembly => _storage().userDripsHashes[userOrAccount.user] = newDripsHash;
             assembly {
-                // 1 is the position in the SLOT Storage Struct of the userDripsHashes
-                mstore(0x20, add(sp, 1))
+                mstore(0x20, add(sp, 1)) // 1: position of userDripsHashes in struct
                 mstore(0x00, user)
                 sstore(keccak256(0x00, 0x40), newDripsHash)
             }
-        }
+        } 
     }
 
     /// @notice Calculates the hash of the drips configuration.
