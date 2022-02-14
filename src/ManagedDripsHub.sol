@@ -3,7 +3,6 @@ pragma solidity ^0.8.7;
 
 import {UUPSUpgradeable} from "openzeppelin-contracts/proxy/utils/UUPSUpgradeable.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {ERC1967Upgrade} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Upgrade.sol";
 import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 import {DripsHub, SplitsReceiver} from "./DripsHub.sol";
 
