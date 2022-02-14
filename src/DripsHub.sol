@@ -688,10 +688,28 @@ abstract contract DripsHub {
         DripsReceiver[] memory newReceivers
     ) internal {
         bytes32 newDripsHash = hashDrips(_currTimestamp(), newBalance, newReceivers);
+        bytes32 sp = SLOT_STORAGE;
+        address user = userOrAccount.user;
         if (userOrAccount.isAccount) {
-            _storage().accountDripsHashes[userOrAccount.user][userOrAccount.account] = newDripsHash;
+            // in assembly => _storage().accountDripsHashes[userOrAccount.user][userOrAccount.account] = newDripsHash;
+            uint256 account = userOrAccount.account;
+            assembly {
+                // 2 is the position in the SLOT Storage Struct of the accountDripsHashes
+                mstore(0x20, add(sp, 2))
+                mstore(0x00, user)
+                let p := keccak256(0x00, 0x40)
+                mstore(0x00, account)
+                mstore(0x20, p)
+                sstore(keccak256(0x00, 0x40), newDripsHash)
+            }
         } else {
-            _storage().userDripsHashes[userOrAccount.user] = newDripsHash;
+            // in assembly => _storage().userDripsHashes[userOrAccount.user] = newDripsHash;
+            assembly {
+                // 1 is the position in the SLOT Storage Struct of the userDripsHashes
+                mstore(0x20, add(sp, 1))
+                mstore(0x00, user)
+                sstore(keccak256(0x00, 0x40), newDripsHash)
+            }
         }
     }
 
