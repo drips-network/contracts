@@ -62,10 +62,6 @@ abstract contract DripsHub {
     uint32 public constant MAX_SPLITS_RECEIVERS = 200;
     /// @notice The total splits weight of a user
     uint32 public constant TOTAL_SPLITS_WEIGHT = 1_000_000;
-    /// @notice The ERC-1967 storage slot for the contract.
-    /// It holds a single `DripsHubStorage` structure.
-    bytes32 private constant SLOT_STORAGE =
-        bytes32(uint256(keccak256("eip1967.dripsHub.storage")) - 1);
 
     /// @notice Emitted when drips from a user to a receiver are updated.
     /// Funds are being dripped on every second between the event block's timestamp (inclusively)
@@ -207,14 +203,11 @@ abstract contract DripsHub {
 
     /// @notice Returns the contract storage.
     /// @return dripsHubStorage The storage.
-    function _storage() internal pure returns (DripsHubStorage storage dripsHubStorage) {
-        bytes32 slot = SLOT_STORAGE;
-        // solhint-disable-next-line no-inline-assembly
-        assembly {
-            // Based on OpenZeppelin's StorageSlot
-            dripsHubStorage.slot := slot
-        }
-    }
+    function _dripsHubStorage()
+        internal
+        view
+        virtual
+        returns (DripsHubStorage storage dripsHubStorage);
 
     /// @notice Returns amount of received funds available for collection for a user.
     /// @param user The user
@@ -226,7 +219,7 @@ abstract contract DripsHub {
         view
         returns (uint128 collected, uint128 split)
     {
-        ReceiverState storage receiver = _storage().receiverStates[user];
+        ReceiverState storage receiver = _dripsHubStorage().receiverStates[user];
         _assertCurrSplits(user, currReceivers);
 
         // Collectable independently from cycles
@@ -276,7 +269,7 @@ abstract contract DripsHub {
     /// @param user The user
     /// @return flushable The number of cycles which can be flushed
     function flushableCycles(address user) public view returns (uint64 flushable) {
-        uint64 nextCollectedCycle = _storage().receiverStates[user].nextCollectedCycle;
+        uint64 nextCollectedCycle = _dripsHubStorage().receiverStates[user].nextCollectedCycle;
         if (nextCollectedCycle == 0) return 0;
         uint64 currFinishedCycle = _currTimestamp() / cycleSecs;
         return currFinishedCycle + 1 - nextCollectedCycle;
@@ -300,7 +293,7 @@ abstract contract DripsHub {
         uint64 cycles = maxCycles < flushable ? maxCycles : flushable;
         flushable -= cycles;
         uint128 collected = _flushCyclesInternal(user, cycles);
-        if (collected > 0) _storage().receiverStates[user].collectable += collected;
+        if (collected > 0) _dripsHubStorage().receiverStates[user].collectable += collected;
     }
 
     /// @notice Collects all received funds available for the user,
@@ -313,7 +306,8 @@ abstract contract DripsHub {
         internal
         returns (uint128 collected, uint128 split)
     {
-        mapping(address => ReceiverState) storage receiverStates = _storage().receiverStates;
+        mapping(address => ReceiverState) storage receiverStates = _dripsHubStorage()
+            .receiverStates;
         ReceiverState storage receiver = receiverStates[user];
         _assertCurrSplits(user, currReceivers);
 
@@ -352,7 +346,7 @@ abstract contract DripsHub {
         returns (uint128 collectedAmt)
     {
         if (count == 0) return 0;
-        ReceiverState storage receiver = _storage().receiverStates[user];
+        ReceiverState storage receiver = _dripsHubStorage().receiverStates[user];
         uint64 cycle = receiver.nextCollectedCycle;
         int128 cycleAmt = 0;
         for (uint256 i = 0; i < count; i++) {
@@ -379,7 +373,7 @@ abstract contract DripsHub {
         address receiver,
         uint128 amt
     ) internal {
-        _storage().receiverStates[receiver].collectable += amt;
+        _dripsHubStorage().receiverStates[receiver].collectable += amt;
         if (userOrAccount.isAccount) {
             emit Given(userOrAccount.user, userOrAccount.account, receiver, amt);
         } else {
@@ -392,7 +386,7 @@ abstract contract DripsHub {
     /// @param user The user
     /// @return currDripsHash The current user's drips hash
     function dripsHash(address user) public view returns (bytes32 currDripsHash) {
-        return _storage().userDripsHashes[user];
+        return _dripsHubStorage().userDripsHashes[user];
     }
 
     /// @notice Current user account's drips hash, see `hashDrips`.
@@ -400,7 +394,7 @@ abstract contract DripsHub {
     /// @param account The account
     /// @return currDripsHash The current user account's drips hash
     function dripsHash(address user, uint256 account) public view returns (bytes32 currDripsHash) {
-        return _storage().accountDripsHashes[user][account];
+        return _dripsHubStorage().accountDripsHashes[user][account];
     }
 
     /// @notice Sets the user's or the account's drips configuration.
@@ -608,7 +602,7 @@ abstract contract DripsHub {
             _emitDripping(userOrAccount, receiver, uint128(newAmtPerSec), newEndTime);
             // The receiver may have never been used
             if (!pickCurr) {
-                ReceiverState storage receiverState = _storage().receiverStates[receiver];
+                ReceiverState storage receiverState = _dripsHubStorage().receiverStates[receiver];
                 // The receiver has never been used, initialize it
                 if (receiverState.nextCollectedCycle == 0) {
                     receiverState.nextCollectedCycle = _currTimestamp() / cycleSecs + 1;
@@ -669,9 +663,11 @@ abstract contract DripsHub {
     ) internal view {
         bytes32 expectedHash;
         if (userOrAccount.isAccount) {
-            expectedHash = _storage().accountDripsHashes[userOrAccount.user][userOrAccount.account];
+            expectedHash = _dripsHubStorage().accountDripsHashes[userOrAccount.user][
+                userOrAccount.account
+            ];
         } else {
-            expectedHash = _storage().userDripsHashes[userOrAccount.user];
+            expectedHash = _dripsHubStorage().userDripsHashes[userOrAccount.user];
         }
         bytes32 actualHash = hashDrips(lastUpdate, lastBalance, currReceivers);
         require(actualHash == expectedHash, "Invalid current drips configuration");
@@ -689,9 +685,11 @@ abstract contract DripsHub {
     ) internal {
         bytes32 newDripsHash = hashDrips(_currTimestamp(), newBalance, newReceivers);
         if (userOrAccount.isAccount) {
-            _storage().accountDripsHashes[userOrAccount.user][userOrAccount.account] = newDripsHash;
+            _dripsHubStorage().accountDripsHashes[userOrAccount.user][
+                userOrAccount.account
+            ] = newDripsHash;
         } else {
-            _storage().userDripsHashes[userOrAccount.user] = newDripsHash;
+            _dripsHubStorage().userDripsHashes[userOrAccount.user] = newDripsHash;
         }
     }
 
@@ -732,7 +730,7 @@ abstract contract DripsHub {
     ) internal returns (uint128 collected, uint128 split) {
         (collected, split) = _collectInternal(user, currReceivers);
         _assertSplitsValid(newReceivers);
-        _storage().splitsHash[user] = hashSplits(newReceivers);
+        _dripsHubStorage().splitsHash[user] = hashSplits(newReceivers);
         emit SplitsUpdated(user, newReceivers);
         _transfer(user, int128(collected));
     }
@@ -762,7 +760,7 @@ abstract contract DripsHub {
     /// @param user The user
     /// @return currSplitsHash The current user's splits hash
     function splitsHash(address user) public view returns (bytes32 currSplitsHash) {
-        return _storage().splitsHash[user];
+        return _dripsHubStorage().splitsHash[user];
     }
 
     /// @notice Asserts that the list of splits receivers is the user's currently used one.
@@ -770,7 +768,7 @@ abstract contract DripsHub {
     /// @param currReceivers The list of the user's current splits receivers.
     function _assertCurrSplits(address user, SplitsReceiver[] memory currReceivers) internal view {
         require(
-            hashSplits(currReceivers) == _storage().splitsHash[user],
+            hashSplits(currReceivers) == _dripsHubStorage().splitsHash[user],
             "Invalid current splits receivers"
         );
     }
@@ -805,7 +803,9 @@ abstract contract DripsHub {
         int128 amtPerSecDelta
     ) internal {
         if (amtPerSecDelta == 0) return;
-        mapping(uint64 => AmtDelta) storage amtDeltas = _storage().receiverStates[user].amtDeltas;
+        mapping(uint64 => AmtDelta) storage amtDeltas = _dripsHubStorage()
+            .receiverStates[user]
+            .amtDeltas;
         // In order to set a delta on a specific timestamp it must be introduced in two cycles.
         // The cycle delta is split proportionally based on how much this cycle is affected.
         // The next cycle has the rest of the delta applied, so the update is fully completed.

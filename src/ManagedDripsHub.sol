@@ -18,9 +18,9 @@ import {DripsHub, SplitsReceiver} from "./DripsHub.sol";
 /// When a proxy uses such contract via delegation, it's initially unpaused.
 abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable {
     /// @notice The ERC-1967 storage slot for the contract.
-    /// It holds a single boolean indicating if the contract is paused.
-    bytes32 private constant SLOT_PAUSED =
-        bytes32(uint256(keccak256("eip1967.managedDripsHub.paused")) - 1);
+    /// It holds a single `ManagedDripsHubStorage` structure.
+    bytes32 private constant STORAGE_SLOT =
+        bytes32(uint256(keccak256("eip1967.managedDripsHub.storage")) - 1);
 
     /// @notice Emitted when the pause is triggered.
     /// @param account The account which triggered the change.
@@ -30,6 +30,11 @@ abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable {
     /// @param account The account which triggered the change.
     event Unpaused(address account);
 
+    struct ManagedDripsHubStorage {
+        DripsHubStorage dripsHubStorage;
+        bool paused;
+    }
+
     /// @notice Initializes the contract in paused state and with no admin.
     /// The contract instance can be used only as a call delegation target for a proxy.
     /// @param cycleSecs The length of cycleSecs to be used in the contract instance.
@@ -37,7 +42,7 @@ abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable {
     /// between being taken from the users' drips balances and being collectable by their receivers.
     /// High value makes collecting cheaper by making it process less cycles for a given time range.
     constructor(uint64 cycleSecs) DripsHub(cycleSecs) {
-        _pausedSlot().value = true;
+        _managedDripsHubStorage().paused = true;
     }
 
     /// @notice Collects all received funds available for the user
@@ -101,18 +106,18 @@ abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable {
 
     /// @notice Returns true if the contract is paused, and false otherwise.
     function paused() public view returns (bool isPaused) {
-        return _pausedSlot().value;
+        return _managedDripsHubStorage().paused;
     }
 
     /// @notice Triggers stopped state.
     function pause() public onlyAdmin whenNotPaused {
-        _pausedSlot().value = true;
+        _managedDripsHubStorage().paused = true;
         emit Paused(msg.sender);
     }
 
     /// @notice Returns to normal state.
     function unpause() public onlyAdmin whenPaused {
-        _pausedSlot().value = false;
+        _managedDripsHubStorage().paused = false;
         emit Unpaused(msg.sender);
     }
 
@@ -128,9 +133,30 @@ abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable {
         _;
     }
 
-    /// @notice Gets the storage slot holding the paused flag.
-    function _pausedSlot() private pure returns (StorageSlot.BooleanSlot storage) {
-        return StorageSlot.getBooleanSlot(SLOT_PAUSED);
+    /// @notice Returns the DripsHub storage.
+    /// @return storageRef The storage.
+    function _dripsHubStorage()
+        internal
+        view
+        override
+        returns (DripsHubStorage storage storageRef)
+    {
+        return _managedDripsHubStorage().dripsHubStorage;
+    }
+
+    /// @notice Returns the ManagedDripsHub contract storage.
+    /// @return storageRef The storage.
+    function _managedDripsHubStorage()
+        internal
+        pure
+        returns (ManagedDripsHubStorage storage storageRef)
+    {
+        bytes32 slot = STORAGE_SLOT;
+        // solhint-disable-next-line no-inline-assembly
+        assembly {
+            // Based on OpenZeppelin's StorageSlot
+            storageRef.slot := slot
+        }
     }
 }
 
