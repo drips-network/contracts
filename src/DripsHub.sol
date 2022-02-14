@@ -692,7 +692,8 @@ abstract contract DripsHub {
         address user = userOrAccount.user;
         if (userOrAccount.isAccount) {
             // in assembly => _storage().accountDripsHashes[userOrAccount.user][userOrAccount.account] = newDripsHash;
-            uint account = userOrAccount.account;
+            uint256 account = userOrAccount.account;
+            // solhint-disable-next-line no-inline-assembly
             assembly {
                 mstore(0x20, add(sp, 2)) // 2: position of accountsDripsHash in struct
                 mstore(0x00, user)
@@ -700,15 +701,16 @@ abstract contract DripsHub {
                 mstore(0x00, account) // position account
                 mstore(0x20, userp)
                 sstore(keccak256(0x00, 0x40), newDripsHash)
-            }            
+            }
         } else {
             // in assembly => _storage().userDripsHashes[userOrAccount.user] = newDripsHash;
+            // solhint-disable-next-line no-inline-assembly
             assembly {
                 mstore(0x20, add(sp, 1)) // 1: position of userDripsHashes in struct
                 mstore(0x00, user)
                 sstore(keccak256(0x00, 0x40), newDripsHash)
             }
-        } 
+        }
     }
 
     /// @notice Calculates the hash of the drips configuration.
