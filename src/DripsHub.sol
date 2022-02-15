@@ -697,9 +697,8 @@ abstract contract DripsHub {
             assembly {
                 mstore(0x20, add(sp, 2)) // 2: position of accountsDripsHash in struct
                 mstore(0x00, user)
-                let userp := keccak256(0x00, 0x40)
+                mstore(0x20, keccak256(0x00, 0x40))
                 mstore(0x00, account)
-                mstore(0x20, userp)
                 sstore(keccak256(0x00, 0x40), newDripsHash)
             }
         } else {
