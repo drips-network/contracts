@@ -14,10 +14,6 @@ jobs:
       - uses: onbjerg/foundry-toolchain@v1
         with:
           version: nightly
-      - uses: cachix/cachix-action@v10
-        with:
-          name: radicle-drips-hub
-          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
       - name: install
         run: make install
