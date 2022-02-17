@@ -6,12 +6,12 @@ Radicle Drips Hub is the smart contract running the drips and splits ecosystem.
 Radicle Drips Hub uses [foundry](https://github.com/gakonst/foundry) for development. Please install the `forge` client. Then, run the following command to install the dependencies:
 
 ```bash
-forge install
+make install
 ```
 
 ### Run all tests
 ```bash
-forge test
+make test
 ```
 
 ### Run specific tests
