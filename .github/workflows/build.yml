@@ -8,19 +8,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          submodules: recursive
       - uses: actions/setup-node@v2
-      - uses: cachix/install-nix-action@v13
+      - uses: onbjerg/foundry-toolchain@v1
+        with:
+          version: nightly
       - uses: cachix/cachix-action@v10
         with:
           name: radicle-drips-hub
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+
       - name: install
-        run: nix-shell --run "make install"
+        run: make install
+
       - name: lint
-        run: nix-shell --run "make lint"
+        run: make lint 
+
       - name: test
         if: ${{ github.event_name == 'pull_request' }}
-        run: nix-shell --run "make test"
-      - name: test deep
-        if: ${{ github.event_name == 'push' }}
-        run: nix-shell --run "make test_deep"
+        run: make test
