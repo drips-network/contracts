@@ -1,5 +1,5 @@
-install     : forge_update yarn_install
-forge_update :; forge update
+install     : forge_install yarn_install
+forge_install:; forge install
 yarn_install:; yarn install
 
 build       :; forge build

@@ -15,6 +15,9 @@ jobs:
         with:
           version: nightly
 
+      - name: Setup environment
+        run: export FOUNDRY_PROFILE=ci
+
       - name: install
         run: make install
 

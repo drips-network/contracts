@@ -1,15 +1,21 @@
 [default]
-src = 'src'
-out = 'out'
-libs = ['lib']
-solc-version = "0.8.7"
-optimizer = true
+solc_version = "0.8.7"
 optimizer_runs = 1000000
 verbosity = 1
-fuzz_runs = 5 
+fuzz_runs = 5
 remappings = [
-    'ds-test/=lib/ds-test/src/',
-    'openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/',
+    'forge-std/=lib/forge-std/src/',
+    'ds-test/=lib/forge-std/lib/ds-test/src/',
+    'openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/'
 ]
 
-# See more config options https://github.com/gakonst/foundry/tree/master/config
+[ci]
+solc_version = "0.8.7"
+optimizer_runs = 1000000
+verbosity = 1
+fuzz_runs = 50000
+remappings = [
+    'forge-std/=lib/forge-std/src/',
+    'ds-test/=lib/forge-std/lib/ds-test/src/',
+    'openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/'
+]
