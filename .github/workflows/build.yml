@@ -13,7 +13,7 @@ jobs:
       - uses: actions/setup-node@v2
       - uses: onbjerg/foundry-toolchain@v1
         with:
-          version: nightly-26b225654ba97218dbb211c0623062c156556360
+          version: nightly
 
       - name: Setup environment
         run: export FOUNDRY_PROFILE=ci
