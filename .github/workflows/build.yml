@@ -4,13 +4,14 @@ on:
   push:
     branches: [ master ]
 
-env:
-  FOUNDRY_PROFILE: ci 
-
 jobs:
   tests:
     runs-on: ubuntu-latest
     steps:
+      - name: Environment setup
+        env:
+          FOUNDRY_FUZZ_RUNS: 50000
+
       - uses: actions/checkout@v2
         with:
           submodules: recursive

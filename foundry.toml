@@ -8,14 +8,3 @@ remappings = [
     'ds-test/=lib/forge-std/lib/ds-test/src/',
     'openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/'
 ]
-
-[ci]
-solc_version = "0.8.7"
-optimizer_runs = 1000000
-verbosity = 1
-fuzz_runs = 50000
-remappings = [
-    'forge-std/=lib/forge-std/src/',
-    'ds-test/=lib/forge-std/lib/ds-test/src/',
-    'openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/'
-]
