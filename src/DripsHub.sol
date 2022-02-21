@@ -160,11 +160,11 @@ abstract contract DripsHub {
 
     struct DripsHubStorage {
         /// @notice User drips states.
-        /// The keys are the user address and the asset ID.
-        mapping(address => mapping(uint256 => DripsState)) dripsStates;
+        /// The keys are the user ID and the asset ID.
+        mapping(uint256 => mapping(uint256 => DripsState)) dripsStates;
         /// @notice User splits states.
-        /// The key is the user address.
-        mapping(address => SplitsState) splitsStates;
+        /// The key is the user ID.
+        mapping(uint256 => SplitsState) splitsStates;
     }
 
     struct DripsState {
@@ -178,9 +178,6 @@ abstract contract DripsHub {
         /// This means that the value of `amtDeltas[nextCollectedCycle].thisCycle` is always
         /// relative to 0 or in other words it's an absolute value independent from other cycles.
         mapping(uint64 => AmtDelta) amtDeltas;
-        /// @notice User accounts' configuration hashes, see `hashDrips`.
-        /// The key is the account ID.
-        mapping(uint256 => bytes32) accountDripsHashes;
     }
 
     struct AmtDelta {
@@ -192,7 +189,6 @@ abstract contract DripsHub {
 
     struct SplitsState {
         /// @notice Users' splits configuration hashes, see `hashSplits`.
-        /// The key is the user address.
         bytes32 splitsHash;
         /// @notice The amount collectable independently from cycles
         /// The key is the asset ID.
@@ -225,13 +221,14 @@ abstract contract DripsHub {
         view
         returns (uint128 collected, uint128 split)
     {
+        uint256 userId = calcUserId(user);
         DripsHubStorage storage dripsHubStorage = _dripsHubStorage();
-        DripsState storage dripsState = dripsHubStorage.dripsStates[user][DUMMY_ASSET];
+        DripsState storage dripsState = dripsHubStorage.dripsStates[userId][DUMMY_ASSET];
 
         _assertCurrSplits(user, currReceivers);
 
         // Collectable independently from cycles
-        collected = dripsHubStorage.splitsStates[user].collectables[DUMMY_ASSET];
+        collected += dripsHubStorage.splitsStates[userId].collectables[DUMMY_ASSET];
 
         // Collectable from cycles
         uint64 collectedCycle = dripsState.nextCollectedCycle;
@@ -278,7 +275,7 @@ abstract contract DripsHub {
     /// @return flushable The number of cycles which can be flushed
     function flushableCycles(address user) public view returns (uint64 flushable) {
         uint64 nextCollectedCycle = _dripsHubStorage()
-        .dripsStates[user][DUMMY_ASSET].nextCollectedCycle;
+        .dripsStates[calcUserId(user)][DUMMY_ASSET].nextCollectedCycle;
         if (nextCollectedCycle == 0) return 0;
         uint64 currFinishedCycle = _currTimestamp() / cycleSecs;
         return currFinishedCycle + 1 - nextCollectedCycle;
@@ -303,7 +300,9 @@ abstract contract DripsHub {
         flushable -= cycles;
         uint128 collected = _flushCyclesInternal(user, cycles);
         if (collected > 0)
-            _dripsHubStorage().splitsStates[user].collectables[DUMMY_ASSET] += collected;
+            _dripsHubStorage().splitsStates[calcUserId(user)].collectables[
+                DUMMY_ASSET
+            ] += collected;
     }
 
     /// @notice Collects all received funds available for the user,
@@ -316,12 +315,12 @@ abstract contract DripsHub {
         internal
         returns (uint128 collected, uint128 split)
     {
-        mapping(address => SplitsState) storage splitsStates = _dripsHubStorage().splitsStates;
+        mapping(uint256 => SplitsState) storage splitsStates = _dripsHubStorage().splitsStates;
 
         _assertCurrSplits(user, currReceivers);
 
         // Collectable independently from cycles
-        SplitsState storage splitsState = splitsStates[user];
+        SplitsState storage splitsState = splitsStates[calcUserId(user)];
         collected = splitsState.collectables[DUMMY_ASSET];
         if (collected > 0) splitsState.collectables[DUMMY_ASSET] = 0;
 
@@ -339,7 +338,7 @@ abstract contract DripsHub {
                 );
                 split += splitsAmt;
                 address splitsReceiver = currReceivers[i].receiver;
-                splitsStates[splitsReceiver].collectables[DUMMY_ASSET] += splitsAmt;
+                splitsStates[calcUserId(splitsReceiver)].collectables[DUMMY_ASSET] += splitsAmt;
                 emit Split(user, splitsReceiver, splitsAmt);
             }
             collected -= split;
@@ -356,7 +355,9 @@ abstract contract DripsHub {
         returns (uint128 collectedAmt)
     {
         if (count == 0) return 0;
-        DripsState storage dripsState = _dripsHubStorage().dripsStates[user][DUMMY_ASSET];
+        DripsState storage dripsState = _dripsHubStorage().dripsStates[calcUserId(user)][
+            DUMMY_ASSET
+        ];
         uint64 cycle = dripsState.nextCollectedCycle;
         int128 cycleAmt = 0;
         for (uint256 i = 0; i < count; i++) {
@@ -383,7 +384,7 @@ abstract contract DripsHub {
         address receiver,
         uint128 amt
     ) internal {
-        _dripsHubStorage().splitsStates[receiver].collectables[DUMMY_ASSET] += amt;
+        _dripsHubStorage().splitsStates[calcUserId(receiver)].collectables[DUMMY_ASSET] += amt;
         if (userOrAccount.isAccount) {
             emit Given(userOrAccount.user, userOrAccount.account, receiver, amt);
         } else {
@@ -396,7 +397,7 @@ abstract contract DripsHub {
     /// @param user The user
     /// @return currDripsHash The current user's drips hash
     function dripsHash(address user) public view returns (bytes32 currDripsHash) {
-        return _dripsHubStorage().dripsStates[user][DUMMY_ASSET].dripsHash;
+        return _dripsHubStorage().dripsStates[calcUserId(user)][DUMMY_ASSET].dripsHash;
     }
 
     /// @notice Current user account's drips hash, see `hashDrips`.
@@ -404,7 +405,7 @@ abstract contract DripsHub {
     /// @param account The account
     /// @return currDripsHash The current user account's drips hash
     function dripsHash(address user, uint256 account) public view returns (bytes32 currDripsHash) {
-        return _dripsHubStorage().dripsStates[user][DUMMY_ASSET].accountDripsHashes[account];
+        return _dripsHubStorage().dripsStates[calcUserId(user, account)][DUMMY_ASSET].dripsHash;
     }
 
     /// @notice Sets the user's or the account's drips configuration.
@@ -612,9 +613,9 @@ abstract contract DripsHub {
             _emitDripping(userOrAccount, receiver, uint128(newAmtPerSec), newEndTime);
             // The receiver may have never been used
             if (!pickCurr) {
-                DripsState storage dripsState = _dripsHubStorage().dripsStates[receiver][
-                    DUMMY_ASSET
-                ];
+                DripsState storage dripsState = _dripsHubStorage().dripsStates[
+                    calcUserId(receiver)
+                ][DUMMY_ASSET];
                 // The receiver has never been used, initialize it
                 if (dripsState.nextCollectedCycle == 0) {
                     dripsState.nextCollectedCycle = _currTimestamp() / cycleSecs + 1;
@@ -673,15 +674,8 @@ abstract contract DripsHub {
         uint128 lastBalance,
         DripsReceiver[] memory currReceivers
     ) internal view {
-        DripsState storage dripsState = _dripsHubStorage().dripsStates[userOrAccount.user][
-            DUMMY_ASSET
-        ];
-        bytes32 expectedHash;
-        if (userOrAccount.isAccount) {
-            expectedHash = dripsState.accountDripsHashes[userOrAccount.account];
-        } else {
-            expectedHash = dripsState.dripsHash;
-        }
+        bytes32 expectedHash = _dripsHubStorage()
+        .dripsStates[calcUserId(userOrAccount)][DUMMY_ASSET].dripsHash;
         bytes32 actualHash = hashDrips(lastUpdate, lastBalance, currReceivers);
         require(actualHash == expectedHash, "Invalid current drips configuration");
     }
@@ -696,15 +690,9 @@ abstract contract DripsHub {
         uint128 newBalance,
         DripsReceiver[] memory newReceivers
     ) internal {
-        DripsState storage dripsState = _dripsHubStorage().dripsStates[userOrAccount.user][
-            DUMMY_ASSET
-        ];
         bytes32 newDripsHash = hashDrips(_currTimestamp(), newBalance, newReceivers);
-        if (userOrAccount.isAccount) {
-            dripsState.accountDripsHashes[userOrAccount.account] = newDripsHash;
-        } else {
-            dripsState.dripsHash = newDripsHash;
-        }
+        _dripsHubStorage()
+        .dripsStates[calcUserId(userOrAccount)][DUMMY_ASSET].dripsHash = newDripsHash;
     }
 
     /// @notice Calculates the hash of the drips configuration.
@@ -744,7 +732,7 @@ abstract contract DripsHub {
     ) internal returns (uint128 collected, uint128 split) {
         (collected, split) = _collectInternal(user, currReceivers);
         _assertSplitsValid(newReceivers);
-        _dripsHubStorage().splitsStates[user].splitsHash = hashSplits(newReceivers);
+        _dripsHubStorage().splitsStates[calcUserId(user)].splitsHash = hashSplits(newReceivers);
         emit SplitsUpdated(user, newReceivers);
         _transfer(user, int128(collected));
     }
@@ -774,7 +762,7 @@ abstract contract DripsHub {
     /// @param user The user
     /// @return currSplitsHash The current user's splits hash
     function splitsHash(address user) public view returns (bytes32 currSplitsHash) {
-        return _dripsHubStorage().splitsStates[user].splitsHash;
+        return _dripsHubStorage().splitsStates[calcUserId(user)].splitsHash;
     }
 
     /// @notice Asserts that the list of splits receivers is the user's currently used one.
@@ -782,7 +770,8 @@ abstract contract DripsHub {
     /// @param currReceivers The list of the user's current splits receivers.
     function _assertCurrSplits(address user, SplitsReceiver[] memory currReceivers) internal view {
         require(
-            hashSplits(currReceivers) == _dripsHubStorage().splitsStates[user].splitsHash,
+            hashSplits(currReceivers) ==
+                _dripsHubStorage().splitsStates[calcUserId(user)].splitsHash,
             "Invalid current splits receivers"
         );
     }
@@ -823,9 +812,8 @@ abstract contract DripsHub {
         uint64 thisCycle = timestamp / cycleSecs + 1;
         uint64 nextCycleSecs = timestamp % cycleSecs;
         uint64 thisCycleSecs = cycleSecs - nextCycleSecs;
-        AmtDelta storage amtDelta = _dripsHubStorage().dripsStates[user][DUMMY_ASSET].amtDeltas[
-            thisCycle
-        ];
+        AmtDelta storage amtDelta = _dripsHubStorage()
+        .dripsStates[calcUserId(user)][DUMMY_ASSET].amtDeltas[thisCycle];
         amtDelta.thisCycle += int128(uint128(thisCycleSecs)) * amtPerSecDelta;
         amtDelta.nextCycle += int128(uint128(nextCycleSecs)) * amtPerSecDelta;
     }
@@ -840,6 +828,22 @@ abstract contract DripsHub {
         returns (UserOrAccount memory)
     {
         return UserOrAccount({isAccount: true, user: user, account: account});
+    }
+
+    function calcUserId(UserOrAccount memory userOrAccount) public pure returns (uint256) {
+        if (userOrAccount.isAccount) {
+            return calcUserId(userOrAccount.user, userOrAccount.account);
+        } else {
+            return calcUserId(userOrAccount.user);
+        }
+    }
+
+    function calcUserId(address user) public pure returns (uint256) {
+        return uint256(keccak256(abi.encode(user)));
+    }
+
+    function calcUserId(address user, uint256 account) public pure returns (uint256) {
+        return uint256(keccak256(abi.encode(user, account)));
     }
 
     function _currTimestamp() internal view returns (uint64) {
