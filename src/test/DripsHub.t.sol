@@ -124,7 +124,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
 
     function testCollectRevertsIfInvalidCurrSplitsReceivers() public {
         setSplits(user, splitsReceivers(receiver, 1));
-        try user.collect(address(user), splitsReceivers(receiver, 2)) {
+        try user.collect(address(user), defaultAsset, splitsReceivers(receiver, 2)) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, "Invalid current splits receivers", "Invalid collect revert reason");
@@ -147,7 +147,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
 
     function testCollectableRevertsIfInvalidCurrSplitsReceivers() public {
         setSplits(user, splitsReceivers(receiver, 1));
-        try user.collectable(splitsReceivers(receiver, 2)) {
+        try user.collectable(defaultAsset, splitsReceivers(receiver, 2)) {
             assertTrue(false, "Collectable hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(
@@ -340,8 +340,9 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         uint64 lastUpdate = uint64(block.timestamp);
         warpBy(4);
         // User had 4 second paying 1 per second
-        uint256 expectedBalance = user.balance() + 6;
+        uint256 expectedBalance = user.balance(defaultAsset) + 6;
         (uint128 newBalance, int128 realBalanceDelta) = user.setDrips(
+            defaultAsset,
             lastUpdate,
             10,
             receivers,

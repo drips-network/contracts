@@ -24,7 +24,7 @@ contract DaiDripsHub is ERC20DripsHub {
         uint64 cycleSecs,
         IDai _dai,
         IERC20Reserve reserve
-    ) ERC20DripsHub(cycleSecs, _dai, reserve) {
+    ) ERC20DripsHub(cycleSecs, reserve) {
         dai = _dai;
     }
 
@@ -44,7 +44,15 @@ contract DaiDripsHub is ERC20DripsHub {
         PermitArgs calldata permitArgs
     ) public whenNotPaused returns (uint128 newBalance, int128 realBalanceDelta) {
         _permit(permitArgs);
-        return setDrips(lastUpdate, lastBalance, currReceivers, balanceDelta, newReceivers);
+        return
+            setDrips(
+                uint160(address(dai)),
+                lastUpdate,
+                lastBalance,
+                currReceivers,
+                balanceDelta,
+                newReceivers
+            );
     }
 
     /// @notice Sets the drips configuration of an account of the `msg.sender`
@@ -81,7 +89,7 @@ contract DaiDripsHub is ERC20DripsHub {
         PermitArgs calldata permitArgs
     ) public whenNotPaused {
         _permit(permitArgs);
-        give(receiver, amt);
+        give(receiver, uint160(address(dai)), amt);
     }
 
     /// @notice Gives funds from the account of the `msg.sender` to the receiver
@@ -98,7 +106,7 @@ contract DaiDripsHub is ERC20DripsHub {
         PermitArgs calldata permitArgs
     ) public whenNotPaused {
         _permit(permitArgs);
-        give(account, receiver, amt);
+        give(account, receiver, uint160(address(dai)), amt);
     }
 
     /// @notice Permits the drips hub to spend the message sender's Dai.

@@ -48,16 +48,16 @@ abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable {
     /// @notice Collects all received funds available for the user
     /// and transfers them out of the drips hub contract to that user's wallet.
     /// @param user The user
+    /// @param assetId The used asset ID
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collected The collected amount
     /// @return split The amount split to the user's splits receivers
-    function collect(address user, SplitsReceiver[] memory currReceivers)
-        public
-        override
-        whenNotPaused
-        returns (uint128 collected, uint128 split)
-    {
-        return super.collect(user, currReceivers);
+    function collect(
+        address user,
+        uint256 assetId,
+        SplitsReceiver[] memory currReceivers
+    ) public override whenNotPaused returns (uint128 collected, uint128 split) {
+        return super.collect(user, assetId, currReceivers);
     }
 
     /// @notice Flushes uncollected cycles of the user.
@@ -69,17 +69,17 @@ abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable {
     /// Calling this function allows spreading the analysis cost over multiple transactions.
     /// A cycle is never flushed more than once, even if this function is called many times.
     /// @param user The user
+    /// @param assetId The used asset ID
     /// @param maxCycles The maximum number of flushed cycles.
     /// If too low, flushing will be cheap, but will cut little gas from the next collection.
     /// If too high, flushing may become too expensive to fit in a single transaction.
     /// @return flushable The number of cycles which can be flushed
-    function flushCycles(address user, uint64 maxCycles)
-        public
-        override
-        whenNotPaused
-        returns (uint64 flushable)
-    {
-        return super.flushCycles(user, maxCycles);
+    function flushCycles(
+        address user,
+        uint256 assetId,
+        uint64 maxCycles
+    ) public override whenNotPaused returns (uint64 flushable) {
+        return super.flushCycles(user, assetId, maxCycles);
     }
 
     /// @notice Authorizes the contract upgrade. See `UUPSUpgradable` docs for more details.

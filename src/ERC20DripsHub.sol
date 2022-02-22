@@ -10,8 +10,6 @@ import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 /// @notice Drips hub contract for any ERC-20 token. Must be used via a proxy.
 /// See the base `DripsHub` and `ManagedDripsHub` contract docs for more details.
 contract ERC20DripsHub is ManagedDripsHub {
-    /// @notice The address of the ERC-20 contract which tokens the drips hub works with
-    IERC20 public immutable erc20;
     /// @notice The address of the ERC-20 reserve which the drips hub works with
     IERC20Reserve public immutable reserve;
 
@@ -19,20 +17,15 @@ contract ERC20DripsHub is ManagedDripsHub {
     /// Low value makes funds more available by shortening the average time of funds being frozen
     /// between being taken from the users' drips balances and being collectable by their receivers.
     /// High value makes collecting cheaper by making it process less cycles for a given time range.
-    /// @param _erc20 The address of an ERC-20 contract which tokens the drips hub will work with.
     /// @param _reserve The address of the ERC-20 reserve which the drips hub will work with
-    constructor(
-        uint64 cycleSecs,
-        IERC20 _erc20,
-        IERC20Reserve _reserve
-    ) ManagedDripsHub(cycleSecs) {
-        erc20 = _erc20;
+    constructor(uint64 cycleSecs, IERC20Reserve _reserve) ManagedDripsHub(cycleSecs) {
         reserve = _reserve;
     }
 
     /// @notice Sets the drips configuration of the `msg.sender`.
     /// Transfers funds to or from the sender to fulfill the update of the drips balance.
     /// The sender must first grant the contract a sufficient allowance.
+    /// @param assetId The used asset ID
     /// @param lastUpdate The timestamp of the last drips update of the `msg.sender`.
     /// If this is the first update, pass zero.
     /// @param lastBalance The drips balance after the last drips update of the `msg.sender`.
@@ -48,6 +41,7 @@ contract ERC20DripsHub is ManagedDripsHub {
     /// Pass it as `lastBalance` when updating that user or the account for the next time.
     /// @return realBalanceDelta The actually applied drips balance change.
     function setDrips(
+        uint256 assetId,
         uint64 lastUpdate,
         uint128 lastBalance,
         DripsReceiver[] memory currReceivers,
@@ -57,6 +51,7 @@ contract ERC20DripsHub is ManagedDripsHub {
         return
             _setDrips(
                 _userOrAccount(msg.sender),
+                assetId,
                 lastUpdate,
                 lastBalance,
                 currReceivers,
@@ -70,6 +65,7 @@ contract ERC20DripsHub is ManagedDripsHub {
     /// @param account The account
     function setDrips(
         uint256 account,
+        uint256 assetId,
         uint64 lastUpdate,
         uint128 lastBalance,
         DripsReceiver[] memory currReceivers,
@@ -79,6 +75,7 @@ contract ERC20DripsHub is ManagedDripsHub {
         return
             _setDrips(
                 _userOrAccount(msg.sender, account),
+                assetId,
                 lastUpdate,
                 lastBalance,
                 currReceivers,
@@ -91,9 +88,14 @@ contract ERC20DripsHub is ManagedDripsHub {
     /// The receiver can collect them immediately.
     /// Transfers the funds to be given from the sender's wallet to the drips hub contract.
     /// @param receiver The receiver
+    /// @param assetId The used asset ID
     /// @param amt The given amount
-    function give(address receiver, uint128 amt) public whenNotPaused {
-        _give(_userOrAccount(msg.sender), receiver, amt);
+    function give(
+        address receiver,
+        uint256 assetId,
+        uint128 amt
+    ) public whenNotPaused {
+        _give(_userOrAccount(msg.sender), receiver, assetId, amt);
     }
 
     /// @notice Gives funds from the account of the `msg.sender` to the receiver.
@@ -101,13 +103,15 @@ contract ERC20DripsHub is ManagedDripsHub {
     /// Transfers the funds to be given from the sender's wallet to the drips hub contract.
     /// @param account The account
     /// @param receiver The receiver
+    /// @param assetId The used asset ID
     /// @param amt The given amount
     function give(
         uint256 account,
         address receiver,
+        uint256 assetId,
         uint128 amt
     ) public whenNotPaused {
-        _give(_userOrAccount(msg.sender, account), receiver, amt);
+        _give(_userOrAccount(msg.sender, account), receiver, assetId, amt);
     }
 
     /// @notice Sets user splits configuration.
@@ -119,7 +123,12 @@ contract ERC20DripsHub is ManagedDripsHub {
         _setSplits(msg.sender, receivers);
     }
 
-    function _transfer(address user, int128 amt) internal override {
+    function _transfer(
+        address user,
+        uint256 assetId,
+        int128 amt
+    ) internal override {
+        IERC20 erc20 = IERC20(address(uint160(assetId)));
         if (amt > 0) {
             uint256 withdraw = uint128(amt);
             reserve.withdraw(erc20, withdraw);

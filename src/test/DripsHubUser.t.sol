@@ -5,7 +5,7 @@ pragma solidity ^0.8.7;
 import {DripsHub} from "../DripsHub.sol";
 import {EthDripsHub} from "../EthDripsHub.sol";
 import {ManagedDripsHub} from "../ManagedDripsHub.sol";
-import {SplitsReceiver, ERC20DripsHub, DripsReceiver} from "../ERC20DripsHub.sol";
+import {SplitsReceiver, ERC20DripsHub, DripsReceiver, IERC20} from "../ERC20DripsHub.sol";
 
 abstract contract DripsHubUser {
     DripsHub private immutable dripsHub;
@@ -14,9 +14,10 @@ abstract contract DripsHubUser {
         dripsHub = dripsHub_;
     }
 
-    function balance() public view virtual returns (uint256);
+    function balance(uint256 assetId) public view virtual returns (uint256);
 
     function setDrips(
+        uint256 assetId,
         uint64 lastUpdate,
         uint128 lastBalance,
         DripsReceiver[] calldata currReceivers,
@@ -26,6 +27,7 @@ abstract contract DripsHubUser {
 
     function setDrips(
         uint256 account,
+        uint256 assetId,
         uint64 lastUpdate,
         uint128 lastBalance,
         DripsReceiver[] calldata currReceivers,
@@ -33,37 +35,43 @@ abstract contract DripsHubUser {
         DripsReceiver[] calldata newReceivers
     ) public virtual returns (uint128 newBalance, int128 realBalanceDelta);
 
-    function give(address receiver, uint128 amt) public virtual;
+    function give(
+        address receiver,
+        uint256 assetId,
+        uint128 amt
+    ) public virtual;
 
     function give(
         uint256 account,
         address receiver,
+        uint256 assetId,
         uint128 amt
     ) public virtual;
 
     function setSplits(SplitsReceiver[] calldata receivers) public virtual;
 
-    function collect(address receiver, SplitsReceiver[] calldata currReceivers)
-        public
-        returns (uint128 collected, uint128 split)
-    {
-        return dripsHub.collect(receiver, currReceivers);
+    function collect(
+        address receiver,
+        uint256 assetId,
+        SplitsReceiver[] calldata currReceivers
+    ) public returns (uint128 collected, uint128 split) {
+        return dripsHub.collect(receiver, assetId, currReceivers);
     }
 
-    function collectable(SplitsReceiver[] calldata currReceivers)
+    function collectable(uint256 assetId, SplitsReceiver[] calldata currReceivers)
         public
         view
         returns (uint128 collected, uint128 split)
     {
-        return dripsHub.collectable(address(this), currReceivers);
+        return dripsHub.collectable(address(this), assetId, currReceivers);
     }
 
-    function flushableCycles() public view returns (uint64 flushable) {
-        return dripsHub.flushableCycles(address(this));
+    function flushableCycles(uint256 assetId) public view returns (uint64 flushable) {
+        return dripsHub.flushableCycles(address(this), assetId);
     }
 
-    function flushCycles(uint64 maxCycles) public returns (uint64 flushable) {
-        return dripsHub.flushCycles(address(this), maxCycles);
+    function flushCycles(uint256 assetId, uint64 maxCycles) public returns (uint64 flushable) {
+        return dripsHub.flushCycles(address(this), assetId, maxCycles);
     }
 
     function hashDrips(
@@ -74,12 +82,12 @@ abstract contract DripsHubUser {
         return dripsHub.hashDrips(lastUpdate, lastBalance, receivers);
     }
 
-    function dripsHash() public view returns (bytes32) {
-        return dripsHub.dripsHash(address(this));
+    function dripsHash(uint256 assetId) public view returns (bytes32) {
+        return dripsHub.dripsHash(address(this), assetId);
     }
 
-    function dripsHash(uint256 account) public view returns (bytes32 weightsHash) {
-        return dripsHub.dripsHash(address(this), account);
+    function dripsHash(uint256 account, uint256 assetId) public view returns (bytes32 weightsHash) {
+        return dripsHub.dripsHash(address(this), account, assetId);
     }
 
     function hashSplits(SplitsReceiver[] calldata receivers) public view returns (bytes32) {
@@ -130,34 +138,23 @@ contract ERC20DripsHubUser is ManagedDripsHubUser {
         dripsHub = dripsHub_;
     }
 
-    function balance() public view override returns (uint256) {
-        return dripsHub.erc20().balanceOf(address(this));
+    function balance(uint256 assetId) public view override returns (uint256) {
+        return IERC20(address(uint160(assetId))).balanceOf(address(this));
     }
 
     function setDrips(
+        uint256 assetId,
         uint64 lastUpdate,
         uint128 lastBalance,
         DripsReceiver[] calldata currReceivers,
         int128 balanceDelta,
         DripsReceiver[] calldata newReceivers
     ) public override returns (uint128 newBalance, int128 realBalanceDelta) {
-        if (balanceDelta > 0) dripsHub.erc20().approve(address(dripsHub), uint128(balanceDelta));
-        return
-            dripsHub.setDrips(lastUpdate, lastBalance, currReceivers, balanceDelta, newReceivers);
-    }
-
-    function setDrips(
-        uint256 account,
-        uint64 lastUpdate,
-        uint128 lastBalance,
-        DripsReceiver[] calldata currReceivers,
-        int128 balanceDelta,
-        DripsReceiver[] calldata newReceivers
-    ) public override returns (uint128 newBalance, int128 realBalanceDelta) {
-        if (balanceDelta > 0) dripsHub.erc20().approve(address(dripsHub), uint128(balanceDelta));
+        if (balanceDelta > 0)
+            IERC20(address(uint160(assetId))).approve(address(dripsHub), uint128(balanceDelta));
         return
             dripsHub.setDrips(
-                account,
+                assetId,
                 lastUpdate,
                 lastBalance,
                 currReceivers,
@@ -166,18 +163,46 @@ contract ERC20DripsHubUser is ManagedDripsHubUser {
             );
     }
 
-    function give(address receiver, uint128 amt) public override {
-        dripsHub.erc20().approve(address(dripsHub), amt);
-        dripsHub.give(receiver, amt);
+    function setDrips(
+        uint256 account,
+        uint256 assetId,
+        uint64 lastUpdate,
+        uint128 lastBalance,
+        DripsReceiver[] calldata currReceivers,
+        int128 balanceDelta,
+        DripsReceiver[] calldata newReceivers
+    ) public override returns (uint128 newBalance, int128 realBalanceDelta) {
+        if (balanceDelta > 0)
+            IERC20(address(uint160(assetId))).approve(address(dripsHub), uint128(balanceDelta));
+        return
+            dripsHub.setDrips(
+                account,
+                assetId,
+                lastUpdate,
+                lastBalance,
+                currReceivers,
+                balanceDelta,
+                newReceivers
+            );
+    }
+
+    function give(
+        address receiver,
+        uint256 assetId,
+        uint128 amt
+    ) public override {
+        IERC20(address(uint160(assetId))).approve(address(dripsHub), amt);
+        dripsHub.give(receiver, assetId, amt);
     }
 
     function give(
         uint256 account,
         address receiver,
+        uint256 assetId,
         uint128 amt
     ) public override {
-        dripsHub.erc20().approve(address(dripsHub), amt);
-        dripsHub.give(account, receiver, amt);
+        IERC20(address(uint160(assetId))).approve(address(dripsHub), amt);
+        dripsHub.give(account, receiver, assetId, amt);
     }
 
     function setSplits(SplitsReceiver[] calldata receivers) public override {
@@ -196,17 +221,20 @@ contract EthDripsHubUser is ManagedDripsHubUser {
         return;
     }
 
-    function balance() public view override returns (uint256) {
+    function balance(uint256 assetId) public view override returns (uint256) {
+        assetId;
         return address(this).balance;
     }
 
     function setDrips(
+        uint256 assetId,
         uint64 lastUpdate,
         uint128 lastBalance,
         DripsReceiver[] calldata currReceivers,
         int128 balanceDelta,
         DripsReceiver[] calldata newReceivers
     ) public override returns (uint128 newBalance, int128 realBalanceDelta) {
+        assetId;
         uint256 value = balanceDelta > 0 ? uint128(balanceDelta) : 0;
         uint128 reduceBalance = balanceDelta < 0 ? uint128(uint136(-int136(balanceDelta))) : 0;
         return
@@ -221,12 +249,14 @@ contract EthDripsHubUser is ManagedDripsHubUser {
 
     function setDrips(
         uint256 account,
+        uint256 assetId,
         uint64 lastUpdate,
         uint128 lastBalance,
         DripsReceiver[] calldata currReceivers,
         int128 balanceDelta,
         DripsReceiver[] calldata newReceivers
     ) public override returns (uint128 newBalance, int128 realBalanceDelta) {
+        assetId;
         uint256 value = balanceDelta > 0 ? uint128(balanceDelta) : 0;
         uint128 reduceBalance = balanceDelta < 0 ? uint128(-balanceDelta) : 0;
         return
@@ -240,15 +270,22 @@ contract EthDripsHubUser is ManagedDripsHubUser {
             );
     }
 
-    function give(address receiver, uint128 amt) public override {
+    function give(
+        address receiver,
+        uint256 assetId,
+        uint128 amt
+    ) public override {
+        assetId;
         dripsHub.give{value: amt}(receiver);
     }
 
     function give(
         uint256 account,
         address receiver,
+        uint256 assetId,
         uint128 amt
     ) public override {
+        assetId;
         dripsHub.give{value: amt}(account, receiver);
     }
 

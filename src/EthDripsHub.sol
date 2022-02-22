@@ -7,6 +7,9 @@ import {ManagedDripsHub} from "./ManagedDripsHub.sol";
 /// @notice Drips hub contract for Ether. Must be used via a proxy.
 /// See the base `DripsHub` contract docs for more details.
 contract EthDripsHub is ManagedDripsHub {
+    /// @notice The asset ID of Ether. This is the only asset used in EthDripsHub.
+    uint256 private constant ASSET_ID = 0;
+
     /// @param cycleSecs The length of cycleSecs to be used in the contract instance.
     /// Low value makes funds more available by shortening the average time of funds being frozen
     /// between being taken from the users' drips balances and being collectable by their receivers.
@@ -42,6 +45,7 @@ contract EthDripsHub is ManagedDripsHub {
         return
             _setDrips(
                 _userOrAccount(msg.sender),
+                ASSET_ID,
                 lastUpdate,
                 lastBalance,
                 currReceivers,
@@ -64,6 +68,7 @@ contract EthDripsHub is ManagedDripsHub {
         return
             _setDrips(
                 _userOrAccount(msg.sender, account),
+                ASSET_ID,
                 lastUpdate,
                 lastBalance,
                 currReceivers,
@@ -86,7 +91,7 @@ contract EthDripsHub is ManagedDripsHub {
     /// The funds to be given must be the value of the message.
     /// @param receiver The receiver
     function give(address receiver) public payable whenNotPaused {
-        _give(_userOrAccount(msg.sender), receiver, uint128(msg.value));
+        _give(_userOrAccount(msg.sender), receiver, ASSET_ID, uint128(msg.value));
     }
 
     /// @notice Gives funds from the account of the `msg.sender` to the receiver.
@@ -95,7 +100,7 @@ contract EthDripsHub is ManagedDripsHub {
     /// @param account The user's account
     /// @param receiver The receiver
     function give(uint256 account, address receiver) public payable whenNotPaused {
-        _give(_userOrAccount(msg.sender, account), receiver, uint128(msg.value));
+        _give(_userOrAccount(msg.sender, account), receiver, ASSET_ID, uint128(msg.value));
     }
 
     /// @notice Sets user splits configuration.
@@ -107,7 +112,12 @@ contract EthDripsHub is ManagedDripsHub {
         _setSplits(msg.sender, receivers);
     }
 
-    function _transfer(address user, int128 amt) internal override {
+    function _transfer(
+        address user,
+        uint256 assetId,
+        int128 amt
+    ) internal override {
+        assetId;
         // Take into account the amount already transferred into the drips hub
         amt += int128(uint128(msg.value));
         if (amt == 0) return;

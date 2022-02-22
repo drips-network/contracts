@@ -106,7 +106,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testCollectCanBePaused() public {
         admin.pause();
-        try admin.collect(address(admin), new SplitsReceiver[](0)) {
+        try admin.collect(address(admin), defaultAsset, new SplitsReceiver[](0)) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid collect revert reason");
@@ -115,7 +115,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testFlushCyclesCanBePaused() public {
         admin.pause();
-        try admin.flushCycles(1) {
+        try admin.flushCycles(defaultAsset, 1) {
             assertTrue(false, "FlushCycles hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid flushCycles revert reason");
@@ -124,7 +124,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testSetDripsCanBePaused() public {
         admin.pause();
-        try admin.setDrips(0, 0, new DripsReceiver[](0), 1, new DripsReceiver[](0)) {
+        try admin.setDrips(defaultAsset, 0, 0, new DripsReceiver[](0), 1, new DripsReceiver[](0)) {
             assertTrue(false, "SetDrips hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid setDrips revert reason");
@@ -133,7 +133,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testSetDripsFromAccountCanBePaused() public {
         admin.pause();
-        try admin.setDrips(0, 0, 0, new DripsReceiver[](0), 1, new DripsReceiver[](0)) {
+        try admin.setDrips(defaultAsset, 0, 0, new DripsReceiver[](0), 1, new DripsReceiver[](0)) {
             assertTrue(false, "SetDrips hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid setDrips revert reason");
@@ -142,7 +142,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testGiveCanBePaused() public {
         admin.pause();
-        try admin.give(address(user), 1) {
+        try admin.give(address(user), defaultAsset, 1) {
             assertTrue(false, "Give hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid give revert reason");
@@ -151,7 +151,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testGiveFromAccountCanBePaused() public {
         admin.pause();
-        try admin.give(0, address(user), 1) {
+        try admin.give(0, address(user), defaultAsset, 1) {
             assertTrue(false, "Give hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid giveFrom revert reason");
