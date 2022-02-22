@@ -12,7 +12,7 @@ jobs:
         with:
           submodules: recursive
       - uses: actions/setup-node@v2
-      - uses: CodeSandwich/foundry-toolchain@loggy
+      - uses: CodeSandwich/foundry-toolchain
         with:
           version: nightly-6547691c6123c1bdbed770fcd245f1e63092befe
 
