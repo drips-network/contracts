@@ -1,4 +1,3 @@
-# Change to trigger the ci
 # Radicle Drips Hub Contracts
 
 Radicle Drips Hub is the smart contract running the drips and splits ecosystem.

@@ -19,9 +19,6 @@ jobs:
       - name: install
         run: make install
 
-      - name: lint
-        run: make lint 
-
       - name: test
         if: ${{ github.event_name == 'pull_request' }}
         run: make test
