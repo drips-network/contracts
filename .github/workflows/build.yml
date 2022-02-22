@@ -22,12 +22,15 @@ jobs:
       - name: lint
         run: make lint
 
+      - name: trigger
+        run: echo TRIGGERCI
+
       - name: test
         if: ${{ github.event_name == 'pull_request' }}
         run: make test
 
       - name: test deep
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'push' }}
         env:
           FOUNDRY_FUZZ_RUNS: 50000
         run: make test
