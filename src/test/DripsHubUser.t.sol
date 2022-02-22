@@ -41,10 +41,7 @@ abstract contract DripsHubUser {
         uint128 amt
     ) public virtual;
 
-    function setSplits(
-        SplitsReceiver[] calldata currReceivers,
-        SplitsReceiver[] calldata newReceivers
-    ) public virtual returns (uint128 collected, uint128 split);
+    function setSplits(SplitsReceiver[] calldata receivers) public virtual;
 
     function collect(address receiver, SplitsReceiver[] calldata currReceivers)
         public
@@ -183,11 +180,8 @@ contract ERC20DripsHubUser is ManagedDripsHubUser {
         dripsHub.give(account, receiver, amt);
     }
 
-    function setSplits(
-        SplitsReceiver[] calldata currReceivers,
-        SplitsReceiver[] calldata newReceivers
-    ) public override returns (uint128 collected, uint128 split) {
-        return dripsHub.setSplits(currReceivers, newReceivers);
+    function setSplits(SplitsReceiver[] calldata receivers) public override {
+        dripsHub.setSplits(receivers);
     }
 }
 
@@ -258,10 +252,7 @@ contract EthDripsHubUser is ManagedDripsHubUser {
         dripsHub.give{value: amt}(account, receiver);
     }
 
-    function setSplits(
-        SplitsReceiver[] calldata currReceivers,
-        SplitsReceiver[] calldata newReceivers
-    ) public override returns (uint128 collected, uint128 split) {
-        return dripsHub.setSplits(currReceivers, newReceivers);
+    function setSplits(SplitsReceiver[] calldata receivers) public override {
+        dripsHub.setSplits(receivers);
     }
 }

@@ -464,34 +464,6 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         );
     }
 
-    function testSetSplitsRevertsIfInvalidCurrSplitsReceivers() public {
-        setSplits(user, splitsReceivers(receiver, 1));
-        try user.setSplits(splitsReceivers(receiver, 2), splitsReceivers()) {
-            assertTrue(false, "Set splits hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(
-                reason,
-                "Invalid current splits receivers",
-                "Invalid set splits revert reason"
-            );
-        }
-    }
-
-    function testSetSplitsCollects() public {
-        setDrips(user, 0, 10, dripsReceivers(receiver, 10));
-        warpToCycleEnd();
-        setSplits(receiver, splitsReceivers(), 10, 0);
-    }
-
-    function testSetSplitsSplits() public {
-        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
-        setDrips(user, 0, 10, dripsReceivers(receiver1, 10));
-        setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
-        warpToCycleEnd();
-        setSplits(receiver1, splitsReceivers(), 0, 10);
-        collect(receiver2, 10);
-    }
-
     function testCollectSplits() public {
         uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
         setDrips(user, 0, 10, dripsReceivers(receiver1, 10));
@@ -501,6 +473,21 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         // Receiver1 had 1 second paying 10 per second of which 10 is split
         collect(receiver1, 0, 10);
         // Receiver2 got 10 split from receiver1
+        collect(receiver2, 10);
+    }
+
+    function testUncollectedFundsAreSplitUsingCurrentConfig() public {
+        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
+        setSplits(user1, splitsReceivers(receiver1, totalWeight));
+        setDrips(user2, 0, 5, dripsReceivers(user1, 5));
+        warpToCycleEnd();
+        give(user2, user1, 5);
+        setSplits(user1, splitsReceivers(receiver2, totalWeight));
+        // Receiver1 had 1 second paying 5 per second and was given 5 of which 10 is split
+        collect(user1, 0, 10);
+        // Receiver1 wasn't a splits receiver when user1 was collecting
+        assertCollectable(receiver1, 0);
+        // Receiver2 was a splits receiver when user1 was collecting
         collect(receiver2, 10);
     }
 
@@ -592,12 +579,12 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testFundsGivenFromUserCanBeCollected() public {
-        user.give(address(receiver), 10);
+        give(user, receiver, 10);
         collect(receiver, 10);
     }
 
     function testFundsGivenFromAccountCanBeCollected() public {
-        user.give(ACCOUNT_1, address(receiver), 10);
+        give(user, ACCOUNT_1, receiver, 10);
         collect(receiver, 10);
     }
 }

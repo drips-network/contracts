@@ -738,27 +738,16 @@ abstract contract DripsHub {
         return keccak256(abi.encode(receivers, update, balance));
     }
 
-    /// @notice Collects funds received by the user and sets their splits.
-    /// The collected funds are split according to `currReceivers`.
+    /// @notice Sets user splits configuration.
     /// @param user The user
-    /// @param currReceivers The list of the user's splits receivers which is currently in use.
-    /// If this function is called for the first time for the user, should be an empty array.
-    /// @param newReceivers The new list of the user's splits receivers.
+    /// @param receivers The list of the user's splits receivers to be set.
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
     /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the user.
-    /// @return collected The collected amount
-    /// @return split The amount split to the user's splits receivers
-    function _setSplits(
-        address user,
-        SplitsReceiver[] memory currReceivers,
-        SplitsReceiver[] memory newReceivers
-    ) internal returns (uint128 collected, uint128 split) {
-        (collected, split) = _collectInternal(user, currReceivers);
-        _assertSplitsValid(newReceivers);
-        _dripsHubStorage().splitsStates[calcUserId(user)].splitsHash = hashSplits(newReceivers);
-        emit SplitsUpdated(user, newReceivers);
-        _transfer(user, int128(collected));
+    function _setSplits(address user, SplitsReceiver[] memory receivers) internal {
+        _assertSplitsValid(receivers);
+        _dripsHubStorage().splitsStates[calcUserId(user)].splitsHash = hashSplits(receivers);
+        emit SplitsUpdated(user, receivers);
     }
 
     /// @notice Validates a list of splits receivers

@@ -250,6 +250,35 @@ abstract contract DripsHubUserUtils is DSTest {
         setDrips(user, account, balanceFrom, balanceTo, curr);
     }
 
+    function give(
+        DripsHubUser user,
+        DripsHubUser receiver,
+        uint128 amt
+    ) internal {
+        uint256 expectedBalance = uint256(user.balance() - amt);
+        uint128 expectedCollectable = totalCollectable(receiver) + amt;
+
+        user.give(address(receiver), amt);
+
+        assertBalance(user, expectedBalance);
+        assertTotalCollectable(receiver, expectedCollectable);
+    }
+
+    function give(
+        DripsHubUser user,
+        uint256 account,
+        DripsHubUser receiver,
+        uint128 amt
+    ) internal {
+        uint256 expectedBalance = uint256(user.balance() - amt);
+        uint128 expectedCollectable = totalCollectable(receiver) + amt;
+
+        user.give(account, address(receiver), amt);
+
+        assertBalance(user, expectedBalance);
+        assertTotalCollectable(receiver, expectedCollectable);
+    }
+
     function splitsReceivers() internal pure returns (SplitsReceiver[] memory list) {
         list = new SplitsReceiver[](0);
     }
@@ -275,28 +304,13 @@ abstract contract DripsHubUserUtils is DSTest {
     }
 
     function setSplits(DripsHubUser user, SplitsReceiver[] memory newReceivers) internal {
-        setSplits(user, newReceivers, 0, 0);
-    }
-
-    function setSplits(
-        DripsHubUser user,
-        SplitsReceiver[] memory newReceivers,
-        uint128 expectedCollected,
-        uint128 expectedSplit
-    ) internal {
         SplitsReceiver[] memory curr = getCurrSplitsReceivers(user);
         assertSplits(user, curr);
-        assertCollectable(user, expectedCollected, expectedSplit);
-        uint256 expectedBalance = user.balance() + expectedCollected;
 
-        (uint128 collected, uint128 split) = user.setSplits(curr, newReceivers);
+        user.setSplits(newReceivers);
 
         setCurrSplitsReceivers(user, newReceivers);
         assertSplits(user, newReceivers);
-        assertEq(collected, expectedCollected, "Invalid collected amount");
-        assertEq(split, expectedSplit, "Invalid split amount");
-        assertCollectable(user, 0, 0);
-        assertBalance(user, expectedBalance);
     }
 
     function assertSetSplitsReverts(
@@ -306,7 +320,7 @@ abstract contract DripsHubUserUtils is DSTest {
     ) internal {
         SplitsReceiver[] memory curr = getCurrSplitsReceivers(user);
         assertSplits(user, curr);
-        try user.setSplits(curr, newReceivers) {
+        try user.setSplits(newReceivers) {
             assertTrue(false, "setSplits hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, expectedReason, "Invalid setSplits revert reason");
@@ -373,6 +387,17 @@ abstract contract DripsHubUserUtils is DSTest {
         );
         assertEq(actualCollected, expectedCollected, "Invalid collected");
         assertEq(actualSplit, expectedSplit, "Invalid split");
+    }
+
+    function totalCollectable(DripsHubUser user) internal view returns (uint128) {
+        SplitsReceiver[] memory splits = getCurrSplitsReceivers(user);
+        (uint128 collectable, uint128 splittable) = user.collectable(splits);
+        return collectable + splittable;
+    }
+
+    function assertTotalCollectable(DripsHubUser user, uint128 expectedCollectable) internal {
+        uint128 actualCollectable = totalCollectable(user);
+        assertEq(actualCollectable, expectedCollectable, "Invalid total collectable");
     }
 
     function flushCycles(
