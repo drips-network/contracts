@@ -12,9 +12,9 @@ jobs:
         with:
           submodules: recursive
       - uses: actions/setup-node@v2
-      - uses: CodeSandwich/foundry-toolchain@v1
+      - uses: onbjerg/foundry-toolchain@v1
         with:
-          version: nightly-6547691c6123c1bdbed770fcd245f1e63092befe
+          version: nightly
 
       - name: install
         run: make install
