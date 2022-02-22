@@ -69,6 +69,7 @@ abstract contract DripsHub {
     /// and`endTime` (exclusively) or until the timestamp of the next drips update (exclusively).
     /// @param user The dripping user
     /// @param receiver The receiver of the updated drips
+    /// @param assetId The used asset ID
     /// @param amtPerSec The new amount per second dripped from the user
     /// to the receiver or 0 if the drips are stopped
     /// @param endTime The timestamp when dripping will stop,
@@ -76,6 +77,7 @@ abstract contract DripsHub {
     event Dripping(
         address indexed user,
         address indexed receiver,
+        uint256 assetId,
         uint128 amtPerSec,
         uint64 endTime
     );
@@ -86,6 +88,7 @@ abstract contract DripsHub {
     /// @param user The user
     /// @param account The dripping account
     /// @param receiver The receiver of the updated drips
+    /// @param assetId The used asset ID
     /// @param amtPerSec The new amount per second dripped from the user's account
     /// to the receiver or 0 if the drips are stopped
     /// @param endTime The timestamp when dripping will stop,
@@ -94,24 +97,33 @@ abstract contract DripsHub {
         address indexed user,
         uint256 indexed account,
         address indexed receiver,
+        uint256 assetId,
         uint128 amtPerSec,
         uint64 endTime
     );
 
     /// @notice Emitted when the drips configuration of a user is updated.
     /// @param user The user
+    /// @param assetId The used asset ID
     /// @param balance The new drips balance. These funds will be dripped to the receivers.
     /// @param receivers The new list of the drips receivers.
-    event DripsUpdated(address indexed user, uint128 balance, DripsReceiver[] receivers);
+    event DripsUpdated(
+        address indexed user,
+        uint256 assetId,
+        uint128 balance,
+        DripsReceiver[] receivers
+    );
 
     /// @notice Emitted when the drips configuration of a user's account is updated.
     /// @param user The user
     /// @param account The account
+    /// @param assetId The used asset ID
     /// @param balance The new drips balance. These funds will be dripped to the receivers.
     /// @param receivers The new list of the drips receivers.
     event DripsUpdated(
         address indexed user,
         uint256 indexed account,
+        uint256 assetId,
         uint128 balance,
         DripsReceiver[] receivers
     );
@@ -123,32 +135,37 @@ abstract contract DripsHub {
 
     /// @notice Emitted when a user collects funds
     /// @param user The user
+    /// @param assetId The used asset ID
     /// @param collected The collected amount
     /// @param split The amount split to the user's splits receivers
-    event Collected(address indexed user, uint128 collected, uint128 split);
+    event Collected(address indexed user, uint256 assetId, uint128 collected, uint128 split);
 
     /// @notice Emitted when funds are split from a user to a receiver.
     /// This is caused by the user collecting received funds.
     /// @param user The user
     /// @param receiver The splits receiver
+    /// @param assetId The used asset ID
     /// @param amt The amount split to the receiver
-    event Split(address indexed user, address indexed receiver, uint128 amt);
+    event Split(address indexed user, address indexed receiver, uint256 assetId, uint128 amt);
 
     /// @notice Emitted when funds are given from the user to the receiver.
     /// @param user The address of the user
     /// @param receiver The receiver
+    /// @param assetId The used asset ID
     /// @param amt The given amount
-    event Given(address indexed user, address indexed receiver, uint128 amt);
+    event Given(address indexed user, address indexed receiver, uint256 assetId, uint128 amt);
 
     /// @notice Emitted when funds are given from the user's account to the receiver.
     /// @param user The address of the user
     /// @param account The user's account
     /// @param receiver The receiver
+    /// @param assetId The used asset ID
     /// @param amt The given amount
     event Given(
         address indexed user,
         uint256 indexed account,
         address indexed receiver,
+        uint256 assetId,
         uint128 amt
     );
 
@@ -339,11 +356,11 @@ abstract contract DripsHub {
                 split += splitsAmt;
                 address splitsReceiver = currReceivers[i].receiver;
                 splitsStates[calcUserId(splitsReceiver)].collectables[DUMMY_ASSET] += splitsAmt;
-                emit Split(user, splitsReceiver, splitsAmt);
+                emit Split(user, splitsReceiver, DUMMY_ASSET, splitsAmt);
             }
             collected -= split;
         }
-        emit Collected(user, collected, split);
+        emit Collected(user, DUMMY_ASSET, collected, split);
     }
 
     /// @notice Collects and clears user's cycles
@@ -386,9 +403,9 @@ abstract contract DripsHub {
     ) internal {
         _dripsHubStorage().splitsStates[calcUserId(receiver)].collectables[DUMMY_ASSET] += amt;
         if (userOrAccount.isAccount) {
-            emit Given(userOrAccount.user, userOrAccount.account, receiver, amt);
+            emit Given(userOrAccount.user, userOrAccount.account, receiver, DUMMY_ASSET, amt);
         } else {
-            emit Given(userOrAccount.user, receiver, amt);
+            emit Given(userOrAccount.user, receiver, DUMMY_ASSET, amt);
         }
         _transfer(userOrAccount.user, -int128(amt));
     }
@@ -546,7 +563,7 @@ abstract contract DripsHub {
         if (userOrAccount.isAccount) {
             emit DripsUpdated(userOrAccount.user, userOrAccount.account, balance, receivers);
         } else {
-            emit DripsUpdated(userOrAccount.user, balance, receivers);
+            emit DripsUpdated(userOrAccount.user, DUMMY_ASSET, balance, receivers);
         }
     }
 
@@ -638,9 +655,16 @@ abstract contract DripsHub {
     ) internal {
         if (amtPerSec == 0) endTime = _currTimestamp();
         if (userOrAccount.isAccount) {
-            emit Dripping(userOrAccount.user, userOrAccount.account, receiver, amtPerSec, endTime);
+            emit Dripping(
+                userOrAccount.user,
+                userOrAccount.account,
+                receiver,
+                DUMMY_ASSET,
+                amtPerSec,
+                endTime
+            );
         } else {
-            emit Dripping(userOrAccount.user, receiver, amtPerSec, endTime);
+            emit Dripping(userOrAccount.user, receiver, DUMMY_ASSET, amtPerSec, endTime);
         }
     }
 
