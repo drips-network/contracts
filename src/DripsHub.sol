@@ -292,13 +292,17 @@ abstract contract DripsHub {
         _transfer(user, assetId, int128(collected));
     }
 
-    /// @notice Counts cycles which will need to be analyzed when collecting or flushing.
-    /// This function can be used to detect that there are too many cycles
-    /// to analyze in a single transaction and flushing is needed.
+    /// @notice Counts cycles which will need to be analyzed when collecting drips.
+    /// This function can be used to detect that there are
+    /// too many cycles to analyze in a single transaction.
     /// @param user The user
     /// @param assetId The used asset ID
-    /// @return flushable The number of cycles which can be flushed
-    function flushableCycles(address user, uint256 assetId) public view returns (uint64 flushable) {
+    /// @return cycles The number of cycles which can be flushed
+    function receivableDripsCycles(address user, uint256 assetId)
+        public
+        view
+        returns (uint64 cycles)
+    {
         uint64 nextCollectedCycle = _dripsHubStorage()
         .dripsStates[calcUserId(user)][assetId].nextCollectedCycle;
         if (nextCollectedCycle == 0) return 0;
@@ -325,7 +329,7 @@ abstract contract DripsHub {
         uint256 assetId,
         uint64 maxCycles
     ) public virtual returns (uint64 flushable) {
-        flushable = flushableCycles(user, assetId);
+        flushable = receivableDripsCycles(user, assetId);
         uint64 cycles = maxCycles < flushable ? maxCycles : flushable;
         flushable -= cycles;
         uint128 collected = _flushCyclesInternal(user, assetId, cycles);
@@ -358,7 +362,7 @@ abstract contract DripsHub {
         if (collected > 0) splitsState.balances[assetId].unsplit = 0;
 
         // Collectable from cycles
-        uint64 cycles = flushableCycles(user, assetId);
+        uint64 cycles = receivableDripsCycles(user, assetId);
         collected += _flushCyclesInternal(user, assetId, cycles);
 
         // split when collected

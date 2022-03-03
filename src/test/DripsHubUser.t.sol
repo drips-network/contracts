@@ -66,8 +66,8 @@ abstract contract DripsHubUser {
         return dripsHub.collectableAll(address(this), assetId, currReceivers);
     }
 
-    function flushableCycles(uint256 assetId) public view returns (uint64 flushable) {
-        return dripsHub.flushableCycles(address(this), assetId);
+    function receivableDripsCycles(uint256 assetId) public view returns (uint64 cycles) {
+        return dripsHub.receivableDripsCycles(address(this), assetId);
     }
 
     function flushCycles(uint256 assetId, uint64 maxCycles) public returns (uint64 flushable) {
