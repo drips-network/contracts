@@ -52,12 +52,12 @@ abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable {
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collected The collected amount
     /// @return split The amount split to the user's splits receivers
-    function collect(
+    function collectAll(
         address user,
         uint256 assetId,
         SplitsReceiver[] memory currReceivers
     ) public override whenNotPaused returns (uint128 collected, uint128 split) {
-        return super.collect(user, assetId, currReceivers);
+        return super.collectAll(user, assetId, currReceivers);
     }
 
     /// @notice Flushes uncollected cycles of the user.

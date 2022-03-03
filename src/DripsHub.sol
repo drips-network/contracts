@@ -283,12 +283,12 @@ abstract contract DripsHub {
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collected The collected amount
     /// @return split The amount split to the user's splits receivers
-    function collect(
+    function collectAll(
         address user,
         uint256 assetId,
         SplitsReceiver[] memory currReceivers
     ) public virtual returns (uint128 collected, uint128 split) {
-        (collected, split) = _collectInternal(user, assetId, currReceivers);
+        (collected, split) = _collectAllInternal(user, assetId, currReceivers);
         _transfer(user, assetId, int128(collected));
     }
 
@@ -343,7 +343,7 @@ abstract contract DripsHub {
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collected The collected amount
     /// @return split The amount split to the user's splits receivers
-    function _collectInternal(
+    function _collectAllInternal(
         address user,
         uint256 assetId,
         SplitsReceiver[] memory currReceivers

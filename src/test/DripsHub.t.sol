@@ -53,7 +53,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         changeBalance(user, 85, 0);
         warpToCycleEnd();
         // Receiver 1 had 15 seconds paying 1 per second
-        collect(receiver, 15);
+        collectAll(receiver, 15);
     }
 
     function testAllowsDrippingToASingleReceiverForFuzzyTime(uint8 cycles, uint8 timeInCycle)
@@ -67,16 +67,16 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         changeBalance(user, balance - time, 0);
         warpToCycleEnd();
         // User had `time` seconds paying 1 per second
-        collect(receiver, time);
+        collectAll(receiver, time);
     }
 
     function testAllowsDrippingToMultipleReceivers() public {
         setDrips(user, 0, 6, dripsReceivers(receiver1, 1, receiver2, 2));
         warpToCycleEnd();
         // User had 2 seconds paying 1 per second
-        collect(receiver1, 2);
+        collectAll(receiver1, 2);
         // User had 2 seconds paying 2 per second
-        collect(receiver2, 4);
+        collectAll(receiver2, 4);
     }
 
     function testDripsSomeFundsToTwoReceivers() public {
@@ -86,9 +86,9 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         changeBalance(user, 72, 0);
         warpToCycleEnd();
         // Receiver 1 had 14 seconds paying 1 per second
-        collect(receiver1, 14);
+        collectAll(receiver1, 14);
         // Receiver 2 had 14 seconds paying 1 per second
-        collect(receiver2, 14);
+        collectAll(receiver2, 14);
     }
 
     function testDripsSomeFundsFromTwoUsersToASingleReceiver() public {
@@ -102,29 +102,29 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         changeBalance(user2, 70, 0);
         warpToCycleEnd();
         // Receiver had 2 seconds paying 1 per second and 15 seconds paying 3 per second
-        collect(receiver, 47);
+        collectAll(receiver, 47);
     }
 
     function testDoesNotRequireReceiverToBeInitialized() public {
-        collect(receiver, 0);
+        collectAll(receiver, 0);
     }
 
     function testAllowsCollectingFundsWhileTheyAreBeingDripped() public {
         setDrips(user, 0, dripsHub.cycleSecs() + 10, dripsReceivers(receiver, 1));
         warpToCycleEnd();
         // Receiver had cycleSecs seconds paying 1 per second
-        collect(receiver, dripsHub.cycleSecs());
+        collectAll(receiver, dripsHub.cycleSecs());
         warpBy(7);
         // User had cycleSecs + 7 seconds paying 1 per second
         changeBalance(user, 3, 0);
         warpToCycleEnd();
         // Receiver had 7 seconds paying 1 per second
-        collect(receiver, 7);
+        collectAll(receiver, 7);
     }
 
-    function testCollectRevertsIfInvalidCurrSplitsReceivers() public {
+    function testCollectAllRevertsIfInvalidCurrSplitsReceivers() public {
         setSplits(user, splitsReceivers(receiver, 1));
-        try user.collect(address(user), defaultAsset, splitsReceivers(receiver, 2)) {
+        try user.collectAll(address(user), defaultAsset, splitsReceivers(receiver, 2)) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, "Invalid current splits receivers", "Invalid collect revert reason");
@@ -142,7 +142,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         // Nothing more will be dripped
         warpToCycleEnd();
         changeBalance(user, 1, 0);
-        collect(receiver, 99);
+        collectAll(receiver, 99);
     }
 
     function testCollectableAllRevertsIfInvalidCurrSplitsReceivers() public {
@@ -168,7 +168,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         changeBalance(user, 10, 0);
         warpToCycleEnd();
         // Receiver had 11 seconds paying 10 per second
-        collect(receiver, 110);
+        collectAll(receiver, 110);
     }
 
     function testAllowsToppingUpAfterFundsRunOut() public {
@@ -185,7 +185,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         changeBalance(user, 10, 0);
         warpToCycleEnd();
         // Receiver had 15 seconds paying 10 per second
-        collect(receiver, 150);
+        collectAll(receiver, 150);
     }
 
     function testAllowsDrippingWhichShouldEndAfterMaxTimestamp() public {
@@ -196,7 +196,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         changeBalance(user, balance - 10, 0);
         warpToCycleEnd();
         // Receiver had 10 seconds paying 1 per second
-        collect(receiver, 10);
+        collectAll(receiver, 10);
     }
 
     function testAllowsNoDripsReceiversUpdate() public {
@@ -205,7 +205,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         // User had 1 second paying 3 per second
         setDrips(user, 3, 3, dripsReceivers(receiver, 3));
         warpToCycleEnd();
-        collect(receiver, 6);
+        collectAll(receiver, 6);
     }
 
     function testAllowsChangingReceiversWhileDripping() public {
@@ -217,9 +217,9 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         changeBalance(user, 16, 0);
         warpToCycleEnd();
         // Receiver1 had 3 seconds paying 6 per second and 4 seconds paying 4 per second
-        collect(receiver1, 34);
+        collectAll(receiver1, 34);
         // Receiver2 had 3 seconds paying 6 per second and 4 seconds paying 8 per second
-        collect(receiver2, 50);
+        collectAll(receiver2, 50);
     }
 
     function testAllowsRemovingReceiversWhileDripping() public {
@@ -233,9 +233,9 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         changeBalance(user, 30, 0);
         warpToCycleEnd();
         // Receiver1 had 3 seconds paying 5 per second
-        collect(receiver1, 15);
+        collectAll(receiver1, 15);
         // Receiver2 had 3 seconds paying 5 per second and 4 seconds paying 10 per second
-        collect(receiver2, 55);
+        collectAll(receiver2, 55);
     }
 
     function testLimitsTheTotalReceiversCount() public {
@@ -331,7 +331,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         assertDripsBalance(user, 0);
         warpToCycleEnd();
         // User had 1 second paying 10 per second
-        collect(user, 10);
+        collectAll(user, 10);
     }
 
     function testAllowsWithdrawalOfMoreThanDripsBalance() public {
@@ -356,14 +356,14 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         assertBalance(user, expectedBalance);
         warpToCycleEnd();
         // Receiver had 4 seconds paying 1 per second
-        collect(receiver, 4);
+        collectAll(receiver, 4);
     }
 
-    function testAnybodyCanCallCollect() public {
+    function testAnybodyCanCallCollectAll() public {
         setDrips(user1, 0, 10, dripsReceivers(receiver, 10));
         warpToCycleEnd();
         // Receiver had 1 second paying 10 per second
-        collect(user2, receiver, 10);
+        collectAll(user2, receiver, 10);
     }
 
     function testUserAndTheirAccountAreIndependent() public {
@@ -378,9 +378,9 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         changeBalance(user, ACCOUNT_1, 2, 0);
         warpToCycleEnd();
         // Receiver1 had 4 second paying 1 per second and 2 seconds paying 2 per second
-        collect(receiver1, 8);
+        collectAll(receiver1, 8);
         // Receiver2 had 2 second paying 1 per second
-        collect(receiver2, 2);
+        collectAll(receiver2, 2);
     }
 
     function testUserAccountsAreIndependent() public {
@@ -395,9 +395,9 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         changeBalance(user, ACCOUNT_2, 2, 0);
         warpToCycleEnd();
         // Receiver1 had 4 second paying 1 per second and 2 seconds paying 2 per second
-        collect(receiver1, 8);
+        collectAll(receiver1, 8);
         // Receiver2 had 2 second paying 1 per second
-        collect(receiver2, 2);
+        collectAll(receiver2, 2);
     }
 
     function testAccountsOfDifferentUsersAreIndependent() public {
@@ -412,9 +412,9 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         changeBalance(user2, ACCOUNT_1, 2, 0);
         warpToCycleEnd();
         // Receiver1 had 4 second paying 1 per second and 2 seconds paying 2 per second
-        collect(receiver1, 8);
+        collectAll(receiver1, 8);
         // Receiver2 had 2 second paying 1 per second
-        collect(receiver2, 2);
+        collectAll(receiver2, 2);
     }
 
     function testLimitsTheTotalSplitsReceiversCount() public {
@@ -465,16 +465,16 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         );
     }
 
-    function testCollectSplits() public {
+    function testCollectAllSplits() public {
         uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
         setDrips(user, 0, 10, dripsReceivers(receiver1, 10));
         setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
         warpToCycleEnd();
         assertCollectableAll(receiver2, 0);
         // Receiver1 had 1 second paying 10 per second of which 10 is split
-        collect(receiver1, 0, 10);
+        collectAll(receiver1, 0, 10);
         // Receiver2 got 10 split from receiver1
-        collect(receiver2, 10);
+        collectAll(receiver2, 10);
     }
 
     function testUncollectedFundsAreSplitUsingCurrentConfig() public {
@@ -485,14 +485,14 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         give(user2, user1, 5);
         setSplits(user1, splitsReceivers(receiver2, totalWeight));
         // Receiver1 had 1 second paying 5 per second and was given 5 of which 10 is split
-        collect(user1, 0, 10);
+        collectAll(user1, 0, 10);
         // Receiver1 wasn't a splits receiver when user1 was collecting
         assertCollectableAll(receiver1, 0);
         // Receiver2 was a splits receiver when user1 was collecting
-        collect(receiver2, 10);
+        collectAll(receiver2, 10);
     }
 
-    function testCollectSplitsFundsFromSplits() public {
+    function testCollectAllSplitsFundsFromSplits() public {
         uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
         setDrips(user, 0, 10, dripsReceivers(receiver1, 10));
         setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
@@ -501,14 +501,14 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         assertCollectableAll(receiver2, 0);
         assertCollectableAll(receiver3, 0);
         // Receiver1 had 1 second paying 10 per second of which 10 is split
-        collect(receiver1, 0, 10);
+        collectAll(receiver1, 0, 10);
         // Receiver2 got 10 split from receiver1 of which 10 is split
-        collect(receiver2, 0, 10);
+        collectAll(receiver2, 0, 10);
         // Receiver3 got 10 split from receiver2
-        collect(receiver3, 10);
+        collectAll(receiver3, 10);
     }
 
-    function testCollectMixesDripsAndSplits() public {
+    function testCollectAllMixesDripsAndSplits() public {
         uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
         setDrips(user, 0, 10, dripsReceivers(receiver1, 5, receiver2, 5));
         setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
@@ -516,12 +516,12 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         // Receiver2 had 1 second paying 5 per second
         assertCollectableAll(receiver2, 5);
         // Receiver1 had 1 second paying 5 per second
-        collect(receiver1, 0, 5);
+        collectAll(receiver1, 0, 5);
         // Receiver2 had 1 second paying 5 per second and got 5 split from receiver1
-        collect(receiver2, 10);
+        collectAll(receiver2, 10);
     }
 
-    function testCollectSplitsFundsBetweenReceiverAndSplits() public {
+    function testCollectAllSplitsFundsBetweenReceiverAndSplits() public {
         uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
         setDrips(user, 0, 10, dripsReceivers(receiver1, 10));
         setSplits(
@@ -532,11 +532,11 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         assertCollectableAll(receiver2, 0);
         assertCollectableAll(receiver3, 0);
         // Receiver1 had 1 second paying 10 per second, of which 3/4 is split, which is 7
-        collect(receiver1, 3, 7);
+        collectAll(receiver1, 3, 7);
         // Receiver2 got 1/3 of 7 split from receiver1, which is 2
-        collect(receiver2, 2);
+        collectAll(receiver2, 2);
         // Receiver3 got 2/3 of 7 split from receiver1, which is 5
-        collect(receiver3, 5);
+        collectAll(receiver3, 5);
     }
 
     function testCanSplitAllWhenCollectedDoesntSplitEvenly() public {
@@ -548,11 +548,11 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         );
         warpToCycleEnd();
         // Receiver1 had 1 second paying 3 per second of which 3 is split
-        collect(receiver1, 0, 3);
+        collectAll(receiver1, 0, 3);
         // Receiver2 got 1 split from receiver
-        collect(receiver2, 1);
+        collectAll(receiver2, 1);
         // Receiver3 got 2 split from receiver
-        collect(receiver3, 2);
+        collectAll(receiver3, 2);
     }
 
     function testFlushSomeCycles() public {
@@ -564,7 +564,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         warpToCycleEnd();
         warpToCycleEnd();
         flushCycles(receiver, 3, 2, 1);
-        collect(receiver, amt);
+        collectAll(receiver, amt);
     }
 
     function testFlushAllCycles() public {
@@ -576,16 +576,16 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         warpToCycleEnd();
         warpToCycleEnd();
         flushCycles(receiver, 3, type(uint64).max, 0);
-        collect(receiver, amt);
+        collectAll(receiver, amt);
     }
 
     function testFundsGivenFromUserCanBeCollected() public {
         give(user, receiver, 10);
-        collect(receiver, 10);
+        collectAll(receiver, 10);
     }
 
     function testFundsGivenFromAccountCanBeCollected() public {
         give(user, ACCOUNT_1, receiver, 10);
-        collect(receiver, 10);
+        collectAll(receiver, 10);
     }
 }

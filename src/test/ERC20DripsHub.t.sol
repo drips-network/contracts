@@ -62,23 +62,23 @@ contract ERC20DripsHubTest is ManagedDripsHubTest {
 
         warpToCycleEnd();
         // receiver1 had 1.5 cycles of 4 per second
-        collect(defaultAsset, receiver1, 6 * cycleLength);
+        collectAll(defaultAsset, receiver1, 6 * cycleLength);
         // receiver1 had 1.5 cycles of 2 per second
-        collect(defaultAsset, receiver2, 3 * cycleLength);
+        collectAll(defaultAsset, receiver2, 3 * cycleLength);
         // receiver1 had 1 cycle of 3 per second
-        collect(otherAsset, receiver1, 3 * cycleLength);
+        collectAll(otherAsset, receiver1, 3 * cycleLength);
         // receiver2 received nothing
-        collect(otherAsset, receiver2, 0);
+        collectAll(otherAsset, receiver2, 0);
 
         warpToCycleEnd();
         // receiver1 received nothing
-        collect(defaultAsset, receiver1, 0);
+        collectAll(defaultAsset, receiver1, 0);
         // receiver2 received nothing
-        collect(defaultAsset, receiver2, 0);
+        collectAll(defaultAsset, receiver2, 0);
         // receiver1 had 1 cycle of 3 per second
-        collect(otherAsset, receiver1, 3 * cycleLength);
+        collectAll(otherAsset, receiver1, 3 * cycleLength);
         // receiver2 received nothing
-        collect(otherAsset, receiver2, 0);
+        collectAll(otherAsset, receiver2, 0);
     }
 
     function testSplitsConfigurationIsCommonBetweenTokens() public {
@@ -86,9 +86,9 @@ contract ERC20DripsHubTest is ManagedDripsHubTest {
         setSplits(user, splitsReceivers(receiver1, totalWeight / 10));
         give(defaultAsset, receiver2, user, 30);
         give(otherAsset, receiver2, user, 100);
-        collect(defaultAsset, user, 27, 3);
-        collect(otherAsset, user, 90, 10);
-        collect(defaultAsset, receiver1, 3);
-        collect(otherAsset, receiver1, 10);
+        collectAll(defaultAsset, user, 27, 3);
+        collectAll(otherAsset, user, 90, 10);
+        collectAll(defaultAsset, receiver1, 3);
+        collectAll(otherAsset, receiver1, 10);
     }
 }

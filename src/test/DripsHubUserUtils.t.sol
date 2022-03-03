@@ -415,44 +415,44 @@ abstract contract DripsHubUserUtils is DSTest {
         assertEq(actual, expected, "Invalid splits hash");
     }
 
-    function collect(DripsHubUser user, uint128 expectedAmt) internal {
-        collect(defaultAsset, user, user, expectedAmt, 0);
+    function collectAll(DripsHubUser user, uint128 expectedAmt) internal {
+        collectAll(defaultAsset, user, user, expectedAmt, 0);
     }
 
-    function collect(
+    function collectAll(
         uint256 asset,
         DripsHubUser user,
         uint128 expectedAmt
     ) internal {
-        collect(asset, user, user, expectedAmt, 0);
+        collectAll(asset, user, user, expectedAmt, 0);
     }
 
-    function collect(
+    function collectAll(
         DripsHubUser user,
         uint128 expectedCollected,
         uint128 expectedSplit
     ) internal {
-        collect(defaultAsset, user, user, expectedCollected, expectedSplit);
+        collectAll(defaultAsset, user, user, expectedCollected, expectedSplit);
     }
 
-    function collect(
+    function collectAll(
         uint256 asset,
         DripsHubUser user,
         uint128 expectedCollected,
         uint128 expectedSplit
     ) internal {
-        collect(asset, user, user, expectedCollected, expectedSplit);
+        collectAll(asset, user, user, expectedCollected, expectedSplit);
     }
 
-    function collect(
+    function collectAll(
         DripsHubUser user,
         DripsHubUser collected,
         uint128 expectedAmt
     ) internal {
-        collect(defaultAsset, user, collected, expectedAmt, 0);
+        collectAll(defaultAsset, user, collected, expectedAmt, 0);
     }
 
-    function collect(
+    function collectAll(
         uint256 asset,
         DripsHubUser user,
         DripsHubUser collected,
@@ -462,7 +462,7 @@ abstract contract DripsHubUserUtils is DSTest {
         assertCollectableAll(asset, collected, expectedCollected, expectedSplit);
         uint256 expectedBalance = collected.balance(asset) + expectedCollected;
 
-        (uint128 collectedAmt, uint128 splitAmt) = user.collect(
+        (uint128 collectedAmt, uint128 splitAmt) = user.collectAll(
             address(collected),
             asset,
             getCurrSplitsReceivers(user)
