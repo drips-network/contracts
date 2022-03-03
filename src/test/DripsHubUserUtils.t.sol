@@ -523,16 +523,16 @@ abstract contract DripsHubUserUtils is DSTest {
         assertEq(actualCollectable, expectedCollectable, "Invalid total collectable");
     }
 
-    function flushCycles(
+    function receiveDrips(
         DripsHubUser user,
-        uint64 expectedFlushableBefore,
+        uint64 expectedReceivableBefore,
         uint64 maxCycles,
-        uint64 expectedFlushableAfter
+        uint64 expectedReceivableAfter
     ) internal {
-        assertReceivableDripsCycles(user, expectedFlushableBefore);
-        uint64 flushableLeft = user.flushCycles(defaultAsset, maxCycles);
-        assertEq(flushableLeft, expectedFlushableAfter, "Invalid flushable cycles left");
-        assertReceivableDripsCycles(user, expectedFlushableAfter);
+        assertReceivableDripsCycles(user, expectedReceivableBefore);
+        (, uint64 receivableLeft) = user.receiveDrips(defaultAsset, maxCycles);
+        assertEq(receivableLeft, expectedReceivableAfter, "Invalid receivable drips cycles left");
+        assertReceivableDripsCycles(user, expectedReceivableAfter);
     }
 
     function assertReceivableDripsCycles(DripsHubUser user, uint64 expectedCycles) internal {

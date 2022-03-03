@@ -310,34 +310,30 @@ abstract contract DripsHub {
         return currFinishedCycle + 1 - nextCollectedCycle;
     }
 
-    /// @notice Flushes uncollected cycles of the user.
-    /// Flushed cycles won't need to be analyzed when the user collects from them.
-    /// Calling this function does not collect and does not affect the collectable amount.
-    ///
-    /// This function is needed when collecting funds received over a period so long, that the gas
-    /// needed for analyzing all the uncollected cycles can't fit in a single transaction.
-    /// Calling this function allows spreading the analysis cost over multiple transactions.
-    /// A cycle is never flushed more than once, even if this function is called many times.
+    /// @notice Receive drips from uncollected cycles of the user.
+    /// Received drips cycles won't need to be analyzed ever again.
+    /// Calling this function does not collect but makes the funds ready to be split and collected.
     /// @param user The user
     /// @param assetId The used asset ID
-    /// @param maxCycles The maximum number of flushed cycles.
-    /// If too low, flushing will be cheap, but will cut little gas from the next collection.
-    /// If too high, flushing may become too expensive to fit in a single transaction.
-    /// @return flushable The number of cycles which can be flushed
-    function flushCycles(
+    /// @param maxCycles The maximum number of received drips cycles.
+    /// If too low, receiving will be cheap, but may not cover many cycles.
+    /// If too high, receiving may become too expensive to fit in a single transaction.
+    /// @return receivedAmt The received amount
+    /// @return receivableCycles The number of cycles which still can be received
+    function receiveDrips(
         address user,
         uint256 assetId,
         uint64 maxCycles
-    ) public virtual returns (uint64 flushable) {
-        flushable = receivableDripsCycles(user, assetId);
-        uint64 cycles = maxCycles < flushable ? maxCycles : flushable;
-        flushable -= cycles;
-        uint128 collected = _flushCyclesInternal(user, assetId, cycles);
-        if (collected > 0)
+    ) public virtual returns (uint128 receivedAmt, uint64 receivableCycles) {
+        receivableCycles = receivableDripsCycles(user, assetId);
+        uint64 cycles = maxCycles < receivableCycles ? maxCycles : receivableCycles;
+        receivableCycles -= cycles;
+        receivedAmt = _receiveDripsInternal(user, assetId, cycles);
+        if (receivedAmt > 0)
             _dripsHubStorage()
                 .splitsStates[calcUserId(user)]
                 .balances[assetId]
-                .unsplit += collected;
+                .unsplit += receivedAmt;
     }
 
     /// @notice Collects all received funds available for the user,
@@ -363,7 +359,7 @@ abstract contract DripsHub {
 
         // Collectable from cycles
         uint64 cycles = receivableDripsCycles(user, assetId);
-        collected += _flushCyclesInternal(user, assetId, cycles);
+        collected += _receiveDripsInternal(user, assetId, cycles);
 
         // split when collected
         if (collected > 0 && currReceivers.length > 0) {
@@ -388,7 +384,7 @@ abstract contract DripsHub {
     /// @param assetId The used asset ID
     /// @param count The number of flushed cycles.
     /// @return collectedAmt The collected amount
-    function _flushCyclesInternal(
+    function _receiveDripsInternal(
         address user,
         uint256 assetId,
         uint64 count

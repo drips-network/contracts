@@ -555,7 +555,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         collectAll(receiver3, 2);
     }
 
-    function testFlushSomeCycles() public {
+    function testReceiveSomeDripsCycles() public {
         // Enough for 3 cycles
         uint128 amt = dripsHub.cycleSecs() * 3;
         warpToCycleEnd();
@@ -563,11 +563,11 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         warpToCycleEnd();
         warpToCycleEnd();
         warpToCycleEnd();
-        flushCycles(receiver, 3, 2, 1);
+        receiveDrips(receiver, 3, 2, 1);
         collectAll(receiver, amt);
     }
 
-    function testFlushAllCycles() public {
+    function testReceiveAllDripsCycles() public {
         // Enough for 3 cycles
         uint128 amt = dripsHub.cycleSecs() * 3;
         warpToCycleEnd();
@@ -575,7 +575,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         warpToCycleEnd();
         warpToCycleEnd();
         warpToCycleEnd();
-        flushCycles(receiver, 3, type(uint64).max, 0);
+        receiveDrips(receiver, 3, type(uint64).max, 0);
         collectAll(receiver, amt);
     }
 

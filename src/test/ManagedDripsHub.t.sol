@@ -113,12 +113,12 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
         }
     }
 
-    function testFlushCyclesCanBePaused() public {
+    function testReceiveDripsCanBePaused() public {
         admin.pause();
-        try admin.flushCycles(defaultAsset, 1) {
-            assertTrue(false, "FlushCycles hasn't reverted");
+        try admin.receiveDrips(defaultAsset, 1) {
+            assertTrue(false, "ReceiveDrips hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, ERROR_PAUSED, "Invalid flushCycles revert reason");
+            assertEq(reason, ERROR_PAUSED, "Invalid receiveDrips revert reason");
         }
     }
 
