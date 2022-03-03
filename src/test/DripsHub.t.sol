@@ -145,9 +145,9 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         collect(receiver, 99);
     }
 
-    function testCollectableRevertsIfInvalidCurrSplitsReceivers() public {
+    function testCollectableAllRevertsIfInvalidCurrSplitsReceivers() public {
         setSplits(user, splitsReceivers(receiver, 1));
-        try user.collectable(defaultAsset, splitsReceivers(receiver, 2)) {
+        try user.collectableAll(defaultAsset, splitsReceivers(receiver, 2)) {
             assertTrue(false, "Collectable hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(
@@ -178,7 +178,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         assertDripsBalance(user, 0);
         warpToCycleEnd();
         // Receiver had 10 seconds paying 10 per second
-        assertCollectable(receiver, 100);
+        assertCollectableAll(receiver, 100);
         changeBalance(user, 0, 60);
         warpBy(5);
         // User had 5 seconds paying 10 per second
@@ -470,7 +470,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         setDrips(user, 0, 10, dripsReceivers(receiver1, 10));
         setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
         warpToCycleEnd();
-        assertCollectable(receiver2, 0);
+        assertCollectableAll(receiver2, 0);
         // Receiver1 had 1 second paying 10 per second of which 10 is split
         collect(receiver1, 0, 10);
         // Receiver2 got 10 split from receiver1
@@ -487,7 +487,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         // Receiver1 had 1 second paying 5 per second and was given 5 of which 10 is split
         collect(user1, 0, 10);
         // Receiver1 wasn't a splits receiver when user1 was collecting
-        assertCollectable(receiver1, 0);
+        assertCollectableAll(receiver1, 0);
         // Receiver2 was a splits receiver when user1 was collecting
         collect(receiver2, 10);
     }
@@ -498,8 +498,8 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
         setSplits(receiver2, splitsReceivers(receiver3, totalWeight));
         warpToCycleEnd();
-        assertCollectable(receiver2, 0);
-        assertCollectable(receiver3, 0);
+        assertCollectableAll(receiver2, 0);
+        assertCollectableAll(receiver3, 0);
         // Receiver1 had 1 second paying 10 per second of which 10 is split
         collect(receiver1, 0, 10);
         // Receiver2 got 10 split from receiver1 of which 10 is split
@@ -514,7 +514,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
         warpToCycleEnd();
         // Receiver2 had 1 second paying 5 per second
-        assertCollectable(receiver2, 5);
+        assertCollectableAll(receiver2, 5);
         // Receiver1 had 1 second paying 5 per second
         collect(receiver1, 0, 5);
         // Receiver2 had 1 second paying 5 per second and got 5 split from receiver1
@@ -529,8 +529,8 @@ abstract contract DripsHubTest is DripsHubUserUtils {
             splitsReceivers(receiver2, totalWeight / 4, receiver3, totalWeight / 2)
         );
         warpToCycleEnd();
-        assertCollectable(receiver2, 0);
-        assertCollectable(receiver3, 0);
+        assertCollectableAll(receiver2, 0);
+        assertCollectableAll(receiver3, 0);
         // Receiver1 had 1 second paying 10 per second, of which 3/4 is split, which is 7
         collect(receiver1, 3, 7);
         // Receiver2 got 1/3 of 7 split from receiver1, which is 2

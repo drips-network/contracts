@@ -239,7 +239,7 @@ abstract contract DripsHub {
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collected The collected amount
     /// @return split The amount split to the user's splits receivers
-    function collectable(
+    function collectableAll(
         address user,
         uint256 assetId,
         SplitsReceiver[] memory currReceivers

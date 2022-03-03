@@ -58,12 +58,12 @@ abstract contract DripsHubUser {
         return dripsHub.collect(receiver, assetId, currReceivers);
     }
 
-    function collectable(uint256 assetId, SplitsReceiver[] calldata currReceivers)
+    function collectableAll(uint256 assetId, SplitsReceiver[] calldata currReceivers)
         public
         view
         returns (uint128 collected, uint128 split)
     {
-        return dripsHub.collectable(address(this), assetId, currReceivers);
+        return dripsHub.collectableAll(address(this), assetId, currReceivers);
     }
 
     function flushableCycles(uint256 assetId) public view returns (uint64 flushable) {
