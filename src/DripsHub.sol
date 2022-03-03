@@ -204,11 +204,17 @@ abstract contract DripsHub {
     }
 
     struct SplitsState {
-        /// @notice Users' splits configuration hashes, see `hashSplits`.
+        /// @notice The user's splits configuration hash, see `hashSplits`.
         bytes32 splitsHash;
-        /// @notice The amount collectable independently from cycles
-        /// The key is the asset ID.
-        mapping(uint256 => uint128) collectables;
+        /// @notice The user's splits balance. The key is the asset ID.
+        mapping(uint256 => SplitsBalance) balances;
+    }
+
+    struct SplitsBalance {
+        /// @notice The not yet split balance, must be split before collecting by the user.
+        uint128 unsplit;
+        /// @notice The already split balance, ready to be collected by the user.
+        uint128 split;
     }
 
     /// @param _cycleSecs The length of cycleSecs to be used in the contract instance.
@@ -245,7 +251,7 @@ abstract contract DripsHub {
         _assertCurrSplits(user, currReceivers);
 
         // Collectable independently from cycles
-        collected += dripsHubStorage.splitsStates[userId].collectables[assetId];
+        collected += dripsHubStorage.splitsStates[userId].balances[assetId].unsplit;
 
         // Collectable from cycles
         uint64 collectedCycle = dripsState.nextCollectedCycle;
@@ -324,7 +330,10 @@ abstract contract DripsHub {
         flushable -= cycles;
         uint128 collected = _flushCyclesInternal(user, assetId, cycles);
         if (collected > 0)
-            _dripsHubStorage().splitsStates[calcUserId(user)].collectables[assetId] += collected;
+            _dripsHubStorage()
+                .splitsStates[calcUserId(user)]
+                .balances[assetId]
+                .unsplit += collected;
     }
 
     /// @notice Collects all received funds available for the user,
@@ -345,8 +354,8 @@ abstract contract DripsHub {
 
         // Collectable independently from cycles
         SplitsState storage splitsState = splitsStates[calcUserId(user)];
-        collected = splitsState.collectables[assetId];
-        if (collected > 0) splitsState.collectables[assetId] = 0;
+        collected = splitsState.balances[assetId].unsplit;
+        if (collected > 0) splitsState.balances[assetId].unsplit = 0;
 
         // Collectable from cycles
         uint64 cycles = flushableCycles(user, assetId);
@@ -362,7 +371,7 @@ abstract contract DripsHub {
                 );
                 split += splitsAmt;
                 address splitsReceiver = currReceivers[i].receiver;
-                splitsStates[calcUserId(splitsReceiver)].collectables[assetId] += splitsAmt;
+                splitsStates[calcUserId(splitsReceiver)].balances[assetId].unsplit += splitsAmt;
                 emit Split(user, splitsReceiver, assetId, splitsAmt);
             }
             collected -= split;
@@ -410,7 +419,7 @@ abstract contract DripsHub {
         uint256 assetId,
         uint128 amt
     ) internal {
-        _dripsHubStorage().splitsStates[calcUserId(receiver)].collectables[assetId] += amt;
+        _dripsHubStorage().splitsStates[calcUserId(receiver)].balances[assetId].unsplit += amt;
         if (userOrAccount.isAccount) {
             emit Given(userOrAccount.user, userOrAccount.account, receiver, assetId, amt);
         } else {
