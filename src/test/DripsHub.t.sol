@@ -563,7 +563,14 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         warpToCycleEnd();
         warpToCycleEnd();
         warpToCycleEnd();
-        receiveDrips(receiver, 3, 2, 1);
+        receiveDrips({
+            user: receiver,
+            maxCycles: 2,
+            expectedReceivedAmt: dripsHub.cycleSecs() * 2,
+            expectedReceivedCycles: 2,
+            expectedAmtAfter: dripsHub.cycleSecs(),
+            expectedCyclesAfter: 1
+        });
         collectAll(receiver, amt);
     }
 
@@ -575,7 +582,16 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         warpToCycleEnd();
         warpToCycleEnd();
         warpToCycleEnd();
-        receiveDrips(receiver, 3, type(uint64).max, 0);
+
+        receiveDrips({
+            user: receiver,
+            maxCycles: type(uint64).max,
+            expectedReceivedAmt: dripsHub.cycleSecs() * 3,
+            expectedReceivedCycles: 3,
+            expectedAmtAfter: 0,
+            expectedCyclesAfter: 0
+        });
+
         collectAll(receiver, amt);
     }
 

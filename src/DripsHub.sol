@@ -244,26 +244,15 @@ abstract contract DripsHub {
         uint256 assetId,
         SplitsReceiver[] memory currReceivers
     ) public view returns (uint128 collected, uint128 split) {
-        uint256 userId = calcUserId(user);
-        DripsHubStorage storage dripsHubStorage = _dripsHubStorage();
-        DripsState storage dripsState = dripsHubStorage.dripsStates[userId][assetId];
-
         _assertCurrSplits(user, currReceivers);
 
         // Collectable independently from cycles
-        collected += dripsHubStorage.splitsStates[userId].balances[assetId].unsplit;
+        uint256 userId = calcUserId(user);
+        collected += _dripsHubStorage().splitsStates[userId].balances[assetId].unsplit;
 
-        // Collectable from cycles
-        uint64 collectedCycle = dripsState.nextCollectedCycle;
-        uint64 currFinishedCycle = _currTimestamp() / cycleSecs;
-        if (collectedCycle != 0 && collectedCycle <= currFinishedCycle) {
-            int128 cycleAmt = 0;
-            for (; collectedCycle <= currFinishedCycle; collectedCycle++) {
-                cycleAmt += dripsState.amtDeltas[collectedCycle].thisCycle;
-                collected += uint128(cycleAmt);
-                cycleAmt += dripsState.amtDeltas[collectedCycle].nextCycle;
-            }
-        }
+        // // Collectable from cycles
+        (uint128 receivableAmt, ) = receivableDrips(user, assetId, type(uint64).max);
+        collected += receivableAmt;
 
         // split when collected
         if (collected > 0 && currReceivers.length > 0) {
@@ -292,7 +281,7 @@ abstract contract DripsHub {
         _transfer(user, assetId, int128(collected));
     }
 
-    /// @notice Counts cycles which will need to be analyzed when collecting drips.
+    /// @notice Counts cycles from which drips can be collected.
     /// This function can be used to detect that there are
     /// too many cycles to analyze in a single transaction.
     /// @param user The user
@@ -303,11 +292,39 @@ abstract contract DripsHub {
         view
         returns (uint64 cycles)
     {
-        uint64 nextCollectedCycle = _dripsHubStorage()
-        .dripsStates[calcUserId(user)][assetId].nextCollectedCycle;
-        if (nextCollectedCycle == 0) return 0;
+        uint256 userId = calcUserId(user);
+        uint64 collectedCycle = _dripsHubStorage().dripsStates[userId][assetId].nextCollectedCycle;
+        if (collectedCycle == 0) return 0;
         uint64 currFinishedCycle = _currTimestamp() / cycleSecs;
-        return currFinishedCycle + 1 - nextCollectedCycle;
+        return currFinishedCycle + 1 - collectedCycle;
+    }
+
+    /// @notice Calculate effects of calling `receiveDrips` with the given parameters.
+    /// @param user The user
+    /// @param assetId The used asset ID
+    /// @param maxCycles The maximum number of received drips cycles.
+    /// If too low, receiving will be cheap, but may not cover many cycles.
+    /// If too high, receiving may become too expensive to fit in a single transaction.
+    /// @return receivableAmt The amount which would be received
+    /// @return receivableCycles The number of cycles which would still be receivable after the call
+    function receivableDrips(
+        address user,
+        uint256 assetId,
+        uint64 maxCycles
+    ) public view returns (uint128 receivableAmt, uint64 receivableCycles) {
+        uint64 allReceivableCycles = receivableDripsCycles(user, assetId);
+        uint64 receivedCycles = maxCycles < allReceivableCycles ? maxCycles : allReceivableCycles;
+        receivableCycles = allReceivableCycles - receivedCycles;
+        uint256 userId = calcUserId(user);
+        DripsState storage dripsState = _dripsHubStorage().dripsStates[userId][assetId];
+        uint64 collectedCycle = dripsState.nextCollectedCycle;
+        int128 cycleAmt = 0;
+        for (uint256 i = 0; i < receivedCycles; i++) {
+            cycleAmt += dripsState.amtDeltas[collectedCycle].thisCycle;
+            receivableAmt += uint128(cycleAmt);
+            cycleAmt += dripsState.amtDeltas[collectedCycle].nextCycle;
+            collectedCycle++;
+        }
     }
 
     /// @notice Receive drips from uncollected cycles of the user.

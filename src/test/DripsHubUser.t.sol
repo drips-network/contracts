@@ -70,6 +70,14 @@ abstract contract DripsHubUser {
         return dripsHub.receivableDripsCycles(address(this), assetId);
     }
 
+    function receivableDrips(uint256 assetId, uint64 maxCycles)
+        public
+        view
+        returns (uint128 receivableAmt, uint64 receivableCycles)
+    {
+        return dripsHub.receivableDrips(address(this), assetId, maxCycles);
+    }
+
     function receiveDrips(uint256 assetId, uint64 maxCycles)
         public
         returns (uint128 receivedAmt, uint64 receivableCycles)

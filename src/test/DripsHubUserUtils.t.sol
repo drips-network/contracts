@@ -525,18 +525,39 @@ abstract contract DripsHubUserUtils is DSTest {
 
     function receiveDrips(
         DripsHubUser user,
-        uint64 expectedReceivableBefore,
         uint64 maxCycles,
-        uint64 expectedReceivableAfter
+        uint128 expectedReceivedAmt,
+        uint64 expectedReceivedCycles,
+        uint128 expectedAmtAfter,
+        uint64 expectedCyclesAfter
     ) internal {
-        assertReceivableDripsCycles(user, expectedReceivableBefore);
-        (, uint64 receivableLeft) = user.receiveDrips(defaultAsset, maxCycles);
-        assertEq(receivableLeft, expectedReceivableAfter, "Invalid receivable drips cycles left");
-        assertReceivableDripsCycles(user, expectedReceivableAfter);
+        uint128 expectedTotalAmt = expectedReceivedAmt + expectedAmtAfter;
+        uint64 expectedTotalCycles = expectedReceivedCycles + expectedCyclesAfter;
+        assertReceivableDripsCycles(user, expectedTotalCycles);
+        assertReceivableDrips(user, type(uint64).max, expectedTotalAmt, 0);
+        assertReceivableDrips(user, maxCycles, expectedReceivedAmt, expectedCyclesAfter);
+
+        (uint128 receivedAmt, uint64 receivableCycles) = user.receiveDrips(defaultAsset, maxCycles);
+
+        assertEq(receivedAmt, expectedReceivedAmt, "Invalid amount received from drips");
+        assertEq(receivableCycles, expectedCyclesAfter, "Invalid receivable drips cycles left");
+        assertReceivableDripsCycles(user, expectedCyclesAfter);
+        assertReceivableDrips(user, type(uint64).max, expectedAmtAfter, 0);
     }
 
     function assertReceivableDripsCycles(DripsHubUser user, uint64 expectedCycles) internal {
         uint64 actualCycles = user.receivableDripsCycles(defaultAsset);
+        assertEq(actualCycles, expectedCycles, "Invalid total receivable drips cycles");
+    }
+
+    function assertReceivableDrips(
+        DripsHubUser user,
+        uint64 maxCycles,
+        uint128 expectedAmt,
+        uint64 expectedCycles
+    ) internal {
+        (uint128 actualAmt, uint64 actualCycles) = user.receivableDrips(defaultAsset, maxCycles);
+        assertEq(actualAmt, expectedAmt, "Invalid receivable amount");
         assertEq(actualCycles, expectedCycles, "Invalid receivable drips cycles");
     }
 
