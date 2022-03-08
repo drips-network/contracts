@@ -147,6 +147,12 @@ abstract contract DripsHub {
     /// @param amt The amount split to the receiver
     event Split(address indexed user, address indexed receiver, uint256 assetId, uint128 amt);
 
+    /// @notice Emitted when funds are made collectable after splitting.
+    /// @param user The user
+    /// @param assetId The used asset ID
+    /// @param amt The amount made collectable for the user on top of what was collectable before.
+    event Collectable(address indexed user, uint256 assetId, uint128 amt);
+
     /// @notice Emitted when funds are given from the user to the receiver.
     /// @param user The address of the user
     /// @param receiver The receiver
@@ -237,32 +243,36 @@ abstract contract DripsHub {
     /// @param user The user
     /// @param assetId The used asset ID
     /// @param currReceivers The list of the user's current splits receivers.
-    /// @return collected The collected amount
-    /// @return split The amount split to the user's splits receivers
+    /// @return collectedAmt The collected amount
+    /// @return splitAmt The amount split to the user's splits receivers
     function collectableAll(
         address user,
         uint256 assetId,
         SplitsReceiver[] memory currReceivers
-    ) public view returns (uint128 collected, uint128 split) {
+    ) public view returns (uint128 collectedAmt, uint128 splitAmt) {
         _assertCurrSplits(user, currReceivers);
+        uint256 userId = calcUserId(user);
+        SplitsBalance storage balance = _dripsHubStorage().splitsStates[userId].balances[assetId];
 
         // Collectable independently from cycles
-        uint256 userId = calcUserId(user);
-        collected += _dripsHubStorage().splitsStates[userId].balances[assetId].unsplit;
+        collectedAmt += balance.unsplit;
 
-        // // Collectable from cycles
+        // Collectable from cycles
         (uint128 receivableAmt, ) = receivableDrips(user, assetId, type(uint64).max);
-        collected += receivableAmt;
+        collectedAmt += receivableAmt;
 
         // split when collected
-        if (collected > 0 && currReceivers.length > 0) {
+        if (collectedAmt > 0 && currReceivers.length > 0) {
             uint32 splitsWeight = 0;
             for (uint256 i = 0; i < currReceivers.length; i++) {
                 splitsWeight += currReceivers[i].weight;
             }
-            split = uint128((uint160(collected) * splitsWeight) / TOTAL_SPLITS_WEIGHT);
-            collected -= split;
+            splitAmt = uint128((uint160(collectedAmt) * splitsWeight) / TOTAL_SPLITS_WEIGHT);
+            collectedAmt -= splitAmt;
         }
+
+        // Already split
+        collectedAmt += balance.split;
     }
 
     /// @notice Collects all received funds available for the user
@@ -270,15 +280,15 @@ abstract contract DripsHub {
     /// @param user The user
     /// @param assetId The used asset ID
     /// @param currReceivers The list of the user's current splits receivers.
-    /// @return collected The collected amount
-    /// @return split The amount split to the user's splits receivers
+    /// @return collectedAmt The collected amount
+    /// @return splitAmt The amount split to the user's splits receivers
     function collectAll(
         address user,
         uint256 assetId,
         SplitsReceiver[] memory currReceivers
-    ) public virtual returns (uint128 collected, uint128 split) {
-        (collected, split) = _collectAllInternal(user, assetId, currReceivers);
-        _transfer(user, assetId, int128(collected));
+    ) public virtual returns (uint128 collectedAmt, uint128 splitAmt) {
+        (collectedAmt, splitAmt) = _collectAllInternal(user, assetId, currReceivers);
+        _transfer(user, assetId, int128(collectedAmt));
     }
 
     /// @notice Counts cycles from which drips can be collected.
@@ -353,47 +363,72 @@ abstract contract DripsHub {
                 .unsplit += receivedAmt;
     }
 
+    /// @notice Returns user's received but not split yet funds.
+    /// @param user The user.
+    /// @param assetId The used asset ID.
+    /// @return amt The amount received but not split yet.
+    function splittable(address user, uint256 assetId) public view returns (uint128 amt) {
+        return _dripsHubStorage().splitsStates[calcUserId(user)].balances[assetId].unsplit;
+    }
+
+    /// @notice Splits user's received but not split yet funds among receivers.
+    /// @param user The user
+    /// @param assetId The used asset ID
+    /// @param currReceivers The list of the user's current splits receivers.
+    /// @return collectableAmt The amount made collectable for the user
+    /// on top of what was collectable before.
+    /// @return splitAmt The amount split to the user's splits receivers
+    function split(
+        address user,
+        uint256 assetId,
+        SplitsReceiver[] memory currReceivers
+    ) public virtual returns (uint128 collectableAmt, uint128 splitAmt) {
+        _assertCurrSplits(user, currReceivers);
+        mapping(uint256 => SplitsState) storage splitsStates = _dripsHubStorage().splitsStates;
+        uint256 userId = calcUserId(user);
+        SplitsBalance storage balance = splitsStates[userId].balances[assetId];
+
+        collectableAmt = balance.unsplit;
+        if (collectableAmt == 0) return (0, 0);
+
+        balance.unsplit = 0;
+        uint32 splitsWeight = 0;
+        for (uint256 i = 0; i < currReceivers.length; i++) {
+            splitsWeight += currReceivers[i].weight;
+            uint128 currSplitAmt = uint128(
+                (uint160(collectableAmt) * splitsWeight) / TOTAL_SPLITS_WEIGHT - splitAmt
+            );
+            splitAmt += currSplitAmt;
+            address splitsReceiver = currReceivers[i].receiver;
+            splitsStates[calcUserId(splitsReceiver)].balances[assetId].unsplit += currSplitAmt;
+            emit Split(user, splitsReceiver, assetId, currSplitAmt);
+        }
+        collectableAmt -= splitAmt;
+        balance.split += collectableAmt;
+        emit Collectable(user, assetId, collectableAmt);
+    }
+
     /// @notice Collects all received funds available for the user,
     /// but doesn't transfer them to the user's wallet.
     /// @param user The user
     /// @param assetId The used asset ID
     /// @param currReceivers The list of the user's current splits receivers.
-    /// @return collected The collected amount
-    /// @return split The amount split to the user's splits receivers
+    /// @return collectedAmt The collected amount
+    /// @return splitAmt The amount split to the user's splits receivers
     function _collectAllInternal(
         address user,
         uint256 assetId,
         SplitsReceiver[] memory currReceivers
-    ) internal returns (uint128 collected, uint128 split) {
-        mapping(uint256 => SplitsState) storage splitsStates = _dripsHubStorage().splitsStates;
+    ) internal returns (uint128 collectedAmt, uint128 splitAmt) {
+        receiveDrips(user, assetId, type(uint64).max);
+        (, splitAmt) = split(user, assetId, currReceivers);
 
-        _assertCurrSplits(user, currReceivers);
+        uint256 userId = calcUserId(user);
+        SplitsBalance storage balance = _dripsHubStorage().splitsStates[userId].balances[assetId];
+        collectedAmt = balance.split;
+        balance.split = 0;
 
-        // Collectable independently from cycles
-        SplitsState storage splitsState = splitsStates[calcUserId(user)];
-        collected = splitsState.balances[assetId].unsplit;
-        if (collected > 0) splitsState.balances[assetId].unsplit = 0;
-
-        // Collectable from cycles
-        uint64 cycles = receivableDripsCycles(user, assetId);
-        collected += _receiveDripsInternal(user, assetId, cycles);
-
-        // split when collected
-        if (collected > 0 && currReceivers.length > 0) {
-            uint32 splitsWeight = 0;
-            for (uint256 i = 0; i < currReceivers.length; i++) {
-                splitsWeight += currReceivers[i].weight;
-                uint128 splitsAmt = uint128(
-                    (uint160(collected) * splitsWeight) / TOTAL_SPLITS_WEIGHT - split
-                );
-                split += splitsAmt;
-                address splitsReceiver = currReceivers[i].receiver;
-                splitsStates[calcUserId(splitsReceiver)].balances[assetId].unsplit += splitsAmt;
-                emit Split(user, splitsReceiver, assetId, splitsAmt);
-            }
-            collected -= split;
-        }
-        emit Collected(user, assetId, collected, split);
+        emit Collected(user, assetId, collectedAmt, splitAmt);
     }
 
     /// @notice Collects and clears user's cycles

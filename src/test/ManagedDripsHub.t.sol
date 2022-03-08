@@ -122,6 +122,15 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
         }
     }
 
+    function testSplitCanBePaused() public {
+        admin.pause();
+        try admin.split(address(admin), defaultAsset, new SplitsReceiver[](0)) {
+            assertTrue(false, "Split hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, ERROR_PAUSED, "Invalid split revert reason");
+        }
+    }
+
     function testSetDripsCanBePaused() public {
         admin.pause();
         try admin.setDrips(defaultAsset, 0, 0, new DripsReceiver[](0), 1, new DripsReceiver[](0)) {
