@@ -131,6 +131,15 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
         }
     }
 
+    function testCollectCanBePaused() public {
+        admin.pause();
+        try admin.collect(address(admin), defaultAsset) {
+            assertTrue(false, "Collect hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, ERROR_PAUSED, "Invalid collect revert reason");
+        }
+    }
+
     function testSetDripsCanBePaused() public {
         admin.pause();
         try admin.setDrips(defaultAsset, 0, 0, new DripsReceiver[](0), 1, new DripsReceiver[](0)) {

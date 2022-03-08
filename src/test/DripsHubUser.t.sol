@@ -97,6 +97,14 @@ abstract contract DripsHubUser {
         return dripsHub.split(user, assetId, currReceivers);
     }
 
+    function collectable(address user, uint256 assetId) public view returns (uint128 amt) {
+        return dripsHub.collectable(user, assetId);
+    }
+
+    function collect(address user, uint256 assetId) public virtual returns (uint128 aamt) {
+        return dripsHub.collect(user, assetId);
+    }
+
     function hashDrips(
         uint64 lastUpdate,
         uint128 lastBalance,

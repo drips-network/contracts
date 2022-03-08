@@ -136,8 +136,7 @@ abstract contract DripsHub {
     /// @param user The user
     /// @param assetId The used asset ID
     /// @param collected The collected amount
-    /// @param split The amount split to the user's splits receivers
-    event Collected(address indexed user, uint256 assetId, uint128 collected, uint128 split);
+    event Collected(address indexed user, uint256 assetId, uint128 collected);
 
     /// @notice Emitted when funds are split from a user to a receiver.
     /// This is caused by the user collecting received funds.
@@ -152,6 +151,18 @@ abstract contract DripsHub {
     /// @param assetId The used asset ID
     /// @param amt The amount made collectable for the user on top of what was collectable before.
     event Collectable(address indexed user, uint256 assetId, uint128 amt);
+
+    /// @notice Emitted when drips are received and are ready to be split.
+    /// @param user The user
+    /// @param assetId The used asset ID
+    /// @param amt The received amount.
+    /// @param receivableCycles The number of cycles which still can be received.
+    event ReceivedDrips(
+        address indexed user,
+        uint256 assetId,
+        uint128 amt,
+        uint64 receivableCycles
+    );
 
     /// @notice Emitted when funds are given from the user to the receiver.
     /// @param user The address of the user
@@ -287,8 +298,9 @@ abstract contract DripsHub {
         uint256 assetId,
         SplitsReceiver[] memory currReceivers
     ) public virtual returns (uint128 collectedAmt, uint128 splitAmt) {
-        (collectedAmt, splitAmt) = _collectAllInternal(user, assetId, currReceivers);
-        _transfer(user, assetId, int128(collectedAmt));
+        receiveDrips(user, assetId, type(uint64).max);
+        (, splitAmt) = split(user, assetId, currReceivers);
+        collectedAmt = collect(user, assetId);
     }
 
     /// @notice Counts cycles from which drips can be collected.
@@ -361,6 +373,7 @@ abstract contract DripsHub {
                 .splitsStates[calcUserId(user)]
                 .balances[assetId]
                 .unsplit += receivedAmt;
+        emit ReceivedDrips(user, assetId, receivedAmt, receivableCycles);
     }
 
     /// @notice Returns user's received but not split yet funds.
@@ -408,6 +421,28 @@ abstract contract DripsHub {
         emit Collectable(user, assetId, collectableAmt);
     }
 
+    /// @notice Returns user's received funds already split and ready to be collected.
+    /// @param user The user.
+    /// @param assetId The used asset ID.
+    /// @return amt The collectable amount.
+    function collectable(address user, uint256 assetId) public view returns (uint128 amt) {
+        return _dripsHubStorage().splitsStates[calcUserId(user)].balances[assetId].split;
+    }
+
+    /// @notice Collects user's received already split funds
+    /// and transfers them out of the drips hub contract to that user's wallet.
+    /// @param user The user
+    /// @param assetId The used asset ID
+    /// @return amt The collected amount
+    function collect(address user, uint256 assetId) public virtual returns (uint128 amt) {
+        uint256 userId = calcUserId(user);
+        SplitsBalance storage balance = _dripsHubStorage().splitsStates[userId].balances[assetId];
+        amt = balance.split;
+        balance.split = 0;
+        emit Collected(user, assetId, amt);
+        _transfer(user, assetId, int128(amt));
+    }
+
     /// @notice Collects all received funds available for the user,
     /// but doesn't transfer them to the user's wallet.
     /// @param user The user
@@ -422,13 +457,7 @@ abstract contract DripsHub {
     ) internal returns (uint128 collectedAmt, uint128 splitAmt) {
         receiveDrips(user, assetId, type(uint64).max);
         (, splitAmt) = split(user, assetId, currReceivers);
-
-        uint256 userId = calcUserId(user);
-        SplitsBalance storage balance = _dripsHubStorage().splitsStates[userId].balances[assetId];
-        collectedAmt = balance.split;
-        balance.split = 0;
-
-        emit Collected(user, assetId, collectedAmt, splitAmt);
+        collectedAmt = collect(user, assetId);
     }
 
     /// @notice Collects and clears user's cycles
