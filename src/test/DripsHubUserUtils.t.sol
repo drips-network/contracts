@@ -510,8 +510,8 @@ abstract contract DripsHubUserUtils is DSTest {
 
     function totalCollectableAll(uint256 asset, DripsHubUser user) internal view returns (uint128) {
         SplitsReceiver[] memory splits = getCurrSplitsReceivers(user);
-        (uint128 collectable, uint128 splittable) = user.collectableAll(asset, splits);
-        return collectable + splittable;
+        (uint128 collectableAmt, uint128 splittableAmt) = user.collectableAll(asset, splits);
+        return collectableAmt + splittableAmt;
     }
 
     function assertTotalCollectableAll(
@@ -521,6 +521,14 @@ abstract contract DripsHubUserUtils is DSTest {
     ) internal {
         uint128 actualCollectable = totalCollectableAll(asset, user);
         assertEq(actualCollectable, expectedCollectable, "Invalid total collectable");
+    }
+
+    function receiveDrips(
+        DripsHubUser user,
+        uint128 expectedReceivedAmt,
+        uint64 expectedReceivedCycles
+    ) internal {
+        receiveDrips(user, type(uint64).max, expectedReceivedAmt, expectedReceivedCycles, 0, 0);
     }
 
     function receiveDrips(
@@ -559,6 +567,49 @@ abstract contract DripsHubUserUtils is DSTest {
         (uint128 actualAmt, uint64 actualCycles) = user.receivableDrips(defaultAsset, maxCycles);
         assertEq(actualAmt, expectedAmt, "Invalid receivable amount");
         assertEq(actualCycles, expectedCycles, "Invalid receivable drips cycles");
+    }
+
+    function split(
+        DripsHubUser user,
+        uint128 expectedCollectable,
+        uint128 expectedSplit
+    ) internal {
+        assertSplittable(user, expectedCollectable + expectedSplit);
+        uint128 collectableBefore = collectable(user);
+
+        (uint128 collectableAmt, uint128 splitAmt) = user.split(
+            address(user),
+            defaultAsset,
+            getCurrSplitsReceivers(user)
+        );
+
+        assertEq(collectableAmt, expectedCollectable, "Invalid collectable amount");
+        assertEq(splitAmt, expectedSplit, "Invalid split amount");
+        assertSplittable(user, 0);
+        assertCollectable(user, collectableBefore + expectedCollectable);
+    }
+
+    function assertSplittable(DripsHubUser user, uint256 expected) internal {
+        assertEq(user.splittable(address(user), defaultAsset), expected, "Invalid splittable");
+    }
+
+    function collect(DripsHubUser user, uint128 expectedAmt) internal {
+        assertCollectable(user, expectedAmt);
+        uint256 balanceBefore = user.balance(defaultAsset);
+
+        uint128 actualAmt = user.collect(address(user), defaultAsset);
+
+        assertEq(actualAmt, expectedAmt, "Invalid collected amount");
+        assertCollectable(user, 0);
+        assertBalance(user, balanceBefore + expectedAmt);
+    }
+
+    function collectable(DripsHubUser user) internal view returns (uint128 amt) {
+        return user.collectable(address(user), defaultAsset);
+    }
+
+    function assertCollectable(DripsHubUser user, uint256 expected) internal {
+        assertEq(collectable(user), expected, "Invalid collectable");
     }
 
     function assertBalance(DripsHubUser user, uint256 expected) internal {

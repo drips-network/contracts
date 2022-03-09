@@ -54,14 +54,14 @@ abstract contract DripsHubUser {
         address receiver,
         uint256 assetId,
         SplitsReceiver[] calldata currReceivers
-    ) public returns (uint128 collected, uint128 split) {
+    ) public returns (uint128 collected, uint128 splitAmt) {
         return dripsHub.collectAll(receiver, assetId, currReceivers);
     }
 
     function collectableAll(uint256 assetId, SplitsReceiver[] calldata currReceivers)
         public
         view
-        returns (uint128 collected, uint128 split)
+        returns (uint128 collected, uint128 splitAmt)
     {
         return dripsHub.collectableAll(address(this), assetId, currReceivers);
     }
