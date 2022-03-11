@@ -124,7 +124,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
 
     function testCollectAllRevertsIfInvalidCurrSplitsReceivers() public {
         setSplits(user, splitsReceivers(receiver, 1));
-        try user.collectAll(address(user), defaultAsset, splitsReceivers(receiver, 2)) {
+        try user.collectAll(defaultAsset, splitsReceivers(receiver, 2)) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, "Invalid current splits receivers", "Invalid collect revert reason");
@@ -357,13 +357,6 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         warpToCycleEnd();
         // Receiver had 4 seconds paying 1 per second
         collectAll(receiver, 4);
-    }
-
-    function testAnybodyCanCallCollectAll() public {
-        setDrips(user1, 0, 10, dripsReceivers(receiver, 10));
-        warpToCycleEnd();
-        // Receiver had 1 second paying 10 per second
-        collectAll(user2, receiver, 10);
     }
 
     function testUserAndTheirAccountAreIndependent() public {

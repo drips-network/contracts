@@ -106,7 +106,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testCollectAllCanBePaused() public {
         admin.pause();
-        try admin.collectAll(address(admin), defaultAsset, new SplitsReceiver[](0)) {
+        try admin.collectAll(defaultAsset, new SplitsReceiver[](0)) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid collect revert reason");
@@ -133,7 +133,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testCollectCanBePaused() public {
         admin.pause();
-        try admin.collect(address(admin), defaultAsset) {
+        try admin.collect(defaultAsset) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid collect revert reason");

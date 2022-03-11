@@ -50,12 +50,11 @@ abstract contract DripsHubUser {
 
     function setSplits(SplitsReceiver[] calldata receivers) public virtual;
 
-    function collectAll(
-        address receiver,
-        uint256 assetId,
-        SplitsReceiver[] calldata currReceivers
-    ) public returns (uint128 collected, uint128 splitAmt) {
-        return dripsHub.collectAll(receiver, assetId, currReceivers);
+    function collectAll(uint256 assetId, SplitsReceiver[] calldata currReceivers)
+        public
+        returns (uint128 collected, uint128 splitAmt)
+    {
+        return dripsHub.collectAll(assetId, currReceivers);
     }
 
     function collectableAll(uint256 assetId, SplitsReceiver[] calldata currReceivers)
@@ -101,8 +100,8 @@ abstract contract DripsHubUser {
         return dripsHub.collectable(user, assetId);
     }
 
-    function collect(address user, uint256 assetId) public virtual returns (uint128 aamt) {
-        return dripsHub.collect(user, assetId);
+    function collect(uint256 assetId) public virtual returns (uint128 aamt) {
+        return dripsHub.collect(assetId);
     }
 
     function hashDrips(

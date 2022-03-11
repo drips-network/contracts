@@ -47,17 +47,17 @@ abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable {
 
     /// @notice Collects all received funds available for the user
     /// and transfers them out of the drips hub contract to that user's wallet.
-    /// @param user The user
     /// @param assetId The used asset ID
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collectedAmt The collected amount
     /// @return splitAmt The amount split to the user's splits receivers
-    function collectAll(
-        address user,
-        uint256 assetId,
-        SplitsReceiver[] memory currReceivers
-    ) public override whenNotPaused returns (uint128 collectedAmt, uint128 splitAmt) {
-        return super.collectAll(user, assetId, currReceivers);
+    function collectAll(uint256 assetId, SplitsReceiver[] memory currReceivers)
+        public
+        override
+        whenNotPaused
+        returns (uint128 collectedAmt, uint128 splitAmt)
+    {
+        return super.collectAll(assetId, currReceivers);
     }
 
     /// @notice Receive drips from uncollected cycles of the user.
@@ -95,16 +95,10 @@ abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable {
 
     /// @notice Collects user's received already split funds
     /// and transfers them out of the drips hub contract to that user's wallet.
-    /// @param user The user
     /// @param assetId The used asset ID
     /// @return amt The collected amount
-    function collect(address user, uint256 assetId)
-        public
-        override
-        whenNotPaused
-        returns (uint128 amt)
-    {
-        return super.collect(user, assetId);
+    function collect(uint256 assetId) public override whenNotPaused returns (uint128 amt) {
+        return super.collect(assetId);
     }
 
     /// @notice Authorizes the contract upgrade. See `UUPSUpgradable` docs for more details.

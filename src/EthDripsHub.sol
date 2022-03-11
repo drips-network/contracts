@@ -112,16 +112,12 @@ contract EthDripsHub is ManagedDripsHub {
         _setSplits(msg.sender, receivers);
     }
 
-    function _transfer(
-        address user,
-        uint256 assetId,
-        int128 amt
-    ) internal override {
+    function _transfer(uint256 assetId, int128 amt) internal override {
         assetId;
         // Take into account the amount already transferred into the drips hub
         amt += int128(uint128(msg.value));
         if (amt == 0) return;
         require(amt > 0, "Transferring a negative ether amount");
-        payable(user).transfer(uint128(amt));
+        payable(msg.sender).transfer(uint128(amt));
     }
 }

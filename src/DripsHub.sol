@@ -288,19 +288,18 @@ abstract contract DripsHub {
 
     /// @notice Collects all received funds available for the user
     /// and transfers them out of the drips hub contract to that user's wallet.
-    /// @param user The user
     /// @param assetId The used asset ID
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collectedAmt The collected amount
     /// @return splitAmt The amount split to the user's splits receivers
-    function collectAll(
-        address user,
-        uint256 assetId,
-        SplitsReceiver[] memory currReceivers
-    ) public virtual returns (uint128 collectedAmt, uint128 splitAmt) {
-        receiveDrips(user, assetId, type(uint64).max);
-        (, splitAmt) = split(user, assetId, currReceivers);
-        collectedAmt = collect(user, assetId);
+    function collectAll(uint256 assetId, SplitsReceiver[] memory currReceivers)
+        public
+        virtual
+        returns (uint128 collectedAmt, uint128 splitAmt)
+    {
+        receiveDrips(msg.sender, assetId, type(uint64).max);
+        (, splitAmt) = split(msg.sender, assetId, currReceivers);
+        collectedAmt = collect(assetId);
     }
 
     /// @notice Counts cycles from which drips can be collected.
@@ -431,33 +430,15 @@ abstract contract DripsHub {
 
     /// @notice Collects user's received already split funds
     /// and transfers them out of the drips hub contract to that user's wallet.
-    /// @param user The user
     /// @param assetId The used asset ID
     /// @return amt The collected amount
-    function collect(address user, uint256 assetId) public virtual returns (uint128 amt) {
-        uint256 userId = calcUserId(user);
+    function collect(uint256 assetId) public virtual returns (uint128 amt) {
+        uint256 userId = calcUserId(msg.sender);
         SplitsBalance storage balance = _dripsHubStorage().splitsStates[userId].balances[assetId];
         amt = balance.split;
         balance.split = 0;
-        emit Collected(user, assetId, amt);
-        _transfer(user, assetId, int128(amt));
-    }
-
-    /// @notice Collects all received funds available for the user,
-    /// but doesn't transfer them to the user's wallet.
-    /// @param user The user
-    /// @param assetId The used asset ID
-    /// @param currReceivers The list of the user's current splits receivers.
-    /// @return collectedAmt The collected amount
-    /// @return splitAmt The amount split to the user's splits receivers
-    function _collectAllInternal(
-        address user,
-        uint256 assetId,
-        SplitsReceiver[] memory currReceivers
-    ) internal returns (uint128 collectedAmt, uint128 splitAmt) {
-        receiveDrips(user, assetId, type(uint64).max);
-        (, splitAmt) = split(user, assetId, currReceivers);
-        collectedAmt = collect(user, assetId);
+        emit Collected(msg.sender, assetId, amt);
+        _transfer(assetId, int128(amt));
     }
 
     /// @notice Collects and clears user's cycles
@@ -506,7 +487,7 @@ abstract contract DripsHub {
         } else {
             emit Given(userOrAccount.user, receiver, assetId, amt);
         }
-        _transfer(userOrAccount.user, assetId, -int128(amt));
+        _transfer(assetId, -int128(amt));
     }
 
     /// @notice Current user's drips hash, see `hashDrips`.
@@ -580,7 +561,7 @@ abstract contract DripsHub {
         );
         _storeNewDrips(userOrAccount, assetId, newBalance, newReceivers);
         _emitDripsUpdated(userOrAccount, assetId, newBalance, newReceivers);
-        _transfer(userOrAccount.user, assetId, -realBalanceDelta);
+        _transfer(assetId, -realBalanceDelta);
     }
 
     /// @notice Validates a list of drips receivers.
@@ -921,15 +902,10 @@ abstract contract DripsHub {
 
     /// @notice Called when funds need to be transferred between the user and the drips hub.
     /// The function must be called no more than once per transaction.
-    /// @param user The user
     /// @param assetId The used asset ID
     /// @param amt The transferred amount.
     /// Positive to transfer funds to the user, negative to transfer from them.
-    function _transfer(
-        address user,
-        uint256 assetId,
-        int128 amt
-    ) internal virtual;
+    function _transfer(uint256 assetId, int128 amt) internal virtual;
 
     /// @notice Sets amt delta of a user on a given timestamp
     /// @param user The user

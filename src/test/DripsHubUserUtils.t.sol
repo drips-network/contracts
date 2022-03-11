@@ -416,7 +416,7 @@ abstract contract DripsHubUserUtils is DSTest {
     }
 
     function collectAll(DripsHubUser user, uint128 expectedAmt) internal {
-        collectAll(defaultAsset, user, user, expectedAmt, 0);
+        collectAll(defaultAsset, user, expectedAmt, 0);
     }
 
     function collectAll(
@@ -424,7 +424,7 @@ abstract contract DripsHubUserUtils is DSTest {
         DripsHubUser user,
         uint128 expectedAmt
     ) internal {
-        collectAll(asset, user, user, expectedAmt, 0);
+        collectAll(asset, user, expectedAmt, 0);
     }
 
     function collectAll(
@@ -432,7 +432,7 @@ abstract contract DripsHubUserUtils is DSTest {
         uint128 expectedCollected,
         uint128 expectedSplit
     ) internal {
-        collectAll(defaultAsset, user, user, expectedCollected, expectedSplit);
+        collectAll(defaultAsset, user, expectedCollected, expectedSplit);
     }
 
     function collectAll(
@@ -441,37 +441,18 @@ abstract contract DripsHubUserUtils is DSTest {
         uint128 expectedCollected,
         uint128 expectedSplit
     ) internal {
-        collectAll(asset, user, user, expectedCollected, expectedSplit);
-    }
-
-    function collectAll(
-        DripsHubUser user,
-        DripsHubUser collected,
-        uint128 expectedAmt
-    ) internal {
-        collectAll(defaultAsset, user, collected, expectedAmt, 0);
-    }
-
-    function collectAll(
-        uint256 asset,
-        DripsHubUser user,
-        DripsHubUser collected,
-        uint128 expectedCollected,
-        uint128 expectedSplit
-    ) internal {
-        assertCollectableAll(asset, collected, expectedCollected, expectedSplit);
-        uint256 expectedBalance = collected.balance(asset) + expectedCollected;
+        assertCollectableAll(asset, user, expectedCollected, expectedSplit);
+        uint256 expectedBalance = user.balance(asset) + expectedCollected;
 
         (uint128 collectedAmt, uint128 splitAmt) = user.collectAll(
-            address(collected),
             asset,
             getCurrSplitsReceivers(user)
         );
 
         assertEq(collectedAmt, expectedCollected, "Invalid collected amount");
         assertEq(splitAmt, expectedSplit, "Invalid split amount");
-        assertCollectableAll(asset, collected, 0);
-        assertBalance(asset, collected, expectedBalance);
+        assertCollectableAll(asset, user, 0);
+        assertBalance(asset, user, expectedBalance);
     }
 
     function assertCollectableAll(DripsHubUser user, uint128 expected) internal {
@@ -597,7 +578,7 @@ abstract contract DripsHubUserUtils is DSTest {
         assertCollectable(user, expectedAmt);
         uint256 balanceBefore = user.balance(defaultAsset);
 
-        uint128 actualAmt = user.collect(address(user), defaultAsset);
+        uint128 actualAmt = user.collect(defaultAsset);
 
         assertEq(actualAmt, expectedAmt, "Invalid collected amount");
         assertCollectable(user, 0);
