@@ -17,11 +17,14 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     DripsHubUser private user2;
     DripsHubUser private receiver2;
     DripsHubUser private receiver3;
-    uint256 private constant ACCOUNT_1 = 1;
-    uint256 private constant ACCOUNT_2 = 2;
+    uint224 private constant SUB_ACCOUNT_1 = 1;
+    uint224 private constant SUB_ACCOUNT_2 = 2;
+
+    string private constant ERROR_NOT_OWNER = "Callable only by the owner of the user account";
 
     // Must be called once from child contract `setUp`
     function setUp(DripsHub dripsHub_) internal {
+        setUpUtils(dripsHub_);
         dripsHub = dripsHub_;
         user = createUser();
         user1 = createUser();
@@ -360,15 +363,16 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testUserAndTheirAccountAreIndependent() public {
+        uint32 account = dripsHub.createAccount(address(user));
         setDrips(user, 0, 5, dripsReceivers(receiver1, 1));
         warpBy(3);
-        setDrips(user, ACCOUNT_1, 0, 8, dripsReceivers(receiver1, 2, receiver2, 1));
+        setDrips(user, account, SUB_ACCOUNT_1, 0, 8, dripsReceivers(receiver1, 2, receiver2, 1));
         warpBy(1);
         // User had 4 seconds paying 1 per second
         changeBalance(user, 1, 0);
         warpBy(1);
         // User account1 had 2 seconds paying 3 per second
-        changeBalance(user, ACCOUNT_1, 2, 0);
+        changeBalance(user, account, SUB_ACCOUNT_1, 2, 0);
         warpToCycleEnd();
         // Receiver1 had 4 second paying 1 per second and 2 seconds paying 2 per second
         collectAll(receiver1, 8);
@@ -377,15 +381,16 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testUserAccountsAreIndependent() public {
-        setDrips(user, ACCOUNT_1, 0, 5, dripsReceivers(receiver1, 1));
+        uint32 account = dripsHub.createAccount(address(user));
+        setDrips(user, account, SUB_ACCOUNT_1, 0, 5, dripsReceivers(receiver1, 1));
         warpBy(3);
-        setDrips(user, ACCOUNT_2, 0, 8, dripsReceivers(receiver1, 2, receiver2, 1));
+        setDrips(user, account, SUB_ACCOUNT_2, 0, 8, dripsReceivers(receiver1, 2, receiver2, 1));
         warpBy(1);
         // User account1 had 4 seconds paying 1 per second
-        changeBalance(user, ACCOUNT_1, 1, 0);
+        changeBalance(user, account, SUB_ACCOUNT_1, 1, 0);
         warpBy(1);
         // User account2 had 2 seconds paying 3 per second
-        changeBalance(user, ACCOUNT_2, 2, 0);
+        changeBalance(user, account, SUB_ACCOUNT_2, 2, 0);
         warpToCycleEnd();
         // Receiver1 had 4 second paying 1 per second and 2 seconds paying 2 per second
         collectAll(receiver1, 8);
@@ -394,15 +399,17 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testAccountsOfDifferentUsersAreIndependent() public {
-        setDrips(user1, ACCOUNT_1, 0, 5, dripsReceivers(receiver1, 1));
+        uint32 account1 = dripsHub.createAccount(address(user1));
+        uint32 account2 = dripsHub.createAccount(address(user2));
+        setDrips(user1, account1, SUB_ACCOUNT_1, 0, 5, dripsReceivers(receiver1, 1));
         warpBy(3);
-        setDrips(user2, ACCOUNT_1, 0, 8, dripsReceivers(receiver1, 2, receiver2, 1));
+        setDrips(user2, account2, SUB_ACCOUNT_1, 0, 8, dripsReceivers(receiver1, 2, receiver2, 1));
         warpBy(1);
         // User1 account1 had 4 seconds paying 1 per second
-        changeBalance(user1, ACCOUNT_1, 1, 0);
+        changeBalance(user1, account1, SUB_ACCOUNT_1, 1, 0);
         warpBy(1);
         // User2 account1 had 2 seconds paying 3 per second
-        changeBalance(user2, ACCOUNT_1, 2, 0);
+        changeBalance(user2, account2, SUB_ACCOUNT_1, 2, 0);
         warpToCycleEnd();
         // Receiver1 had 4 second paying 1 per second and 2 seconds paying 2 per second
         collectAll(receiver1, 8);
@@ -587,7 +594,8 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testFundsGivenFromAccountCanBeCollected() public {
-        give(user, ACCOUNT_1, receiver, 10);
+        uint32 account = dripsHub.createAccount(address(user));
+        give(user, account, SUB_ACCOUNT_1, receiver, 10);
         collectAll(receiver, 10);
     }
 
@@ -685,5 +693,31 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         assertEq(accountId, dripsHub.createAccount(owner), "Invalid assigned account ID");
         assertEq(owner, dripsHub.accountOwner(accountId), "Invalid account owner");
         assertEq(accountId + 1, dripsHub.nextAccountId(), "Invalid next account ID");
+    }
+
+    function testSetDripsRevertsWhenNotAccountOwner() public {
+        try
+            user1.setDrips(
+                calcUserId(dripsHub.nextAccountId(), 0),
+                defaultAsset,
+                0,
+                0,
+                new DripsReceiver[](0),
+                0,
+                new DripsReceiver[](0)
+            )
+        {
+            assertTrue(false, "SetDrips hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, ERROR_NOT_OWNER, "Invalid setDrips revert reason");
+        }
+    }
+
+    function testGiveRevertsWhenNotAccountOwner() public {
+        try user1.give(calcUserId(dripsHub.nextAccountId(), 0), address(user2), defaultAsset, 1) {
+            assertTrue(false, "Give hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, ERROR_NOT_OWNER, "Invalid give revert reason");
+        }
     }
 }

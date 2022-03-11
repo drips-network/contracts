@@ -62,11 +62,13 @@ abstract contract DripsHub {
     uint32 public constant MAX_SPLITS_RECEIVERS = 200;
     /// @notice The total splits weight of a user
     uint32 public constant TOTAL_SPLITS_WEIGHT = 1_000_000;
+    /// @notice Number of bits in the sub-account part of userId
+    uint256 public constant BITS_SUB_ACCOUNT = 224;
 
     /// @notice Emitted when drips from a user to a receiver are updated.
     /// Funds are being dripped on every second between the event block's timestamp (inclusively)
     /// and`endTime` (exclusively) or until the timestamp of the next drips update (exclusively).
-    /// @param user The dripping user
+    /// @param userId The dripping user ID.
     /// @param receiver The receiver of the updated drips
     /// @param assetId The used asset ID
     /// @param amtPerSec The new amount per second dripped from the user
@@ -74,27 +76,7 @@ abstract contract DripsHub {
     /// @param endTime The timestamp when dripping will stop,
     /// always larger than the block timestamp or equal to it if the drips are stopped
     event Dripping(
-        address indexed user,
-        address indexed receiver,
-        uint256 assetId,
-        uint128 amtPerSec,
-        uint64 endTime
-    );
-
-    /// @notice Emitted when drips from a user's account to a receiver are updated.
-    /// Funds are being dripped on every second between the event block's timestamp (inclusively)
-    /// and`endTime` (exclusively) or until the timestamp of the next drips update (exclusively).
-    /// @param user The user
-    /// @param account The dripping account
-    /// @param receiver The receiver of the updated drips
-    /// @param assetId The used asset ID
-    /// @param amtPerSec The new amount per second dripped from the user's account
-    /// to the receiver or 0 if the drips are stopped
-    /// @param endTime The timestamp when dripping will stop,
-    /// always larger than the block timestamp or equal to it if the drips are stopped
-    event Dripping(
-        address indexed user,
-        uint256 indexed account,
+        uint256 indexed userId,
         address indexed receiver,
         uint256 assetId,
         uint128 amtPerSec,
@@ -102,26 +84,12 @@ abstract contract DripsHub {
     );
 
     /// @notice Emitted when the drips configuration of a user is updated.
-    /// @param user The user
+    /// @param userId The user ID.
     /// @param assetId The used asset ID
     /// @param balance The new drips balance. These funds will be dripped to the receivers.
     /// @param receivers The new list of the drips receivers.
     event DripsUpdated(
-        address indexed user,
-        uint256 assetId,
-        uint128 balance,
-        DripsReceiver[] receivers
-    );
-
-    /// @notice Emitted when the drips configuration of a user's account is updated.
-    /// @param user The user
-    /// @param account The account
-    /// @param assetId The used asset ID
-    /// @param balance The new drips balance. These funds will be dripped to the receivers.
-    /// @param receivers The new list of the drips receivers.
-    event DripsUpdated(
-        address indexed user,
-        uint256 indexed account,
+        uint256 indexed userId,
         uint256 assetId,
         uint128 balance,
         DripsReceiver[] receivers
@@ -165,31 +133,11 @@ abstract contract DripsHub {
     );
 
     /// @notice Emitted when funds are given from the user to the receiver.
-    /// @param user The address of the user
+    /// @param userId The user ID
     /// @param receiver The receiver
     /// @param assetId The used asset ID
     /// @param amt The given amount
-    event Given(address indexed user, address indexed receiver, uint256 assetId, uint128 amt);
-
-    /// @notice Emitted when funds are given from the user's account to the receiver.
-    /// @param user The address of the user
-    /// @param account The user's account
-    /// @param receiver The receiver
-    /// @param assetId The used asset ID
-    /// @param amt The given amount
-    event Given(
-        address indexed user,
-        uint256 indexed account,
-        address indexed receiver,
-        uint256 assetId,
-        uint128 amt
-    );
-
-    struct UserOrAccount {
-        bool isAccount;
-        address user;
-        uint256 account;
-    }
+    event Given(uint256 indexed userId, address indexed receiver, uint256 assetId, uint128 amt);
 
     struct DripsHubStorage {
         /// @notice User drips states.
@@ -244,6 +192,23 @@ abstract contract DripsHub {
     /// High value makes collecting cheaper by making it process less cycles for a given time range.
     constructor(uint64 _cycleSecs) {
         cycleSecs = _cycleSecs;
+    }
+
+    modifier onlyAccountOwner(uint256 userId) {
+        uint32 accountId = uint32(userId >> BITS_SUB_ACCOUNT);
+        if (accountId == 0) {
+            // Account ID 0 is for msg.sender verification sub-accounts
+            require(
+                address(uint160(userId)) == msg.sender,
+                "Callable only by the address equal to the user sub-account"
+            );
+        } else {
+            require(
+                accountOwner(accountId) == msg.sender,
+                "Callable only by the owner of the user account"
+            );
+        }
+        _;
     }
 
     /// @notice Creates an account.
@@ -499,22 +464,18 @@ abstract contract DripsHub {
     /// @notice Gives funds from the user or their account to the receiver.
     /// The receiver can collect them immediately.
     /// Transfers the funds to be given from the user's wallet to the drips hub contract.
-    /// @param userOrAccount The user or their account
+    /// @param userId The user ID
     /// @param receiver The receiver
     /// @param assetId The used asset ID
     /// @param amt The given amount
     function _give(
-        UserOrAccount memory userOrAccount,
+        uint256 userId,
         address receiver,
         uint256 assetId,
         uint128 amt
-    ) internal {
+    ) internal onlyAccountOwner(userId) {
         _dripsHubStorage().splitsStates[calcUserId(receiver)].balances[assetId].unsplit += amt;
-        if (userOrAccount.isAccount) {
-            emit Given(userOrAccount.user, userOrAccount.account, receiver, assetId, amt);
-        } else {
-            emit Given(userOrAccount.user, receiver, assetId, amt);
-        }
+        emit Given(userId, receiver, assetId, amt);
         _transfer(assetId, -int128(amt));
     }
 
@@ -523,26 +484,25 @@ abstract contract DripsHub {
     /// @param assetId The used asset ID
     /// @return currDripsHash The current user's drips hash
     function dripsHash(address user, uint256 assetId) public view returns (bytes32 currDripsHash) {
-        return _dripsHubStorage().dripsStates[calcUserId(user)][assetId].dripsHash;
+        return dripsHash(calcUserId(user), assetId);
     }
 
-    /// @notice Current user account's drips hash, see `hashDrips`.
-    /// @param user The user
-    /// @param account The account
+    /// @notice Current user drips hash, see `hashDrips`.
+    /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @return currDripsHash The current user account's drips hash
-    function dripsHash(
-        address user,
-        uint256 account,
-        uint256 assetId
-    ) public view returns (bytes32 currDripsHash) {
-        return _dripsHubStorage().dripsStates[calcUserId(user, account)][assetId].dripsHash;
+    function dripsHash(uint256 userId, uint256 assetId)
+        public
+        view
+        returns (bytes32 currDripsHash)
+    {
+        return _dripsHubStorage().dripsStates[userId][assetId].dripsHash;
     }
 
     /// @notice Sets the user's or the account's drips configuration.
     /// Transfers funds between the user's wallet and the drips hub contract
     /// to fulfill the change of the drips balance.
-    /// @param userOrAccount The user or their account
+    /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param lastUpdate The timestamp of the last drips update of the user or the account.
     /// If this is the first update, pass zero.
@@ -559,15 +519,15 @@ abstract contract DripsHub {
     /// Pass it as `lastBalance` when updating that user or the account for the next time.
     /// @return realBalanceDelta The actually applied drips balance change.
     function _setDrips(
-        UserOrAccount memory userOrAccount,
+        uint256 userId,
         uint256 assetId,
         uint64 lastUpdate,
         uint128 lastBalance,
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers
-    ) internal returns (uint128 newBalance, int128 realBalanceDelta) {
-        _assertCurrDrips(userOrAccount, assetId, lastUpdate, lastBalance, currReceivers);
+    ) internal onlyAccountOwner(userId) returns (uint128 newBalance, int128 realBalanceDelta) {
+        _assertCurrDrips(userId, assetId, lastUpdate, lastBalance, currReceivers);
         uint128 newAmtPerSec = _assertDripsReceiversValid(newReceivers);
         uint128 currAmtPerSec = _totalDripsAmtPerSec(currReceivers);
         uint64 currEndTime = _dripsEndTime(lastUpdate, lastBalance, currAmtPerSec);
@@ -580,15 +540,15 @@ abstract contract DripsHub {
         );
         uint64 newEndTime = _dripsEndTime(_currTimestamp(), newBalance, newAmtPerSec);
         _updateDripsReceiversStates(
-            userOrAccount,
+            userId,
             assetId,
             currReceivers,
             currEndTime,
             newReceivers,
             newEndTime
         );
-        _storeNewDrips(userOrAccount, assetId, newBalance, newReceivers);
-        _emitDripsUpdated(userOrAccount, assetId, newBalance, newReceivers);
+        _storeNewDrips(userId, assetId, newBalance, newReceivers);
+        emit DripsUpdated(userId, assetId, newBalance, newReceivers);
         _transfer(assetId, -realBalanceDelta);
     }
 
@@ -668,27 +628,9 @@ abstract contract DripsHub {
         return (uint128(uint136(balance)), int128(balance - currBalance));
     }
 
-    /// @notice Emit an event when drips are updated.
-    /// @param userOrAccount The user or their account
-    /// @param assetId The used asset ID
-    /// @param balance The new drips balance.
-    /// @param receivers The new list of the drips receivers.
-    function _emitDripsUpdated(
-        UserOrAccount memory userOrAccount,
-        uint256 assetId,
-        uint128 balance,
-        DripsReceiver[] memory receivers
-    ) internal {
-        if (userOrAccount.isAccount) {
-            emit DripsUpdated(userOrAccount.user, userOrAccount.account, balance, receivers);
-        } else {
-            emit DripsUpdated(userOrAccount.user, assetId, balance, receivers);
-        }
-    }
-
     /// @notice Updates the user's or the account's drips receivers' states.
     /// It applies the effects of the change of the drips configuration.
-    /// @param userOrAccount The user or their account
+    /// @param userId The user ID.
     /// @param assetId The used asset ID
     /// @param currReceivers The list of the drips receivers set in the last drips update
     /// of the user or the account.
@@ -698,7 +640,7 @@ abstract contract DripsHub {
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
     /// @param newEndTime Time when drips will end according to the new drips configuration.
     function _updateDripsReceiversStates(
-        UserOrAccount memory userOrAccount,
+        uint256 userId,
         uint256 assetId,
         DripsReceiver[] memory currReceivers,
         uint64 currEndTime,
@@ -748,7 +690,8 @@ abstract contract DripsHub {
             }
             // Apply the drips update since now
             _setDelta(receiver, _currTimestamp(), assetId, newAmtPerSec - currAmtPerSec);
-            _emitDripping(userOrAccount, receiver, assetId, uint128(newAmtPerSec), newEndTime);
+            uint64 eventEndTime = newAmtPerSec == 0 ? _currTimestamp() : newEndTime;
+            emit Dripping(userId, receiver, assetId, uint128(newAmtPerSec), eventEndTime);
             // The receiver may have never been used
             if (!pickCurr) {
                 DripsState storage dripsState = _dripsHubStorage().dripsStates[
@@ -759,35 +702,6 @@ abstract contract DripsHub {
                     dripsState.nextCollectedCycle = _currTimestamp() / cycleSecs + 1;
                 }
             }
-        }
-    }
-
-    /// @notice Emit an event when drips from a user to a receiver are updated.
-    /// @param userOrAccount The user or their account
-    /// @param receiver The receiver
-    /// @param assetId The used asset ID
-    /// @param amtPerSec The new amount per second dripped from the user or the account
-    /// to the receiver or 0 if the drips are stopped
-    /// @param endTime The timestamp when dripping will stop
-    function _emitDripping(
-        UserOrAccount memory userOrAccount,
-        address receiver,
-        uint256 assetId,
-        uint128 amtPerSec,
-        uint64 endTime
-    ) internal {
-        if (amtPerSec == 0) endTime = _currTimestamp();
-        if (userOrAccount.isAccount) {
-            emit Dripping(
-                userOrAccount.user,
-                userOrAccount.account,
-                receiver,
-                assetId,
-                amtPerSec,
-                endTime
-            );
-        } else {
-            emit Dripping(userOrAccount.user, receiver, assetId, amtPerSec, endTime);
         }
     }
 
@@ -807,7 +721,7 @@ abstract contract DripsHub {
     }
 
     /// @notice Asserts that the drips configuration is the currently used one.
-    /// @param userOrAccount The user or their account
+    /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param lastUpdate The timestamp of the last drips update of the user or the account.
     /// If this is the first update, pass zero.
@@ -817,32 +731,31 @@ abstract contract DripsHub {
     /// of the user or the account.
     /// If this is the first update, pass an empty array.
     function _assertCurrDrips(
-        UserOrAccount memory userOrAccount,
+        uint256 userId,
         uint256 assetId,
         uint64 lastUpdate,
         uint128 lastBalance,
         DripsReceiver[] memory currReceivers
     ) internal view {
-        bytes32 expectedHash = _dripsHubStorage()
-        .dripsStates[calcUserId(userOrAccount)][assetId].dripsHash;
+        bytes32 expectedHash = _dripsHubStorage().dripsStates[userId][assetId].dripsHash;
         bytes32 actualHash = hashDrips(lastUpdate, lastBalance, currReceivers);
         require(actualHash == expectedHash, "Invalid current drips configuration");
     }
 
     /// @notice Stores the hash of the new drips configuration to be used in `_assertCurrDrips`.
-    /// @param userOrAccount The user or their account
+    /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param newBalance The user or the account drips balance.
     /// @param newReceivers The list of the drips receivers of the user or the account.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
     function _storeNewDrips(
-        UserOrAccount memory userOrAccount,
+        uint256 userId,
         uint256 assetId,
         uint128 newBalance,
         DripsReceiver[] memory newReceivers
     ) internal {
         bytes32 newDripsHash = hashDrips(_currTimestamp(), newBalance, newReceivers);
-        _dripsHubStorage().dripsStates[calcUserId(userOrAccount)][assetId].dripsHash = newDripsHash;
+        _dripsHubStorage().dripsStates[userId][assetId].dripsHash = newDripsHash;
     }
 
     /// @notice Calculates the hash of the drips configuration.
@@ -959,32 +872,8 @@ abstract contract DripsHub {
         amtDelta.nextCycle += int128(uint128(nextCycleSecs)) * amtPerSecDelta;
     }
 
-    function _userOrAccount(address user) internal pure returns (UserOrAccount memory) {
-        return UserOrAccount({isAccount: false, user: user, account: 0});
-    }
-
-    function _userOrAccount(address user, uint256 account)
-        internal
-        pure
-        returns (UserOrAccount memory)
-    {
-        return UserOrAccount({isAccount: true, user: user, account: account});
-    }
-
-    function calcUserId(UserOrAccount memory userOrAccount) public pure returns (uint256) {
-        if (userOrAccount.isAccount) {
-            return calcUserId(userOrAccount.user, userOrAccount.account);
-        } else {
-            return calcUserId(userOrAccount.user);
-        }
-    }
-
     function calcUserId(address user) public pure returns (uint256) {
-        return uint256(keccak256(abi.encode(user)));
-    }
-
-    function calcUserId(address user, uint256 account) public pure returns (uint256) {
-        return uint256(keccak256(abi.encode(user, account)));
+        return uint160(user);
     }
 
     function _currTimestamp() internal view returns (uint64) {

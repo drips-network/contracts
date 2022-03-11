@@ -42,7 +42,7 @@ abstract contract DripsHubUser {
     ) public virtual;
 
     function give(
-        uint256 account,
+        uint256 userId,
         address receiver,
         uint256 assetId,
         uint128 amt
@@ -116,8 +116,8 @@ abstract contract DripsHubUser {
         return dripsHub.dripsHash(address(this), assetId);
     }
 
-    function dripsHash(uint256 account, uint256 assetId) public view returns (bytes32 weightsHash) {
-        return dripsHub.dripsHash(address(this), account, assetId);
+    function dripsHash(uint256 userId, uint256 assetId) public view returns (bytes32 weightsHash) {
+        return dripsHub.dripsHash(userId, assetId);
     }
 
     function hashSplits(SplitsReceiver[] calldata receivers) public view returns (bytes32) {
@@ -194,7 +194,7 @@ contract ERC20DripsHubUser is ManagedDripsHubUser {
     }
 
     function setDrips(
-        uint256 account,
+        uint256 userId,
         uint256 assetId,
         uint64 lastUpdate,
         uint128 lastBalance,
@@ -206,7 +206,7 @@ contract ERC20DripsHubUser is ManagedDripsHubUser {
             IERC20(address(uint160(assetId))).approve(address(dripsHub), uint128(balanceDelta));
         return
             dripsHub.setDrips(
-                account,
+                userId,
                 assetId,
                 lastUpdate,
                 lastBalance,
@@ -226,13 +226,13 @@ contract ERC20DripsHubUser is ManagedDripsHubUser {
     }
 
     function give(
-        uint256 account,
+        uint256 userId,
         address receiver,
         uint256 assetId,
         uint128 amt
     ) public override {
         IERC20(address(uint160(assetId))).approve(address(dripsHub), amt);
-        dripsHub.give(account, receiver, assetId, amt);
+        dripsHub.give(userId, receiver, assetId, amt);
     }
 
     function setSplits(SplitsReceiver[] calldata receivers) public override {
@@ -278,7 +278,7 @@ contract EthDripsHubUser is ManagedDripsHubUser {
     }
 
     function setDrips(
-        uint256 account,
+        uint256 userId,
         uint256 assetId,
         uint64 lastUpdate,
         uint128 lastBalance,
@@ -291,7 +291,7 @@ contract EthDripsHubUser is ManagedDripsHubUser {
         uint128 reduceBalance = balanceDelta < 0 ? uint128(-balanceDelta) : 0;
         return
             dripsHub.setDrips{value: value}(
-                account,
+                userId,
                 lastUpdate,
                 lastBalance,
                 currReceivers,
@@ -310,13 +310,13 @@ contract EthDripsHubUser is ManagedDripsHubUser {
     }
 
     function give(
-        uint256 account,
+        uint256 userId,
         address receiver,
         uint256 assetId,
         uint128 amt
     ) public override {
         assetId;
-        dripsHub.give{value: amt}(account, receiver);
+        dripsHub.give{value: amt}(userId, receiver);
     }
 
     function setSplits(SplitsReceiver[] calldata receivers) public override {

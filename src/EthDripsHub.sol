@@ -44,7 +44,7 @@ contract EthDripsHub is ManagedDripsHub {
     ) public payable whenNotPaused returns (uint128 newBalance, int128 realBalanceDelta) {
         return
             _setDrips(
-                _userOrAccount(msg.sender),
+                calcUserId(msg.sender),
                 ASSET_ID,
                 lastUpdate,
                 lastBalance,
@@ -54,11 +54,10 @@ contract EthDripsHub is ManagedDripsHub {
             );
     }
 
-    /// @notice Sets the drips configuration of an account of the `msg.sender`.
-    /// See `setDrips` for more details
-    /// @param account The account
+    /// @notice Sets the drips configuration of the user. See `setDrips` for more details.
+    /// @param userId The user ID
     function setDrips(
-        uint256 account,
+        uint256 userId,
         uint64 lastUpdate,
         uint128 lastBalance,
         DripsReceiver[] memory currReceivers,
@@ -67,7 +66,7 @@ contract EthDripsHub is ManagedDripsHub {
     ) public payable whenNotPaused returns (uint128 newBalance, int128 realBalanceDelta) {
         return
             _setDrips(
-                _userOrAccount(msg.sender, account),
+                userId,
                 ASSET_ID,
                 lastUpdate,
                 lastBalance,
@@ -91,16 +90,16 @@ contract EthDripsHub is ManagedDripsHub {
     /// The funds to be given must be the value of the message.
     /// @param receiver The receiver
     function give(address receiver) public payable whenNotPaused {
-        _give(_userOrAccount(msg.sender), receiver, ASSET_ID, uint128(msg.value));
+        _give(calcUserId(msg.sender), receiver, ASSET_ID, uint128(msg.value));
     }
 
-    /// @notice Gives funds from the account of the `msg.sender` to the receiver.
+    /// @notice Gives funds from the user to the receiver.
     /// The receiver can collect them immediately.
     /// The funds to be given must be the value of the message.
-    /// @param account The user's account
+    /// @param userId The user ID.
     /// @param receiver The receiver
-    function give(uint256 account, address receiver) public payable whenNotPaused {
-        _give(_userOrAccount(msg.sender, account), receiver, ASSET_ID, uint128(msg.value));
+    function give(uint256 userId, address receiver) public payable whenNotPaused {
+        _give(userId, receiver, ASSET_ID, uint128(msg.value));
     }
 
     /// @notice Sets user splits configuration.

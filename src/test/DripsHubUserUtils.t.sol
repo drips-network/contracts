@@ -6,15 +6,53 @@ import {DripsHubUser} from "./DripsHubUser.t.sol";
 import {SplitsReceiver, DripsHub, DripsReceiver} from "../DripsHub.sol";
 
 abstract contract DripsHubUserUtils is DSTest {
+    DripsHub private dripsHub;
     uint256 internal defaultAsset;
 
-    // Keys are user and asset ID
-    mapping(DripsHubUser => mapping(uint256 => bytes)) internal drips;
-    // Keys are user, account ID and asset ID
-    mapping(DripsHubUser => mapping(uint256 => mapping(uint256 => bytes))) internal accountDrips;
+    // Keys are user ID and asset ID
+    mapping(uint256 => mapping(uint256 => bytes)) internal drips;
     mapping(DripsHubUser => bytes) internal currSplitsReceivers;
 
+    function setUpUtils(DripsHub dripsHub_) internal {
+        dripsHub = dripsHub_;
+    }
+
+    function calcUserId(DripsHubUser user) internal view returns (uint256) {
+        return calcUserId(address(user));
+    }
+
+    function calcUserId(address user) internal view returns (uint256) {
+        // Account ID 0 is for msg.sender verification sub-accounts
+        return calcUserId(0, uint160(user));
+    }
+
+    function calcUserId(uint32 account, uint224 subAccount) internal view returns (uint256) {
+        return (uint256(account) << dripsHub.BITS_SUB_ACCOUNT()) | subAccount;
+    }
+
     function loadDrips(DripsHubUser user)
+        internal
+        returns (
+            uint64 lastUpdate,
+            uint128 lastBalance,
+            DripsReceiver[] memory currReceivers
+        )
+    {
+        return loadDrips(defaultAsset, calcUserId(user));
+    }
+
+    function loadDrips(uint256 asset, DripsHubUser user)
+        internal
+        returns (
+            uint64 lastUpdate,
+            uint128 lastBalance,
+            DripsReceiver[] memory currReceivers
+        )
+    {
+        return loadDrips(asset, calcUserId(user));
+    }
+
+    function loadDrips(uint256 user)
         internal
         returns (
             uint64 lastUpdate,
@@ -25,7 +63,7 @@ abstract contract DripsHubUserUtils is DSTest {
         return loadDrips(defaultAsset, user);
     }
 
-    function loadDrips(uint256 asset, DripsHubUser user)
+    function loadDrips(uint256 asset, uint256 user)
         internal
         returns (
             uint64 lastUpdate,
@@ -37,35 +75,25 @@ abstract contract DripsHubUserUtils is DSTest {
         assertDrips(asset, user, lastUpdate, lastBalance, currReceivers);
     }
 
-    function loadDrips(DripsHubUser user, uint256 account)
-        internal
-        returns (
-            uint64 lastUpdate,
-            uint128 lastBalance,
-            DripsReceiver[] memory currReceivers
-        )
-    {
-        return loadDrips(defaultAsset, user, account);
-    }
-
-    function loadDrips(
-        uint256 asset,
+    function storeDrips(
         DripsHubUser user,
-        uint256 account
-    )
-        internal
-        returns (
-            uint64 lastUpdate,
-            uint128 lastBalance,
-            DripsReceiver[] memory currReceivers
-        )
-    {
-        (lastUpdate, lastBalance, currReceivers) = decodeDrips(accountDrips[user][account][asset]);
-        assertDrips(asset, user, account, lastUpdate, lastBalance, currReceivers);
+        uint128 newBalance,
+        DripsReceiver[] memory newReceivers
+    ) internal {
+        storeDrips(defaultAsset, calcUserId(user), newBalance, newReceivers);
     }
 
     function storeDrips(
+        uint256 asset,
         DripsHubUser user,
+        uint128 newBalance,
+        DripsReceiver[] memory newReceivers
+    ) internal {
+        storeDrips(asset, calcUserId(user), newBalance, newReceivers);
+    }
+
+    function storeDrips(
+        uint256 user,
         uint128 newBalance,
         DripsReceiver[] memory newReceivers
     ) internal {
@@ -74,34 +102,13 @@ abstract contract DripsHubUserUtils is DSTest {
 
     function storeDrips(
         uint256 asset,
-        DripsHubUser user,
+        uint256 user,
         uint128 newBalance,
         DripsReceiver[] memory newReceivers
     ) internal {
         uint64 currTimestamp = uint64(block.timestamp);
         assertDrips(asset, user, currTimestamp, newBalance, newReceivers);
         drips[user][asset] = abi.encode(currTimestamp, newBalance, newReceivers);
-    }
-
-    function storeDrips(
-        DripsHubUser user,
-        uint256 account,
-        uint128 newBalance,
-        DripsReceiver[] memory newReceivers
-    ) internal {
-        storeDrips(defaultAsset, user, account, newBalance, newReceivers);
-    }
-
-    function storeDrips(
-        uint256 asset,
-        DripsHubUser user,
-        uint256 account,
-        uint128 newBalance,
-        DripsReceiver[] memory newReceivers
-    ) internal {
-        uint64 currTimestamp = uint64(block.timestamp);
-        assertDrips(asset, user, account, currTimestamp, newBalance, newReceivers);
-        accountDrips[user][account][asset] = abi.encode(currTimestamp, newBalance, newReceivers);
     }
 
     function decodeDrips(bytes storage encoded)
@@ -272,7 +279,18 @@ abstract contract DripsHubUserUtils is DSTest {
 
     function setDrips(
         DripsHubUser user,
-        uint256 account,
+        uint32 account,
+        uint224 subAccount,
+        uint128 balanceFrom,
+        uint128 balanceTo,
+        DripsReceiver[] memory newReceivers
+    ) internal {
+        setDrips(user, calcUserId(account, subAccount), balanceFrom, balanceTo, newReceivers);
+    }
+
+    function setDrips(
+        DripsHubUser user,
+        uint256 userId,
         uint128 balanceFrom,
         uint128 balanceTo,
         DripsReceiver[] memory newReceivers
@@ -280,12 +298,11 @@ abstract contract DripsHubUserUtils is DSTest {
         int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
         uint256 expectedBalance = uint256(int256(user.balance(defaultAsset)) - balanceDelta);
         (uint64 lastUpdate, uint128 lastBalance, DripsReceiver[] memory currReceivers) = loadDrips(
-            user,
-            account
+            userId
         );
 
         (uint128 newBalance, int128 realBalanceDelta) = user.setDrips(
-            account,
+            userId,
             defaultAsset,
             lastUpdate,
             lastBalance,
@@ -294,7 +311,7 @@ abstract contract DripsHubUserUtils is DSTest {
             newReceivers
         );
 
-        storeDrips(user, account, newBalance, newReceivers);
+        storeDrips(userId, newBalance, newReceivers);
         assertEq(newBalance, balanceTo, "Invalid drips balance");
         assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
         assertBalance(user, expectedBalance);
@@ -302,25 +319,26 @@ abstract contract DripsHubUserUtils is DSTest {
 
     function assertDrips(
         uint256 asset,
-        DripsHubUser user,
-        uint256 account,
+        uint256 user,
         uint64 lastUpdate,
         uint128 lastBalance,
         DripsReceiver[] memory currReceivers
     ) internal {
-        bytes32 actual = user.dripsHash(account, asset);
-        bytes32 expected = user.hashDrips(lastUpdate, lastBalance, currReceivers);
+        bytes32 actual = dripsHub.dripsHash(user, asset);
+        bytes32 expected = dripsHub.hashDrips(lastUpdate, lastBalance, currReceivers);
         assertEq(actual, expected, "Invalid drips configuration");
     }
 
     function changeBalance(
         DripsHubUser user,
-        uint256 account,
+        uint32 account,
+        uint224 subAccount,
         uint128 balanceFrom,
         uint128 balanceTo
     ) internal {
-        (, , DripsReceiver[] memory curr) = loadDrips(user, account);
-        setDrips(user, account, balanceFrom, balanceTo, curr);
+        uint256 userId = calcUserId(account, subAccount);
+        (, , DripsReceiver[] memory curr) = loadDrips(userId);
+        setDrips(user, userId, balanceFrom, balanceTo, curr);
     }
 
     function give(
@@ -348,14 +366,15 @@ abstract contract DripsHubUserUtils is DSTest {
 
     function give(
         DripsHubUser user,
-        uint256 account,
+        uint32 account,
+        uint224 subAccount,
         DripsHubUser receiver,
         uint128 amt
     ) internal {
         uint256 expectedBalance = uint256(user.balance(defaultAsset) - amt);
         uint128 expectedCollectable = totalCollectableAll(defaultAsset, receiver) + amt;
 
-        user.give(account, address(receiver), defaultAsset, amt);
+        user.give(calcUserId(account, subAccount), address(receiver), defaultAsset, amt);
 
         assertBalance(defaultAsset, user, expectedBalance);
         assertTotalCollectableAll(defaultAsset, receiver, expectedCollectable);

@@ -50,7 +50,7 @@ contract ERC20DripsHub is ManagedDripsHub {
     ) public whenNotPaused returns (uint128 newBalance, int128 realBalanceDelta) {
         return
             _setDrips(
-                _userOrAccount(msg.sender),
+                calcUserId(msg.sender),
                 assetId,
                 lastUpdate,
                 lastBalance,
@@ -60,11 +60,10 @@ contract ERC20DripsHub is ManagedDripsHub {
             );
     }
 
-    /// @notice Sets the drips configuration of an account of the `msg.sender`.
-    /// See `setDrips` for more details
-    /// @param account The account
+    /// @notice Sets the drips configuration of the user. See `setDrips` for more details.
+    /// @param userId The user ID
     function setDrips(
-        uint256 account,
+        uint256 userId,
         uint256 assetId,
         uint64 lastUpdate,
         uint128 lastBalance,
@@ -74,7 +73,7 @@ contract ERC20DripsHub is ManagedDripsHub {
     ) public whenNotPaused returns (uint128 newBalance, int128 realBalanceDelta) {
         return
             _setDrips(
-                _userOrAccount(msg.sender, account),
+                userId,
                 assetId,
                 lastUpdate,
                 lastBalance,
@@ -95,23 +94,23 @@ contract ERC20DripsHub is ManagedDripsHub {
         uint256 assetId,
         uint128 amt
     ) public whenNotPaused {
-        _give(_userOrAccount(msg.sender), receiver, assetId, amt);
+        _give(calcUserId(msg.sender), receiver, assetId, amt);
     }
 
-    /// @notice Gives funds from the account of the `msg.sender` to the receiver.
+    /// @notice Gives funds from the user to the receiver.
     /// The receiver can collect them immediately.
     /// Transfers the funds to be given from the sender's wallet to the drips hub contract.
-    /// @param account The account
+    /// @param userId The user ID
     /// @param receiver The receiver
     /// @param assetId The used asset ID
     /// @param amt The given amount
     function give(
-        uint256 account,
+        uint256 userId,
         address receiver,
         uint256 assetId,
         uint128 amt
     ) public whenNotPaused {
-        _give(_userOrAccount(msg.sender, account), receiver, assetId, amt);
+        _give(userId, receiver, assetId, amt);
     }
 
     /// @notice Sets user splits configuration.
