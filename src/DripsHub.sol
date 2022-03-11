@@ -198,6 +198,10 @@ abstract contract DripsHub {
         /// @notice User splits states.
         /// The key is the user ID.
         mapping(uint256 => SplitsState) splitsStates;
+        /// @notice The last created account ID. The next one will have ID lastAccountId + 1.
+        uint32 lastAccountId;
+        /// @notice Account owners. The key is the account ID, the value is the owner address.
+        mapping(uint32 => address) accountsOwners;
     }
 
     struct DripsState {
@@ -240,6 +244,30 @@ abstract contract DripsHub {
     /// High value makes collecting cheaper by making it process less cycles for a given time range.
     constructor(uint64 _cycleSecs) {
         cycleSecs = _cycleSecs;
+    }
+
+    /// @notice Creates an account.
+    /// Assigns it an ID and lets its owner perform actions on behalf of all its sub-accounts.
+    /// Multiple accounts can be registered for a single address, it will own all of them.
+    /// @return accountId The new account ID.
+    function createAccount(address owner) public virtual returns (uint32 accountId) {
+        DripsHubStorage storage dripsHubStorage = _dripsHubStorage();
+        accountId = dripsHubStorage.lastAccountId + 1;
+        dripsHubStorage.lastAccountId = accountId;
+        dripsHubStorage.accountsOwners[accountId] = owner;
+    }
+
+    /// @notice Returns account owner.
+    /// @param accountId The account to look up.
+    /// @return owner The owner of the account. If the account doesn't exist, returns address 0.
+    function accountOwner(uint32 accountId) public view returns (address owner) {
+        return _dripsHubStorage().accountsOwners[accountId];
+    }
+
+    /// @notice Returns the ID which will be assigned for the next created account.
+    /// @return accountId The account ID.
+    function nextAccountId() public view returns (uint32 accountId) {
+        return _dripsHubStorage().lastAccountId + 1;
     }
 
     /// @notice Returns the contract storage.

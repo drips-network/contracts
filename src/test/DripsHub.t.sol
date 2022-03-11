@@ -677,4 +677,13 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         receiveDrips(receiver1, dripsHub.cycleSecs(), 1);
         receiveDrips(receiver2, dripsHub.cycleSecs() * 2, 1);
     }
+
+    function testCreateAccount() public {
+        address owner = address(0x1234);
+        uint32 accountId = dripsHub.nextAccountId();
+        assertEq(address(0), dripsHub.accountOwner(accountId), "Invalid nonexistent account owner");
+        assertEq(accountId, dripsHub.createAccount(owner), "Invalid assigned account ID");
+        assertEq(owner, dripsHub.accountOwner(accountId), "Invalid account owner");
+        assertEq(accountId + 1, dripsHub.nextAccountId(), "Invalid next account ID");
+    }
 }

@@ -45,6 +45,14 @@ abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable {
         _managedDripsHubStorage().paused = true;
     }
 
+    /// @notice Creates an account.
+    /// Assigns it an ID and lets its owner perform actions on behalf of all its sub-accounts.
+    /// Multiple accounts can be registered for a single address, it will own all of them.
+    /// @return accountId The new account ID.
+    function createAccount(address owner) public override whenNotPaused returns (uint32 accountId) {
+        return super.createAccount(owner);
+    }
+
     /// @notice Collects all received funds available for the user
     /// and transfers them out of the drips hub contract to that user's wallet.
     /// @param assetId The used asset ID

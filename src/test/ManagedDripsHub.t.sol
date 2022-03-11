@@ -184,4 +184,13 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
             assertEq(reason, ERROR_PAUSED, "Invalid setSplits revert reason");
         }
     }
+
+    function testCreateAccountCanBePaused() public {
+        admin.pause();
+        try dripsHub.createAccount(address(0x1234)) {
+            assertTrue(false, "CreateAccount hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, ERROR_PAUSED, "Invalid createAccount revert reason");
+        }
+    }
 }
