@@ -86,11 +86,11 @@ contract ERC20DripsHub is ManagedDripsHub {
     /// @notice Gives funds from the `msg.sender` to the receiver.
     /// The receiver can collect them immediately.
     /// Transfers the funds to be given from the sender's wallet to the drips hub contract.
-    /// @param receiver The receiver
+    /// @param receiver The receiver user ID
     /// @param assetId The used asset ID
     /// @param amt The given amount
     function give(
-        address receiver,
+        uint256 receiver,
         uint256 assetId,
         uint128 amt
     ) public whenNotPaused {
@@ -101,12 +101,12 @@ contract ERC20DripsHub is ManagedDripsHub {
     /// The receiver can collect them immediately.
     /// Transfers the funds to be given from the sender's wallet to the drips hub contract.
     /// @param userId The user ID
-    /// @param receiver The receiver
+    /// @param receiver The receiver user ID
     /// @param assetId The used asset ID
     /// @param amt The given amount
     function give(
         uint256 userId,
-        address receiver,
+        uint256 receiver,
         uint256 assetId,
         uint128 amt
     ) public whenNotPaused {

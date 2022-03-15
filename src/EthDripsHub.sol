@@ -88,8 +88,8 @@ contract EthDripsHub is ManagedDripsHub {
     /// @notice Gives funds from the `msg.sender` to the receiver.
     /// The receiver can collect them immediately.
     /// The funds to be given must be the value of the message.
-    /// @param receiver The receiver
-    function give(address receiver) public payable whenNotPaused {
+    /// @param receiver The receiver user ID
+    function give(uint256 receiver) public payable whenNotPaused {
         _give(calcUserId(msg.sender), receiver, ASSET_ID, uint128(msg.value));
     }
 
@@ -97,8 +97,8 @@ contract EthDripsHub is ManagedDripsHub {
     /// The receiver can collect them immediately.
     /// The funds to be given must be the value of the message.
     /// @param userId The user ID.
-    /// @param receiver The receiver
-    function give(uint256 userId, address receiver) public payable whenNotPaused {
+    /// @param receiver The receiver user ID
+    function give(uint256 userId, uint256 receiver) public payable whenNotPaused {
         _give(userId, receiver, ASSET_ID, uint128(msg.value));
     }
 

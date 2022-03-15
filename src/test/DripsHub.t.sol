@@ -714,7 +714,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testGiveRevertsWhenNotAccountOwner() public {
-        try user1.give(calcUserId(dripsHub.nextAccountId(), 0), address(user2), defaultAsset, 1) {
+        try user1.give(calcUserId(dripsHub.nextAccountId(), 0), 0, defaultAsset, 1) {
             assertTrue(false, "Give hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_NOT_OWNER, "Invalid give revert reason");

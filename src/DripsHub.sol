@@ -134,10 +134,10 @@ abstract contract DripsHub {
 
     /// @notice Emitted when funds are given from the user to the receiver.
     /// @param userId The user ID
-    /// @param receiver The receiver
+    /// @param receiver The receiver user ID
     /// @param assetId The used asset ID
     /// @param amt The given amount
-    event Given(uint256 indexed userId, address indexed receiver, uint256 assetId, uint128 amt);
+    event Given(uint256 indexed userId, uint256 indexed receiver, uint256 assetId, uint128 amt);
 
     struct DripsHubStorage {
         /// @notice User drips states.
@@ -470,11 +470,11 @@ abstract contract DripsHub {
     /// @param amt The given amount
     function _give(
         uint256 userId,
-        address receiver,
+        uint256 receiver,
         uint256 assetId,
         uint128 amt
     ) internal onlyAccountOwner(userId) {
-        _dripsHubStorage().splitsStates[calcUserId(receiver)].balances[assetId].unsplit += amt;
+        _dripsHubStorage().splitsStates[receiver].balances[assetId].unsplit += amt;
         emit Given(userId, receiver, assetId, amt);
         _transfer(assetId, -int128(amt));
     }

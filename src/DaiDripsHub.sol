@@ -84,7 +84,7 @@ contract DaiDripsHub is ERC20DripsHub {
     /// These parameters will be passed to the Dai contract by this function.
     /// @param permitArgs The Dai permission arguments.
     function giveAndPermit(
-        address receiver,
+        uint256 receiver,
         uint128 amt,
         PermitArgs calldata permitArgs
     ) public whenNotPaused {
@@ -101,7 +101,7 @@ contract DaiDripsHub is ERC20DripsHub {
     /// @param permitArgs The Dai permission arguments.
     function giveAndPermit(
         uint256 account,
-        address receiver,
+        uint256 receiver,
         uint128 amt,
         PermitArgs calldata permitArgs
     ) public whenNotPaused {

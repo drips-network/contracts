@@ -160,7 +160,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testGiveCanBePaused() public {
         admin.pause();
-        try admin.give(address(user), defaultAsset, 1) {
+        try admin.give(0, defaultAsset, 1) {
             assertTrue(false, "Give hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid give revert reason");
@@ -169,7 +169,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testGiveFromAccountCanBePaused() public {
         admin.pause();
-        try admin.give(0, address(user), defaultAsset, 1) {
+        try admin.give(0, 0, defaultAsset, 1) {
             assertTrue(false, "Give hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid giveFrom revert reason");

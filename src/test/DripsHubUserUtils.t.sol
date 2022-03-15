@@ -358,7 +358,7 @@ abstract contract DripsHubUserUtils is DSTest {
         uint256 expectedBalance = uint256(user.balance(asset) - amt);
         uint128 expectedCollectable = totalCollectableAll(asset, receiver) + amt;
 
-        user.give(address(receiver), asset, amt);
+        user.give(calcUserId(receiver), asset, amt);
 
         assertBalance(asset, user, expectedBalance);
         assertTotalCollectableAll(asset, receiver, expectedCollectable);
@@ -374,7 +374,7 @@ abstract contract DripsHubUserUtils is DSTest {
         uint256 expectedBalance = uint256(user.balance(defaultAsset) - amt);
         uint128 expectedCollectable = totalCollectableAll(defaultAsset, receiver) + amt;
 
-        user.give(calcUserId(account, subAccount), address(receiver), defaultAsset, amt);
+        user.give(calcUserId(account, subAccount), calcUserId(receiver), defaultAsset, amt);
 
         assertBalance(defaultAsset, user, expectedBalance);
         assertTotalCollectableAll(defaultAsset, receiver, expectedCollectable);
