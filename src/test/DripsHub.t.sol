@@ -246,10 +246,10 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         DripsReceiver[] memory receiversGood = new DripsReceiver[](countMax);
         DripsReceiver[] memory receiversBad = new DripsReceiver[](countMax + 1);
         for (uint160 i = 0; i < countMax; i++) {
-            receiversGood[i] = DripsReceiver(address(i + 1), 1);
+            receiversGood[i] = DripsReceiver(i, 1);
             receiversBad[i] = receiversGood[i];
         }
-        receiversBad[countMax] = DripsReceiver(address(countMax + 1), 1);
+        receiversBad[countMax] = DripsReceiver(countMax, 1);
 
         setDrips(user, 0, 0, receiversGood);
         assertSetReceiversReverts(user, receiversBad, "Too many drips receivers");
@@ -276,7 +276,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         assertSetReceiversReverts(
             user,
             dripsReceivers(receiver2, 1, receiver1, 1),
-            "Drips receivers not sorted by address"
+            "Drips receivers not sorted by user ID"
         );
     }
 

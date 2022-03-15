@@ -2,7 +2,7 @@
 pragma solidity ^0.8.7;
 
 struct DripsReceiver {
-    address receiver;
+    uint256 userId;
     uint128 amtPerSec;
 }
 
@@ -69,7 +69,7 @@ abstract contract DripsHub {
     /// Funds are being dripped on every second between the event block's timestamp (inclusively)
     /// and`endTime` (exclusively) or until the timestamp of the next drips update (exclusively).
     /// @param userId The dripping user ID.
-    /// @param receiver The receiver of the updated drips
+    /// @param receiver The receiver user ID
     /// @param assetId The used asset ID
     /// @param amtPerSec The new amount per second dripped from the user
     /// to the receiver or 0 if the drips are stopped
@@ -77,7 +77,7 @@ abstract contract DripsHub {
     /// always larger than the block timestamp or equal to it if the drips are stopped
     event Dripping(
         uint256 indexed userId,
-        address indexed receiver,
+        uint256 indexed receiver,
         uint256 assetId,
         uint128 amtPerSec,
         uint64 endTime
@@ -563,15 +563,15 @@ abstract contract DripsHub {
     {
         require(receivers.length <= MAX_DRIPS_RECEIVERS, "Too many drips receivers");
         uint256 amtPerSec = 0;
-        address prevReceiver;
+        uint256 prevReceiver;
         for (uint256 i = 0; i < receivers.length; i++) {
             uint128 amt = receivers[i].amtPerSec;
             require(amt != 0, "Drips receiver amtPerSec is zero");
             amtPerSec += amt;
-            address receiver = receivers[i].receiver;
+            uint256 receiver = receivers[i].userId;
             if (i > 0) {
                 require(prevReceiver != receiver, "Duplicate drips receivers");
-                require(prevReceiver < receiver, "Drips receivers not sorted by address");
+                require(prevReceiver < receiver, "Drips receivers not sorted by user ID");
             }
             prevReceiver = receiver;
         }
@@ -665,24 +665,24 @@ abstract contract DripsHub {
                 // The one with a higher address won't be used in this iteration.
                 // Because drips receivers lists are sorted by addresses and deduplicated,
                 // all matching pairs of drips receiver configurations will be found.
-                address currReceiver = currReceivers[currIdx].receiver;
-                address newReceiver = newReceivers[newIdx].receiver;
+                uint256 currReceiver = currReceivers[currIdx].userId;
+                uint256 newReceiver = newReceivers[newIdx].userId;
                 pickCurr = currReceiver <= newReceiver;
                 pickNew = newReceiver <= currReceiver;
             }
             // The drips update parameters
-            address receiver;
+            uint256 receiver;
             int128 currAmtPerSec = 0;
             int128 newAmtPerSec = 0;
             if (pickCurr) {
-                receiver = currReceivers[currIdx].receiver;
+                receiver = currReceivers[currIdx].userId;
                 currAmtPerSec = int128(currReceivers[currIdx].amtPerSec);
                 // Clear the obsolete drips end
                 _setDelta(receiver, currEndTime, assetId, currAmtPerSec);
                 currIdx++;
             }
             if (pickNew) {
-                receiver = newReceivers[newIdx].receiver;
+                receiver = newReceivers[newIdx].userId;
                 newAmtPerSec = int128(newReceivers[newIdx].amtPerSec);
                 // Apply the new drips end
                 _setDelta(receiver, newEndTime, assetId, -newAmtPerSec);
@@ -694,9 +694,7 @@ abstract contract DripsHub {
             emit Dripping(userId, receiver, assetId, uint128(newAmtPerSec), eventEndTime);
             // The receiver may have never been used
             if (!pickCurr) {
-                DripsState storage dripsState = _dripsHubStorage().dripsStates[
-                    calcUserId(receiver)
-                ][assetId];
+                DripsState storage dripsState = _dripsHubStorage().dripsStates[receiver][assetId];
                 // The receiver has never been used, initialize it
                 if (dripsState.nextCollectedCycle == 0) {
                     dripsState.nextCollectedCycle = _currTimestamp() / cycleSecs + 1;
@@ -849,12 +847,12 @@ abstract contract DripsHub {
     function _transfer(uint256 assetId, int128 amt) internal virtual;
 
     /// @notice Sets amt delta of a user on a given timestamp
-    /// @param user The user
+    /// @param userId The user ID
     /// @param timestamp The timestamp from which the delta takes effect
     /// @param assetId The used asset ID
     /// @param amtPerSecDelta Change of the per-second receiving rate
     function _setDelta(
-        address user,
+        uint256 userId,
         uint64 timestamp,
         uint256 assetId,
         int128 amtPerSecDelta
@@ -866,8 +864,9 @@ abstract contract DripsHub {
         uint64 thisCycle = timestamp / cycleSecs + 1;
         uint64 nextCycleSecs = timestamp % cycleSecs;
         uint64 thisCycleSecs = cycleSecs - nextCycleSecs;
-        AmtDelta storage amtDelta = _dripsHubStorage()
-        .dripsStates[calcUserId(user)][assetId].amtDeltas[thisCycle];
+        AmtDelta storage amtDelta = _dripsHubStorage().dripsStates[userId][assetId].amtDeltas[
+            thisCycle
+        ];
         amtDelta.thisCycle += int128(uint128(thisCycleSecs)) * amtPerSecDelta;
         amtDelta.nextCycle += int128(uint128(nextCycleSecs)) * amtPerSecDelta;
     }

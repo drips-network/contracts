@@ -152,11 +152,11 @@ abstract contract DripsHubUserUtils is DSTest {
 
     function dripsReceivers(DripsHubUser user, uint128 amtPerSec)
         internal
-        pure
+        view
         returns (DripsReceiver[] memory list)
     {
         list = new DripsReceiver[](1);
-        list[0] = DripsReceiver(address(user), amtPerSec);
+        list[0] = DripsReceiver(calcUserId(user), amtPerSec);
     }
 
     function dripsReceivers(
@@ -164,10 +164,10 @@ abstract contract DripsHubUserUtils is DSTest {
         uint128 amtPerSec1,
         DripsHubUser user2,
         uint128 amtPerSec2
-    ) internal pure returns (DripsReceiver[] memory list) {
+    ) internal view returns (DripsReceiver[] memory list) {
         list = new DripsReceiver[](2);
-        list[0] = DripsReceiver(address(user1), amtPerSec1);
-        list[1] = DripsReceiver(address(user2), amtPerSec2);
+        list[0] = DripsReceiver(calcUserId(user1), amtPerSec1);
+        list[1] = DripsReceiver(calcUserId(user2), amtPerSec2);
     }
 
     function setDrips(
