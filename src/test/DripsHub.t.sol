@@ -720,4 +720,12 @@ abstract contract DripsHubTest is DripsHubUserUtils {
             assertEq(reason, ERROR_NOT_OWNER, "Invalid give revert reason");
         }
     }
+
+    function testSetSplitsRevertsWhenNotAccountOwner() public {
+        try user.setSplits(calcUserId(dripsHub.nextAccountId(), 0), splitsReceivers()) {
+            assertTrue(false, "SetSplits hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, ERROR_NOT_OWNER, "Invalid setSplits revert reason");
+        }
+    }
 }

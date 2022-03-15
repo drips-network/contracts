@@ -178,7 +178,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testSetSplitsCanBePaused() public {
         admin.pause();
-        try admin.setSplits(new SplitsReceiver[](0)) {
+        try admin.setSplits(calcUserId(admin), new SplitsReceiver[](0)) {
             assertTrue(false, "SetSplits hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid setSplits revert reason");

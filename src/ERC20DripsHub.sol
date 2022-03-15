@@ -114,12 +114,13 @@ contract ERC20DripsHub is ManagedDripsHub {
     }
 
     /// @notice Sets user splits configuration.
+    /// @param userId The user ID
     /// @param receivers The list of the user's splits receivers to be set.
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
     /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the user.
-    function setSplits(SplitsReceiver[] memory receivers) public whenNotPaused {
-        _setSplits(msg.sender, receivers);
+    function setSplits(uint256 userId, SplitsReceiver[] memory receivers) public whenNotPaused {
+        _setSplits(userId, receivers);
     }
 
     function _transfer(uint256 assetId, int128 amt) internal override {

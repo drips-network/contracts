@@ -98,7 +98,7 @@ abstract contract DripsHub {
     /// @notice Emitted when the user's splits are updated.
     /// @param user The user
     /// @param receivers The list of the user's splits receivers.
-    event SplitsUpdated(address indexed user, SplitsReceiver[] receivers);
+    event SplitsUpdated(uint256 indexed user, SplitsReceiver[] receivers);
 
     /// @notice Emitted when a user collects funds
     /// @param user The user
@@ -776,15 +776,18 @@ abstract contract DripsHub {
     }
 
     /// @notice Sets user splits configuration.
-    /// @param user The user
+    /// @param userId The user ID
     /// @param receivers The list of the user's splits receivers to be set.
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
     /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the user.
-    function _setSplits(address user, SplitsReceiver[] memory receivers) internal {
+    function _setSplits(uint256 userId, SplitsReceiver[] memory receivers)
+        internal
+        onlyAccountOwner(userId)
+    {
         _assertSplitsValid(receivers);
-        _dripsHubStorage().splitsStates[calcUserId(user)].splitsHash = hashSplits(receivers);
-        emit SplitsUpdated(user, receivers);
+        _dripsHubStorage().splitsStates[userId].splitsHash = hashSplits(receivers);
+        emit SplitsUpdated(userId, receivers);
     }
 
     /// @notice Validates a list of splits receivers
@@ -809,10 +812,10 @@ abstract contract DripsHub {
     }
 
     /// @notice Current user's splits hash, see `hashSplits`.
-    /// @param user The user
+    /// @param userId The user ID
     /// @return currSplitsHash The current user's splits hash
-    function splitsHash(address user) public view returns (bytes32 currSplitsHash) {
-        return _dripsHubStorage().splitsStates[calcUserId(user)].splitsHash;
+    function splitsHash(uint256 userId) public view returns (bytes32 currSplitsHash) {
+        return _dripsHubStorage().splitsStates[userId].splitsHash;
     }
 
     /// @notice Asserts that the list of splits receivers is the user's currently used one.

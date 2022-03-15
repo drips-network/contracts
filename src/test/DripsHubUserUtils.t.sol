@@ -408,7 +408,7 @@ abstract contract DripsHubUserUtils is DSTest {
         SplitsReceiver[] memory curr = getCurrSplitsReceivers(user);
         assertSplits(user, curr);
 
-        user.setSplits(newReceivers);
+        user.setSplits(calcUserId(user), newReceivers);
 
         setCurrSplitsReceivers(user, newReceivers);
         assertSplits(user, newReceivers);
@@ -421,7 +421,7 @@ abstract contract DripsHubUserUtils is DSTest {
     ) internal {
         SplitsReceiver[] memory curr = getCurrSplitsReceivers(user);
         assertSplits(user, curr);
-        try user.setSplits(newReceivers) {
+        try user.setSplits(calcUserId(user), newReceivers) {
             assertTrue(false, "setSplits hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, expectedReason, "Invalid setSplits revert reason");
@@ -429,7 +429,7 @@ abstract contract DripsHubUserUtils is DSTest {
     }
 
     function assertSplits(DripsHubUser user, SplitsReceiver[] memory expectedReceivers) internal {
-        bytes32 actual = user.splitsHash();
+        bytes32 actual = user.splitsHash(calcUserId(user));
         bytes32 expected = user.hashSplits(expectedReceivers);
         assertEq(actual, expected, "Invalid splits hash");
     }
