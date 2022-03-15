@@ -7,7 +7,7 @@ struct DripsReceiver {
 }
 
 struct SplitsReceiver {
-    address receiver;
+    uint256 userId;
     uint32 weight;
 }
 
@@ -109,10 +109,10 @@ abstract contract DripsHub {
     /// @notice Emitted when funds are split from a user to a receiver.
     /// This is caused by the user collecting received funds.
     /// @param user The user
-    /// @param receiver The splits receiver
+    /// @param receiver The splits receiver user ID
     /// @param assetId The used asset ID
     /// @param amt The amount split to the receiver
-    event Split(address indexed user, address indexed receiver, uint256 assetId, uint128 amt);
+    event Split(address indexed user, uint256 indexed receiver, uint256 assetId, uint128 amt);
 
     /// @notice Emitted when funds are made collectable after splitting.
     /// @param user The user
@@ -404,9 +404,9 @@ abstract contract DripsHub {
                 (uint160(collectableAmt) * splitsWeight) / TOTAL_SPLITS_WEIGHT - splitAmt
             );
             splitAmt += currSplitAmt;
-            address splitsReceiver = currReceivers[i].receiver;
-            splitsStates[calcUserId(splitsReceiver)].balances[assetId].unsplit += currSplitAmt;
-            emit Split(user, splitsReceiver, assetId, currSplitAmt);
+            uint256 receiver = currReceivers[i].userId;
+            splitsStates[receiver].balances[assetId].unsplit += currSplitAmt;
+            emit Split(user, receiver, assetId, currSplitAmt);
         }
         collectableAmt -= splitAmt;
         balance.split += collectableAmt;
@@ -793,15 +793,15 @@ abstract contract DripsHub {
     function _assertSplitsValid(SplitsReceiver[] memory receivers) internal pure {
         require(receivers.length <= MAX_SPLITS_RECEIVERS, "Too many splits receivers");
         uint64 totalWeight = 0;
-        address prevReceiver;
+        uint256 prevReceiver;
         for (uint256 i = 0; i < receivers.length; i++) {
             uint32 weight = receivers[i].weight;
             require(weight != 0, "Splits receiver weight is zero");
             totalWeight += weight;
-            address receiver = receivers[i].receiver;
+            uint256 receiver = receivers[i].userId;
             if (i > 0) {
                 require(prevReceiver != receiver, "Duplicate splits receivers");
-                require(prevReceiver < receiver, "Splits receivers not sorted by address");
+                require(prevReceiver < receiver, "Splits receivers not sorted by user ID");
             }
             prevReceiver = receiver;
         }

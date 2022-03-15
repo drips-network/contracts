@@ -386,11 +386,11 @@ abstract contract DripsHubUserUtils is DSTest {
 
     function splitsReceivers(DripsHubUser user, uint32 weight)
         internal
-        pure
+        view
         returns (SplitsReceiver[] memory list)
     {
         list = new SplitsReceiver[](1);
-        list[0] = SplitsReceiver(address(user), weight);
+        list[0] = SplitsReceiver(calcUserId(user), weight);
     }
 
     function splitsReceivers(
@@ -398,10 +398,10 @@ abstract contract DripsHubUserUtils is DSTest {
         uint32 weight1,
         DripsHubUser user2,
         uint32 weight2
-    ) internal pure returns (SplitsReceiver[] memory list) {
+    ) internal view returns (SplitsReceiver[] memory list) {
         list = new SplitsReceiver[](2);
-        list[0] = SplitsReceiver(address(user1), weight1);
-        list[1] = SplitsReceiver(address(user2), weight2);
+        list[0] = SplitsReceiver(calcUserId(user1), weight1);
+        list[1] = SplitsReceiver(calcUserId(user2), weight2);
     }
 
     function setSplits(DripsHubUser user, SplitsReceiver[] memory newReceivers) internal {

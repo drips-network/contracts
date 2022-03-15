@@ -422,10 +422,10 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         SplitsReceiver[] memory receiversGood = new SplitsReceiver[](countMax);
         SplitsReceiver[] memory receiversBad = new SplitsReceiver[](countMax + 1);
         for (uint160 i = 0; i < countMax; i++) {
-            receiversGood[i] = SplitsReceiver(address(i + 1), 1);
+            receiversGood[i] = SplitsReceiver(i, 1);
             receiversBad[i] = receiversGood[i];
         }
-        receiversBad[countMax] = SplitsReceiver(address(countMax + 1), 1);
+        receiversBad[countMax] = SplitsReceiver(countMax, 1);
 
         setSplits(user, receiversGood);
         assertSetSplitsReverts(user, receiversBad, "Too many splits receivers");
@@ -453,7 +453,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         assertSetSplitsReverts(
             user,
             splitsReceivers(receiver2, 1, receiver1, 1),
-            "Splits receivers not sorted by address"
+            "Splits receivers not sorted by user ID"
         );
     }
 
