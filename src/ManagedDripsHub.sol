@@ -87,18 +87,18 @@ abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable {
     }
 
     /// @notice Splits user's received but not split yet funds among receivers.
-    /// @param user The user
+    /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collectableAmt The amount made collectable for the user
     /// on top of what was collectable before.
     /// @return splitAmt The amount split to the user's splits receivers
     function split(
-        address user,
+        uint256 userId,
         uint256 assetId,
         SplitsReceiver[] memory currReceivers
     ) public override whenNotPaused returns (uint128 collectableAmt, uint128 splitAmt) {
-        return super.split(user, assetId, currReceivers);
+        return super.split(userId, assetId, currReceivers);
     }
 
     /// @notice Collects user's received already split funds

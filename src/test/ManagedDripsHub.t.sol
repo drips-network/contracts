@@ -124,7 +124,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testSplitCanBePaused() public {
         admin.pause();
-        try admin.split(address(admin), defaultAsset, new SplitsReceiver[](0)) {
+        try admin.split(calcUserId(admin), defaultAsset, new SplitsReceiver[](0)) {
             assertTrue(false, "Split hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid split revert reason");

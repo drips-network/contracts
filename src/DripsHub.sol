@@ -108,17 +108,17 @@ abstract contract DripsHub {
 
     /// @notice Emitted when funds are split from a user to a receiver.
     /// This is caused by the user collecting received funds.
-    /// @param user The user
+    /// @param userId The user ID
     /// @param receiver The splits receiver user ID
     /// @param assetId The used asset ID
     /// @param amt The amount split to the receiver
-    event Split(address indexed user, uint256 indexed receiver, uint256 assetId, uint128 amt);
+    event Split(uint256 indexed userId, uint256 indexed receiver, uint256 assetId, uint128 amt);
 
     /// @notice Emitted when funds are made collectable after splitting.
-    /// @param user The user
+    /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param amt The amount made collectable for the user on top of what was collectable before.
-    event Collectable(address indexed user, uint256 assetId, uint128 amt);
+    event Collectable(uint256 indexed userId, uint256 assetId, uint128 amt);
 
     /// @notice Emitted when drips are received and are ready to be split.
     /// @param user The user
@@ -292,7 +292,7 @@ abstract contract DripsHub {
     {
         uint256 userId = calcUserId(msg.sender);
         receiveDrips(msg.sender, assetId, type(uint64).max);
-        (, splitAmt) = split(msg.sender, assetId, currReceivers);
+        (, splitAmt) = split(userId, assetId, currReceivers);
         collectedAmt = collect(userId, assetId);
     }
 
@@ -368,26 +368,25 @@ abstract contract DripsHub {
     }
 
     /// @notice Returns user's received but not split yet funds.
-    /// @param user The user.
+    /// @param userId The user ID
     /// @param assetId The used asset ID.
     /// @return amt The amount received but not split yet.
-    function splittable(address user, uint256 assetId) public view returns (uint128 amt) {
-        return _dripsHubStorage().splitsStates[calcUserId(user)].balances[assetId].unsplit;
+    function splittable(uint256 userId, uint256 assetId) public view returns (uint128 amt) {
+        return _dripsHubStorage().splitsStates[userId].balances[assetId].unsplit;
     }
 
     /// @notice Splits user's received but not split yet funds among receivers.
-    /// @param user The user
+    /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collectableAmt The amount made collectable for the user
     /// on top of what was collectable before.
     /// @return splitAmt The amount split to the user's splits receivers
     function split(
-        address user,
+        uint256 userId,
         uint256 assetId,
         SplitsReceiver[] memory currReceivers
     ) public virtual returns (uint128 collectableAmt, uint128 splitAmt) {
-        uint256 userId = calcUserId(user);
         _assertCurrSplits(userId, currReceivers);
         mapping(uint256 => SplitsState) storage splitsStates = _dripsHubStorage().splitsStates;
         SplitsBalance storage balance = splitsStates[userId].balances[assetId];
@@ -405,11 +404,11 @@ abstract contract DripsHub {
             splitAmt += currSplitAmt;
             uint256 receiver = currReceivers[i].userId;
             splitsStates[receiver].balances[assetId].unsplit += currSplitAmt;
-            emit Split(user, receiver, assetId, currSplitAmt);
+            emit Split(userId, receiver, assetId, currSplitAmt);
         }
         collectableAmt -= splitAmt;
         balance.split += collectableAmt;
-        emit Collectable(user, assetId, collectableAmt);
+        emit Collectable(userId, assetId, collectableAmt);
     }
 
     /// @notice Returns user's received funds already split and ready to be collected.

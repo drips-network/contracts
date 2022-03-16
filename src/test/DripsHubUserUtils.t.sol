@@ -583,7 +583,7 @@ abstract contract DripsHubUserUtils is DSTest {
         uint128 collectableBefore = collectable(user);
 
         (uint128 collectableAmt, uint128 splitAmt) = user.split(
-            address(user),
+            calcUserId(user),
             defaultAsset,
             getCurrSplitsReceivers(user)
         );
@@ -595,7 +595,7 @@ abstract contract DripsHubUserUtils is DSTest {
     }
 
     function assertSplittable(DripsHubUser user, uint256 expected) internal {
-        assertEq(user.splittable(address(user), defaultAsset), expected, "Invalid splittable");
+        assertEq(user.splittable(calcUserId(user), defaultAsset), expected, "Invalid splittable");
     }
 
     function collect(DripsHubUser user, uint128 expectedAmt) internal {

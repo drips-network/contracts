@@ -69,16 +69,16 @@ abstract contract DripsHubUser {
         return dripsHub.receiveDrips(address(this), assetId, maxCycles);
     }
 
-    function splittable(address user, uint256 assetId) public view returns (uint128 amt) {
-        return dripsHub.splittable(user, assetId);
+    function splittable(uint256 userId, uint256 assetId) public view returns (uint128 amt) {
+        return dripsHub.splittable(userId, assetId);
     }
 
     function split(
-        address user,
+        uint256 userId,
         uint256 assetId,
         SplitsReceiver[] memory currReceivers
     ) public virtual returns (uint128 collectableAmt, uint128 splitAmt) {
-        return dripsHub.split(user, assetId, currReceivers);
+        return dripsHub.split(userId, assetId, currReceivers);
     }
 
     function collectable(uint256 userId, uint256 assetId) public view returns (uint128 amt) {
