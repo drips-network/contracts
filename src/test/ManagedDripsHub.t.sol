@@ -142,7 +142,17 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testSetDripsCanBePaused() public {
         admin.pause();
-        try admin.setDrips(defaultAsset, 0, 0, new DripsReceiver[](0), 1, new DripsReceiver[](0)) {
+        try
+            admin.setDrips(
+                calcUserId(admin),
+                defaultAsset,
+                0,
+                0,
+                new DripsReceiver[](0),
+                1,
+                new DripsReceiver[](0)
+            )
+        {
             assertTrue(false, "SetDrips hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid setDrips revert reason");
@@ -151,7 +161,17 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testSetDripsFromAccountCanBePaused() public {
         admin.pause();
-        try admin.setDrips(defaultAsset, 0, 0, new DripsReceiver[](0), 1, new DripsReceiver[](0)) {
+        try
+            admin.setDrips(
+                calcUserId(admin),
+                defaultAsset,
+                0,
+                0,
+                new DripsReceiver[](0),
+                1,
+                new DripsReceiver[](0)
+            )
+        {
             assertTrue(false, "SetDrips hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid setDrips revert reason");

@@ -479,14 +479,6 @@ abstract contract DripsHub {
         _transfer(assetId, -int128(amt));
     }
 
-    /// @notice Current user's drips hash, see `hashDrips`.
-    /// @param user The user
-    /// @param assetId The used asset ID
-    /// @return currDripsHash The current user's drips hash
-    function dripsHash(address user, uint256 assetId) public view returns (bytes32 currDripsHash) {
-        return dripsHash(calcUserId(user), assetId);
-    }
-
     /// @notice Current user drips hash, see `hashDrips`.
     /// @param userId The user ID
     /// @param assetId The used asset ID

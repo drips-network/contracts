@@ -18,42 +18,6 @@ contract EthDripsHub is ManagedDripsHub {
         return;
     }
 
-    /// @notice Sets the drips configuration of the `msg.sender`.
-    /// Increases the drips balance with the value of the message.
-    /// Transfers the reduced drips balance to the `msg.sender`.
-    /// @param lastUpdate The timestamp of the last drips update of the `msg.sender`.
-    /// If this is the first update, pass zero.
-    /// @param lastBalance The drips balance after the last drips update of the `msg.sender`.
-    /// If this is the first update, pass zero.
-    /// @param currReceivers The list of the drips receivers set in the last drips update
-    /// of the `msg.sender`.
-    /// If this is the first update, pass an empty array.
-    /// @param reduceBalance The drips balance reduction to be applied.
-    /// If more than 0, the message value must be 0.
-    /// @param newReceivers The list of the drips receivers of the `msg.sender` to be set.
-    /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
-    /// @return newBalance The new drips balance of the `msg.sender`.
-    /// Pass it as `lastBalance` when updating that user or the account for the next time.
-    /// @return realBalanceDelta The actually applied drips balance change.
-    function setDrips(
-        uint64 lastUpdate,
-        uint128 lastBalance,
-        DripsReceiver[] memory currReceivers,
-        uint128 reduceBalance,
-        DripsReceiver[] memory newReceivers
-    ) public payable whenNotPaused returns (uint128 newBalance, int128 realBalanceDelta) {
-        return
-            _setDrips(
-                calcUserId(msg.sender),
-                ASSET_ID,
-                lastUpdate,
-                lastBalance,
-                currReceivers,
-                _balanceDelta(reduceBalance),
-                newReceivers
-            );
-    }
-
     /// @notice Sets the drips configuration of the user. See `setDrips` for more details.
     /// @param userId The user ID
     function setDrips(

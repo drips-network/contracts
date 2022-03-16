@@ -27,7 +27,16 @@ contract EthDripsHubTest is ManagedDripsHubTest {
     }
 
     function testRevertsIfBalanceReductionAndValueNonZero() public {
-        try dripsHub.setDrips{value: 1}(0, 0, dripsReceivers(), 1, dripsReceivers()) {
+        try
+            dripsHub.setDrips{value: 1}(
+                calcUserId(address(this)),
+                0,
+                0,
+                dripsReceivers(),
+                1,
+                dripsReceivers()
+            )
+        {
             assertTrue(false, "Set drips hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(

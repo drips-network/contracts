@@ -345,6 +345,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         // User had 4 second paying 1 per second
         uint256 expectedBalance = user.balance(defaultAsset) + 6;
         (uint128 newBalance, int128 realBalanceDelta) = user.setDrips(
+            calcUserId(user),
             defaultAsset,
             lastUpdate,
             10,

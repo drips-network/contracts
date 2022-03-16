@@ -22,44 +22,6 @@ contract ERC20DripsHub is ManagedDripsHub {
         reserve = _reserve;
     }
 
-    /// @notice Sets the drips configuration of the `msg.sender`.
-    /// Transfers funds to or from the sender to fulfill the update of the drips balance.
-    /// The sender must first grant the contract a sufficient allowance.
-    /// @param assetId The used asset ID
-    /// @param lastUpdate The timestamp of the last drips update of the `msg.sender`.
-    /// If this is the first update, pass zero.
-    /// @param lastBalance The drips balance after the last drips update of the `msg.sender`.
-    /// If this is the first update, pass zero.
-    /// @param currReceivers The list of the drips receivers set in the last drips update
-    /// of the `msg.sender`.
-    /// If this is the first update, pass an empty array.
-    /// @param balanceDelta The drips balance change to be applied.
-    /// Positive to add funds to the drips balance, negative to remove them.
-    /// @param newReceivers The list of the drips receivers of the `msg.sender` to be set.
-    /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
-    /// @return newBalance The new drips balance of the `msg.sender`.
-    /// Pass it as `lastBalance` when updating that user or the account for the next time.
-    /// @return realBalanceDelta The actually applied drips balance change.
-    function setDrips(
-        uint256 assetId,
-        uint64 lastUpdate,
-        uint128 lastBalance,
-        DripsReceiver[] memory currReceivers,
-        int128 balanceDelta,
-        DripsReceiver[] memory newReceivers
-    ) public whenNotPaused returns (uint128 newBalance, int128 realBalanceDelta) {
-        return
-            _setDrips(
-                calcUserId(msg.sender),
-                assetId,
-                lastUpdate,
-                lastBalance,
-                currReceivers,
-                balanceDelta,
-                newReceivers
-            );
-    }
-
     /// @notice Sets the drips configuration of the user. See `setDrips` for more details.
     /// @param userId The user ID
     function setDrips(

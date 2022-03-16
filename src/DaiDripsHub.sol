@@ -28,7 +28,7 @@ contract DaiDripsHub is ERC20DripsHub {
         dai = _dai;
     }
 
-    /// @notice Sets the drips configuration of the `msg.sender`
+    /// @notice Sets the drips configuration of an account of the `msg.sender`
     /// and permits spending their Dai by the drips hub.
     /// This function is an extension of `setDrips`, see its documentation for more details.
     ///
@@ -36,6 +36,7 @@ contract DaiDripsHub is ERC20DripsHub {
     /// These parameters will be passed to the Dai contract by this function.
     /// @param permitArgs The Dai permission arguments.
     function setDripsAndPermit(
+        uint256 userId,
         uint64 lastUpdate,
         uint128 lastBalance,
         DripsReceiver[] memory currReceivers,
@@ -46,6 +47,7 @@ contract DaiDripsHub is ERC20DripsHub {
         _permit(permitArgs);
         return
             setDrips(
+                userId,
                 uint160(address(dai)),
                 lastUpdate,
                 lastBalance,
@@ -53,27 +55,6 @@ contract DaiDripsHub is ERC20DripsHub {
                 balanceDelta,
                 newReceivers
             );
-    }
-
-    /// @notice Sets the drips configuration of an account of the `msg.sender`
-    /// and permits spending their Dai by the drips hub.
-    /// This function is an extension of `setDrips`, see its documentation for more details.
-    ///
-    /// The user must sign a Dai permission document allowing the drips hub to spend their funds.
-    /// These parameters will be passed to the Dai contract by this function.
-    /// @param permitArgs The Dai permission arguments.
-    function setDripsAndPermit(
-        uint256 account,
-        uint64 lastUpdate,
-        uint128 lastBalance,
-        DripsReceiver[] memory currReceivers,
-        int128 balanceDelta,
-        DripsReceiver[] memory newReceivers,
-        PermitArgs calldata permitArgs
-    ) public whenNotPaused returns (uint128 newBalance, int128 realBalanceDelta) {
-        _permit(permitArgs);
-        return
-            setDrips(account, lastUpdate, lastBalance, currReceivers, balanceDelta, newReceivers);
     }
 
     /// @notice Gives funds from the `msg.sender` to the receiver

@@ -176,7 +176,7 @@ abstract contract DripsHubUserUtils is DSTest {
         uint128 balanceTo,
         DripsReceiver[] memory newReceivers
     ) internal {
-        setDrips(defaultAsset, user, balanceFrom, balanceTo, newReceivers);
+        setDrips(defaultAsset, user, calcUserId(user), balanceFrom, balanceTo, newReceivers);
     }
 
     function setDrips(
@@ -186,14 +186,54 @@ abstract contract DripsHubUserUtils is DSTest {
         uint128 balanceTo,
         DripsReceiver[] memory newReceivers
     ) internal {
+        setDrips(asset, user, calcUserId(user), balanceFrom, balanceTo, newReceivers);
+    }
+
+    function setDrips(
+        DripsHubUser user,
+        uint32 account,
+        uint224 subAccount,
+        uint128 balanceFrom,
+        uint128 balanceTo,
+        DripsReceiver[] memory newReceivers
+    ) internal {
+        setDrips(
+            defaultAsset,
+            user,
+            calcUserId(account, subAccount),
+            balanceFrom,
+            balanceTo,
+            newReceivers
+        );
+    }
+
+    function setDrips(
+        DripsHubUser user,
+        uint256 userId,
+        uint128 balanceFrom,
+        uint128 balanceTo,
+        DripsReceiver[] memory newReceivers
+    ) internal {
+        setDrips(defaultAsset, user, userId, balanceFrom, balanceTo, newReceivers);
+    }
+
+    function setDrips(
+        uint256 asset,
+        DripsHubUser user,
+        uint256 userId,
+        uint128 balanceFrom,
+        uint128 balanceTo,
+        DripsReceiver[] memory newReceivers
+    ) internal {
         int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
         uint256 expectedBalance = uint256(int256(user.balance(asset)) - balanceDelta);
         (uint64 lastUpdate, uint128 lastBalance, DripsReceiver[] memory currReceivers) = loadDrips(
             asset,
-            user
+            userId
         );
 
         (uint128 newBalance, int128 realBalanceDelta) = user.setDrips(
+            userId,
             asset,
             lastUpdate,
             lastBalance,
@@ -202,7 +242,7 @@ abstract contract DripsHubUserUtils is DSTest {
             newReceivers
         );
 
-        storeDrips(asset, user, newBalance, newReceivers);
+        storeDrips(asset, userId, newBalance, newReceivers);
         assertEq(newBalance, balanceTo, "Invalid drips balance");
         assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
         assertBalance(asset, user, expectedBalance);
@@ -215,7 +255,7 @@ abstract contract DripsHubUserUtils is DSTest {
         uint128 balance,
         DripsReceiver[] memory currReceivers
     ) internal {
-        bytes32 actual = user.dripsHash(asset);
+        bytes32 actual = user.dripsHash(calcUserId(user), asset);
         bytes32 expected = user.hashDrips(lastUpdate, balance, currReceivers);
         assertEq(actual, expected, "Invalid drips configuration");
     }
@@ -263,6 +303,7 @@ abstract contract DripsHubUserUtils is DSTest {
     ) internal {
         try
             user.setDrips(
+                calcUserId(user),
                 defaultAsset,
                 lastUpdate,
                 lastBalance,
@@ -275,46 +316,6 @@ abstract contract DripsHubUserUtils is DSTest {
         } catch Error(string memory reason) {
             assertEq(reason, expectedReason, "Invalid set drips revert reason");
         }
-    }
-
-    function setDrips(
-        DripsHubUser user,
-        uint32 account,
-        uint224 subAccount,
-        uint128 balanceFrom,
-        uint128 balanceTo,
-        DripsReceiver[] memory newReceivers
-    ) internal {
-        setDrips(user, calcUserId(account, subAccount), balanceFrom, balanceTo, newReceivers);
-    }
-
-    function setDrips(
-        DripsHubUser user,
-        uint256 userId,
-        uint128 balanceFrom,
-        uint128 balanceTo,
-        DripsReceiver[] memory newReceivers
-    ) internal {
-        int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
-        uint256 expectedBalance = uint256(int256(user.balance(defaultAsset)) - balanceDelta);
-        (uint64 lastUpdate, uint128 lastBalance, DripsReceiver[] memory currReceivers) = loadDrips(
-            userId
-        );
-
-        (uint128 newBalance, int128 realBalanceDelta) = user.setDrips(
-            userId,
-            defaultAsset,
-            lastUpdate,
-            lastBalance,
-            currReceivers,
-            balanceDelta,
-            newReceivers
-        );
-
-        storeDrips(userId, newBalance, newReceivers);
-        assertEq(newBalance, balanceTo, "Invalid drips balance");
-        assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
-        assertBalance(user, expectedBalance);
     }
 
     function assertDrips(
