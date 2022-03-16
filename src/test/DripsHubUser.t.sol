@@ -35,19 +35,20 @@ abstract contract DripsHubUser {
 
     function setSplits(uint256 userId, SplitsReceiver[] calldata receivers) public virtual;
 
-    function collectAll(uint256 assetId, SplitsReceiver[] calldata currReceivers)
-        public
-        returns (uint128 collected, uint128 splitAmt)
-    {
-        return dripsHub.collectAll(assetId, currReceivers);
+    function collectAll(
+        uint256 userId,
+        uint256 assetId,
+        SplitsReceiver[] calldata currReceivers
+    ) public returns (uint128 collected, uint128 splitAmt) {
+        return dripsHub.collectAll(userId, assetId, currReceivers);
     }
 
-    function collectableAll(uint256 assetId, SplitsReceiver[] calldata currReceivers)
-        public
-        view
-        returns (uint128 collected, uint128 splitAmt)
-    {
-        return dripsHub.collectableAll(address(this), assetId, currReceivers);
+    function collectableAll(
+        uint256 userId,
+        uint256 assetId,
+        SplitsReceiver[] calldata currReceivers
+    ) public view returns (uint128 collected, uint128 splitAmt) {
+        return dripsHub.collectableAll(userId, assetId, currReceivers);
     }
 
     function receivableDripsCycles(uint256 userId, uint256 assetId)

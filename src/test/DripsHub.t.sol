@@ -127,7 +127,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
 
     function testCollectAllRevertsIfInvalidCurrSplitsReceivers() public {
         setSplits(user, splitsReceivers(receiver, 1));
-        try user.collectAll(defaultAsset, splitsReceivers(receiver, 2)) {
+        try user.collectAll(calcUserId(user), defaultAsset, splitsReceivers(receiver, 2)) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, "Invalid current splits receivers", "Invalid collect revert reason");
@@ -150,7 +150,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
 
     function testCollectableAllRevertsIfInvalidCurrSplitsReceivers() public {
         setSplits(user, splitsReceivers(receiver, 1));
-        try user.collectableAll(defaultAsset, splitsReceivers(receiver, 2)) {
+        try user.collectableAll(calcUserId(user), defaultAsset, splitsReceivers(receiver, 2)) {
             assertTrue(false, "Collectable hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(
@@ -735,6 +735,20 @@ abstract contract DripsHubTest is DripsHubUserUtils {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_NOT_OWNER, "Invalid collect revert reason");
+        }
+    }
+
+    function testCollectAllRevertsWhenNotAccountOwner() public {
+        try
+            user.collectAll(
+                calcUserId(dripsHub.nextAccountId(), 0),
+                defaultAsset,
+                new SplitsReceiver[](0)
+            )
+        {
+            assertTrue(false, "CollectAll hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, ERROR_NOT_OWNER, "Invalid collectAll revert reason");
         }
     }
 }

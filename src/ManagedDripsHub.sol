@@ -54,18 +54,18 @@ abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable {
     }
 
     /// @notice Collects all received funds available for the user
-    /// and transfers them out of the drips hub contract to that user's wallet.
+    /// and transfers them out of the drips hub contract to msg.sender.
+    /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collectedAmt The collected amount
     /// @return splitAmt The amount split to the user's splits receivers
-    function collectAll(uint256 assetId, SplitsReceiver[] memory currReceivers)
-        public
-        override
-        whenNotPaused
-        returns (uint128 collectedAmt, uint128 splitAmt)
-    {
-        return super.collectAll(assetId, currReceivers);
+    function collectAll(
+        uint256 userId,
+        uint256 assetId,
+        SplitsReceiver[] memory currReceivers
+    ) public override whenNotPaused returns (uint128 collectedAmt, uint128 splitAmt) {
+        return super.collectAll(userId, assetId, currReceivers);
     }
 
     /// @notice Receive drips from uncollected cycles of the user.

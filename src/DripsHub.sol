@@ -244,17 +244,16 @@ abstract contract DripsHub {
         returns (DripsHubStorage storage dripsHubStorage);
 
     /// @notice Returns amount of received funds available for collection for a user.
-    /// @param user The user
+    /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collectedAmt The collected amount
     /// @return splitAmt The amount split to the user's splits receivers
     function collectableAll(
-        address user,
+        uint256 userId,
         uint256 assetId,
         SplitsReceiver[] memory currReceivers
     ) public view returns (uint128 collectedAmt, uint128 splitAmt) {
-        uint256 userId = calcUserId(user);
         _assertCurrSplits(userId, currReceivers);
         SplitsBalance storage balance = _dripsHubStorage().splitsStates[userId].balances[assetId];
 
@@ -280,17 +279,17 @@ abstract contract DripsHub {
     }
 
     /// @notice Collects all received funds available for the user
-    /// and transfers them out of the drips hub contract to that user's wallet.
+    /// and transfers them out of the drips hub contract to msg.sender.
+    /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collectedAmt The collected amount
     /// @return splitAmt The amount split to the user's splits receivers
-    function collectAll(uint256 assetId, SplitsReceiver[] memory currReceivers)
-        public
-        virtual
-        returns (uint128 collectedAmt, uint128 splitAmt)
-    {
-        uint256 userId = calcUserId(msg.sender);
+    function collectAll(
+        uint256 userId,
+        uint256 assetId,
+        SplitsReceiver[] memory currReceivers
+    ) public virtual returns (uint128 collectedAmt, uint128 splitAmt) {
         receiveDrips(userId, assetId, type(uint64).max);
         (, splitAmt) = split(userId, assetId, currReceivers);
         collectedAmt = collect(userId, assetId);
@@ -866,10 +865,6 @@ abstract contract DripsHub {
         ];
         amtDelta.thisCycle += int128(uint128(thisCycleSecs)) * amtPerSecDelta;
         amtDelta.nextCycle += int128(uint128(nextCycleSecs)) * amtPerSecDelta;
-    }
-
-    function calcUserId(address user) public pure returns (uint256) {
-        return uint160(user);
     }
 
     function _currTimestamp() internal view returns (uint64) {

@@ -469,6 +469,7 @@ abstract contract DripsHubUserUtils is DSTest {
         uint256 expectedBalance = user.balance(asset) + expectedCollected;
 
         (uint128 collectedAmt, uint128 splitAmt) = user.collectAll(
+            calcUserId(user),
             asset,
             getCurrSplitsReceivers(user)
         );
@@ -506,6 +507,7 @@ abstract contract DripsHubUserUtils is DSTest {
         uint128 expectedSplit
     ) internal {
         (uint128 actualCollected, uint128 actualSplit) = user.collectableAll(
+            calcUserId(user),
             asset,
             getCurrSplitsReceivers(user)
         );
@@ -515,7 +517,11 @@ abstract contract DripsHubUserUtils is DSTest {
 
     function totalCollectableAll(uint256 asset, DripsHubUser user) internal view returns (uint128) {
         SplitsReceiver[] memory splits = getCurrSplitsReceivers(user);
-        (uint128 collectableAmt, uint128 splittableAmt) = user.collectableAll(asset, splits);
+        (uint128 collectableAmt, uint128 splittableAmt) = user.collectableAll(
+            calcUserId(user),
+            asset,
+            splits
+        );
         return collectableAmt + splittableAmt;
     }
 
