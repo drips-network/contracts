@@ -347,7 +347,7 @@ abstract contract DripsHubUserUtils is DSTest {
         DripsHubUser receiver,
         uint128 amt
     ) internal {
-        give(defaultAsset, user, receiver, amt);
+        give(defaultAsset, user, calcUserId(user), receiver, amt);
     }
 
     function give(
@@ -356,13 +356,7 @@ abstract contract DripsHubUserUtils is DSTest {
         DripsHubUser receiver,
         uint128 amt
     ) internal {
-        uint256 expectedBalance = uint256(user.balance(asset) - amt);
-        uint128 expectedCollectable = totalCollectableAll(asset, receiver) + amt;
-
-        user.give(calcUserId(receiver), asset, amt);
-
-        assertBalance(asset, user, expectedBalance);
-        assertTotalCollectableAll(asset, receiver, expectedCollectable);
+        give(asset, user, calcUserId(user), receiver, amt);
     }
 
     function give(
@@ -372,13 +366,23 @@ abstract contract DripsHubUserUtils is DSTest {
         DripsHubUser receiver,
         uint128 amt
     ) internal {
-        uint256 expectedBalance = uint256(user.balance(defaultAsset) - amt);
-        uint128 expectedCollectable = totalCollectableAll(defaultAsset, receiver) + amt;
+        give(defaultAsset, user, calcUserId(account, subAccount), receiver, amt);
+    }
 
-        user.give(calcUserId(account, subAccount), calcUserId(receiver), defaultAsset, amt);
+    function give(
+        uint256 asset,
+        DripsHubUser user,
+        uint256 userId,
+        DripsHubUser receiver,
+        uint128 amt
+    ) internal {
+        uint256 expectedBalance = uint256(user.balance(asset) - amt);
+        uint128 expectedCollectable = totalCollectableAll(asset, receiver) + amt;
 
-        assertBalance(defaultAsset, user, expectedBalance);
-        assertTotalCollectableAll(defaultAsset, receiver, expectedCollectable);
+        user.give(userId, calcUserId(receiver), asset, amt);
+
+        assertBalance(asset, user, expectedBalance);
+        assertTotalCollectableAll(asset, receiver, expectedCollectable);
     }
 
     function splitsReceivers() internal pure returns (SplitsReceiver[] memory list) {

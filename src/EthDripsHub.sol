@@ -49,14 +49,6 @@ contract EthDripsHub is ManagedDripsHub {
         return -int128(reduceBalance);
     }
 
-    /// @notice Gives funds from the `msg.sender` to the receiver.
-    /// The receiver can collect them immediately.
-    /// The funds to be given must be the value of the message.
-    /// @param receiver The receiver user ID
-    function give(uint256 receiver) public payable whenNotPaused {
-        _give(calcUserId(msg.sender), receiver, ASSET_ID, uint128(msg.value));
-    }
-
     /// @notice Gives funds from the user to the receiver.
     /// The receiver can collect them immediately.
     /// The funds to be given must be the value of the message.

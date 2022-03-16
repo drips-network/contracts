@@ -27,12 +27,6 @@ abstract contract DripsHubUser {
     ) public virtual returns (uint128 newBalance, int128 realBalanceDelta);
 
     function give(
-        uint256 receiver,
-        uint256 assetId,
-        uint128 amt
-    ) public virtual;
-
-    function give(
         uint256 userId,
         uint256 receiver,
         uint256 assetId,
@@ -183,15 +177,6 @@ contract ERC20DripsHubUser is ManagedDripsHubUser {
     }
 
     function give(
-        uint256 receiver,
-        uint256 assetId,
-        uint128 amt
-    ) public override {
-        IERC20(address(uint160(assetId))).approve(address(dripsHub), amt);
-        dripsHub.give(receiver, assetId, amt);
-    }
-
-    function give(
         uint256 userId,
         uint256 receiver,
         uint256 assetId,
@@ -243,15 +228,6 @@ contract EthDripsHubUser is ManagedDripsHubUser {
                 reduceBalance,
                 newReceivers
             );
-    }
-
-    function give(
-        uint256 receiver,
-        uint256 assetId,
-        uint128 amt
-    ) public override {
-        assetId;
-        dripsHub.give{value: amt}(receiver);
     }
 
     function give(

@@ -45,20 +45,6 @@ contract ERC20DripsHub is ManagedDripsHub {
             );
     }
 
-    /// @notice Gives funds from the `msg.sender` to the receiver.
-    /// The receiver can collect them immediately.
-    /// Transfers the funds to be given from the sender's wallet to the drips hub contract.
-    /// @param receiver The receiver user ID
-    /// @param assetId The used asset ID
-    /// @param amt The given amount
-    function give(
-        uint256 receiver,
-        uint256 assetId,
-        uint128 amt
-    ) public whenNotPaused {
-        _give(calcUserId(msg.sender), receiver, assetId, amt);
-    }
-
     /// @notice Gives funds from the user to the receiver.
     /// The receiver can collect them immediately.
     /// Transfers the funds to be given from the sender's wallet to the drips hub contract.

@@ -57,22 +57,6 @@ contract DaiDripsHub is ERC20DripsHub {
             );
     }
 
-    /// @notice Gives funds from the `msg.sender` to the receiver
-    /// and permits spending sender's Dai by the drips hub.
-    /// This function is an extension of `give`, see its documentation for more details.
-    ///
-    /// The user must sign a Dai permission document allowing the drips hub to spend their funds.
-    /// These parameters will be passed to the Dai contract by this function.
-    /// @param permitArgs The Dai permission arguments.
-    function giveAndPermit(
-        uint256 receiver,
-        uint128 amt,
-        PermitArgs calldata permitArgs
-    ) public whenNotPaused {
-        _permit(permitArgs);
-        give(receiver, uint160(address(dai)), amt);
-    }
-
     /// @notice Gives funds from the account of the `msg.sender` to the receiver
     /// and permits spending sender's Dai by the drips hub.
     /// This function is an extension of `give` see its documentation for more details.
