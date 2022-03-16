@@ -78,7 +78,7 @@ abstract contract DripsHub {
     event Dripping(
         uint256 indexed userId,
         uint256 indexed receiver,
-        uint256 assetId,
+        uint256 indexed assetId,
         uint128 amtPerSec,
         uint64 endTime
     );
@@ -90,7 +90,7 @@ abstract contract DripsHub {
     /// @param receivers The new list of the drips receivers.
     event DripsUpdated(
         uint256 indexed userId,
-        uint256 assetId,
+        uint256 indexed assetId,
         uint128 balance,
         DripsReceiver[] receivers
     );
@@ -104,7 +104,7 @@ abstract contract DripsHub {
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param collected The collected amount
-    event Collected(uint256 indexed userId, uint256 assetId, uint128 collected);
+    event Collected(uint256 indexed userId, uint256 indexed assetId, uint128 collected);
 
     /// @notice Emitted when funds are split from a user to a receiver.
     /// This is caused by the user collecting received funds.
@@ -112,13 +112,18 @@ abstract contract DripsHub {
     /// @param receiver The splits receiver user ID
     /// @param assetId The used asset ID
     /// @param amt The amount split to the receiver
-    event Split(uint256 indexed userId, uint256 indexed receiver, uint256 assetId, uint128 amt);
+    event Split(
+        uint256 indexed userId,
+        uint256 indexed receiver,
+        uint256 indexed assetId,
+        uint128 amt
+    );
 
     /// @notice Emitted when funds are made collectable after splitting.
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param amt The amount made collectable for the user on top of what was collectable before.
-    event Collectable(uint256 indexed userId, uint256 assetId, uint128 amt);
+    event Collectable(uint256 indexed userId, uint256 indexed assetId, uint128 amt);
 
     /// @notice Emitted when drips are received and are ready to be split.
     /// @param userId The user ID
@@ -127,7 +132,7 @@ abstract contract DripsHub {
     /// @param receivableCycles The number of cycles which still can be received.
     event ReceivedDrips(
         uint256 indexed userId,
-        uint256 assetId,
+        uint256 indexed assetId,
         uint128 amt,
         uint64 receivableCycles
     );
@@ -137,7 +142,12 @@ abstract contract DripsHub {
     /// @param receiver The receiver user ID
     /// @param assetId The used asset ID
     /// @param amt The given amount
-    event Given(uint256 indexed userId, uint256 indexed receiver, uint256 assetId, uint128 amt);
+    event Given(
+        uint256 indexed userId,
+        uint256 indexed receiver,
+        uint256 indexed assetId,
+        uint128 amt
+    );
 
     struct DripsHubStorage {
         /// @notice User drips states.
