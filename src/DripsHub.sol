@@ -254,8 +254,8 @@ abstract contract DripsHub {
         uint256 assetId,
         SplitsReceiver[] memory currReceivers
     ) public view returns (uint128 collectedAmt, uint128 splitAmt) {
-        _assertCurrSplits(user, currReceivers);
         uint256 userId = calcUserId(user);
+        _assertCurrSplits(userId, currReceivers);
         SplitsBalance storage balance = _dripsHubStorage().splitsStates[userId].balances[assetId];
 
         // Collectable independently from cycles
@@ -356,15 +356,13 @@ abstract contract DripsHub {
         uint256 assetId,
         uint64 maxCycles
     ) public virtual returns (uint128 receivedAmt, uint64 receivableCycles) {
+        uint256 userId = calcUserId(user);
         receivableCycles = receivableDripsCycles(user, assetId);
         uint64 cycles = maxCycles < receivableCycles ? maxCycles : receivableCycles;
         receivableCycles -= cycles;
-        receivedAmt = _receiveDripsInternal(user, assetId, cycles);
+        receivedAmt = _receiveDripsInternal(userId, assetId, cycles);
         if (receivedAmt > 0)
-            _dripsHubStorage()
-                .splitsStates[calcUserId(user)]
-                .balances[assetId]
-                .unsplit += receivedAmt;
+            _dripsHubStorage().splitsStates[userId].balances[assetId].unsplit += receivedAmt;
         emit ReceivedDrips(user, assetId, receivedAmt, receivableCycles);
     }
 
@@ -388,9 +386,9 @@ abstract contract DripsHub {
         uint256 assetId,
         SplitsReceiver[] memory currReceivers
     ) public virtual returns (uint128 collectableAmt, uint128 splitAmt) {
-        _assertCurrSplits(user, currReceivers);
-        mapping(uint256 => SplitsState) storage splitsStates = _dripsHubStorage().splitsStates;
         uint256 userId = calcUserId(user);
+        _assertCurrSplits(userId, currReceivers);
+        mapping(uint256 => SplitsState) storage splitsStates = _dripsHubStorage().splitsStates;
         SplitsBalance storage balance = splitsStates[userId].balances[assetId];
 
         collectableAmt = balance.unsplit;
@@ -435,17 +433,17 @@ abstract contract DripsHub {
     }
 
     /// @notice Collects and clears user's cycles
-    /// @param user The user
+    /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param count The number of flushed cycles.
     /// @return collectedAmt The collected amount
     function _receiveDripsInternal(
-        address user,
+        uint256 userId,
         uint256 assetId,
         uint64 count
     ) internal returns (uint128 collectedAmt) {
         if (count == 0) return 0;
-        DripsState storage dripsState = _dripsHubStorage().dripsStates[calcUserId(user)][assetId];
+        DripsState storage dripsState = _dripsHubStorage().dripsStates[userId][assetId];
         uint64 cycle = dripsState.nextCollectedCycle;
         int128 cycleAmt = 0;
         for (uint256 i = 0; i < count; i++) {
@@ -811,12 +809,14 @@ abstract contract DripsHub {
     }
 
     /// @notice Asserts that the list of splits receivers is the user's currently used one.
-    /// @param user The user
+    /// @param userId The user ID
     /// @param currReceivers The list of the user's current splits receivers.
-    function _assertCurrSplits(address user, SplitsReceiver[] memory currReceivers) internal view {
+    function _assertCurrSplits(uint256 userId, SplitsReceiver[] memory currReceivers)
+        internal
+        view
+    {
         require(
-            hashSplits(currReceivers) ==
-                _dripsHubStorage().splitsStates[calcUserId(user)].splitsHash,
+            hashSplits(currReceivers) == splitsHash(userId),
             "Invalid current splits receivers"
         );
     }
