@@ -559,7 +559,7 @@ abstract contract DripsHubUserUtils is DSTest {
     }
 
     function assertReceivableDripsCycles(DripsHubUser user, uint64 expectedCycles) internal {
-        uint64 actualCycles = user.receivableDripsCycles(defaultAsset);
+        uint64 actualCycles = user.receivableDripsCycles(calcUserId(user), defaultAsset);
         assertEq(actualCycles, expectedCycles, "Invalid total receivable drips cycles");
     }
 

@@ -299,15 +299,14 @@ abstract contract DripsHub {
     /// @notice Counts cycles from which drips can be collected.
     /// This function can be used to detect that there are
     /// too many cycles to analyze in a single transaction.
-    /// @param user The user
+    /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @return cycles The number of cycles which can be flushed
-    function receivableDripsCycles(address user, uint256 assetId)
+    function receivableDripsCycles(uint256 userId, uint256 assetId)
         public
         view
         returns (uint64 cycles)
     {
-        uint256 userId = calcUserId(user);
         uint64 collectedCycle = _dripsHubStorage().dripsStates[userId][assetId].nextCollectedCycle;
         if (collectedCycle == 0) return 0;
         uint64 currFinishedCycle = _currTimestamp() / cycleSecs;
@@ -327,10 +326,10 @@ abstract contract DripsHub {
         uint256 assetId,
         uint64 maxCycles
     ) public view returns (uint128 receivableAmt, uint64 receivableCycles) {
-        uint64 allReceivableCycles = receivableDripsCycles(user, assetId);
+        uint256 userId = calcUserId(user);
+        uint64 allReceivableCycles = receivableDripsCycles(userId, assetId);
         uint64 receivedCycles = maxCycles < allReceivableCycles ? maxCycles : allReceivableCycles;
         receivableCycles = allReceivableCycles - receivedCycles;
-        uint256 userId = calcUserId(user);
         DripsState storage dripsState = _dripsHubStorage().dripsStates[userId][assetId];
         uint64 collectedCycle = dripsState.nextCollectedCycle;
         int128 cycleAmt = 0;
@@ -358,7 +357,7 @@ abstract contract DripsHub {
         uint64 maxCycles
     ) public virtual returns (uint128 receivedAmt, uint64 receivableCycles) {
         uint256 userId = calcUserId(user);
-        receivableCycles = receivableDripsCycles(user, assetId);
+        receivableCycles = receivableDripsCycles(userId, assetId);
         uint64 cycles = maxCycles < receivableCycles ? maxCycles : receivableCycles;
         receivableCycles -= cycles;
         receivedAmt = _receiveDripsInternal(userId, assetId, cycles);
