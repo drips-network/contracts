@@ -729,4 +729,12 @@ abstract contract DripsHubTest is DripsHubUserUtils {
             assertEq(reason, ERROR_NOT_OWNER, "Invalid setSplits revert reason");
         }
     }
+
+    function testCollectRevertsWhenNotAccountOwner() public {
+        try user.collect(calcUserId(dripsHub.nextAccountId(), 0), defaultAsset) {
+            assertTrue(false, "Collect hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, ERROR_NOT_OWNER, "Invalid collect revert reason");
+        }
+    }
 }

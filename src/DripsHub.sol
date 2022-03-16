@@ -96,15 +96,15 @@ abstract contract DripsHub {
     );
 
     /// @notice Emitted when the user's splits are updated.
-    /// @param user The user
+    /// @param userId The user ID
     /// @param receivers The list of the user's splits receivers.
-    event SplitsUpdated(uint256 indexed user, SplitsReceiver[] receivers);
+    event SplitsUpdated(uint256 indexed userId, SplitsReceiver[] receivers);
 
     /// @notice Emitted when a user collects funds
-    /// @param user The user
+    /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param collected The collected amount
-    event Collected(address indexed user, uint256 assetId, uint128 collected);
+    event Collected(uint256 indexed userId, uint256 assetId, uint128 collected);
 
     /// @notice Emitted when funds are split from a user to a receiver.
     /// This is caused by the user collecting received funds.
@@ -290,9 +290,10 @@ abstract contract DripsHub {
         virtual
         returns (uint128 collectedAmt, uint128 splitAmt)
     {
+        uint256 userId = calcUserId(msg.sender);
         receiveDrips(msg.sender, assetId, type(uint64).max);
         (, splitAmt) = split(msg.sender, assetId, currReceivers);
-        collectedAmt = collect(assetId);
+        collectedAmt = collect(userId, assetId);
     }
 
     /// @notice Counts cycles from which drips can be collected.
@@ -412,23 +413,28 @@ abstract contract DripsHub {
     }
 
     /// @notice Returns user's received funds already split and ready to be collected.
-    /// @param user The user.
+    /// @param userId The user ID
     /// @param assetId The used asset ID.
     /// @return amt The collectable amount.
-    function collectable(address user, uint256 assetId) public view returns (uint128 amt) {
-        return _dripsHubStorage().splitsStates[calcUserId(user)].balances[assetId].split;
+    function collectable(uint256 userId, uint256 assetId) public view returns (uint128 amt) {
+        return _dripsHubStorage().splitsStates[userId].balances[assetId].split;
     }
 
     /// @notice Collects user's received already split funds
-    /// and transfers them out of the drips hub contract to that user's wallet.
+    /// and transfers them out of the drips hub contract to msg.sender.
+    /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @return amt The collected amount
-    function collect(uint256 assetId) public virtual returns (uint128 amt) {
-        uint256 userId = calcUserId(msg.sender);
+    function collect(uint256 userId, uint256 assetId)
+        public
+        virtual
+        onlyAccountOwner(userId)
+        returns (uint128 amt)
+    {
         SplitsBalance storage balance = _dripsHubStorage().splitsStates[userId].balances[assetId];
         amt = balance.split;
         balance.split = 0;
-        emit Collected(msg.sender, assetId, amt);
+        emit Collected(userId, assetId, amt);
         _transfer(assetId, int128(amt));
     }
 

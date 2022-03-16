@@ -133,7 +133,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testCollectCanBePaused() public {
         admin.pause();
-        try admin.collect(defaultAsset) {
+        try admin.collect(calcUserId(admin), defaultAsset) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid collect revert reason");

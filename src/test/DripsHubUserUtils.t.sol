@@ -602,7 +602,7 @@ abstract contract DripsHubUserUtils is DSTest {
         assertCollectable(user, expectedAmt);
         uint256 balanceBefore = user.balance(defaultAsset);
 
-        uint128 actualAmt = user.collect(defaultAsset);
+        uint128 actualAmt = user.collect(calcUserId(user), defaultAsset);
 
         assertEq(actualAmt, expectedAmt, "Invalid collected amount");
         assertCollectable(user, 0);
@@ -610,7 +610,7 @@ abstract contract DripsHubUserUtils is DSTest {
     }
 
     function collectable(DripsHubUser user) internal view returns (uint128 amt) {
-        return user.collectable(address(user), defaultAsset);
+        return user.collectable(calcUserId(user), defaultAsset);
     }
 
     function assertCollectable(DripsHubUser user, uint256 expected) internal {
