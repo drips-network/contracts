@@ -71,7 +71,7 @@ abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable {
     /// @notice Receive drips from uncollected cycles of the user.
     /// Received drips cycles won't need to be analyzed ever again.
     /// Calling this function does not collect but makes the funds ready to be split and collected.
-    /// @param user The user
+    /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param maxCycles The maximum number of received drips cycles.
     /// If too low, receiving will be cheap, but may not cover many cycles.
@@ -79,11 +79,11 @@ abstract contract ManagedDripsHub is DripsHub, UUPSUpgradeable {
     /// @return receivedAmt The received amount
     /// @return receivableCycles The number of cycles which still can be received
     function receiveDrips(
-        address user,
+        uint256 userId,
         uint256 assetId,
         uint64 maxCycles
     ) public override whenNotPaused returns (uint128 receivedAmt, uint64 receivableCycles) {
-        return super.receiveDrips(user, assetId, maxCycles);
+        return super.receiveDrips(userId, assetId, maxCycles);
     }
 
     /// @notice Splits user's received but not split yet funds among receivers.

@@ -58,19 +58,20 @@ abstract contract DripsHubUser {
         return dripsHub.receivableDripsCycles(userId, assetId);
     }
 
-    function receivableDrips(uint256 assetId, uint64 maxCycles)
-        public
-        view
-        returns (uint128 receivableAmt, uint64 receivableCycles)
-    {
-        return dripsHub.receivableDrips(address(this), assetId, maxCycles);
+    function receivableDrips(
+        uint256 userId,
+        uint256 assetId,
+        uint64 maxCycles
+    ) public view returns (uint128 receivableAmt, uint64 receivableCycles) {
+        return dripsHub.receivableDrips(userId, assetId, maxCycles);
     }
 
-    function receiveDrips(uint256 assetId, uint64 maxCycles)
-        public
-        returns (uint128 receivedAmt, uint64 receivableCycles)
-    {
-        return dripsHub.receiveDrips(address(this), assetId, maxCycles);
+    function receiveDrips(
+        uint256 userId,
+        uint256 assetId,
+        uint64 maxCycles
+    ) public returns (uint128 receivedAmt, uint64 receivableCycles) {
+        return dripsHub.receiveDrips(userId, assetId, maxCycles);
     }
 
     function splittable(uint256 userId, uint256 assetId) public view returns (uint128 amt) {

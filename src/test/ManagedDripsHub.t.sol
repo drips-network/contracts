@@ -115,7 +115,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testReceiveDripsCanBePaused() public {
         admin.pause();
-        try admin.receiveDrips(defaultAsset, 1) {
+        try admin.receiveDrips(calcUserId(admin), defaultAsset, 1) {
             assertTrue(false, "ReceiveDrips hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid receiveDrips revert reason");

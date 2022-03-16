@@ -550,7 +550,11 @@ abstract contract DripsHubUserUtils is DSTest {
         assertReceivableDrips(user, type(uint64).max, expectedTotalAmt, 0);
         assertReceivableDrips(user, maxCycles, expectedReceivedAmt, expectedCyclesAfter);
 
-        (uint128 receivedAmt, uint64 receivableCycles) = user.receiveDrips(defaultAsset, maxCycles);
+        (uint128 receivedAmt, uint64 receivableCycles) = user.receiveDrips(
+            calcUserId(user),
+            defaultAsset,
+            maxCycles
+        );
 
         assertEq(receivedAmt, expectedReceivedAmt, "Invalid amount received from drips");
         assertEq(receivableCycles, expectedCyclesAfter, "Invalid receivable drips cycles left");
@@ -569,7 +573,11 @@ abstract contract DripsHubUserUtils is DSTest {
         uint128 expectedAmt,
         uint64 expectedCycles
     ) internal {
-        (uint128 actualAmt, uint64 actualCycles) = user.receivableDrips(defaultAsset, maxCycles);
+        (uint128 actualAmt, uint64 actualCycles) = user.receivableDrips(
+            calcUserId(user),
+            defaultAsset,
+            maxCycles
+        );
         assertEq(actualAmt, expectedAmt, "Invalid receivable amount");
         assertEq(actualCycles, expectedCycles, "Invalid receivable drips cycles");
     }

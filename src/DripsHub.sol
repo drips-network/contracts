@@ -121,12 +121,12 @@ abstract contract DripsHub {
     event Collectable(uint256 indexed userId, uint256 assetId, uint128 amt);
 
     /// @notice Emitted when drips are received and are ready to be split.
-    /// @param user The user
+    /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param amt The received amount.
     /// @param receivableCycles The number of cycles which still can be received.
     event ReceivedDrips(
-        address indexed user,
+        uint256 indexed userId,
         uint256 assetId,
         uint128 amt,
         uint64 receivableCycles
@@ -262,7 +262,7 @@ abstract contract DripsHub {
         collectedAmt += balance.unsplit;
 
         // Collectable from cycles
-        (uint128 receivableAmt, ) = receivableDrips(user, assetId, type(uint64).max);
+        (uint128 receivableAmt, ) = receivableDrips(userId, assetId, type(uint64).max);
         collectedAmt += receivableAmt;
 
         // split when collected
@@ -291,7 +291,7 @@ abstract contract DripsHub {
         returns (uint128 collectedAmt, uint128 splitAmt)
     {
         uint256 userId = calcUserId(msg.sender);
-        receiveDrips(msg.sender, assetId, type(uint64).max);
+        receiveDrips(userId, assetId, type(uint64).max);
         (, splitAmt) = split(userId, assetId, currReceivers);
         collectedAmt = collect(userId, assetId);
     }
@@ -314,7 +314,7 @@ abstract contract DripsHub {
     }
 
     /// @notice Calculate effects of calling `receiveDrips` with the given parameters.
-    /// @param user The user
+    /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param maxCycles The maximum number of received drips cycles.
     /// If too low, receiving will be cheap, but may not cover many cycles.
@@ -322,11 +322,10 @@ abstract contract DripsHub {
     /// @return receivableAmt The amount which would be received
     /// @return receivableCycles The number of cycles which would still be receivable after the call
     function receivableDrips(
-        address user,
+        uint256 userId,
         uint256 assetId,
         uint64 maxCycles
     ) public view returns (uint128 receivableAmt, uint64 receivableCycles) {
-        uint256 userId = calcUserId(user);
         uint64 allReceivableCycles = receivableDripsCycles(userId, assetId);
         uint64 receivedCycles = maxCycles < allReceivableCycles ? maxCycles : allReceivableCycles;
         receivableCycles = allReceivableCycles - receivedCycles;
@@ -344,7 +343,7 @@ abstract contract DripsHub {
     /// @notice Receive drips from uncollected cycles of the user.
     /// Received drips cycles won't need to be analyzed ever again.
     /// Calling this function does not collect but makes the funds ready to be split and collected.
-    /// @param user The user
+    /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param maxCycles The maximum number of received drips cycles.
     /// If too low, receiving will be cheap, but may not cover many cycles.
@@ -352,18 +351,17 @@ abstract contract DripsHub {
     /// @return receivedAmt The received amount
     /// @return receivableCycles The number of cycles which still can be received
     function receiveDrips(
-        address user,
+        uint256 userId,
         uint256 assetId,
         uint64 maxCycles
     ) public virtual returns (uint128 receivedAmt, uint64 receivableCycles) {
-        uint256 userId = calcUserId(user);
         receivableCycles = receivableDripsCycles(userId, assetId);
         uint64 cycles = maxCycles < receivableCycles ? maxCycles : receivableCycles;
         receivableCycles -= cycles;
         receivedAmt = _receiveDripsInternal(userId, assetId, cycles);
         if (receivedAmt > 0)
             _dripsHubStorage().splitsStates[userId].balances[assetId].unsplit += receivedAmt;
-        emit ReceivedDrips(user, assetId, receivedAmt, receivableCycles);
+        emit ReceivedDrips(userId, assetId, receivedAmt, receivableCycles);
     }
 
     /// @notice Returns user's received but not split yet funds.
