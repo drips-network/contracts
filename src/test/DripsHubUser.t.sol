@@ -3,7 +3,6 @@
 pragma solidity ^0.8.7;
 
 import {DripsHub} from "../DripsHub.sol";
-import {ManagedDripsHub} from "../ManagedDripsHub.sol";
 import {SplitsReceiver, ERC20DripsHub, DripsReceiver, IERC20} from "../ERC20DripsHub.sol";
 
 abstract contract DripsHubUser {
@@ -47,34 +46,10 @@ abstract contract DripsHubUser {
     }
 }
 
-abstract contract ManagedDripsHubUser is DripsHubUser {
-    ManagedDripsHub private immutable dripsHub;
-
-    constructor(ManagedDripsHub dripsHub_) DripsHubUser(dripsHub_) {
-        dripsHub = dripsHub_;
-    }
-
-    function changeAdmin(address newAdmin) public {
-        dripsHub.changeAdmin(newAdmin);
-    }
-
-    function pause() public {
-        dripsHub.pause();
-    }
-
-    function unpause() public {
-        dripsHub.unpause();
-    }
-
-    function upgradeTo(address newImplementation) public {
-        dripsHub.upgradeTo(newImplementation);
-    }
-}
-
-contract ERC20DripsHubUser is ManagedDripsHubUser {
+contract ERC20DripsHubUser is DripsHubUser {
     ERC20DripsHub private immutable dripsHub;
 
-    constructor(ERC20DripsHub dripsHub_) ManagedDripsHubUser(dripsHub_) {
+    constructor(ERC20DripsHub dripsHub_) DripsHubUser(dripsHub_) {
         dripsHub = dripsHub_;
     }
 

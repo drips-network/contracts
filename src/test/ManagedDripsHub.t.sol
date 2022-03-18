@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.7;
 
-import {DripsHubUser, ManagedDripsHubUser} from "./DripsHubUser.t.sol";
+import {DripsHubUser} from "./DripsHubUser.t.sol";
+import {ManagedDripsHubUser} from "./ManagedDripsHubUser.t.sol";
 import {DripsHubTest} from "./DripsHub.t.sol";
-import {DripsReceiver, SplitsReceiver} from "../DripsHub.sol";
+import {DripsReceiver, ERC20DripsHub, IERC20Reserve, SplitsReceiver} from "../ERC20DripsHub.sol";
 import {ManagedDripsHub, ManagedDripsHubProxy} from "../ManagedDripsHub.sol";
 
 abstract contract ManagedDripsHubTest is DripsHubTest {
     ManagedDripsHub private dripsHub;
     ManagedDripsHubUser internal admin;
-    ManagedDripsHubUser private user;
-    ManagedDripsHubUser private user1;
-    ManagedDripsHubUser private user2;
+    ManagedDripsHubUser internal nonAdmin;
+    DripsHubUser private user;
 
     string private constant ERROR_NOT_ADMIN = "Caller is not the admin";
     string private constant ERROR_PAUSED = "Contract paused";
@@ -20,18 +20,15 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
     function setUp(ManagedDripsHub dripsHub_) internal {
         dripsHub = dripsHub_;
         admin = createManagedUser();
+        nonAdmin = createManagedUser();
         dripsHub.changeAdmin(address(admin));
-        user = createManagedUser();
-        user1 = createManagedUser();
-        user2 = createManagedUser();
+        user = createUser();
         super.setUp(dripsHub);
     }
 
-    function createUser() internal override returns (DripsHubUser) {
-        return createManagedUser();
+    function createManagedUser() internal returns (ManagedDripsHubUser) {
+        return new ManagedDripsHubUser(dripsHub);
     }
-
-    function createManagedUser() internal virtual returns (ManagedDripsHubUser);
 
     function wrapInProxy(ManagedDripsHub hubLogic) internal returns (ManagedDripsHub) {
         ManagedDripsHubProxy proxy = new ManagedDripsHubProxy(hubLogic, address(this));
@@ -40,22 +37,27 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testAdminCanBeChanged() public {
         assertEq(dripsHub.admin(), address(admin));
-        admin.changeAdmin(address(user));
-        assertEq(dripsHub.admin(), address(user));
+        admin.changeAdmin(address(nonAdmin));
+        assertEq(dripsHub.admin(), address(nonAdmin));
     }
 
     function testOnlyAdminCanChangeAdmin() public {
-        try user1.changeAdmin(address(user2)) {
+        try nonAdmin.changeAdmin(address(0x1234)) {
             assertTrue(false, "ChangeAdmin hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_NOT_ADMIN, "Invalid changeAdmin revert reason");
         }
     }
 
-    function testContractCanBeUpgraded() public virtual;
+    function testContractCanBeUpgraded() public {
+        uint64 newCycleLength = dripsHub.cycleSecs() + 1;
+        ERC20DripsHub newLogic = new ERC20DripsHub(newCycleLength, IERC20Reserve(address(0x1234)));
+        admin.upgradeTo(address(newLogic));
+        assertEq(dripsHub.cycleSecs(), newCycleLength, "Invalid new cycle length");
+    }
 
     function testOnlyAdminCanUpgradeContract() public {
-        try user.upgradeTo(address(0)) {
+        try nonAdmin.upgradeTo(address(0)) {
             assertTrue(false, "ChangeAdmin hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_NOT_ADMIN, "Invalid changeAdmin revert reason");
@@ -88,7 +90,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
     }
 
     function testOnlyAdminCanPause() public {
-        try user.pause() {
+        try nonAdmin.pause() {
             assertTrue(false, "Pause hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_NOT_ADMIN, "Invalid pause revert reason");
@@ -97,7 +99,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testOnlyAdminCanUnpause() public {
         admin.pause();
-        try user.unpause() {
+        try nonAdmin.unpause() {
             assertTrue(false, "Unpause hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_NOT_ADMIN, "Invalid unpause revert reason");
@@ -106,7 +108,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testCollectAllCanBePaused() public {
         admin.pause();
-        try admin.collectAll(calcUserId(user), defaultAsset, new SplitsReceiver[](0)) {
+        try user.collectAll(calcUserId(user), defaultAsset, new SplitsReceiver[](0)) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid collect revert reason");
@@ -115,7 +117,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testReceiveDripsCanBePaused() public {
         admin.pause();
-        try dripsHub.receiveDrips(calcUserId(admin), defaultAsset, 1) {
+        try dripsHub.receiveDrips(calcUserId(user), defaultAsset, 1) {
             assertTrue(false, "ReceiveDrips hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid receiveDrips revert reason");
@@ -124,7 +126,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testSplitCanBePaused() public {
         admin.pause();
-        try dripsHub.split(calcUserId(admin), defaultAsset, new SplitsReceiver[](0)) {
+        try dripsHub.split(calcUserId(user), defaultAsset, new SplitsReceiver[](0)) {
             assertTrue(false, "Split hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid split revert reason");
@@ -133,7 +135,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testCollectCanBePaused() public {
         admin.pause();
-        try admin.collect(calcUserId(admin), defaultAsset) {
+        try user.collect(calcUserId(user), defaultAsset) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid collect revert reason");
@@ -143,8 +145,8 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
     function testSetDripsCanBePaused() public {
         admin.pause();
         try
-            admin.setDrips(
-                calcUserId(admin),
+            user.setDrips(
+                calcUserId(user),
                 defaultAsset,
                 0,
                 0,
@@ -162,8 +164,8 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
     function testSetDripsFromAccountCanBePaused() public {
         admin.pause();
         try
-            admin.setDrips(
-                calcUserId(admin),
+            user.setDrips(
+                calcUserId(user),
                 defaultAsset,
                 0,
                 0,
@@ -180,25 +182,16 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testGiveCanBePaused() public {
         admin.pause();
-        try admin.give(calcUserId(admin), 0, defaultAsset, 1) {
+        try user.give(calcUserId(user), 0, defaultAsset, 1) {
             assertTrue(false, "Give hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid give revert reason");
         }
     }
 
-    function testGiveFromAccountCanBePaused() public {
-        admin.pause();
-        try admin.give(0, 0, defaultAsset, 1) {
-            assertTrue(false, "Give hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_PAUSED, "Invalid giveFrom revert reason");
-        }
-    }
-
     function testSetSplitsCanBePaused() public {
         admin.pause();
-        try admin.setSplits(calcUserId(admin), new SplitsReceiver[](0)) {
+        try user.setSplits(calcUserId(user), new SplitsReceiver[](0)) {
             assertTrue(false, "SetSplits hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid setSplits revert reason");

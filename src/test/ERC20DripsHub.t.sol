@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.7;
 
-import {ERC20DripsHubUser, ManagedDripsHubUser} from "./DripsHubUser.t.sol";
+import {DripsHubUser, ERC20DripsHubUser} from "./DripsHubUser.t.sol";
+import {ManagedDripsHubUser} from "./ManagedDripsHubUser.t.sol";
 import {ManagedDripsHubTest} from "./ManagedDripsHub.t.sol";
 import {ERC20Reserve, IERC20Reserve} from "../ERC20Reserve.sol";
 import {ERC20DripsHub} from "../ERC20DripsHub.sol";
@@ -11,9 +12,9 @@ import {IERC20, ERC20PresetFixedSupply} from "openzeppelin-contracts/token/ERC20
 contract ERC20DripsHubTest is ManagedDripsHubTest {
     ERC20DripsHub private dripsHub;
     uint256 private otherAsset;
-    ManagedDripsHubUser private user;
-    ManagedDripsHubUser private receiver1;
-    ManagedDripsHubUser private receiver2;
+    DripsHubUser private user;
+    DripsHubUser private receiver1;
+    DripsHubUser private receiver2;
 
     function setUp() public {
         defaultAsset = uint160(
@@ -26,23 +27,16 @@ contract ERC20DripsHubTest is ManagedDripsHubTest {
         ERC20DripsHub hubLogic = new ERC20DripsHub(10, reserve);
         dripsHub = ERC20DripsHub(address(wrapInProxy(hubLogic)));
         reserve.addUser(address(dripsHub));
-        user = createManagedUser();
-        receiver1 = createManagedUser();
-        receiver2 = createManagedUser();
+        user = createUser();
+        receiver1 = createUser();
+        receiver2 = createUser();
         ManagedDripsHubTest.setUp(dripsHub);
     }
 
-    function createManagedUser() internal override returns (ManagedDripsHubUser newUser) {
+    function createUser() internal override returns (DripsHubUser newUser) {
         newUser = new ERC20DripsHubUser(dripsHub);
         IERC20(address(uint160(defaultAsset))).transfer(address(newUser), 100 ether);
         IERC20(address(uint160(otherAsset))).transfer(address(newUser), 100 ether);
-    }
-
-    function testContractCanBeUpgraded() public override {
-        uint64 newCycleLength = dripsHub.cycleSecs() + 1;
-        ERC20DripsHub newLogic = new ERC20DripsHub(newCycleLength, dripsHub.reserve());
-        admin.upgradeTo(address(newLogic));
-        assertEq(dripsHub.cycleSecs(), newCycleLength, "Invalid new cycle length");
     }
 
     function testDripsInDifferentTokensAreIndependent() public {
