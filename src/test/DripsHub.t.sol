@@ -150,7 +150,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
 
     function testCollectableAllRevertsIfInvalidCurrSplitsReceivers() public {
         setSplits(user, splitsReceivers(receiver, 1));
-        try user.collectableAll(calcUserId(user), defaultAsset, splitsReceivers(receiver, 2)) {
+        try dripsHub.collectableAll(calcUserId(user), defaultAsset, splitsReceivers(receiver, 2)) {
             assertTrue(false, "Collectable hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(
@@ -624,7 +624,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
 
     function testSplitRevertsIfInvalidCurrSplitsReceivers() public {
         setSplits(user, splitsReceivers(receiver, 1));
-        try user.split(calcUserId(user), defaultAsset, splitsReceivers(receiver, 2)) {
+        try dripsHub.split(calcUserId(user), defaultAsset, splitsReceivers(receiver, 2)) {
             assertTrue(false, "Split hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, "Invalid current splits receivers", "Invalid split revert reason");
@@ -654,7 +654,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         give(receiver1, receiver1, 20);
 
         // Splitting 20
-        (uint128 collectableAmt, uint128 splitAmt) = receiver1.split(
+        (uint128 collectableAmt, uint128 splitAmt) = dripsHub.split(
             calcUserId(receiver1),
             defaultAsset,
             getCurrSplitsReceivers(receiver1)
@@ -666,7 +666,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         collectAll(receiver2, 4);
 
         // Splitting 10 which has been split to receiver1 themselves in the previous step
-        (collectableAmt, splitAmt) = receiver1.split(
+        (collectableAmt, splitAmt) = dripsHub.split(
             calcUserId(receiver1),
             defaultAsset,
             getCurrSplitsReceivers(receiver1)

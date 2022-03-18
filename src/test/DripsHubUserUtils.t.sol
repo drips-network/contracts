@@ -255,8 +255,8 @@ abstract contract DripsHubUserUtils is DSTest {
         uint128 balance,
         DripsReceiver[] memory currReceivers
     ) internal {
-        bytes32 actual = user.dripsHash(calcUserId(user), asset);
-        bytes32 expected = user.hashDrips(lastUpdate, balance, currReceivers);
+        bytes32 actual = dripsHub.dripsHash(calcUserId(user), asset);
+        bytes32 expected = dripsHub.hashDrips(lastUpdate, balance, currReceivers);
         assertEq(actual, expected, "Invalid drips configuration");
     }
 
@@ -434,8 +434,8 @@ abstract contract DripsHubUserUtils is DSTest {
     }
 
     function assertSplits(DripsHubUser user, SplitsReceiver[] memory expectedReceivers) internal {
-        bytes32 actual = user.splitsHash(calcUserId(user));
-        bytes32 expected = user.hashSplits(expectedReceivers);
+        bytes32 actual = dripsHub.splitsHash(calcUserId(user));
+        bytes32 expected = dripsHub.hashSplits(expectedReceivers);
         assertEq(actual, expected, "Invalid splits hash");
     }
 
@@ -506,7 +506,7 @@ abstract contract DripsHubUserUtils is DSTest {
         uint128 expectedCollected,
         uint128 expectedSplit
     ) internal {
-        (uint128 actualCollected, uint128 actualSplit) = user.collectableAll(
+        (uint128 actualCollected, uint128 actualSplit) = dripsHub.collectableAll(
             calcUserId(user),
             asset,
             getCurrSplitsReceivers(user)
@@ -517,7 +517,7 @@ abstract contract DripsHubUserUtils is DSTest {
 
     function totalCollectableAll(uint256 asset, DripsHubUser user) internal view returns (uint128) {
         SplitsReceiver[] memory splits = getCurrSplitsReceivers(user);
-        (uint128 collectableAmt, uint128 splittableAmt) = user.collectableAll(
+        (uint128 collectableAmt, uint128 splittableAmt) = dripsHub.collectableAll(
             calcUserId(user),
             asset,
             splits
@@ -556,7 +556,7 @@ abstract contract DripsHubUserUtils is DSTest {
         assertReceivableDrips(user, type(uint64).max, expectedTotalAmt, 0);
         assertReceivableDrips(user, maxCycles, expectedReceivedAmt, expectedCyclesAfter);
 
-        (uint128 receivedAmt, uint64 receivableCycles) = user.receiveDrips(
+        (uint128 receivedAmt, uint64 receivableCycles) = dripsHub.receiveDrips(
             calcUserId(user),
             defaultAsset,
             maxCycles
@@ -569,7 +569,7 @@ abstract contract DripsHubUserUtils is DSTest {
     }
 
     function assertReceivableDripsCycles(DripsHubUser user, uint64 expectedCycles) internal {
-        uint64 actualCycles = user.receivableDripsCycles(calcUserId(user), defaultAsset);
+        uint64 actualCycles = dripsHub.receivableDripsCycles(calcUserId(user), defaultAsset);
         assertEq(actualCycles, expectedCycles, "Invalid total receivable drips cycles");
     }
 
@@ -579,7 +579,7 @@ abstract contract DripsHubUserUtils is DSTest {
         uint128 expectedAmt,
         uint64 expectedCycles
     ) internal {
-        (uint128 actualAmt, uint64 actualCycles) = user.receivableDrips(
+        (uint128 actualAmt, uint64 actualCycles) = dripsHub.receivableDrips(
             calcUserId(user),
             defaultAsset,
             maxCycles
@@ -596,7 +596,7 @@ abstract contract DripsHubUserUtils is DSTest {
         assertSplittable(user, expectedCollectable + expectedSplit);
         uint128 collectableBefore = collectable(user);
 
-        (uint128 collectableAmt, uint128 splitAmt) = user.split(
+        (uint128 collectableAmt, uint128 splitAmt) = dripsHub.split(
             calcUserId(user),
             defaultAsset,
             getCurrSplitsReceivers(user)
@@ -609,7 +609,8 @@ abstract contract DripsHubUserUtils is DSTest {
     }
 
     function assertSplittable(DripsHubUser user, uint256 expected) internal {
-        assertEq(user.splittable(calcUserId(user), defaultAsset), expected, "Invalid splittable");
+        uint256 actual = dripsHub.splittable(calcUserId(user), defaultAsset);
+        assertEq(actual, expected, "Invalid splittable");
     }
 
     function collect(DripsHubUser user, uint128 expectedAmt) internal {
@@ -624,7 +625,7 @@ abstract contract DripsHubUserUtils is DSTest {
     }
 
     function collectable(DripsHubUser user) internal view returns (uint128 amt) {
-        return user.collectable(calcUserId(user), defaultAsset);
+        return dripsHub.collectable(calcUserId(user), defaultAsset);
     }
 
     function assertCollectable(DripsHubUser user, uint256 expected) internal {

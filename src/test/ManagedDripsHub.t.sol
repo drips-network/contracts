@@ -39,9 +39,9 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
     }
 
     function testAdminCanBeChanged() public {
-        assertEq(admin.admin(), address(admin));
+        assertEq(dripsHub.admin(), address(admin));
         admin.changeAdmin(address(user));
-        assertEq(admin.admin(), address(user));
+        assertEq(dripsHub.admin(), address(user));
     }
 
     function testOnlyAdminCanChangeAdmin() public {
@@ -63,11 +63,11 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
     }
 
     function testContractCanBePausedAndUnpaused() public {
-        assertTrue(!admin.paused(), "Initially paused");
+        assertTrue(!dripsHub.paused(), "Initially paused");
         admin.pause();
-        assertTrue(admin.paused(), "Pausing failed");
+        assertTrue(dripsHub.paused(), "Pausing failed");
         admin.unpause();
-        assertTrue(!admin.paused(), "Unpausing failed");
+        assertTrue(!dripsHub.paused(), "Unpausing failed");
     }
 
     function testOnlyUnpausedContractCanBePaused() public {
@@ -115,7 +115,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testReceiveDripsCanBePaused() public {
         admin.pause();
-        try admin.receiveDrips(calcUserId(admin), defaultAsset, 1) {
+        try dripsHub.receiveDrips(calcUserId(admin), defaultAsset, 1) {
             assertTrue(false, "ReceiveDrips hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid receiveDrips revert reason");
@@ -124,7 +124,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testSplitCanBePaused() public {
         admin.pause();
-        try admin.split(calcUserId(admin), defaultAsset, new SplitsReceiver[](0)) {
+        try dripsHub.split(calcUserId(admin), defaultAsset, new SplitsReceiver[](0)) {
             assertTrue(false, "Split hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid split revert reason");

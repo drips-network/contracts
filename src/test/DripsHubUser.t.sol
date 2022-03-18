@@ -42,76 +42,8 @@ abstract contract DripsHubUser {
         return dripsHub.collectAll(userId, assetId, currReceivers);
     }
 
-    function collectableAll(
-        uint256 userId,
-        uint256 assetId,
-        SplitsReceiver[] calldata currReceivers
-    ) public view returns (uint128 collected, uint128 splitAmt) {
-        return dripsHub.collectableAll(userId, assetId, currReceivers);
-    }
-
-    function receivableDripsCycles(uint256 userId, uint256 assetId)
-        public
-        view
-        returns (uint64 cycles)
-    {
-        return dripsHub.receivableDripsCycles(userId, assetId);
-    }
-
-    function receivableDrips(
-        uint256 userId,
-        uint256 assetId,
-        uint64 maxCycles
-    ) public view returns (uint128 receivableAmt, uint64 receivableCycles) {
-        return dripsHub.receivableDrips(userId, assetId, maxCycles);
-    }
-
-    function receiveDrips(
-        uint256 userId,
-        uint256 assetId,
-        uint64 maxCycles
-    ) public returns (uint128 receivedAmt, uint64 receivableCycles) {
-        return dripsHub.receiveDrips(userId, assetId, maxCycles);
-    }
-
-    function splittable(uint256 userId, uint256 assetId) public view returns (uint128 amt) {
-        return dripsHub.splittable(userId, assetId);
-    }
-
-    function split(
-        uint256 userId,
-        uint256 assetId,
-        SplitsReceiver[] memory currReceivers
-    ) public virtual returns (uint128 collectableAmt, uint128 splitAmt) {
-        return dripsHub.split(userId, assetId, currReceivers);
-    }
-
-    function collectable(uint256 userId, uint256 assetId) public view returns (uint128 amt) {
-        return dripsHub.collectable(userId, assetId);
-    }
-
-    function collect(uint256 userId, uint256 assetId) public virtual returns (uint128 aamt) {
+    function collect(uint256 userId, uint256 assetId) public virtual returns (uint128 amt) {
         return dripsHub.collect(userId, assetId);
-    }
-
-    function hashDrips(
-        uint64 lastUpdate,
-        uint128 lastBalance,
-        DripsReceiver[] calldata receivers
-    ) public view returns (bytes32) {
-        return dripsHub.hashDrips(lastUpdate, lastBalance, receivers);
-    }
-
-    function dripsHash(uint256 userId, uint256 assetId) public view returns (bytes32 weightsHash) {
-        return dripsHub.dripsHash(userId, assetId);
-    }
-
-    function hashSplits(SplitsReceiver[] calldata receivers) public view returns (bytes32) {
-        return dripsHub.hashSplits(receivers);
-    }
-
-    function splitsHash(uint256 userId) public view returns (bytes32) {
-        return dripsHub.splitsHash(userId);
     }
 }
 
@@ -122,16 +54,8 @@ abstract contract ManagedDripsHubUser is DripsHubUser {
         dripsHub = dripsHub_;
     }
 
-    function admin() public view returns (address) {
-        return dripsHub.admin();
-    }
-
     function changeAdmin(address newAdmin) public {
         dripsHub.changeAdmin(newAdmin);
-    }
-
-    function paused() public view returns (bool) {
-        return dripsHub.paused();
     }
 
     function pause() public {
