@@ -3,7 +3,6 @@
 pragma solidity ^0.8.7;
 
 import {DripsHub} from "../DripsHub.sol";
-import {EthDripsHub} from "../EthDripsHub.sol";
 import {ManagedDripsHub} from "../ManagedDripsHub.sol";
 import {SplitsReceiver, ERC20DripsHub, DripsReceiver, IERC20} from "../ERC20DripsHub.sol";
 
@@ -190,60 +189,6 @@ contract ERC20DripsHubUser is ManagedDripsHubUser {
     ) public override {
         IERC20(address(uint160(assetId))).approve(address(dripsHub), amt);
         dripsHub.give(userId, receiver, assetId, amt);
-    }
-
-    function setSplits(uint256 userId, SplitsReceiver[] calldata receivers) public override {
-        dripsHub.setSplits(userId, receivers);
-    }
-}
-
-contract EthDripsHubUser is ManagedDripsHubUser {
-    EthDripsHub private immutable dripsHub;
-
-    constructor(EthDripsHub dripsHub_) payable ManagedDripsHubUser(dripsHub_) {
-        dripsHub = dripsHub_;
-    }
-
-    receive() external payable {
-        return;
-    }
-
-    function balance(uint256 assetId) public view override returns (uint256) {
-        assetId;
-        return address(this).balance;
-    }
-
-    function setDrips(
-        uint256 userId,
-        uint256 assetId,
-        uint64 lastUpdate,
-        uint128 lastBalance,
-        DripsReceiver[] calldata currReceivers,
-        int128 balanceDelta,
-        DripsReceiver[] calldata newReceivers
-    ) public override returns (uint128 newBalance, int128 realBalanceDelta) {
-        assetId;
-        uint256 value = balanceDelta > 0 ? uint128(balanceDelta) : 0;
-        uint128 reduceBalance = balanceDelta < 0 ? uint128(uint136(-int136(balanceDelta))) : 0;
-        return
-            dripsHub.setDrips{value: value}(
-                userId,
-                lastUpdate,
-                lastBalance,
-                currReceivers,
-                reduceBalance,
-                newReceivers
-            );
-    }
-
-    function give(
-        uint256 userId,
-        uint256 receiver,
-        uint256 assetId,
-        uint128 amt
-    ) public override {
-        assetId;
-        dripsHub.give{value: amt}(userId, receiver);
     }
 
     function setSplits(uint256 userId, SplitsReceiver[] calldata receivers) public override {
