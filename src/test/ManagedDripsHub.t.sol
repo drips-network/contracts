@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.7;
 
-import {DripsHubUser} from "./DripsHubUser.t.sol";
+import {AddressIdUser} from "./AddressIdUser.t.sol";
 import {ManagedDripsHubUser} from "./ManagedDripsHubUser.t.sol";
 import {DripsHubTest} from "./DripsHub.t.sol";
 import {DripsReceiver, ERC20DripsHub, IERC20Reserve, SplitsReceiver} from "../ERC20DripsHub.sol";
@@ -11,7 +11,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
     ManagedDripsHub private dripsHub;
     ManagedDripsHubUser internal admin;
     ManagedDripsHubUser internal nonAdmin;
-    DripsHubUser private user;
+    AddressIdUser private user;
 
     string private constant ERROR_NOT_ADMIN = "Caller is not the admin";
     string private constant ERROR_PAUSED = "Contract paused";
@@ -108,7 +108,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testCollectAllCanBePaused() public {
         admin.pause();
-        try user.collectAll(calcUserId(user), defaultAsset, new SplitsReceiver[](0)) {
+        try user.collectAll(address(user), defaultAsset, new SplitsReceiver[](0)) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid collect revert reason");
@@ -117,7 +117,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testReceiveDripsCanBePaused() public {
         admin.pause();
-        try dripsHub.receiveDrips(calcUserId(user), defaultAsset, 1) {
+        try dripsHub.receiveDrips(user.userId(), defaultAsset, 1) {
             assertTrue(false, "ReceiveDrips hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid receiveDrips revert reason");
@@ -126,7 +126,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testSplitCanBePaused() public {
         admin.pause();
-        try dripsHub.split(calcUserId(user), defaultAsset, new SplitsReceiver[](0)) {
+        try dripsHub.split(user.userId(), defaultAsset, new SplitsReceiver[](0)) {
             assertTrue(false, "Split hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid split revert reason");
@@ -135,7 +135,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testCollectCanBePaused() public {
         admin.pause();
-        try user.collect(calcUserId(user), defaultAsset) {
+        try user.collect(address(user), defaultAsset) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid collect revert reason");
@@ -144,17 +144,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testSetDripsCanBePaused() public {
         admin.pause();
-        try
-            user.setDrips(
-                calcUserId(user),
-                defaultAsset,
-                0,
-                0,
-                new DripsReceiver[](0),
-                1,
-                new DripsReceiver[](0)
-            )
-        {
+        try user.setDrips(defaultAsset, 0, 0, new DripsReceiver[](0), 1, new DripsReceiver[](0)) {
             assertTrue(false, "SetDrips hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid setDrips revert reason");
@@ -163,17 +153,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testSetDripsFromAccountCanBePaused() public {
         admin.pause();
-        try
-            user.setDrips(
-                calcUserId(user),
-                defaultAsset,
-                0,
-                0,
-                new DripsReceiver[](0),
-                1,
-                new DripsReceiver[](0)
-            )
-        {
+        try user.setDrips(defaultAsset, 0, 0, new DripsReceiver[](0), 1, new DripsReceiver[](0)) {
             assertTrue(false, "SetDrips hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid setDrips revert reason");
@@ -182,7 +162,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testGiveCanBePaused() public {
         admin.pause();
-        try user.give(calcUserId(user), 0, defaultAsset, 1) {
+        try user.give(0, defaultAsset, 1) {
             assertTrue(false, "Give hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid give revert reason");
@@ -191,7 +171,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
 
     function testSetSplitsCanBePaused() public {
         admin.pause();
-        try user.setSplits(calcUserId(user), new SplitsReceiver[](0)) {
+        try user.setSplits(new SplitsReceiver[](0)) {
             assertTrue(false, "SetSplits hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid setSplits revert reason");

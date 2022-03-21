@@ -3,24 +3,24 @@ pragma solidity ^0.8.7;
 
 import {DSTest} from "ds-test/test.sol";
 import {DripsHubUserUtils} from "./DripsHubUserUtils.t.sol";
-import {DripsHubUser} from "./DripsHubUser.t.sol";
+import {AddressIdUser} from "./AddressIdUser.t.sol";
 import {Hevm} from "./Hevm.t.sol";
 import {SplitsReceiver, DripsHub, DripsReceiver} from "../DripsHub.sol";
 
 abstract contract DripsHubTest is DripsHubUserUtils {
     DripsHub private dripsHub;
 
-    DripsHubUser private user;
-    DripsHubUser private receiver;
-    DripsHubUser private user1;
-    DripsHubUser private receiver1;
-    DripsHubUser private user2;
-    DripsHubUser private receiver2;
-    DripsHubUser private receiver3;
+    AddressIdUser private user;
+    AddressIdUser private receiver;
+    AddressIdUser private user1;
+    AddressIdUser private receiver1;
+    AddressIdUser private user2;
+    AddressIdUser private receiver2;
+    AddressIdUser private receiver3;
     uint224 private constant SUB_ACCOUNT_1 = 1;
     uint224 private constant SUB_ACCOUNT_2 = 2;
 
-    string private constant ERROR_NOT_OWNER = "Callable only by the owner of the user account";
+    string internal constant ERROR_NOT_OWNER = "Callable only by the owner of the user account";
 
     // Must be called once from child contract `setUp`
     function setUp(DripsHub dripsHub_) internal {
@@ -39,7 +39,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         if (receiver1 > receiver2) (receiver1, receiver2) = (receiver2, receiver1);
     }
 
-    function createUser() internal virtual returns (DripsHubUser);
+    function createUser() internal virtual returns (AddressIdUser);
 
     function warpToCycleEnd() internal {
         warpBy(dripsHub.cycleSecs() - (block.timestamp % dripsHub.cycleSecs()));
@@ -127,7 +127,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
 
     function testCollectAllRevertsIfInvalidCurrSplitsReceivers() public {
         setSplits(user, splitsReceivers(receiver, 1));
-        try user.collectAll(calcUserId(user), defaultAsset, splitsReceivers(receiver, 2)) {
+        try user.collectAll(address(user), defaultAsset, splitsReceivers(receiver, 2)) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, "Invalid current splits receivers", "Invalid collect revert reason");
@@ -150,7 +150,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
 
     function testCollectableAllRevertsIfInvalidCurrSplitsReceivers() public {
         setSplits(user, splitsReceivers(receiver, 1));
-        try dripsHub.collectableAll(calcUserId(user), defaultAsset, splitsReceivers(receiver, 2)) {
+        try dripsHub.collectableAll(user.userId(), defaultAsset, splitsReceivers(receiver, 2)) {
             assertTrue(false, "Collectable hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(
@@ -345,7 +345,6 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         // User had 4 second paying 1 per second
         uint256 expectedBalance = user.balance(defaultAsset) + 6;
         (uint128 newBalance, int128 realBalanceDelta) = user.setDrips(
-            calcUserId(user),
             defaultAsset,
             lastUpdate,
             10,
@@ -361,61 +360,6 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         warpToCycleEnd();
         // Receiver had 4 seconds paying 1 per second
         collectAll(receiver, 4);
-    }
-
-    function testUserAndTheirAccountAreIndependent() public {
-        uint32 account = dripsHub.createAccount(address(user));
-        setDrips(user, 0, 5, dripsReceivers(receiver1, 1));
-        warpBy(3);
-        setDrips(user, account, SUB_ACCOUNT_1, 0, 8, dripsReceivers(receiver1, 2, receiver2, 1));
-        warpBy(1);
-        // User had 4 seconds paying 1 per second
-        changeBalance(user, 1, 0);
-        warpBy(1);
-        // User account1 had 2 seconds paying 3 per second
-        changeBalance(user, account, SUB_ACCOUNT_1, 2, 0);
-        warpToCycleEnd();
-        // Receiver1 had 4 second paying 1 per second and 2 seconds paying 2 per second
-        collectAll(receiver1, 8);
-        // Receiver2 had 2 second paying 1 per second
-        collectAll(receiver2, 2);
-    }
-
-    function testUserAccountsAreIndependent() public {
-        uint32 account = dripsHub.createAccount(address(user));
-        setDrips(user, account, SUB_ACCOUNT_1, 0, 5, dripsReceivers(receiver1, 1));
-        warpBy(3);
-        setDrips(user, account, SUB_ACCOUNT_2, 0, 8, dripsReceivers(receiver1, 2, receiver2, 1));
-        warpBy(1);
-        // User account1 had 4 seconds paying 1 per second
-        changeBalance(user, account, SUB_ACCOUNT_1, 1, 0);
-        warpBy(1);
-        // User account2 had 2 seconds paying 3 per second
-        changeBalance(user, account, SUB_ACCOUNT_2, 2, 0);
-        warpToCycleEnd();
-        // Receiver1 had 4 second paying 1 per second and 2 seconds paying 2 per second
-        collectAll(receiver1, 8);
-        // Receiver2 had 2 second paying 1 per second
-        collectAll(receiver2, 2);
-    }
-
-    function testAccountsOfDifferentUsersAreIndependent() public {
-        uint32 account1 = dripsHub.createAccount(address(user1));
-        uint32 account2 = dripsHub.createAccount(address(user2));
-        setDrips(user1, account1, SUB_ACCOUNT_1, 0, 5, dripsReceivers(receiver1, 1));
-        warpBy(3);
-        setDrips(user2, account2, SUB_ACCOUNT_1, 0, 8, dripsReceivers(receiver1, 2, receiver2, 1));
-        warpBy(1);
-        // User1 account1 had 4 seconds paying 1 per second
-        changeBalance(user1, account1, SUB_ACCOUNT_1, 1, 0);
-        warpBy(1);
-        // User2 account1 had 2 seconds paying 3 per second
-        changeBalance(user2, account2, SUB_ACCOUNT_1, 2, 0);
-        warpToCycleEnd();
-        // Receiver1 had 4 second paying 1 per second and 2 seconds paying 2 per second
-        collectAll(receiver1, 8);
-        // Receiver2 had 2 second paying 1 per second
-        collectAll(receiver2, 2);
     }
 
     function testLimitsTheTotalSplitsReceiversCount() public {
@@ -594,12 +538,6 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         collectAll(receiver, 10);
     }
 
-    function testFundsGivenFromAccountCanBeCollected() public {
-        uint32 account = dripsHub.createAccount(address(user));
-        give(user, account, SUB_ACCOUNT_1, receiver, 10);
-        collectAll(receiver, 10);
-    }
-
     function testSplitSplitsFundsReceivedFromAllSources() public {
         uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
 
@@ -624,7 +562,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
 
     function testSplitRevertsIfInvalidCurrSplitsReceivers() public {
         setSplits(user, splitsReceivers(receiver, 1));
-        try dripsHub.split(calcUserId(user), defaultAsset, splitsReceivers(receiver, 2)) {
+        try dripsHub.split(user.userId(), defaultAsset, splitsReceivers(receiver, 2)) {
             assertTrue(false, "Split hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, "Invalid current splits receivers", "Invalid split revert reason");
@@ -655,7 +593,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
 
         // Splitting 20
         (uint128 collectableAmt, uint128 splitAmt) = dripsHub.split(
-            calcUserId(receiver1),
+            receiver1.userId(),
             defaultAsset,
             getCurrSplitsReceivers(receiver1)
         );
@@ -667,7 +605,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
 
         // Splitting 10 which has been split to receiver1 themselves in the previous step
         (collectableAmt, splitAmt) = dripsHub.split(
-            calcUserId(receiver1),
+            receiver1.userId(),
             defaultAsset,
             getCurrSplitsReceivers(receiver1)
         );
@@ -696,42 +634,8 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         assertEq(accountId + 1, dripsHub.nextAccountId(), "Invalid next account ID");
     }
 
-    function testSetDripsRevertsWhenNotAccountOwner() public {
-        try
-            user1.setDrips(
-                calcUserId(dripsHub.nextAccountId(), 0),
-                defaultAsset,
-                0,
-                0,
-                new DripsReceiver[](0),
-                0,
-                new DripsReceiver[](0)
-            )
-        {
-            assertTrue(false, "SetDrips hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_OWNER, "Invalid setDrips revert reason");
-        }
-    }
-
-    function testGiveRevertsWhenNotAccountOwner() public {
-        try user1.give(calcUserId(dripsHub.nextAccountId(), 0), 0, defaultAsset, 1) {
-            assertTrue(false, "Give hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_OWNER, "Invalid give revert reason");
-        }
-    }
-
-    function testSetSplitsRevertsWhenNotAccountOwner() public {
-        try user.setSplits(calcUserId(dripsHub.nextAccountId(), 0), splitsReceivers()) {
-            assertTrue(false, "SetSplits hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_OWNER, "Invalid setSplits revert reason");
-        }
-    }
-
     function testCollectRevertsWhenNotAccountOwner() public {
-        try user.collect(calcUserId(dripsHub.nextAccountId(), 0), defaultAsset) {
+        try dripsHub.collect(calcUserId(dripsHub.nextAccountId(), 0), defaultAsset) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_NOT_OWNER, "Invalid collect revert reason");
@@ -740,7 +644,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
 
     function testCollectAllRevertsWhenNotAccountOwner() public {
         try
-            user.collectAll(
+            dripsHub.collectAll(
                 calcUserId(dripsHub.nextAccountId(), 0),
                 defaultAsset,
                 new SplitsReceiver[](0)

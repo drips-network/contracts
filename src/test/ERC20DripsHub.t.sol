@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.7;
 
-import {DripsHubUser, ERC20DripsHubUser} from "./DripsHubUser.t.sol";
+import {AddressIdUser} from "./AddressIdUser.t.sol";
+import {AddressIdUser} from "./AddressIdUser.t.sol";
 import {ManagedDripsHubUser} from "./ManagedDripsHubUser.t.sol";
 import {ManagedDripsHubTest} from "./ManagedDripsHub.t.sol";
+import {AddressId} from "../AddressId.sol";
 import {ERC20Reserve, IERC20Reserve} from "../ERC20Reserve.sol";
 import {ERC20DripsHub} from "../ERC20DripsHub.sol";
 import {ManagedDripsHubProxy} from "../ManagedDripsHub.sol";
@@ -11,10 +13,11 @@ import {IERC20, ERC20PresetFixedSupply} from "openzeppelin-contracts/token/ERC20
 
 contract ERC20DripsHubTest is ManagedDripsHubTest {
     ERC20DripsHub private dripsHub;
+    AddressId private addressId;
     uint256 private otherAsset;
-    DripsHubUser private user;
-    DripsHubUser private receiver1;
-    DripsHubUser private receiver2;
+    AddressIdUser private user;
+    AddressIdUser private receiver1;
+    AddressIdUser private receiver2;
 
     function setUp() public {
         defaultAsset = uint160(
@@ -27,14 +30,15 @@ contract ERC20DripsHubTest is ManagedDripsHubTest {
         ERC20DripsHub hubLogic = new ERC20DripsHub(10, reserve);
         dripsHub = ERC20DripsHub(address(wrapInProxy(hubLogic)));
         reserve.addUser(address(dripsHub));
+        addressId = new AddressId(dripsHub);
         user = createUser();
         receiver1 = createUser();
         receiver2 = createUser();
         ManagedDripsHubTest.setUp(dripsHub);
     }
 
-    function createUser() internal override returns (DripsHubUser newUser) {
-        newUser = new ERC20DripsHubUser(dripsHub);
+    function createUser() internal override returns (AddressIdUser newUser) {
+        newUser = new AddressIdUser(addressId);
         IERC20(address(uint160(defaultAsset))).transfer(address(newUser), 100 ether);
         IERC20(address(uint160(otherAsset))).transfer(address(newUser), 100 ether);
     }
@@ -84,5 +88,71 @@ contract ERC20DripsHubTest is ManagedDripsHubTest {
         collectAll(otherAsset, user, 90, 10);
         collectAll(defaultAsset, receiver1, 3);
         collectAll(otherAsset, receiver1, 10);
+    }
+
+    function testSetDripsRevertsWhenNotAccountOwner() public {
+        try
+            dripsHub.setDrips(
+                calcUserId(dripsHub.nextAccountId(), 0),
+                defaultAsset,
+                0,
+                0,
+                dripsReceivers(),
+                0,
+                dripsReceivers()
+            )
+        {
+            assertTrue(false, "SetDrips hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, ERROR_NOT_OWNER, "Invalid setDrips revert reason");
+        }
+    }
+
+    function testGiveRevertsWhenNotAccountOwner() public {
+        try dripsHub.give(calcUserId(dripsHub.nextAccountId(), 0), 0, defaultAsset, 1) {
+            assertTrue(false, "Give hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, ERROR_NOT_OWNER, "Invalid give revert reason");
+        }
+    }
+
+    function testSetSplitsRevertsWhenNotAccountOwner() public {
+        try dripsHub.setSplits(calcUserId(dripsHub.nextAccountId(), 0), splitsReceivers()) {
+            assertTrue(false, "SetSplits hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, ERROR_NOT_OWNER, "Invalid setSplits revert reason");
+        }
+    }
+
+    function testAnyoneCanCollectForAnyoneUsingAddressId() public {
+        give(user, receiver1, 5);
+        split(receiver1, 5, 0);
+        assertCollectable(receiver1, 5);
+        uint256 balanceBefore = receiver1.balance(defaultAsset);
+        IERC20 erc20 = IERC20(address(uint160(defaultAsset)));
+
+        uint128 collected = addressId.collect(address(receiver1), erc20);
+
+        assertEq(collected, 5, "Invalid collected amount");
+        assertCollectable(receiver1, 0);
+        assertBalance(receiver1, balanceBefore + 5);
+    }
+
+    function testAnyoneCanCollectAllForAnyoneUsingAddressId() public {
+        give(user, receiver1, 5);
+        assertCollectableAll(receiver1, 5);
+        uint256 balanceBefore = receiver1.balance(defaultAsset);
+        IERC20 erc20 = IERC20(address(uint160(defaultAsset)));
+
+        (uint128 collected, uint128 split) = addressId.collectAll(
+            address(receiver1),
+            erc20,
+            splitsReceivers()
+        );
+
+        assertEq(collected, 5, "Invalid collected amount");
+        assertEq(split, 0, "Invalid split amount");
+        assertCollectableAll(receiver1, 0);
+        assertBalance(receiver1, balanceBefore + 5);
     }
 }
