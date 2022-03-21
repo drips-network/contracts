@@ -156,8 +156,8 @@ abstract contract DripsHub {
         /// @notice User splits states.
         /// The key is the user ID.
         mapping(uint256 => SplitsState) splitsStates;
-        /// @notice The last created account ID. The next one will have ID lastAccountId + 1.
-        uint32 lastAccountId;
+        /// @notice The next created account ID.
+        uint32 nextAccountId;
         /// @notice Account owners. The key is the account ID, the value is the owner address.
         mapping(uint32 => address) accountsOwners;
     }
@@ -206,18 +206,10 @@ abstract contract DripsHub {
 
     modifier onlyAccountOwner(uint256 userId) {
         uint32 accountId = uint32(userId >> BITS_SUB_ACCOUNT);
-        if (accountId == 0) {
-            // Account ID 0 is for msg.sender verification sub-accounts
-            require(
-                address(uint160(userId)) == msg.sender,
-                "Callable only by the address equal to the user sub-account"
-            );
-        } else {
-            require(
-                accountOwner(accountId) == msg.sender,
-                "Callable only by the owner of the user account"
-            );
-        }
+        require(
+            accountOwner(accountId) == msg.sender,
+            "Callable only by the owner of the user account"
+        );
         _;
     }
 
@@ -227,8 +219,7 @@ abstract contract DripsHub {
     /// @return accountId The new account ID.
     function createAccount(address owner) public virtual returns (uint32 accountId) {
         DripsHubStorage storage dripsHubStorage = _dripsHubStorage();
-        accountId = dripsHubStorage.lastAccountId + 1;
-        dripsHubStorage.lastAccountId = accountId;
+        accountId = dripsHubStorage.nextAccountId++;
         dripsHubStorage.accountsOwners[accountId] = owner;
     }
 
@@ -242,7 +233,7 @@ abstract contract DripsHub {
     /// @notice Returns the ID which will be assigned for the next created account.
     /// @return accountId The account ID.
     function nextAccountId() public view returns (uint32 accountId) {
-        return _dripsHubStorage().lastAccountId + 1;
+        return _dripsHubStorage().nextAccountId;
     }
 
     /// @notice Returns the contract storage.
