@@ -634,6 +634,23 @@ abstract contract DripsHubTest is DripsHubUserUtils {
         assertEq(accountId + 1, dripsHub.nextAccountId(), "Invalid next account ID");
     }
 
+    function testTransferAccount() public {
+        uint32 accountId = dripsHub.createAccount(address(this));
+        assertEq(address(this), dripsHub.accountOwner(accountId), "Invalid account owner before");
+        address newOwner = address(0x1234);
+        dripsHub.transferAccount(accountId, newOwner);
+        assertEq(newOwner, dripsHub.accountOwner(accountId), "Invalid account owner after");
+    }
+
+    function testTransferAccountRevertsWhenNotAccountOwner() public {
+        uint32 accountId = dripsHub.createAccount(address(0x1234));
+        try dripsHub.transferAccount(accountId, address(0x5678)) {
+            assertTrue(false, "TransferAccount hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, ERROR_NOT_OWNER, "Invalid collect revert reason");
+        }
+    }
+
     function testCollectRevertsWhenNotAccountOwner() public {
         try dripsHub.collect(calcUserId(dripsHub.nextAccountId(), 0), defaultAsset) {
             assertTrue(false, "Collect hasn't reverted");

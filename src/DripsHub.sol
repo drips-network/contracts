@@ -65,6 +65,21 @@ abstract contract DripsHub {
     /// @notice Number of bits in the sub-account part of userId
     uint256 public constant BITS_SUB_ACCOUNT = 224;
 
+    /// @notice Emitted when an account is created
+    /// @param accountId The account ID
+    /// @param owner The account owner
+    event AccountCreated(uint32 indexed accountId, address indexed owner);
+
+    /// @notice Emitted when an account ownership is transferred.
+    /// @param accountId The account ID
+    /// @param previousOwner The previous account owner
+    /// @param newOwner The new account owner
+    event AccountTransferred(
+        uint32 indexed accountId,
+        address indexed previousOwner,
+        address indexed newOwner
+    );
+
     /// @notice Emitted when drips from a user to a receiver are updated.
     /// Funds are being dripped on every second between the event block's timestamp (inclusively)
     /// and`endTime` (exclusively) or until the timestamp of the next drips update (exclusively).
@@ -206,11 +221,15 @@ abstract contract DripsHub {
 
     modifier onlyAccountOwner(uint256 userId) {
         uint32 accountId = uint32(userId >> BITS_SUB_ACCOUNT);
+        _assertCallerIsAccountOwner(accountId);
+        _;
+    }
+
+    function _assertCallerIsAccountOwner(uint32 accountId) internal view {
         require(
             accountOwner(accountId) == msg.sender,
             "Callable only by the owner of the user account"
         );
-        _;
     }
 
     /// @notice Creates an account.
@@ -221,6 +240,7 @@ abstract contract DripsHub {
         DripsHubStorage storage dripsHubStorage = _dripsHubStorage();
         accountId = dripsHubStorage.nextAccountId++;
         dripsHubStorage.accountsOwners[accountId] = owner;
+        emit AccountCreated(accountId, owner);
     }
 
     /// @notice Returns account owner.
@@ -228,6 +248,16 @@ abstract contract DripsHub {
     /// @return owner The owner of the account. If the account doesn't exist, returns address 0.
     function accountOwner(uint32 accountId) public view returns (address owner) {
         return _dripsHubStorage().accountsOwners[accountId];
+    }
+
+    /// @notice Transfers the account ownership to a new address.
+    /// Must be called by the current account owner.
+    /// @param accountId The account which ownership is transferred
+    /// @param newOwner The new account owner
+    function transferAccount(uint32 accountId, address newOwner) public {
+        _assertCallerIsAccountOwner(accountId);
+        _dripsHubStorage().accountsOwners[accountId] = newOwner;
+        emit AccountTransferred(accountId, msg.sender, newOwner);
     }
 
     /// @notice Returns the ID which will be assigned for the next created account.
