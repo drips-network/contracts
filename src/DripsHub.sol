@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.7;
 
-struct DripsReceiver {
-    uint256 userId;
-    uint128 amtPerSec;
-}
+import {Drips, DripsReceiver} from "./Drips.sol";
 
 struct SplitsReceiver {
     uint256 userId;
@@ -80,36 +77,6 @@ abstract contract DripsHub {
         address indexed newOwner
     );
 
-    /// @notice Emitted when drips from a user to a receiver are updated.
-    /// Funds are being dripped on every second between the event block's timestamp (inclusively)
-    /// and`endTime` (exclusively) or until the timestamp of the next drips update (exclusively).
-    /// @param userId The dripping user ID.
-    /// @param receiver The receiver user ID
-    /// @param assetId The used asset ID
-    /// @param amtPerSec The new amount per second dripped from the user
-    /// to the receiver or 0 if the drips are stopped
-    /// @param endTime The timestamp when dripping will stop,
-    /// always larger than the block timestamp or equal to it if the drips are stopped
-    event Dripping(
-        uint256 indexed userId,
-        uint256 indexed receiver,
-        uint256 indexed assetId,
-        uint128 amtPerSec,
-        uint64 endTime
-    );
-
-    /// @notice Emitted when the drips configuration of a user is updated.
-    /// @param userId The user ID.
-    /// @param assetId The used asset ID
-    /// @param balance The new drips balance. These funds will be dripped to the receivers.
-    /// @param receivers The new list of the drips receivers.
-    event DripsUpdated(
-        uint256 indexed userId,
-        uint256 indexed assetId,
-        uint128 balance,
-        DripsReceiver[] receivers
-    );
-
     /// @notice Emitted when the user's splits are updated.
     /// @param userId The user ID
     /// @param receivers The list of the user's splits receivers.
@@ -140,18 +107,6 @@ abstract contract DripsHub {
     /// @param amt The amount made collectable for the user on top of what was collectable before.
     event Collectable(uint256 indexed userId, uint256 indexed assetId, uint128 amt);
 
-    /// @notice Emitted when drips are received and are ready to be split.
-    /// @param userId The user ID
-    /// @param assetId The used asset ID
-    /// @param amt The received amount.
-    /// @param receivableCycles The number of cycles which still can be received.
-    event ReceivedDrips(
-        uint256 indexed userId,
-        uint256 indexed assetId,
-        uint128 amt,
-        uint64 receivableCycles
-    );
-
     /// @notice Emitted when funds are given from the user to the receiver.
     /// @param userId The user ID
     /// @param receiver The receiver user ID
@@ -165,9 +120,8 @@ abstract contract DripsHub {
     );
 
     struct DripsHubStorage {
-        /// @notice User drips states.
-        /// The keys are the user ID and the asset ID.
-        mapping(uint256 => mapping(uint256 => DripsState)) dripsStates;
+        /// @notice The drips storage
+        Drips.Storage drips;
         /// @notice User splits states.
         /// The key is the user ID.
         mapping(uint256 => SplitsState) splitsStates;
@@ -175,26 +129,6 @@ abstract contract DripsHub {
         uint32 nextAccountId;
         /// @notice Account owners. The key is the account ID, the value is the owner address.
         mapping(uint32 => address) accountsOwners;
-    }
-
-    struct DripsState {
-        /// @notice User drips configuration hashes, see `hashDrips`.
-        bytes32 dripsHash;
-        // The next cycle to be collected
-        uint64 nextCollectedCycle;
-        /// @notice The changes of collected amounts on specific cycle.
-        /// The keys are cycles, each cycle `C` becomes collectable on timestamp `C * cycleSecs`.
-        /// Values for cycles before `nextCollectedCycle` are guaranteed to be zeroed.
-        /// This means that the value of `amtDeltas[nextCollectedCycle].thisCycle` is always
-        /// relative to 0 or in other words it's an absolute value independent from other cycles.
-        mapping(uint64 => AmtDelta) amtDeltas;
-    }
-
-    struct AmtDelta {
-        /// @notice Amount delta applied on this cycle
-        int128 thisCycle;
-        /// @notice Amount delta applied on the next cycle
-        int128 nextCycle;
     }
 
     struct SplitsState {
@@ -337,10 +271,7 @@ abstract contract DripsHub {
         view
         returns (uint64 cycles)
     {
-        uint64 collectedCycle = _dripsHubStorage().dripsStates[userId][assetId].nextCollectedCycle;
-        if (collectedCycle == 0) return 0;
-        uint64 currFinishedCycle = _currTimestamp() / cycleSecs;
-        return currFinishedCycle + 1 - collectedCycle;
+        return Drips.receivableDripsCycles(_dripsHubStorage().drips, cycleSecs, userId, assetId);
     }
 
     /// @notice Calculate effects of calling `receiveDrips` with the given parameters.
@@ -356,18 +287,8 @@ abstract contract DripsHub {
         uint256 assetId,
         uint64 maxCycles
     ) public view returns (uint128 receivableAmt, uint64 receivableCycles) {
-        uint64 allReceivableCycles = receivableDripsCycles(userId, assetId);
-        uint64 receivedCycles = maxCycles < allReceivableCycles ? maxCycles : allReceivableCycles;
-        receivableCycles = allReceivableCycles - receivedCycles;
-        DripsState storage dripsState = _dripsHubStorage().dripsStates[userId][assetId];
-        uint64 collectedCycle = dripsState.nextCollectedCycle;
-        int128 cycleAmt = 0;
-        for (uint256 i = 0; i < receivedCycles; i++) {
-            cycleAmt += dripsState.amtDeltas[collectedCycle].thisCycle;
-            receivableAmt += uint128(cycleAmt);
-            cycleAmt += dripsState.amtDeltas[collectedCycle].nextCycle;
-            collectedCycle++;
-        }
+        return
+            Drips.receivableDrips(_dripsHubStorage().drips, cycleSecs, userId, assetId, maxCycles);
     }
 
     /// @notice Receive drips from uncollected cycles of the user.
@@ -385,13 +306,15 @@ abstract contract DripsHub {
         uint256 assetId,
         uint64 maxCycles
     ) public virtual returns (uint128 receivedAmt, uint64 receivableCycles) {
-        receivableCycles = receivableDripsCycles(userId, assetId);
-        uint64 cycles = maxCycles < receivableCycles ? maxCycles : receivableCycles;
-        receivableCycles -= cycles;
-        receivedAmt = _receiveDripsInternal(userId, assetId, cycles);
+        (receivedAmt, receivableCycles) = Drips.receiveDrips(
+            _dripsHubStorage().drips,
+            cycleSecs,
+            userId,
+            assetId,
+            maxCycles
+        );
         if (receivedAmt > 0)
             _dripsHubStorage().splitsStates[userId].balances[assetId].unsplit += receivedAmt;
-        emit ReceivedDrips(userId, assetId, receivedAmt, receivableCycles);
     }
 
     /// @notice Returns user's received but not split yet funds.
@@ -464,33 +387,6 @@ abstract contract DripsHub {
         _transfer(assetId, int128(amt));
     }
 
-    /// @notice Collects and clears user's cycles
-    /// @param userId The user ID
-    /// @param assetId The used asset ID
-    /// @param count The number of flushed cycles.
-    /// @return collectedAmt The collected amount
-    function _receiveDripsInternal(
-        uint256 userId,
-        uint256 assetId,
-        uint64 count
-    ) internal returns (uint128 collectedAmt) {
-        if (count == 0) return 0;
-        DripsState storage dripsState = _dripsHubStorage().dripsStates[userId][assetId];
-        uint64 cycle = dripsState.nextCollectedCycle;
-        int128 cycleAmt = 0;
-        for (uint256 i = 0; i < count; i++) {
-            cycleAmt += dripsState.amtDeltas[cycle].thisCycle;
-            collectedAmt += uint128(cycleAmt);
-            cycleAmt += dripsState.amtDeltas[cycle].nextCycle;
-            delete dripsState.amtDeltas[cycle];
-            cycle++;
-        }
-        // The next cycle delta must be relative to the last collected cycle, which got zeroed.
-        // In other words the next cycle delta must be an absolute value.
-        if (cycleAmt != 0) dripsState.amtDeltas[cycle].thisCycle += cycleAmt;
-        dripsState.nextCollectedCycle = cycle;
-    }
-
     /// @notice Gives funds from the user or their account to the receiver.
     /// The receiver can collect them immediately.
     /// Transfers the funds to be given from the user's wallet to the drips hub contract.
@@ -518,7 +414,7 @@ abstract contract DripsHub {
         view
         returns (bytes32 currDripsHash)
     {
-        return _dripsHubStorage().dripsStates[userId][assetId].dripsHash;
+        return Drips.dripsHash(_dripsHubStorage().drips, userId, assetId);
     }
 
     /// @notice Sets the user's or the account's drips configuration.
@@ -549,233 +445,18 @@ abstract contract DripsHub {
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers
     ) internal onlyAccountOwner(userId) returns (uint128 newBalance, int128 realBalanceDelta) {
-        _assertCurrDrips(userId, assetId, lastUpdate, lastBalance, currReceivers);
-        uint128 newAmtPerSec = _assertDripsReceiversValid(newReceivers);
-        uint128 currAmtPerSec = _totalDripsAmtPerSec(currReceivers);
-        uint64 currEndTime = _dripsEndTime(lastUpdate, lastBalance, currAmtPerSec);
-        (newBalance, realBalanceDelta) = _updateDripsBalance(
-            lastUpdate,
-            lastBalance,
-            currEndTime,
-            currAmtPerSec,
-            balanceDelta
-        );
-        uint64 newEndTime = _dripsEndTime(_currTimestamp(), newBalance, newAmtPerSec);
-        _updateDripsReceiversStates(
+        (newBalance, realBalanceDelta) = Drips.setDrips(
+            _dripsHubStorage().drips,
+            cycleSecs,
             userId,
             assetId,
+            lastUpdate,
+            lastBalance,
             currReceivers,
-            currEndTime,
-            newReceivers,
-            newEndTime
+            balanceDelta,
+            newReceivers
         );
-        _storeNewDrips(userId, assetId, newBalance, newReceivers);
-        emit DripsUpdated(userId, assetId, newBalance, newReceivers);
         _transfer(assetId, -realBalanceDelta);
-    }
-
-    /// @notice Validates a list of drips receivers.
-    /// @param receivers The list of drips receivers.
-    /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
-    /// @return totalAmtPerSec The total amount per second of all drips receivers.
-    function _assertDripsReceiversValid(DripsReceiver[] memory receivers)
-        internal
-        pure
-        returns (uint128 totalAmtPerSec)
-    {
-        require(receivers.length <= MAX_DRIPS_RECEIVERS, "Too many drips receivers");
-        uint256 amtPerSec = 0;
-        uint256 prevReceiver;
-        for (uint256 i = 0; i < receivers.length; i++) {
-            uint128 amt = receivers[i].amtPerSec;
-            require(amt != 0, "Drips receiver amtPerSec is zero");
-            amtPerSec += amt;
-            uint256 receiver = receivers[i].userId;
-            if (i > 0) {
-                require(prevReceiver != receiver, "Duplicate drips receivers");
-                require(prevReceiver < receiver, "Drips receivers not sorted by user ID");
-            }
-            prevReceiver = receiver;
-        }
-        require(amtPerSec <= type(uint128).max, "Total drips receivers amtPerSec too high");
-        return uint128(amtPerSec);
-    }
-
-    /// @notice Calculates the total amount per second of all the drips receivers.
-    /// @param receivers The list of the receivers.
-    /// It must have passed `_assertDripsReceiversValid` in the past.
-    /// @return totalAmtPerSec The total amount per second of all the drips receivers
-    function _totalDripsAmtPerSec(DripsReceiver[] memory receivers)
-        internal
-        pure
-        returns (uint128 totalAmtPerSec)
-    {
-        uint256 length = receivers.length;
-        uint256 i = 0;
-        while (i < length) {
-            // Safe, because `receivers` passed `_assertDripsReceiversValid` in the past
-            unchecked {
-                totalAmtPerSec += receivers[i++].amtPerSec;
-            }
-        }
-    }
-
-    /// @notice Updates drips balance.
-    /// @param lastUpdate The timestamp of the last drips update.
-    /// If this is the first update, pass zero.
-    /// @param lastBalance The drips balance after the last drips update.
-    /// If this is the first update, pass zero.
-    /// @param currEndTime Time when drips were supposed to end according to the last drips update.
-    /// @param currAmtPerSec The total amount per second of all drips receivers
-    /// according to the last drips update.
-    /// @param balanceDelta The drips balance change to be applied.
-    /// Positive to add funds to the drips balance, negative to remove them.
-    /// @return newBalance The new drips balance.
-    /// Pass it as `lastBalance` when updating for the next time.
-    /// @return realBalanceDelta The actually applied drips balance change.
-    /// If positive, this is the amount which should be transferred from the user to the drips hub,
-    /// or if negative, from the drips hub to the user.
-    function _updateDripsBalance(
-        uint64 lastUpdate,
-        uint128 lastBalance,
-        uint64 currEndTime,
-        uint128 currAmtPerSec,
-        int128 balanceDelta
-    ) internal view returns (uint128 newBalance, int128 realBalanceDelta) {
-        if (currEndTime > _currTimestamp()) currEndTime = _currTimestamp();
-        uint128 dripped = (currEndTime - lastUpdate) * currAmtPerSec;
-        int128 currBalance = int128(lastBalance - dripped);
-        int136 balance = currBalance + int136(balanceDelta);
-        if (balance < 0) balance = 0;
-        return (uint128(uint136(balance)), int128(balance - currBalance));
-    }
-
-    /// @notice Updates the user's or the account's drips receivers' states.
-    /// It applies the effects of the change of the drips configuration.
-    /// @param userId The user ID.
-    /// @param assetId The used asset ID
-    /// @param currReceivers The list of the drips receivers set in the last drips update
-    /// of the user or the account.
-    /// If this is the first update, pass an empty array.
-    /// @param currEndTime Time when drips were supposed to end according to the last drips update.
-    /// @param newReceivers  The list of the drips receivers of the user or the account to be set.
-    /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
-    /// @param newEndTime Time when drips will end according to the new drips configuration.
-    function _updateDripsReceiversStates(
-        uint256 userId,
-        uint256 assetId,
-        DripsReceiver[] memory currReceivers,
-        uint64 currEndTime,
-        DripsReceiver[] memory newReceivers,
-        uint64 newEndTime
-    ) internal {
-        // Skip iterating over `currReceivers` if dripping has run out
-        uint256 currIdx = currEndTime > _currTimestamp() ? 0 : currReceivers.length;
-        // Skip iterating over `newReceivers` if no new dripping is started
-        uint256 newIdx = newEndTime > _currTimestamp() ? 0 : newReceivers.length;
-        while (true) {
-            // Each iteration gets the next drips update and applies it on the receiver state.
-            // A drips update is composed of two drips receiver configurations,
-            // one current and one new, or from a single drips receiver configuration
-            // if the drips receiver is being added or removed.
-            bool pickCurr = currIdx < currReceivers.length;
-            bool pickNew = newIdx < newReceivers.length;
-            if (!pickCurr && !pickNew) break;
-            if (pickCurr && pickNew) {
-                // There are two candidate drips receiver configurations to create a drips update.
-                // Pick both if they describe the same receiver or the one with a lower address.
-                // The one with a higher address won't be used in this iteration.
-                // Because drips receivers lists are sorted by addresses and deduplicated,
-                // all matching pairs of drips receiver configurations will be found.
-                uint256 currReceiver = currReceivers[currIdx].userId;
-                uint256 newReceiver = newReceivers[newIdx].userId;
-                pickCurr = currReceiver <= newReceiver;
-                pickNew = newReceiver <= currReceiver;
-            }
-            // The drips update parameters
-            uint256 receiver;
-            int128 currAmtPerSec = 0;
-            int128 newAmtPerSec = 0;
-            if (pickCurr) {
-                receiver = currReceivers[currIdx].userId;
-                currAmtPerSec = int128(currReceivers[currIdx].amtPerSec);
-                // Clear the obsolete drips end
-                _setDelta(receiver, currEndTime, assetId, currAmtPerSec);
-                currIdx++;
-            }
-            if (pickNew) {
-                receiver = newReceivers[newIdx].userId;
-                newAmtPerSec = int128(newReceivers[newIdx].amtPerSec);
-                // Apply the new drips end
-                _setDelta(receiver, newEndTime, assetId, -newAmtPerSec);
-                newIdx++;
-            }
-            // Apply the drips update since now
-            _setDelta(receiver, _currTimestamp(), assetId, newAmtPerSec - currAmtPerSec);
-            uint64 eventEndTime = newAmtPerSec == 0 ? _currTimestamp() : newEndTime;
-            emit Dripping(userId, receiver, assetId, uint128(newAmtPerSec), eventEndTime);
-            // The receiver may have never been used
-            if (!pickCurr) {
-                DripsState storage dripsState = _dripsHubStorage().dripsStates[receiver][assetId];
-                // The receiver has never been used, initialize it
-                if (dripsState.nextCollectedCycle == 0) {
-                    dripsState.nextCollectedCycle = _currTimestamp() / cycleSecs + 1;
-                }
-            }
-        }
-    }
-
-    /// @notice Calculates the timestamp when dripping will end.
-    /// @param startTime Time when dripping is started.
-    /// @param startBalance The drips balance when dripping is started.
-    /// @param totalAmtPerSec The total amount per second of all the drips receivers
-    /// @return dripsEndTime The dripping end time.
-    function _dripsEndTime(
-        uint64 startTime,
-        uint128 startBalance,
-        uint128 totalAmtPerSec
-    ) internal pure returns (uint64 dripsEndTime) {
-        if (totalAmtPerSec == 0) return startTime;
-        uint256 endTime = startTime + uint256(startBalance / totalAmtPerSec);
-        return endTime > MAX_TIMESTAMP ? MAX_TIMESTAMP : uint64(endTime);
-    }
-
-    /// @notice Asserts that the drips configuration is the currently used one.
-    /// @param userId The user ID
-    /// @param assetId The used asset ID
-    /// @param lastUpdate The timestamp of the last drips update of the user or the account.
-    /// If this is the first update, pass zero.
-    /// @param lastBalance The drips balance after the last drips update of the user or the account.
-    /// If this is the first update, pass zero.
-    /// @param currReceivers The list of the drips receivers set in the last drips update
-    /// of the user or the account.
-    /// If this is the first update, pass an empty array.
-    function _assertCurrDrips(
-        uint256 userId,
-        uint256 assetId,
-        uint64 lastUpdate,
-        uint128 lastBalance,
-        DripsReceiver[] memory currReceivers
-    ) internal view {
-        bytes32 expectedHash = _dripsHubStorage().dripsStates[userId][assetId].dripsHash;
-        bytes32 actualHash = hashDrips(lastUpdate, lastBalance, currReceivers);
-        require(actualHash == expectedHash, "Invalid current drips configuration");
-    }
-
-    /// @notice Stores the hash of the new drips configuration to be used in `_assertCurrDrips`.
-    /// @param userId The user ID
-    /// @param assetId The used asset ID
-    /// @param newBalance The user or the account drips balance.
-    /// @param newReceivers The list of the drips receivers of the user or the account.
-    /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
-    function _storeNewDrips(
-        uint256 userId,
-        uint256 assetId,
-        uint128 newBalance,
-        DripsReceiver[] memory newReceivers
-    ) internal {
-        bytes32 newDripsHash = hashDrips(_currTimestamp(), newBalance, newReceivers);
-        _dripsHubStorage().dripsStates[userId][assetId].dripsHash = newDripsHash;
     }
 
     /// @notice Calculates the hash of the drips configuration.
@@ -793,8 +474,7 @@ abstract contract DripsHub {
         uint128 balance,
         DripsReceiver[] memory receivers
     ) public pure returns (bytes32 dripsConfigurationHash) {
-        if (update == 0 && balance == 0 && receivers.length == 0) return bytes32(0);
-        return keccak256(abi.encode(receivers, update, balance));
+        return Drips.hashDrips(update, balance, receivers);
     }
 
     /// @notice Sets user splits configuration.
@@ -872,33 +552,4 @@ abstract contract DripsHub {
     /// @param amt The transferred amount.
     /// Positive to transfer funds to the user, negative to transfer from them.
     function _transfer(uint256 assetId, int128 amt) internal virtual;
-
-    /// @notice Sets amt delta of a user on a given timestamp
-    /// @param userId The user ID
-    /// @param timestamp The timestamp from which the delta takes effect
-    /// @param assetId The used asset ID
-    /// @param amtPerSecDelta Change of the per-second receiving rate
-    function _setDelta(
-        uint256 userId,
-        uint64 timestamp,
-        uint256 assetId,
-        int128 amtPerSecDelta
-    ) internal {
-        if (amtPerSecDelta == 0) return;
-        // In order to set a delta on a specific timestamp it must be introduced in two cycles.
-        // The cycle delta is split proportionally based on how much this cycle is affected.
-        // The next cycle has the rest of the delta applied, so the update is fully completed.
-        uint64 thisCycle = timestamp / cycleSecs + 1;
-        uint64 nextCycleSecs = timestamp % cycleSecs;
-        uint64 thisCycleSecs = cycleSecs - nextCycleSecs;
-        AmtDelta storage amtDelta = _dripsHubStorage().dripsStates[userId][assetId].amtDeltas[
-            thisCycle
-        ];
-        amtDelta.thisCycle += int128(uint128(thisCycleSecs)) * amtPerSecDelta;
-        amtDelta.nextCycle += int128(uint128(nextCycleSecs)) * amtPerSecDelta;
-    }
-
-    function _currTimestamp() internal view returns (uint64) {
-        return uint64(block.timestamp);
-    }
 }
