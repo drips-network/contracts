@@ -45,16 +45,14 @@ abstract contract DripsHub {
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
     /// gain access to drips collected during `T - cycleSecs` to `T - 1`.
     uint64 public immutable cycleSecs;
-    /// @notice Timestamp at which all drips must be finished
-    uint64 internal constant MAX_TIMESTAMP = type(uint64).max - 2;
     /// @notice Maximum number of drips receivers of a single user.
     /// Limits cost of changes in drips configuration.
-    uint32 public constant MAX_DRIPS_RECEIVERS = 100;
+    uint32 public immutable maxDripsReceivers;
     /// @notice Maximum number of splits receivers of a single user.
     /// Limits cost of collecting.
-    uint32 public constant MAX_SPLITS_RECEIVERS = 200;
+    uint32 public immutable maxSplitsReceivers;
     /// @notice The total splits weight of a user
-    uint32 public constant TOTAL_SPLITS_WEIGHT = 1_000_000;
+    uint32 public immutable totalSplitsWeight;
     /// @notice Number of bits in the sub-account part of userId
     uint256 public constant BITS_SUB_ACCOUNT = 224;
 
@@ -90,6 +88,9 @@ abstract contract DripsHub {
     /// High value makes collecting cheaper by making it process less cycles for a given time range.
     constructor(uint64 _cycleSecs) {
         cycleSecs = _cycleSecs;
+        maxDripsReceivers = Drips.MAX_DRIPS_RECEIVERS;
+        maxSplitsReceivers = Splits.MAX_SPLITS_RECEIVERS;
+        totalSplitsWeight = Splits.TOTAL_SPLITS_WEIGHT;
     }
 
     modifier onlyAccountOwner(uint256 userId) {

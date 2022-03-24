@@ -242,7 +242,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testLimitsTheTotalReceiversCount() public {
-        uint160 countMax = dripsHub.MAX_DRIPS_RECEIVERS();
+        uint160 countMax = dripsHub.maxDripsReceivers();
         DripsReceiver[] memory receiversGood = new DripsReceiver[](countMax);
         DripsReceiver[] memory receiversBad = new DripsReceiver[](countMax + 1);
         for (uint160 i = 0; i < countMax; i++) {
@@ -363,7 +363,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testLimitsTheTotalSplitsReceiversCount() public {
-        uint160 countMax = dripsHub.MAX_SPLITS_RECEIVERS();
+        uint160 countMax = dripsHub.maxSplitsReceivers();
         SplitsReceiver[] memory receiversGood = new SplitsReceiver[](countMax);
         SplitsReceiver[] memory receiversBad = new SplitsReceiver[](countMax + 1);
         for (uint160 i = 0; i < countMax; i++) {
@@ -377,7 +377,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testRejectsTooHighTotalWeightSplitsReceivers() public {
-        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
+        uint32 totalWeight = dripsHub.totalSplitsWeight();
         setSplits(user, splitsReceivers(receiver, totalWeight));
         assertSetSplitsReverts(
             user,
@@ -411,7 +411,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testCollectAllSplits() public {
-        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
+        uint32 totalWeight = dripsHub.totalSplitsWeight();
         setDrips(user, 0, 10, dripsReceivers(receiver1, 10));
         setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
         warpToCycleEnd();
@@ -423,7 +423,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testUncollectedFundsAreSplitUsingCurrentConfig() public {
-        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
+        uint32 totalWeight = dripsHub.totalSplitsWeight();
         setSplits(user1, splitsReceivers(receiver1, totalWeight));
         setDrips(user2, 0, 5, dripsReceivers(user1, 5));
         warpToCycleEnd();
@@ -438,7 +438,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testCollectAllSplitsFundsFromSplits() public {
-        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
+        uint32 totalWeight = dripsHub.totalSplitsWeight();
         setDrips(user, 0, 10, dripsReceivers(receiver1, 10));
         setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
         setSplits(receiver2, splitsReceivers(receiver3, totalWeight));
@@ -454,7 +454,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testCollectAllMixesDripsAndSplits() public {
-        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
+        uint32 totalWeight = dripsHub.totalSplitsWeight();
         setDrips(user, 0, 10, dripsReceivers(receiver1, 5, receiver2, 5));
         setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
         warpToCycleEnd();
@@ -467,7 +467,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testCollectAllSplitsFundsBetweenReceiverAndSplits() public {
-        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
+        uint32 totalWeight = dripsHub.totalSplitsWeight();
         setDrips(user, 0, 10, dripsReceivers(receiver1, 10));
         setSplits(
             receiver1,
@@ -485,7 +485,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testCanSplitAllWhenCollectedDoesntSplitEvenly() public {
-        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
+        uint32 totalWeight = dripsHub.totalSplitsWeight();
         setDrips(user, 0, 3, dripsReceivers(receiver1, 3));
         setSplits(
             receiver1,
@@ -539,7 +539,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testSplitSplitsFundsReceivedFromAllSources() public {
-        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
+        uint32 totalWeight = dripsHub.totalSplitsWeight();
 
         // Gives
         give(user2, user1, 1);
@@ -570,7 +570,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testSplittingSplitsAllFundsEvenWhenTheyDontDivideEvenly() public {
-        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
+        uint32 totalWeight = dripsHub.totalSplitsWeight();
         setSplits(
             user,
             splitsReceivers(receiver1, (totalWeight / 5) * 2, receiver2, totalWeight / 5)
@@ -583,7 +583,7 @@ abstract contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testUserCanSplitToThemselves() public {
-        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
+        uint32 totalWeight = dripsHub.totalSplitsWeight();
         // receiver1 receives 30%, gets 50% split to themselves and receiver2 gets split 20%
         setSplits(
             receiver1,

@@ -80,7 +80,7 @@ contract ERC20DripsHubTest is ManagedDripsHubTest {
     }
 
     function testSplitsConfigurationIsCommonBetweenTokens() public {
-        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
+        uint32 totalWeight = dripsHub.totalSplitsWeight();
         setSplits(user, splitsReceivers(receiver1, totalWeight / 10));
         give(defaultAsset, receiver2, user, 30);
         give(otherAsset, receiver2, user, 100);
