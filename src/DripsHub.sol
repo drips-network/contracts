@@ -2,11 +2,7 @@
 pragma solidity ^0.8.7;
 
 import {Drips, DripsReceiver} from "./Drips.sol";
-
-struct SplitsReceiver {
-    uint256 userId;
-    uint32 weight;
-}
+import {Splits, SplitsReceiver} from "./Splits.sol";
 
 /// @notice Drips hub contract. Automatically drips and splits funds between users.
 ///
@@ -77,72 +73,15 @@ abstract contract DripsHub {
         address indexed newOwner
     );
 
-    /// @notice Emitted when the user's splits are updated.
-    /// @param userId The user ID
-    /// @param receivers The list of the user's splits receivers.
-    event SplitsUpdated(uint256 indexed userId, SplitsReceiver[] receivers);
-
-    /// @notice Emitted when a user collects funds
-    /// @param userId The user ID
-    /// @param assetId The used asset ID
-    /// @param collected The collected amount
-    event Collected(uint256 indexed userId, uint256 indexed assetId, uint128 collected);
-
-    /// @notice Emitted when funds are split from a user to a receiver.
-    /// This is caused by the user collecting received funds.
-    /// @param userId The user ID
-    /// @param receiver The splits receiver user ID
-    /// @param assetId The used asset ID
-    /// @param amt The amount split to the receiver
-    event Split(
-        uint256 indexed userId,
-        uint256 indexed receiver,
-        uint256 indexed assetId,
-        uint128 amt
-    );
-
-    /// @notice Emitted when funds are made collectable after splitting.
-    /// @param userId The user ID
-    /// @param assetId The used asset ID
-    /// @param amt The amount made collectable for the user on top of what was collectable before.
-    event Collectable(uint256 indexed userId, uint256 indexed assetId, uint128 amt);
-
-    /// @notice Emitted when funds are given from the user to the receiver.
-    /// @param userId The user ID
-    /// @param receiver The receiver user ID
-    /// @param assetId The used asset ID
-    /// @param amt The given amount
-    event Given(
-        uint256 indexed userId,
-        uint256 indexed receiver,
-        uint256 indexed assetId,
-        uint128 amt
-    );
-
     struct DripsHubStorage {
         /// @notice The drips storage
         Drips.Storage drips;
-        /// @notice User splits states.
-        /// The key is the user ID.
-        mapping(uint256 => SplitsState) splitsStates;
+        /// @notice The splits storage
+        Splits.Storage splits;
         /// @notice The next created account ID.
         uint32 nextAccountId;
         /// @notice Account owners. The key is the account ID, the value is the owner address.
         mapping(uint32 => address) accountsOwners;
-    }
-
-    struct SplitsState {
-        /// @notice The user's splits configuration hash, see `hashSplits`.
-        bytes32 splitsHash;
-        /// @notice The user's splits balance. The key is the asset ID.
-        mapping(uint256 => SplitsBalance) balances;
-    }
-
-    struct SplitsBalance {
-        /// @notice The not yet split balance, must be split before collecting by the user.
-        uint128 unsplit;
-        /// @notice The already split balance, ready to be collected by the user.
-        uint128 split;
     }
 
     /// @param _cycleSecs The length of cycleSecs to be used in the contract instance.
@@ -219,28 +158,25 @@ abstract contract DripsHub {
         uint256 assetId,
         SplitsReceiver[] memory currReceivers
     ) public view returns (uint128 collectedAmt, uint128 splitAmt) {
-        _assertCurrSplits(userId, currReceivers);
-        SplitsBalance storage balance = _dripsHubStorage().splitsStates[userId].balances[assetId];
-
-        // Collectable independently from cycles
-        collectedAmt += balance.unsplit;
-
         // Collectable from cycles
-        (uint128 receivableAmt, ) = receivableDrips(userId, assetId, type(uint64).max);
-        collectedAmt += receivableAmt;
-
-        // split when collected
-        if (collectedAmt > 0 && currReceivers.length > 0) {
-            uint32 splitsWeight = 0;
-            for (uint256 i = 0; i < currReceivers.length; i++) {
-                splitsWeight += currReceivers[i].weight;
-            }
-            splitAmt = uint128((uint160(collectedAmt) * splitsWeight) / TOTAL_SPLITS_WEIGHT);
-            collectedAmt -= splitAmt;
-        }
-
+        (collectedAmt, ) = Drips.receivableDrips(
+            _dripsHubStorage().drips,
+            cycleSecs,
+            userId,
+            assetId,
+            type(uint64).max
+        );
+        // Collectable independently from cycles
+        collectedAmt += Splits.splittable(_dripsHubStorage().splits, userId, assetId);
+        // Split when collected
+        (collectedAmt, splitAmt) = Splits.splitResults(
+            _dripsHubStorage().splits,
+            userId,
+            currReceivers,
+            collectedAmt
+        );
         // Already split
-        collectedAmt += balance.split;
+        collectedAmt += Splits.collectable(_dripsHubStorage().splits, userId, assetId);
     }
 
     /// @notice Collects all received funds available for the user
@@ -313,8 +249,9 @@ abstract contract DripsHub {
             assetId,
             maxCycles
         );
-        if (receivedAmt > 0)
-            _dripsHubStorage().splitsStates[userId].balances[assetId].unsplit += receivedAmt;
+        if (receivedAmt > 0) {
+            Splits.give(_dripsHubStorage().splits, userId, userId, assetId, receivedAmt);
+        }
     }
 
     /// @notice Returns user's received but not split yet funds.
@@ -322,7 +259,7 @@ abstract contract DripsHub {
     /// @param assetId The used asset ID.
     /// @return amt The amount received but not split yet.
     function splittable(uint256 userId, uint256 assetId) public view returns (uint128 amt) {
-        return _dripsHubStorage().splitsStates[userId].balances[assetId].unsplit;
+        return Splits.splittable(_dripsHubStorage().splits, userId, assetId);
     }
 
     /// @notice Splits user's received but not split yet funds among receivers.
@@ -337,28 +274,7 @@ abstract contract DripsHub {
         uint256 assetId,
         SplitsReceiver[] memory currReceivers
     ) public virtual returns (uint128 collectableAmt, uint128 splitAmt) {
-        _assertCurrSplits(userId, currReceivers);
-        mapping(uint256 => SplitsState) storage splitsStates = _dripsHubStorage().splitsStates;
-        SplitsBalance storage balance = splitsStates[userId].balances[assetId];
-
-        collectableAmt = balance.unsplit;
-        if (collectableAmt == 0) return (0, 0);
-
-        balance.unsplit = 0;
-        uint32 splitsWeight = 0;
-        for (uint256 i = 0; i < currReceivers.length; i++) {
-            splitsWeight += currReceivers[i].weight;
-            uint128 currSplitAmt = uint128(
-                (uint160(collectableAmt) * splitsWeight) / TOTAL_SPLITS_WEIGHT - splitAmt
-            );
-            splitAmt += currSplitAmt;
-            uint256 receiver = currReceivers[i].userId;
-            splitsStates[receiver].balances[assetId].unsplit += currSplitAmt;
-            emit Split(userId, receiver, assetId, currSplitAmt);
-        }
-        collectableAmt -= splitAmt;
-        balance.split += collectableAmt;
-        emit Collectable(userId, assetId, collectableAmt);
+        return Splits.split(_dripsHubStorage().splits, userId, assetId, currReceivers);
     }
 
     /// @notice Returns user's received funds already split and ready to be collected.
@@ -366,7 +282,7 @@ abstract contract DripsHub {
     /// @param assetId The used asset ID.
     /// @return amt The collectable amount.
     function collectable(uint256 userId, uint256 assetId) public view returns (uint128 amt) {
-        return _dripsHubStorage().splitsStates[userId].balances[assetId].split;
+        return Splits.collectable(_dripsHubStorage().splits, userId, assetId);
     }
 
     /// @notice Collects user's received already split funds
@@ -380,10 +296,7 @@ abstract contract DripsHub {
         onlyAccountOwner(userId)
         returns (uint128 amt)
     {
-        SplitsBalance storage balance = _dripsHubStorage().splitsStates[userId].balances[assetId];
-        amt = balance.split;
-        balance.split = 0;
-        emit Collected(userId, assetId, amt);
+        amt = Splits.collect(_dripsHubStorage().splits, userId, assetId);
         _transfer(assetId, int128(amt));
     }
 
@@ -400,8 +313,7 @@ abstract contract DripsHub {
         uint256 assetId,
         uint128 amt
     ) internal onlyAccountOwner(userId) {
-        _dripsHubStorage().splitsStates[receiver].balances[assetId].unsplit += amt;
-        emit Given(userId, receiver, assetId, amt);
+        Splits.give(_dripsHubStorage().splits, userId, receiver, assetId, amt);
         _transfer(assetId, -int128(amt));
     }
 
@@ -487,50 +399,14 @@ abstract contract DripsHub {
         internal
         onlyAccountOwner(userId)
     {
-        _assertSplitsValid(receivers);
-        _dripsHubStorage().splitsStates[userId].splitsHash = hashSplits(receivers);
-        emit SplitsUpdated(userId, receivers);
-    }
-
-    /// @notice Validates a list of splits receivers
-    /// @param receivers The list of splits receivers
-    /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
-    function _assertSplitsValid(SplitsReceiver[] memory receivers) internal pure {
-        require(receivers.length <= MAX_SPLITS_RECEIVERS, "Too many splits receivers");
-        uint64 totalWeight = 0;
-        uint256 prevReceiver;
-        for (uint256 i = 0; i < receivers.length; i++) {
-            uint32 weight = receivers[i].weight;
-            require(weight != 0, "Splits receiver weight is zero");
-            totalWeight += weight;
-            uint256 receiver = receivers[i].userId;
-            if (i > 0) {
-                require(prevReceiver != receiver, "Duplicate splits receivers");
-                require(prevReceiver < receiver, "Splits receivers not sorted by user ID");
-            }
-            prevReceiver = receiver;
-        }
-        require(totalWeight <= TOTAL_SPLITS_WEIGHT, "Splits weights sum too high");
+        Splits.setSplits(_dripsHubStorage().splits, userId, receivers);
     }
 
     /// @notice Current user's splits hash, see `hashSplits`.
     /// @param userId The user ID
     /// @return currSplitsHash The current user's splits hash
     function splitsHash(uint256 userId) public view returns (bytes32 currSplitsHash) {
-        return _dripsHubStorage().splitsStates[userId].splitsHash;
-    }
-
-    /// @notice Asserts that the list of splits receivers is the user's currently used one.
-    /// @param userId The user ID
-    /// @param currReceivers The list of the user's current splits receivers.
-    function _assertCurrSplits(uint256 userId, SplitsReceiver[] memory currReceivers)
-        internal
-        view
-    {
-        require(
-            hashSplits(currReceivers) == splitsHash(userId),
-            "Invalid current splits receivers"
-        );
+        return Splits.splitsHash(_dripsHubStorage().splits, userId);
     }
 
     /// @notice Calculates the hash of the list of splits receivers.
@@ -542,8 +418,7 @@ abstract contract DripsHub {
         pure
         returns (bytes32 receiversHash)
     {
-        if (receivers.length == 0) return bytes32(0);
-        return keccak256(abi.encode(receivers));
+        return Splits.hashSplits(receivers);
     }
 
     /// @notice Called when funds need to be transferred between the user and the drips hub.
