@@ -8,7 +8,7 @@ import {DripsReceiver, ERC20DripsHub, IERC20Reserve, SplitsReceiver} from "../ER
 import {ManagedDripsHub, ManagedDripsHubProxy} from "../ManagedDripsHub.sol";
 
 abstract contract ManagedDripsHubTest is DripsHubTest {
-    ManagedDripsHub private dripsHub;
+    ERC20DripsHub private dripsHub;
     ManagedDripsHubUser internal admin;
     ManagedDripsHubUser internal nonAdmin;
     AddressIdUser private user;
@@ -17,7 +17,7 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
     string private constant ERROR_PAUSED = "Contract paused";
 
     // Must be called once from child contract `setUp`
-    function setUp(ManagedDripsHub dripsHub_) internal {
+    function setUp(ERC20DripsHub dripsHub_) internal {
         dripsHub = dripsHub_;
         admin = createManagedUser();
         nonAdmin = createManagedUser();
