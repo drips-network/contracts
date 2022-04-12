@@ -3,12 +3,11 @@ pragma solidity ^0.8.7;
 
 import {AddressIdUser} from "./AddressIdUser.t.sol";
 import {AddressIdUser} from "./AddressIdUser.t.sol";
-import {ManagedDripsHubUser} from "./ManagedDripsHubUser.t.sol";
 import {ManagedDripsHubTest} from "./ManagedDripsHub.t.sol";
 import {AddressId} from "../AddressId.sol";
 import {ERC20Reserve, IERC20Reserve} from "../ERC20Reserve.sol";
 import {ERC20DripsHub} from "../ERC20DripsHub.sol";
-import {ManagedDripsHubProxy} from "../ManagedDripsHub.sol";
+import {Proxy} from "../Managed.sol";
 import {IERC20, ERC20PresetFixedSupply} from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
 contract ERC20DripsHubTest is ManagedDripsHubTest {
@@ -28,7 +27,7 @@ contract ERC20DripsHubTest is ManagedDripsHubTest {
         );
         ERC20Reserve reserve = new ERC20Reserve(address(this));
         ERC20DripsHub hubLogic = new ERC20DripsHub(10, reserve);
-        dripsHub = ERC20DripsHub(address(wrapInProxy(hubLogic)));
+        dripsHub = wrapInProxy(hubLogic);
         reserve.addUser(address(dripsHub));
         addressId = new AddressId(dripsHub);
         user = createUser();

@@ -6,18 +6,18 @@ import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.so
 import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 
 /// @notice A mix-in for contract UUPS-upgradability, pausability and admin management.
-/// It can't be used directly, only via a proxy.
+/// It can't be used directly, only via a proxy. It uses the upgrade-safe ERC-1967 storage scheme.
 ///
-/// ManagedDripsHub uses the ERC-1967 admin slot to store the admin address.
+/// Managed uses the ERC-1967 admin slot to store the admin address.
 /// All instances of the contracts are owned by address `0x00`.
 /// While this contract is capable of updating the admin,
 /// the proxy is expected to set up the initial value of the ERC-1967 admin.
 ///
 /// All instances of the contracts are paused and can't be unpaused.
 /// When a proxy uses such contract via delegation, it's initially unpaused.
-abstract contract ManagedDripsHub is UUPSUpgradeable {
+abstract contract Managed is UUPSUpgradeable {
     /// @notice The ERC-1967 name of the `pausedSlot` storage slot.
-    string private constant PAUSED_SLOT_NAME = "eip1967.managedDripsHub.paused";
+    string private constant PAUSED_SLOT_NAME = "eip1967.managed.paused";
     /// @notice The pointer to the storage slot with the boolean holding the paused state.
     bytes32 private immutable pausedSlot;
 
@@ -100,11 +100,9 @@ abstract contract ManagedDripsHub is UUPSUpgradeable {
     }
 }
 
-/// @notice A generic ManagedDripsHub proxy.
-contract ManagedDripsHubProxy is ERC1967Proxy {
-    constructor(ManagedDripsHub hubLogic, address admin)
-        ERC1967Proxy(address(hubLogic), new bytes(0))
-    {
+/// @notice A generic proxy for Managed.
+contract Proxy is ERC1967Proxy {
+    constructor(Managed logic, address admin) ERC1967Proxy(address(logic), new bytes(0)) {
         _changeAdmin(admin);
     }
 }

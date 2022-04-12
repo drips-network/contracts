@@ -2,15 +2,15 @@
 pragma solidity ^0.8.7;
 
 import {AddressIdUser} from "./AddressIdUser.t.sol";
-import {ManagedDripsHubUser} from "./ManagedDripsHubUser.t.sol";
+import {ManagedUser} from "./ManagedUser.t.sol";
 import {DripsHubTest} from "./DripsHub.t.sol";
 import {DripsReceiver, ERC20DripsHub, IERC20Reserve, SplitsReceiver} from "../ERC20DripsHub.sol";
-import {ManagedDripsHub, ManagedDripsHubProxy} from "../ManagedDripsHub.sol";
+import {Managed, Proxy} from "../Managed.sol";
 
 abstract contract ManagedDripsHubTest is DripsHubTest {
     ERC20DripsHub private dripsHub;
-    ManagedDripsHubUser internal admin;
-    ManagedDripsHubUser internal nonAdmin;
+    ManagedUser internal admin;
+    ManagedUser internal nonAdmin;
     AddressIdUser private user;
 
     string private constant ERROR_NOT_ADMIN = "Caller is not the admin";
@@ -26,13 +26,13 @@ abstract contract ManagedDripsHubTest is DripsHubTest {
         super.setUp(dripsHub);
     }
 
-    function createManagedUser() internal returns (ManagedDripsHubUser) {
-        return new ManagedDripsHubUser(dripsHub);
+    function createManagedUser() internal returns (ManagedUser) {
+        return new ManagedUser(dripsHub);
     }
 
-    function wrapInProxy(ManagedDripsHub hubLogic) internal returns (ManagedDripsHub) {
-        ManagedDripsHubProxy proxy = new ManagedDripsHubProxy(hubLogic, address(this));
-        return ManagedDripsHub(address(proxy));
+    function wrapInProxy(ERC20DripsHub logic) internal returns (ERC20DripsHub) {
+        Proxy proxy = new Proxy(logic, address(this));
+        return ERC20DripsHub(address(proxy));
     }
 
     function testAdminCanBeChanged() public {

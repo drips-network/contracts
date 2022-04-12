@@ -2,16 +2,15 @@
 pragma solidity ^0.8.7;
 
 import {DripsHub, SplitsReceiver, DripsReceiver} from "./DripsHub.sol";
-import {ManagedDripsHub} from "./ManagedDripsHub.sol";
+import {Managed} from "./Managed.sol";
 import {IERC20Reserve} from "./ERC20Reserve.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 
 /// @notice Drips hub contract for any ERC-20 token. Must be used via a proxy.
-/// See the base `DripsHub` and `ManagedDripsHub` contract docs for more details.
-contract ERC20DripsHub is DripsHub, ManagedDripsHub {
-    /// @notice The ERC-1967 storage slot for the contract.
-    /// It holds a single `ManagedDripsHubStorage` structure.
+/// See the base `DripsHub` and `Managed` contract docs for more details.
+contract ERC20DripsHub is Managed, DripsHub {
+    /// @notice The ERC-1967 storage slot holding a single `DripsHubStorage` structure.
     bytes32 private immutable storageSlot = erc1967Slot("eip1967.dripsHub.storage");
 
     /// @notice The address of the ERC-20 reserve which the drips hub works with
