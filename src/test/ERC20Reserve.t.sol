@@ -16,16 +16,28 @@ contract ERC20ReserveUser {
         token.approve(address(reserve), amt);
     }
 
-    function withdraw(IERC20 token, uint256 amt) public {
-        reserve.withdraw(token, amt);
+    function withdraw(
+        IERC20 token,
+        ERC20ReserveUser to,
+        uint256 amt
+    ) public {
+        reserve.withdraw(token, address(to), amt);
     }
 
-    function deposit(IERC20 token, uint256 amt) public {
-        reserve.deposit(token, amt);
+    function deposit(
+        IERC20 token,
+        ERC20ReserveUser from,
+        uint256 amt
+    ) public {
+        reserve.deposit(token, address(from), amt);
     }
 
-    function forceWithdraw(IERC20 token, uint256 amt) public {
-        reserve.forceWithdraw(token, amt);
+    function forceWithdraw(
+        IERC20 token,
+        ERC20ReserveUser to,
+        uint256 amt
+    ) public {
+        reserve.forceWithdraw(token, address(to), amt);
     }
 
     function addUser(address user) public {
@@ -42,6 +54,7 @@ contract ERC20ReserveTest is DSTest {
     ERC20ReserveUser public user;
     ERC20ReserveUser public nonUser;
     ERC20ReserveUser public owner;
+    ERC20ReserveUser public depositor;
     IERC20 public token;
 
     string public constant ERROR_NOT_USER = "Reserve: caller is not the user";
@@ -52,75 +65,80 @@ contract ERC20ReserveTest is DSTest {
         user = new ERC20ReserveUser();
         nonUser = new ERC20ReserveUser();
         owner = new ERC20ReserveUser();
+        depositor = new ERC20ReserveUser();
         reserve = new ERC20Reserve(address(owner));
 
         owner.setReserve(reserve);
         user.setReserve(reserve);
         nonUser.setReserve(reserve);
+        depositor.setReserve(reserve);
         owner.addUser(address(user));
 
         token = new ERC20PresetFixedSupply("token", "token", 30, address(this));
-        token.transfer(address(user), 10);
-        token.transfer(address(nonUser), 10);
+        token.transfer(address(depositor), 10);
     }
 
     function deposit(
-        ERC20ReserveUser forUser,
+        ERC20ReserveUser reserveUser,
         IERC20 forToken,
+        ERC20ReserveUser from,
         uint256 amt
     ) public {
         uint256 withdrawable = reserve.withdrawable(forToken);
         uint256 reserveBalance = forToken.balanceOf(address(reserve));
-        uint256 userBalance = forToken.balanceOf(address(forUser));
-        forUser.approveReserve(forToken, amt);
+        uint256 userBalance = forToken.balanceOf(address(from));
+        from.approveReserve(forToken, amt);
 
-        forUser.deposit(forToken, amt);
+        reserveUser.deposit(forToken, from, amt);
 
         string memory details = "after deposit";
-        assertUserBalance(forToken, forUser, userBalance - amt, details);
+        assertUserBalance(forToken, from, userBalance - amt, details);
         assertWithdrawable(forToken, withdrawable + amt, details);
         assertReserveBalance(forToken, reserveBalance + amt, details);
     }
 
     function assertDepositReverts(
-        ERC20ReserveUser forUser,
+        ERC20ReserveUser reserveUser,
         IERC20 forToken,
+        ERC20ReserveUser from,
         uint256 amt,
         string memory expectedReason
     ) public {
-        forUser.approveReserve(forToken, amt);
-        try forUser.deposit(forToken, amt) {
+        from.approveReserve(forToken, amt);
+        try reserveUser.deposit(forToken, from, amt) {
             assertTrue(false, "Deposit hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, expectedReason, "Invalid deposit revert reason");
         }
-        forUser.approveReserve(forToken, 0);
+        from.approveReserve(forToken, 0);
     }
 
     function withdraw(
-        ERC20ReserveUser forUser,
+        ERC20ReserveUser reserveUser,
         IERC20 forToken,
+        ERC20ReserveUser to,
         uint256 amt
     ) public {
         uint256 withdrawable = reserve.withdrawable(forToken);
         uint256 reserveBalance = forToken.balanceOf(address(reserve));
-        uint256 userBalance = forToken.balanceOf(address(forUser));
+        uint256 userBalance = forToken.balanceOf(address(to));
 
-        forUser.withdraw(forToken, amt);
+        reserveUser.withdraw(forToken, to, amt);
 
         string memory details = "after withdrawal";
-        assertUserBalance(forToken, forUser, userBalance + amt, details);
+        assertUserBalance(forToken, to, userBalance + amt, details);
         assertWithdrawable(forToken, withdrawable - amt, details);
         assertReserveBalance(forToken, reserveBalance - amt, details);
     }
 
     function assertWithdrawReverts(
-        ERC20ReserveUser forUser,
+        ERC20ReserveUser reserveUser,
         IERC20 forToken,
+        ERC20ReserveUser to,
         uint256 amt,
         string memory expectedReason
     ) public {
-        try forUser.withdraw(forToken, amt) {
+        try reserveUser.withdraw(forToken, to, amt) {
             assertTrue(false, "Withdraw hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, expectedReason, "Invalid withdrawal revert reason");
@@ -128,29 +146,31 @@ contract ERC20ReserveTest is DSTest {
     }
 
     function forceWithdraw(
-        ERC20ReserveUser forUser,
+        ERC20ReserveUser reserveUser,
         IERC20 forToken,
+        ERC20ReserveUser to,
         uint256 amt
     ) public {
         uint256 withdrawable = reserve.withdrawable(forToken);
         uint256 reserveBalance = forToken.balanceOf(address(reserve));
-        uint256 userBalance = forToken.balanceOf(address(forUser));
+        uint256 userBalance = forToken.balanceOf(address(to));
 
-        forUser.forceWithdraw(forToken, amt);
+        reserveUser.forceWithdraw(forToken, to, amt);
 
         string memory details = "after force withdrawal";
-        assertUserBalance(forToken, forUser, userBalance + amt, details);
+        assertUserBalance(forToken, to, userBalance + amt, details);
         assertWithdrawable(forToken, withdrawable, details);
         assertReserveBalance(forToken, reserveBalance - amt, details);
     }
 
     function assertForceWithdrawReverts(
-        ERC20ReserveUser forUser,
+        ERC20ReserveUser reserveUser,
         IERC20 forToken,
+        ERC20ReserveUser to,
         uint256 amt,
         string memory expectedReason
     ) public {
-        try forUser.forceWithdraw(forToken, amt) {
+        try reserveUser.forceWithdraw(forToken, to, amt) {
             assertTrue(false, "Force withdraw hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, expectedReason, "Invalid force withdrawal revert reason");
@@ -226,30 +246,30 @@ contract ERC20ReserveTest is DSTest {
     }
 
     function testUserDepositsAndWithdraws() public {
-        deposit(user, token, 1);
-        withdraw(user, token, 1);
+        deposit(user, token, depositor, 1);
+        withdraw(user, token, depositor, 1);
     }
 
     function testRejectsWithdrawalOverBalance() public {
-        deposit(user, token, 1);
-        assertWithdrawReverts(user, token, 2, ERROR_WITHDRAWAL_BALANCE);
+        deposit(user, token, depositor, 1);
+        assertWithdrawReverts(user, token, depositor, 2, ERROR_WITHDRAWAL_BALANCE);
     }
 
     function testRejectsNonUserDepositing() public {
-        assertDepositReverts(owner, token, 1, ERROR_NOT_USER);
-        assertDepositReverts(nonUser, token, 1, ERROR_NOT_USER);
+        assertDepositReverts(owner, token, depositor, 1, ERROR_NOT_USER);
+        assertDepositReverts(nonUser, token, depositor, 1, ERROR_NOT_USER);
     }
 
     function testRejectsNonUserWithdrawing() public {
-        deposit(user, token, 1);
-        assertWithdrawReverts(owner, token, 1, ERROR_NOT_USER);
-        assertWithdrawReverts(nonUser, token, 1, ERROR_NOT_USER);
+        deposit(user, token, depositor, 1);
+        assertWithdrawReverts(owner, token, depositor, 1, ERROR_NOT_USER);
+        assertWithdrawReverts(nonUser, token, depositor, 1, ERROR_NOT_USER);
     }
 
     function testAddUser() public {
         addUser(owner, nonUser);
-        deposit(nonUser, token, 1);
-        withdraw(nonUser, token, 1);
+        deposit(nonUser, token, depositor, 1);
+        withdraw(nonUser, token, depositor, 1);
     }
 
     function testRejectNotOwnerAddingUser() public {
@@ -258,10 +278,10 @@ contract ERC20ReserveTest is DSTest {
     }
 
     function testRemoveUser() public {
-        deposit(user, token, 1);
+        deposit(user, token, depositor, 1);
         removeUser(owner, user);
-        assertDepositReverts(user, token, 1, ERROR_NOT_USER);
-        assertWithdrawReverts(user, token, 1, ERROR_NOT_USER);
+        assertDepositReverts(user, token, depositor, 1, ERROR_NOT_USER);
+        assertWithdrawReverts(user, token, depositor, 1, ERROR_NOT_USER);
     }
 
     function testRejectNotOwnerRemovingUser() public {
@@ -270,51 +290,51 @@ contract ERC20ReserveTest is DSTest {
     }
 
     function testForceWithdraw() public {
-        deposit(user, token, 1);
-        forceWithdraw(owner, token, 1);
+        deposit(user, token, depositor, 1);
+        forceWithdraw(owner, token, depositor, 1);
     }
 
     function testRejectNotOwnerForceWithdrawing() public {
-        deposit(user, token, 1);
-        assertForceWithdrawReverts(user, token, 1, ERROR_NOT_OWNER);
-        assertForceWithdrawReverts(nonUser, token, 1, ERROR_NOT_OWNER);
+        deposit(user, token, depositor, 1);
+        assertForceWithdrawReverts(user, token, depositor, 1, ERROR_NOT_OWNER);
+        assertForceWithdrawReverts(nonUser, token, depositor, 1, ERROR_NOT_OWNER);
     }
 
     function testForceWithdrawOverWithdrawable() public {
-        deposit(user, token, 1);
+        deposit(user, token, depositor, 1);
         token.transfer(address(reserve), 1);
-        forceWithdraw(owner, token, 2);
+        forceWithdraw(owner, token, depositor, 2);
     }
 
     function testTokensDontMix() public {
-        IERC20 otherToken = new ERC20PresetFixedSupply("other", "other", 2, address(user));
-        uint256 tokenBalance = token.balanceOf(address(user));
+        IERC20 otherToken = new ERC20PresetFixedSupply("other", "other", 2, address(depositor));
+        uint256 tokenBalance = token.balanceOf(address(depositor));
 
-        deposit(user, token, 1);
+        deposit(user, token, depositor, 1);
 
         string memory details = "of the other token after token deposit";
-        assertUserBalance(otherToken, user, 2, details);
+        assertUserBalance(otherToken, depositor, 2, details);
         assertWithdrawable(otherToken, 0, details);
         assertReserveBalance(otherToken, 0, details);
 
-        deposit(user, otherToken, 2);
+        deposit(user, otherToken, depositor, 2);
 
         details = "of token after the other token deposit";
-        assertUserBalance(token, user, tokenBalance - 1, details);
+        assertUserBalance(token, depositor, tokenBalance - 1, details);
         assertWithdrawable(token, 1, details);
         assertReserveBalance(token, 1, details);
 
-        withdraw(user, token, 1);
+        withdraw(user, token, depositor, 1);
 
         details = "of the other token after token withdrawal";
-        assertUserBalance(otherToken, user, 0, details);
+        assertUserBalance(otherToken, depositor, 0, details);
         assertWithdrawable(otherToken, 2, details);
         assertReserveBalance(otherToken, 2, details);
 
-        withdraw(user, otherToken, 2);
+        withdraw(user, otherToken, depositor, 2);
 
         details = "of token after the other token withdrawal";
-        assertUserBalance(token, user, tokenBalance, details);
+        assertUserBalance(token, depositor, tokenBalance, details);
         assertWithdrawable(token, 0, details);
         assertReserveBalance(token, 0, details);
     }

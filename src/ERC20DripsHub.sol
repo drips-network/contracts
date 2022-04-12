@@ -74,14 +74,9 @@ contract ERC20DripsHub is ManagedDripsHub {
     function _transfer(uint256 assetId, int128 amt) internal override {
         IERC20 erc20 = IERC20(address(uint160(assetId)));
         if (amt > 0) {
-            uint256 withdraw = uint128(amt);
-            reserve.withdraw(erc20, withdraw);
-            erc20.transfer(msg.sender, withdraw);
+            reserve.withdraw(erc20, msg.sender, uint128(amt));
         } else if (amt < 0) {
-            uint256 deposit = uint128(-amt);
-            erc20.transferFrom(msg.sender, address(this), deposit);
-            erc20.approve(address(reserve), deposit);
-            reserve.deposit(erc20, deposit);
+            reserve.deposit(erc20, msg.sender, uint128(-amt));
         }
     }
 }
