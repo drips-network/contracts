@@ -12,10 +12,9 @@ import {Proxy} from "../Managed.sol";
 import {IERC20, ERC20PresetFixedSupply} from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
 contract DripsHubTest is DripsHubUserUtils {
-    DripsHub private dripsHub;
     AddressId private addressId;
 
-    uint256 private otherAsset;
+    IERC20 private otherErc20;
 
     AddressIdUser private user;
     AddressIdUser private receiver;
@@ -32,12 +31,8 @@ contract DripsHubTest is DripsHubUserUtils {
     string private constant ERROR_PAUSED = "Contract paused";
 
     function setUp() public {
-        defaultAsset = uint160(
-            address(new ERC20PresetFixedSupply("test", "test", 10**6 * 1 ether, address(this)))
-        );
-        otherAsset = uint160(
-            address(new ERC20PresetFixedSupply("other", "other", 10**6 * 1 ether, address(this)))
-        );
+        defaultErc20 = new ERC20PresetFixedSupply("test", "test", 10**6 * 1 ether, address(this));
+        otherErc20 = new ERC20PresetFixedSupply("other", "other", 10**6 * 1 ether, address(this));
         ERC20Reserve reserve = new ERC20Reserve(address(this));
         DripsHub hubLogic = new DripsHub(10, reserve);
         dripsHub = DripsHub(address(new Proxy(hubLogic, address(this))));
@@ -60,13 +55,12 @@ contract DripsHubTest is DripsHubUserUtils {
         if (receiver1 > receiver2) (receiver1, receiver2) = (receiver2, receiver1);
         if (receiver2 > receiver3) (receiver2, receiver3) = (receiver3, receiver2);
         if (receiver1 > receiver2) (receiver1, receiver2) = (receiver2, receiver1);
-        setUp(dripsHub);
     }
 
     function createUser() internal returns (AddressIdUser newUser) {
         newUser = new AddressIdUser(addressId);
-        IERC20(address(uint160(defaultAsset))).transfer(address(newUser), 100 ether);
-        IERC20(address(uint160(otherAsset))).transfer(address(newUser), 100 ether);
+        defaultErc20.transfer(address(newUser), 100 ether);
+        otherErc20.transfer(address(newUser), 100 ether);
     }
 
     function testAllowsDrippingToASingleReceiver() public {
@@ -147,7 +141,7 @@ contract DripsHubTest is DripsHubUserUtils {
 
     function testCollectAllRevertsIfInvalidCurrSplitsReceivers() public {
         setSplits(user, splitsReceivers(receiver, 1));
-        try user.collectAll(address(user), defaultAsset, splitsReceivers(receiver, 2)) {
+        try user.collectAll(address(user), defaultErc20, splitsReceivers(receiver, 2)) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, "Invalid current splits receivers", "Invalid collect revert reason");
@@ -170,7 +164,7 @@ contract DripsHubTest is DripsHubUserUtils {
 
     function testCollectableAllRevertsIfInvalidCurrSplitsReceivers() public {
         setSplits(user, splitsReceivers(receiver, 1));
-        try dripsHub.collectableAll(user.userId(), defaultAsset, splitsReceivers(receiver, 2)) {
+        try dripsHub.collectableAll(user.userId(), defaultErc20, splitsReceivers(receiver, 2)) {
             assertTrue(false, "Collectable hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(
@@ -363,9 +357,9 @@ contract DripsHubTest is DripsHubUserUtils {
         uint64 lastUpdate = uint64(block.timestamp);
         warpBy(4);
         // User had 4 second paying 1 per second
-        uint256 expectedBalance = user.balance(defaultAsset) + 6;
+        uint256 expectedBalance = defaultErc20.balanceOf(address(user)) + 6;
         (uint128 newBalance, int128 realBalanceDelta) = user.setDrips(
-            defaultAsset,
+            defaultErc20,
             lastUpdate,
             10,
             receivers,
@@ -582,7 +576,7 @@ contract DripsHubTest is DripsHubUserUtils {
 
     function testSplitRevertsIfInvalidCurrSplitsReceivers() public {
         setSplits(user, splitsReceivers(receiver, 1));
-        try dripsHub.split(user.userId(), defaultAsset, splitsReceivers(receiver, 2)) {
+        try dripsHub.split(user.userId(), defaultErc20, splitsReceivers(receiver, 2)) {
             assertTrue(false, "Split hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, "Invalid current splits receivers", "Invalid split revert reason");
@@ -614,7 +608,7 @@ contract DripsHubTest is DripsHubUserUtils {
         // Splitting 20
         (uint128 collectableAmt, uint128 splitAmt) = dripsHub.split(
             receiver1.userId(),
-            defaultAsset,
+            defaultErc20,
             getCurrSplitsReceivers(receiver1)
         );
         assertEq(collectableAmt, 6, "Invalid collectable amount");
@@ -626,7 +620,7 @@ contract DripsHubTest is DripsHubUserUtils {
         // Splitting 10 which has been split to receiver1 themselves in the previous step
         (collectableAmt, splitAmt) = dripsHub.split(
             receiver1.userId(),
-            defaultAsset,
+            defaultErc20,
             getCurrSplitsReceivers(receiver1)
         );
         assertEq(collectableAmt, 3, "Invalid collectable amount");
@@ -672,7 +666,7 @@ contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testCollectRevertsWhenNotAccountOwner() public {
-        try dripsHub.collect(calcUserId(dripsHub.nextAccountId(), 0), defaultAsset) {
+        try dripsHub.collect(calcUserId(dripsHub.nextAccountId(), 0), defaultErc20) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_NOT_OWNER, "Invalid collect revert reason");
@@ -683,7 +677,7 @@ contract DripsHubTest is DripsHubUserUtils {
         try
             dripsHub.collectAll(
                 calcUserId(dripsHub.nextAccountId(), 0),
-                defaultAsset,
+                defaultErc20,
                 new SplitsReceiver[](0)
             )
         {
@@ -697,7 +691,7 @@ contract DripsHubTest is DripsHubUserUtils {
         uint64 cycleLength = dripsHub.cycleSecs();
         // Covers 1.5 cycles of dripping
         setDrips(
-            defaultAsset,
+            defaultErc20,
             user,
             0,
             9 * cycleLength,
@@ -706,45 +700,45 @@ contract DripsHubTest is DripsHubUserUtils {
 
         warpToCycleEnd();
         // Covers 2 cycles of dripping
-        setDrips(otherAsset, user, 0, 6 * cycleLength, dripsReceivers(receiver1, 3));
+        setDrips(otherErc20, user, 0, 6 * cycleLength, dripsReceivers(receiver1, 3));
 
         warpToCycleEnd();
         // receiver1 had 1.5 cycles of 4 per second
-        collectAll(defaultAsset, receiver1, 6 * cycleLength);
+        collectAll(defaultErc20, receiver1, 6 * cycleLength);
         // receiver1 had 1.5 cycles of 2 per second
-        collectAll(defaultAsset, receiver2, 3 * cycleLength);
+        collectAll(defaultErc20, receiver2, 3 * cycleLength);
         // receiver1 had 1 cycle of 3 per second
-        collectAll(otherAsset, receiver1, 3 * cycleLength);
+        collectAll(otherErc20, receiver1, 3 * cycleLength);
         // receiver2 received nothing
-        collectAll(otherAsset, receiver2, 0);
+        collectAll(otherErc20, receiver2, 0);
 
         warpToCycleEnd();
         // receiver1 received nothing
-        collectAll(defaultAsset, receiver1, 0);
+        collectAll(defaultErc20, receiver1, 0);
         // receiver2 received nothing
-        collectAll(defaultAsset, receiver2, 0);
+        collectAll(defaultErc20, receiver2, 0);
         // receiver1 had 1 cycle of 3 per second
-        collectAll(otherAsset, receiver1, 3 * cycleLength);
+        collectAll(otherErc20, receiver1, 3 * cycleLength);
         // receiver2 received nothing
-        collectAll(otherAsset, receiver2, 0);
+        collectAll(otherErc20, receiver2, 0);
     }
 
     function testSplitsConfigurationIsCommonBetweenTokens() public {
         uint32 totalWeight = dripsHub.totalSplitsWeight();
         setSplits(user, splitsReceivers(receiver1, totalWeight / 10));
-        give(defaultAsset, receiver2, user, 30);
-        give(otherAsset, receiver2, user, 100);
-        collectAll(defaultAsset, user, 27, 3);
-        collectAll(otherAsset, user, 90, 10);
-        collectAll(defaultAsset, receiver1, 3);
-        collectAll(otherAsset, receiver1, 10);
+        give(defaultErc20, receiver2, user, 30);
+        give(otherErc20, receiver2, user, 100);
+        collectAll(defaultErc20, user, 27, 3);
+        collectAll(otherErc20, user, 90, 10);
+        collectAll(defaultErc20, receiver1, 3);
+        collectAll(otherErc20, receiver1, 10);
     }
 
     function testSetDripsRevertsWhenNotAccountOwner() public {
         try
             dripsHub.setDrips(
                 calcUserId(dripsHub.nextAccountId(), 0),
-                defaultAsset,
+                defaultErc20,
                 0,
                 0,
                 dripsReceivers(),
@@ -759,7 +753,7 @@ contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testGiveRevertsWhenNotAccountOwner() public {
-        try dripsHub.give(calcUserId(dripsHub.nextAccountId(), 0), 0, defaultAsset, 1) {
+        try dripsHub.give(calcUserId(dripsHub.nextAccountId(), 0), 0, defaultErc20, 1) {
             assertTrue(false, "Give hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_NOT_OWNER, "Invalid give revert reason");
@@ -778,10 +772,9 @@ contract DripsHubTest is DripsHubUserUtils {
         give(user, receiver1, 5);
         split(receiver1, 5, 0);
         assertCollectable(receiver1, 5);
-        uint256 balanceBefore = receiver1.balance(defaultAsset);
-        IERC20 erc20 = IERC20(address(uint160(defaultAsset)));
+        uint256 balanceBefore = defaultErc20.balanceOf(address(receiver1));
 
-        uint128 collected = addressId.collect(address(receiver1), erc20);
+        uint128 collected = addressId.collect(address(receiver1), defaultErc20);
 
         assertEq(collected, 5, "Invalid collected amount");
         assertCollectable(receiver1, 0);
@@ -791,12 +784,11 @@ contract DripsHubTest is DripsHubUserUtils {
     function testAnyoneCanCollectAllForAnyoneUsingAddressId() public {
         give(user, receiver1, 5);
         assertCollectableAll(receiver1, 5);
-        uint256 balanceBefore = receiver1.balance(defaultAsset);
-        IERC20 erc20 = IERC20(address(uint160(defaultAsset)));
+        uint256 balanceBefore = defaultErc20.balanceOf(address(receiver1));
 
         (uint128 collected, uint128 split) = addressId.collectAll(
             address(receiver1),
-            erc20,
+            defaultErc20,
             splitsReceivers()
         );
 
@@ -879,7 +871,7 @@ contract DripsHubTest is DripsHubUserUtils {
 
     function testCollectAllCanBePaused() public {
         admin.pause();
-        try user.collectAll(address(user), defaultAsset, splitsReceivers()) {
+        try user.collectAll(address(user), defaultErc20, splitsReceivers()) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid collect revert reason");
@@ -888,7 +880,7 @@ contract DripsHubTest is DripsHubUserUtils {
 
     function testReceiveDripsCanBePaused() public {
         admin.pause();
-        try dripsHub.receiveDrips(user.userId(), defaultAsset, 1) {
+        try dripsHub.receiveDrips(user.userId(), defaultErc20, 1) {
             assertTrue(false, "ReceiveDrips hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid receiveDrips revert reason");
@@ -897,7 +889,7 @@ contract DripsHubTest is DripsHubUserUtils {
 
     function testSplitCanBePaused() public {
         admin.pause();
-        try dripsHub.split(user.userId(), defaultAsset, splitsReceivers()) {
+        try dripsHub.split(user.userId(), defaultErc20, splitsReceivers()) {
             assertTrue(false, "Split hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid split revert reason");
@@ -906,7 +898,7 @@ contract DripsHubTest is DripsHubUserUtils {
 
     function testCollectCanBePaused() public {
         admin.pause();
-        try user.collect(address(user), defaultAsset) {
+        try user.collect(address(user), defaultErc20) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid collect revert reason");
@@ -915,7 +907,7 @@ contract DripsHubTest is DripsHubUserUtils {
 
     function testSetDripsCanBePaused() public {
         admin.pause();
-        try user.setDrips(defaultAsset, 0, 0, dripsReceivers(), 1, dripsReceivers()) {
+        try user.setDrips(defaultErc20, 0, 0, dripsReceivers(), 1, dripsReceivers()) {
             assertTrue(false, "SetDrips hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid setDrips revert reason");
@@ -924,7 +916,7 @@ contract DripsHubTest is DripsHubUserUtils {
 
     function testSetDripsFromAccountCanBePaused() public {
         admin.pause();
-        try user.setDrips(defaultAsset, 0, 0, dripsReceivers(), 1, dripsReceivers()) {
+        try user.setDrips(defaultErc20, 0, 0, dripsReceivers(), 1, dripsReceivers()) {
             assertTrue(false, "SetDrips hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid setDrips revert reason");
@@ -933,7 +925,7 @@ contract DripsHubTest is DripsHubUserUtils {
 
     function testGiveCanBePaused() public {
         admin.pause();
-        try user.give(0, defaultAsset, 1) {
+        try user.give(0, defaultErc20, 1) {
             assertTrue(false, "Give hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid give revert reason");

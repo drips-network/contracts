@@ -15,19 +15,14 @@ contract AddressIdUser {
         userId = addressId_.calcUserId(address(this));
     }
 
-    function balance(uint256 assetId) public view returns (uint256) {
-        return _erc20(assetId).balanceOf(address(this));
-    }
-
     function setDrips(
-        uint256 assetId,
+        IERC20 erc20,
         uint64 lastUpdate,
         uint128 lastBalance,
         DripsReceiver[] calldata currReceivers,
         int128 balanceDelta,
         DripsReceiver[] calldata newReceivers
     ) public returns (uint128 newBalance, int128 realBalanceDelta) {
-        IERC20 erc20 = _erc20(assetId);
         if (balanceDelta > 0) erc20.approve(address(addressId), uint128(balanceDelta));
         return
             addressId.setDrips(
@@ -42,10 +37,9 @@ contract AddressIdUser {
 
     function give(
         uint256 receiver,
-        uint256 assetId,
+        IERC20 erc20,
         uint128 amt
     ) public {
-        IERC20 erc20 = _erc20(assetId);
         erc20.approve(address(addressId), amt);
         addressId.give(receiver, erc20, amt);
     }
@@ -56,17 +50,13 @@ contract AddressIdUser {
 
     function collectAll(
         address user,
-        uint256 assetId,
+        IERC20 erc20,
         SplitsReceiver[] calldata currReceivers
     ) public returns (uint128 collected, uint128 splitAmt) {
-        return addressId.collectAll(user, _erc20(assetId), currReceivers);
+        return addressId.collectAll(user, erc20, currReceivers);
     }
 
-    function collect(address user, uint256 assetId) public returns (uint128 amt) {
-        return addressId.collect(user, _erc20(assetId));
-    }
-
-    function _erc20(uint256 assetId) internal pure returns (IERC20) {
-        return IERC20(address(uint160(assetId)));
+    function collect(address user, IERC20 erc20) public returns (uint128 amt) {
+        return addressId.collect(user, erc20);
     }
 }

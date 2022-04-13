@@ -35,11 +35,7 @@ contract AddressId {
         IERC20 erc20,
         SplitsReceiver[] memory currReceivers
     ) public returns (uint128 collectedAmt, uint128 splitAmt) {
-        (collectedAmt, splitAmt) = dripsHub.collectAll(
-            calcUserId(user),
-            _calcAssetId(erc20),
-            currReceivers
-        );
+        (collectedAmt, splitAmt) = dripsHub.collectAll(calcUserId(user), erc20, currReceivers);
         _transferTo(user, erc20, collectedAmt);
     }
 
@@ -48,7 +44,7 @@ contract AddressId {
     /// @param erc20 The token to use
     /// @return amt The collected amount
     function collect(address user, IERC20 erc20) public returns (uint128 amt) {
-        amt = dripsHub.collect(calcUserId(user), _calcAssetId(erc20));
+        amt = dripsHub.collect(calcUserId(user), erc20);
         _transferTo(user, erc20, amt);
     }
 
@@ -64,7 +60,7 @@ contract AddressId {
         uint128 amt
     ) public {
         _transferFromCaller(erc20, amt);
-        dripsHub.give(calcUserId(msg.sender), receiver, _calcAssetId(erc20), amt);
+        dripsHub.give(calcUserId(msg.sender), receiver, erc20, amt);
     }
 
     /// @notice Sets the msg.sender's drips configuration.
@@ -96,7 +92,7 @@ contract AddressId {
         if (balanceDelta > 0) _transferFromCaller(erc20, uint128(balanceDelta));
         (newBalance, realBalanceDelta) = dripsHub.setDrips(
             calcUserId(msg.sender),
-            _calcAssetId(erc20),
+            erc20,
             lastUpdate,
             lastBalance,
             currReceivers,
@@ -113,10 +109,6 @@ contract AddressId {
     /// share of the funds collected by the user.
     function setSplits(SplitsReceiver[] memory receivers) public {
         dripsHub.setSplits(calcUserId(msg.sender), receivers);
-    }
-
-    function _calcAssetId(IERC20 erc20) internal pure returns (uint256) {
-        return uint160(address(erc20));
     }
 
     function _transferFromCaller(IERC20 erc20, uint128 amt) internal {

@@ -151,15 +151,16 @@ contract DripsHub is Managed {
 
     /// @notice Returns amount of received funds available for collection for a user.
     /// @param userId The user ID
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collectedAmt The collected amount
     /// @return splitAmt The amount split to the user's splits receivers
     function collectableAll(
         uint256 userId,
-        uint256 assetId,
+        IERC20 erc20,
         SplitsReceiver[] memory currReceivers
     ) public view returns (uint128 collectedAmt, uint128 splitAmt) {
+        uint256 assetId = _assetId(erc20);
         // Collectable from cycles
         (collectedAmt, ) = Drips.receivableDrips(
             _dripsHubStorage().drips,
@@ -184,37 +185,43 @@ contract DripsHub is Managed {
     /// @notice Collects all received funds available for the user
     /// and transfers them out of the drips hub contract to msg.sender.
     /// @param userId The user ID
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collectedAmt The collected amount
     /// @return splitAmt The amount split to the user's splits receivers
     function collectAll(
         uint256 userId,
-        uint256 assetId,
+        IERC20 erc20,
         SplitsReceiver[] memory currReceivers
     ) public whenNotPaused returns (uint128 collectedAmt, uint128 splitAmt) {
-        receiveDrips(userId, assetId, type(uint64).max);
-        (, splitAmt) = split(userId, assetId, currReceivers);
-        collectedAmt = collect(userId, assetId);
+        receiveDrips(userId, erc20, type(uint64).max);
+        (, splitAmt) = split(userId, erc20, currReceivers);
+        collectedAmt = collect(userId, erc20);
     }
 
     /// @notice Counts cycles from which drips can be collected.
     /// This function can be used to detect that there are
     /// too many cycles to analyze in a single transaction.
     /// @param userId The user ID
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token
     /// @return cycles The number of cycles which can be flushed
-    function receivableDripsCycles(uint256 userId, uint256 assetId)
+    function receivableDripsCycles(uint256 userId, IERC20 erc20)
         public
         view
         returns (uint64 cycles)
     {
-        return Drips.receivableDripsCycles(_dripsHubStorage().drips, cycleSecs, userId, assetId);
+        return
+            Drips.receivableDripsCycles(
+                _dripsHubStorage().drips,
+                cycleSecs,
+                userId,
+                _assetId(erc20)
+            );
     }
 
     /// @notice Calculate effects of calling `receiveDrips` with the given parameters.
     /// @param userId The user ID
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token
     /// @param maxCycles The maximum number of received drips cycles.
     /// If too low, receiving will be cheap, but may not cover many cycles.
     /// If too high, receiving may become too expensive to fit in a single transaction.
@@ -222,18 +229,24 @@ contract DripsHub is Managed {
     /// @return receivableCycles The number of cycles which would still be receivable after the call
     function receivableDrips(
         uint256 userId,
-        uint256 assetId,
+        IERC20 erc20,
         uint64 maxCycles
     ) public view returns (uint128 receivableAmt, uint64 receivableCycles) {
         return
-            Drips.receivableDrips(_dripsHubStorage().drips, cycleSecs, userId, assetId, maxCycles);
+            Drips.receivableDrips(
+                _dripsHubStorage().drips,
+                cycleSecs,
+                userId,
+                _assetId(erc20),
+                maxCycles
+            );
     }
 
     /// @notice Receive drips from uncollected cycles of the user.
     /// Received drips cycles won't need to be analyzed ever again.
     /// Calling this function does not collect but makes the funds ready to be split and collected.
     /// @param userId The user ID
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token
     /// @param maxCycles The maximum number of received drips cycles.
     /// If too low, receiving will be cheap, but may not cover many cycles.
     /// If too high, receiving may become too expensive to fit in a single transaction.
@@ -241,9 +254,10 @@ contract DripsHub is Managed {
     /// @return receivableCycles The number of cycles which still can be received
     function receiveDrips(
         uint256 userId,
-        uint256 assetId,
+        IERC20 erc20,
         uint64 maxCycles
     ) public whenNotPaused returns (uint128 receivedAmt, uint64 receivableCycles) {
+        uint256 assetId = _assetId(erc20);
         (receivedAmt, receivableCycles) = Drips.receiveDrips(
             _dripsHubStorage().drips,
             cycleSecs,
@@ -258,48 +272,48 @@ contract DripsHub is Managed {
 
     /// @notice Returns user's received but not split yet funds.
     /// @param userId The user ID
-    /// @param assetId The used asset ID.
+    /// @param erc20 The used ERC-20 token.
     /// @return amt The amount received but not split yet.
-    function splittable(uint256 userId, uint256 assetId) public view returns (uint128 amt) {
-        return Splits.splittable(_dripsHubStorage().splits, userId, assetId);
+    function splittable(uint256 userId, IERC20 erc20) public view returns (uint128 amt) {
+        return Splits.splittable(_dripsHubStorage().splits, userId, _assetId(erc20));
     }
 
     /// @notice Splits user's received but not split yet funds among receivers.
     /// @param userId The user ID
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collectableAmt The amount made collectable for the user
     /// on top of what was collectable before.
     /// @return splitAmt The amount split to the user's splits receivers
     function split(
         uint256 userId,
-        uint256 assetId,
+        IERC20 erc20,
         SplitsReceiver[] memory currReceivers
     ) public whenNotPaused returns (uint128 collectableAmt, uint128 splitAmt) {
-        return Splits.split(_dripsHubStorage().splits, userId, assetId, currReceivers);
+        return Splits.split(_dripsHubStorage().splits, userId, _assetId(erc20), currReceivers);
     }
 
     /// @notice Returns user's received funds already split and ready to be collected.
     /// @param userId The user ID
-    /// @param assetId The used asset ID.
+    /// @param erc20 The used ERC-20 token.
     /// @return amt The collectable amount.
-    function collectable(uint256 userId, uint256 assetId) public view returns (uint128 amt) {
-        return Splits.collectable(_dripsHubStorage().splits, userId, assetId);
+    function collectable(uint256 userId, IERC20 erc20) public view returns (uint128 amt) {
+        return Splits.collectable(_dripsHubStorage().splits, userId, _assetId(erc20));
     }
 
     /// @notice Collects user's received already split funds
     /// and transfers them out of the drips hub contract to msg.sender.
     /// @param userId The user ID
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token
     /// @return amt The collected amount
-    function collect(uint256 userId, uint256 assetId)
+    function collect(uint256 userId, IERC20 erc20)
         public
         whenNotPaused
         onlyAccountOwner(userId)
         returns (uint128 amt)
     {
-        amt = Splits.collect(_dripsHubStorage().splits, userId, assetId);
-        _settleBalance(assetId, -int128(amt));
+        amt = Splits.collect(_dripsHubStorage().splits, userId, _assetId(erc20));
+        reserve.withdraw(erc20, msg.sender, amt);
     }
 
     /// @notice Gives funds from the user or their account to the receiver.
@@ -307,35 +321,31 @@ contract DripsHub is Managed {
     /// Transfers the funds to be given from the user's wallet to the drips hub contract.
     /// @param userId The user ID
     /// @param receiver The receiver
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token
     /// @param amt The given amount
     function give(
         uint256 userId,
         uint256 receiver,
-        uint256 assetId,
+        IERC20 erc20,
         uint128 amt
     ) public whenNotPaused onlyAccountOwner(userId) {
-        Splits.give(_dripsHubStorage().splits, userId, receiver, assetId, amt);
-        _settleBalance(assetId, int128(amt));
+        Splits.give(_dripsHubStorage().splits, userId, receiver, _assetId(erc20), amt);
+        reserve.deposit(erc20, msg.sender, amt);
     }
 
     /// @notice Current user drips hash, see `hashDrips`.
     /// @param userId The user ID
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token
     /// @return currDripsHash The current user account's drips hash
-    function dripsHash(uint256 userId, uint256 assetId)
-        public
-        view
-        returns (bytes32 currDripsHash)
-    {
-        return Drips.dripsHash(_dripsHubStorage().drips, userId, assetId);
+    function dripsHash(uint256 userId, IERC20 erc20) public view returns (bytes32 currDripsHash) {
+        return Drips.dripsHash(_dripsHubStorage().drips, userId, _assetId(erc20));
     }
 
     /// @notice Sets the user's or the account's drips configuration.
     /// Transfers funds between the user's wallet and the drips hub contract
     /// to fulfill the change of the drips balance.
     /// @param userId The user ID
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token
     /// @param lastUpdate The timestamp of the last drips update of the user or the account.
     /// If this is the first update, pass zero.
     /// @param lastBalance The drips balance after the last drips update of the user or the account.
@@ -352,7 +362,7 @@ contract DripsHub is Managed {
     /// @return realBalanceDelta The actually applied drips balance change.
     function setDrips(
         uint256 userId,
-        uint256 assetId,
+        IERC20 erc20,
         uint64 lastUpdate,
         uint128 lastBalance,
         DripsReceiver[] memory currReceivers,
@@ -368,14 +378,18 @@ contract DripsHub is Managed {
             _dripsHubStorage().drips,
             cycleSecs,
             userId,
-            assetId,
+            _assetId(erc20),
             lastUpdate,
             lastBalance,
             currReceivers,
             balanceDelta,
             newReceivers
         );
-        _settleBalance(assetId, realBalanceDelta);
+        if (realBalanceDelta > 0) {
+            reserve.deposit(erc20, msg.sender, uint128(realBalanceDelta));
+        } else if (realBalanceDelta < 0) {
+            reserve.withdraw(erc20, msg.sender, uint128(-realBalanceDelta));
+        }
     }
 
     /// @notice Calculates the hash of the drips configuration.
@@ -429,22 +443,6 @@ contract DripsHub is Managed {
         return Splits.hashSplits(receivers);
     }
 
-    /// @notice Settles the change in balance of funds stored in DripHub.
-    /// It's done by transferring funds between `msg.sender` and the reserve.
-    /// @param assetId The used asset ID
-    /// @param balanceDelta The change in balance.
-    /// Positive values cause transfer of funds from `msg.sender` to the reserve.
-    /// Negative values cause transfer of funds from the reserve to `msg.sender`.
-    /// Zero value causes no effect.
-    function _settleBalance(uint256 assetId, int128 balanceDelta) internal {
-        IERC20 erc20 = IERC20(address(uint160(assetId)));
-        if (balanceDelta > 0) {
-            reserve.deposit(erc20, msg.sender, uint128(balanceDelta));
-        } else if (balanceDelta < 0) {
-            reserve.withdraw(erc20, msg.sender, uint128(-balanceDelta));
-        }
-    }
-
     /// @notice Returns the DripsHub storage.
     /// @return storageRef The storage.
     function _dripsHubStorage() internal view returns (DripsHubStorage storage storageRef) {
@@ -454,5 +452,12 @@ contract DripsHub is Managed {
             // Based on OpenZeppelin's StorageSlot
             storageRef.slot := slot
         }
+    }
+
+    /// @notice Generates an asset ID for the ERC-20 token
+    /// @param erc20 The ERC-20 token
+    /// @return assetId The asset ID
+    function _assetId(IERC20 erc20) internal pure returns (uint256 assetId) {
+        return uint160(address(erc20));
     }
 }
