@@ -4,7 +4,7 @@ pragma solidity ^0.8.7;
 import {Ownable} from "openzeppelin-contracts/access/Ownable.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
-interface IERC20Reserve {
+interface IReserve {
     function withdraw(
         IERC20 token,
         address to,
@@ -18,7 +18,7 @@ interface IERC20Reserve {
     ) external;
 }
 
-contract ERC20Reserve is IERC20Reserve, Ownable {
+contract Reserve is IReserve, Ownable {
     mapping(address => bool) public isUser;
     mapping(IERC20 => uint256) public withdrawable;
 

@@ -2,13 +2,13 @@
 pragma solidity ^0.8.7;
 import "ds-test/test.sol";
 
-import {ERC20Reserve} from "../ERC20Reserve.sol";
+import {Reserve} from "../Reserve.sol";
 import {IERC20, ERC20PresetFixedSupply} from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
-contract ERC20ReserveUser {
-    ERC20Reserve public reserve;
+contract ReserveUser {
+    Reserve public reserve;
 
-    function setReserve(ERC20Reserve reserve_) public {
+    function setReserve(Reserve reserve_) public {
         reserve = reserve_;
     }
 
@@ -18,7 +18,7 @@ contract ERC20ReserveUser {
 
     function withdraw(
         IERC20 token,
-        ERC20ReserveUser to,
+        ReserveUser to,
         uint256 amt
     ) public {
         reserve.withdraw(token, address(to), amt);
@@ -26,7 +26,7 @@ contract ERC20ReserveUser {
 
     function deposit(
         IERC20 token,
-        ERC20ReserveUser from,
+        ReserveUser from,
         uint256 amt
     ) public {
         reserve.deposit(token, address(from), amt);
@@ -34,7 +34,7 @@ contract ERC20ReserveUser {
 
     function forceWithdraw(
         IERC20 token,
-        ERC20ReserveUser to,
+        ReserveUser to,
         uint256 amt
     ) public {
         reserve.forceWithdraw(token, address(to), amt);
@@ -49,12 +49,12 @@ contract ERC20ReserveUser {
     }
 }
 
-contract ERC20ReserveTest is DSTest {
-    ERC20Reserve public reserve;
-    ERC20ReserveUser public user;
-    ERC20ReserveUser public nonUser;
-    ERC20ReserveUser public owner;
-    ERC20ReserveUser public depositor;
+contract ReserveTest is DSTest {
+    Reserve public reserve;
+    ReserveUser public user;
+    ReserveUser public nonUser;
+    ReserveUser public owner;
+    ReserveUser public depositor;
     IERC20 public token;
 
     string public constant ERROR_NOT_USER = "Reserve: caller is not the user";
@@ -62,11 +62,11 @@ contract ERC20ReserveTest is DSTest {
     string public constant ERROR_WITHDRAWAL_BALANCE = "Reserve: withdrawal over balance";
 
     function setUp() public {
-        user = new ERC20ReserveUser();
-        nonUser = new ERC20ReserveUser();
-        owner = new ERC20ReserveUser();
-        depositor = new ERC20ReserveUser();
-        reserve = new ERC20Reserve(address(owner));
+        user = new ReserveUser();
+        nonUser = new ReserveUser();
+        owner = new ReserveUser();
+        depositor = new ReserveUser();
+        reserve = new Reserve(address(owner));
 
         owner.setReserve(reserve);
         user.setReserve(reserve);
@@ -79,9 +79,9 @@ contract ERC20ReserveTest is DSTest {
     }
 
     function deposit(
-        ERC20ReserveUser reserveUser,
+        ReserveUser reserveUser,
         IERC20 forToken,
-        ERC20ReserveUser from,
+        ReserveUser from,
         uint256 amt
     ) public {
         uint256 withdrawable = reserve.withdrawable(forToken);
@@ -98,9 +98,9 @@ contract ERC20ReserveTest is DSTest {
     }
 
     function assertDepositReverts(
-        ERC20ReserveUser reserveUser,
+        ReserveUser reserveUser,
         IERC20 forToken,
-        ERC20ReserveUser from,
+        ReserveUser from,
         uint256 amt,
         string memory expectedReason
     ) public {
@@ -114,9 +114,9 @@ contract ERC20ReserveTest is DSTest {
     }
 
     function withdraw(
-        ERC20ReserveUser reserveUser,
+        ReserveUser reserveUser,
         IERC20 forToken,
-        ERC20ReserveUser to,
+        ReserveUser to,
         uint256 amt
     ) public {
         uint256 withdrawable = reserve.withdrawable(forToken);
@@ -132,9 +132,9 @@ contract ERC20ReserveTest is DSTest {
     }
 
     function assertWithdrawReverts(
-        ERC20ReserveUser reserveUser,
+        ReserveUser reserveUser,
         IERC20 forToken,
-        ERC20ReserveUser to,
+        ReserveUser to,
         uint256 amt,
         string memory expectedReason
     ) public {
@@ -146,9 +146,9 @@ contract ERC20ReserveTest is DSTest {
     }
 
     function forceWithdraw(
-        ERC20ReserveUser reserveUser,
+        ReserveUser reserveUser,
         IERC20 forToken,
-        ERC20ReserveUser to,
+        ReserveUser to,
         uint256 amt
     ) public {
         uint256 withdrawable = reserve.withdrawable(forToken);
@@ -164,9 +164,9 @@ contract ERC20ReserveTest is DSTest {
     }
 
     function assertForceWithdrawReverts(
-        ERC20ReserveUser reserveUser,
+        ReserveUser reserveUser,
         IERC20 forToken,
-        ERC20ReserveUser to,
+        ReserveUser to,
         uint256 amt,
         string memory expectedReason
     ) public {
@@ -179,7 +179,7 @@ contract ERC20ReserveTest is DSTest {
 
     function assertUserBalance(
         IERC20 forToken,
-        ERC20ReserveUser forUser,
+        ReserveUser forUser,
         uint256 expected,
         string memory details
     ) public {
@@ -209,15 +209,15 @@ contract ERC20ReserveTest is DSTest {
         return string(bytes.concat(bytes(str1), bytes(str2)));
     }
 
-    function addUser(ERC20ReserveUser currOwner, ERC20ReserveUser addedUser) public {
+    function addUser(ReserveUser currOwner, ReserveUser addedUser) public {
         address userAddr = address(addedUser);
         currOwner.addUser(userAddr);
         assertTrue(reserve.isUser(userAddr), "User not added");
     }
 
     function assertAddUserReverts(
-        ERC20ReserveUser currOwner,
-        ERC20ReserveUser addedUser,
+        ReserveUser currOwner,
+        ReserveUser addedUser,
         string memory expectedReason
     ) public {
         try currOwner.addUser(address(addedUser)) {
@@ -227,15 +227,15 @@ contract ERC20ReserveTest is DSTest {
         }
     }
 
-    function removeUser(ERC20ReserveUser currOwner, ERC20ReserveUser removedUser) public {
+    function removeUser(ReserveUser currOwner, ReserveUser removedUser) public {
         address userAddr = address(removedUser);
         currOwner.removeUser(userAddr);
         assertTrue(!reserve.isUser(userAddr), "User not removed");
     }
 
     function assertRemoveUserReverts(
-        ERC20ReserveUser currOwner,
-        ERC20ReserveUser removedUser,
+        ReserveUser currOwner,
+        ReserveUser removedUser,
         string memory expectedReason
     ) public {
         try currOwner.removeUser(address(removedUser)) {

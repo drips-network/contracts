@@ -2,7 +2,7 @@
 pragma solidity ^0.8.7;
 
 import {Drips, DripsReceiver} from "./Drips.sol";
-import {IERC20Reserve} from "./ERC20Reserve.sol";
+import {IReserve} from "./Reserve.sol";
 import {Managed} from "./Managed.sol";
 import {Splits, SplitsReceiver} from "./Splits.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
@@ -46,7 +46,7 @@ import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 /// It's guaranteed to be safe only when working with assets with supply lower than `2 ^ 127`.
 contract DripsHub is Managed {
     /// @notice The address of the ERC-20 reserve which the drips hub works with
-    IERC20Reserve public immutable reserve;
+    IReserve public immutable reserve;
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
     /// gain access to drips collected during `T - cycleSecs` to `T - 1`.
     uint64 public immutable cycleSecs;
@@ -94,7 +94,7 @@ contract DripsHub is Managed {
     /// between being taken from the users' drips balances and being collectable by their receivers.
     /// High value makes collecting cheaper by making it process less cycles for a given time range.
     /// @param _reserve The address of the ERC-20 reserve which the drips hub will work with
-    constructor(uint64 _cycleSecs, IERC20Reserve _reserve) {
+    constructor(uint64 _cycleSecs, IReserve _reserve) {
         cycleSecs = _cycleSecs;
         maxDripsReceivers = Drips.MAX_DRIPS_RECEIVERS;
         maxSplitsReceivers = Splits.MAX_SPLITS_RECEIVERS;

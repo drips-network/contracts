@@ -7,7 +7,7 @@ import {AddressIdUser} from "./AddressIdUser.t.sol";
 import {ManagedUser} from "./ManagedUser.t.sol";
 import {AddressId} from "../AddressId.sol";
 import {SplitsReceiver, DripsHub, DripsReceiver} from "../DripsHub.sol";
-import {ERC20Reserve, IERC20Reserve} from "../ERC20Reserve.sol";
+import {Reserve} from "../Reserve.sol";
 import {Proxy} from "../Managed.sol";
 import {IERC20, ERC20PresetFixedSupply} from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
@@ -33,7 +33,7 @@ contract DripsHubTest is DripsHubUserUtils {
     function setUp() public {
         defaultErc20 = new ERC20PresetFixedSupply("test", "test", 10**6 * 1 ether, address(this));
         otherErc20 = new ERC20PresetFixedSupply("other", "other", 10**6 * 1 ether, address(this));
-        ERC20Reserve reserve = new ERC20Reserve(address(this));
+        Reserve reserve = new Reserve(address(this));
         DripsHub hubLogic = new DripsHub(10, reserve);
         dripsHub = DripsHub(address(new Proxy(hubLogic, address(this))));
         reserve.addUser(address(dripsHub));
@@ -814,7 +814,7 @@ contract DripsHubTest is DripsHubUserUtils {
 
     function testContractCanBeUpgraded() public {
         uint64 newCycleLength = dripsHub.cycleSecs() + 1;
-        DripsHub newLogic = new DripsHub(newCycleLength, IERC20Reserve(address(0x1234)));
+        DripsHub newLogic = new DripsHub(newCycleLength, dripsHub.reserve());
         admin.upgradeTo(address(newLogic));
         assertEq(dripsHub.cycleSecs(), newCycleLength, "Invalid new cycle length");
     }
