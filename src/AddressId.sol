@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.7;
 
-import {DripsReceiver, ERC20DripsHub, SplitsReceiver} from "./ERC20DripsHub.sol";
+import {DripsHub, DripsReceiver, SplitsReceiver} from "./DripsHub.sol";
 import {IERC20Reserve} from "./ERC20Reserve.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
 contract AddressId {
-    ERC20DripsHub public immutable dripsHub;
+    DripsHub public immutable dripsHub;
     address public immutable reserve;
     uint32 public immutable accountId;
 
     /// @param _dripsHub The drips hub to use
-    constructor(ERC20DripsHub _dripsHub) {
+    constructor(DripsHub _dripsHub) {
         dripsHub = _dripsHub;
         reserve = address(_dripsHub.reserve());
         accountId = _dripsHub.createAccount(address(this));

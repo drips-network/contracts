@@ -3,6 +3,7 @@ pragma solidity ^0.8.7;
 
 import {DSTest} from "ds-test/test.sol";
 import {AddressIdUser} from "./AddressIdUser.t.sol";
+import {Hevm} from "./Hevm.t.sol";
 import {SplitsReceiver, DripsHub, DripsReceiver} from "../DripsHub.sol";
 
 abstract contract DripsHubUserUtils is DSTest {
@@ -14,8 +15,16 @@ abstract contract DripsHubUserUtils is DSTest {
     // Keys is user ID
     mapping(uint256 => bytes) internal currSplitsReceivers;
 
-    function setUpUtils(DripsHub dripsHub_) internal {
+    function setUp(DripsHub dripsHub_) internal {
         dripsHub = dripsHub_;
+    }
+
+    function warpToCycleEnd() internal {
+        warpBy(dripsHub.cycleSecs() - (block.timestamp % dripsHub.cycleSecs()));
+    }
+
+    function warpBy(uint256 secs) internal {
+        Hevm(HEVM_ADDRESS).warp(block.timestamp + secs);
     }
 
     function calcUserId(uint32 account, uint224 subAccount) internal view returns (uint256) {

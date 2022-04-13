@@ -2,7 +2,10 @@
 pragma solidity ^0.8.7;
 
 import {Drips, DripsReceiver} from "./Drips.sol";
+import {IERC20Reserve} from "./ERC20Reserve.sol";
+import {Managed} from "./Managed.sol";
 import {Splits, SplitsReceiver} from "./Splits.sol";
+import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
 /// @notice Drips hub contract. Automatically drips and splits funds between users.
 ///
@@ -41,7 +44,9 @@ import {Splits, SplitsReceiver} from "./Splits.sol";
 ///
 /// The contract assumes that all amounts in the system can be stored in signed 128-bit integers.
 /// It's guaranteed to be safe only when working with assets with supply lower than `2 ^ 127`.
-abstract contract DripsHub {
+contract DripsHub is Managed {
+    /// @notice The address of the ERC-20 reserve which the drips hub works with
+    IERC20Reserve public immutable reserve;
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
     /// gain access to drips collected during `T - cycleSecs` to `T - 1`.
     uint64 public immutable cycleSecs;
@@ -55,6 +60,8 @@ abstract contract DripsHub {
     uint32 public immutable totalSplitsWeight;
     /// @notice Number of bits in the sub-account part of userId
     uint256 public constant BITS_SUB_ACCOUNT = 224;
+    /// @notice The ERC-1967 storage slot holding a single `DripsHubStorage` structure.
+    bytes32 private immutable storageSlot = erc1967Slot("eip1967.dripsHub.storage");
 
     /// @notice Emitted when an account is created
     /// @param accountId The account ID
@@ -86,11 +93,13 @@ abstract contract DripsHub {
     /// Low value makes funds more available by shortening the average time of funds being frozen
     /// between being taken from the users' drips balances and being collectable by their receivers.
     /// High value makes collecting cheaper by making it process less cycles for a given time range.
-    constructor(uint64 _cycleSecs) {
+    /// @param _reserve The address of the ERC-20 reserve which the drips hub will work with
+    constructor(uint64 _cycleSecs, IERC20Reserve _reserve) {
         cycleSecs = _cycleSecs;
         maxDripsReceivers = Drips.MAX_DRIPS_RECEIVERS;
         maxSplitsReceivers = Splits.MAX_SPLITS_RECEIVERS;
         totalSplitsWeight = Splits.TOTAL_SPLITS_WEIGHT;
+        reserve = _reserve;
     }
 
     modifier onlyAccountOwner(uint256 userId) {
@@ -110,7 +119,7 @@ abstract contract DripsHub {
     /// Assigns it an ID and lets its owner perform actions on behalf of all its sub-accounts.
     /// Multiple accounts can be registered for a single address, it will own all of them.
     /// @return accountId The new account ID.
-    function createAccount(address owner) public virtual returns (uint32 accountId) {
+    function createAccount(address owner) public whenNotPaused returns (uint32 accountId) {
         DripsHubStorage storage dripsHubStorage = _dripsHubStorage();
         accountId = dripsHubStorage.nextAccountId++;
         dripsHubStorage.accountsOwners[accountId] = owner;
@@ -139,14 +148,6 @@ abstract contract DripsHub {
     function nextAccountId() public view returns (uint32 accountId) {
         return _dripsHubStorage().nextAccountId;
     }
-
-    /// @notice Returns the contract storage.
-    /// @return dripsHubStorage The storage.
-    function _dripsHubStorage()
-        internal
-        view
-        virtual
-        returns (DripsHubStorage storage dripsHubStorage);
 
     /// @notice Returns amount of received funds available for collection for a user.
     /// @param userId The user ID
@@ -191,7 +192,7 @@ abstract contract DripsHub {
         uint256 userId,
         uint256 assetId,
         SplitsReceiver[] memory currReceivers
-    ) public virtual returns (uint128 collectedAmt, uint128 splitAmt) {
+    ) public whenNotPaused returns (uint128 collectedAmt, uint128 splitAmt) {
         receiveDrips(userId, assetId, type(uint64).max);
         (, splitAmt) = split(userId, assetId, currReceivers);
         collectedAmt = collect(userId, assetId);
@@ -242,7 +243,7 @@ abstract contract DripsHub {
         uint256 userId,
         uint256 assetId,
         uint64 maxCycles
-    ) public virtual returns (uint128 receivedAmt, uint64 receivableCycles) {
+    ) public whenNotPaused returns (uint128 receivedAmt, uint64 receivableCycles) {
         (receivedAmt, receivableCycles) = Drips.receiveDrips(
             _dripsHubStorage().drips,
             cycleSecs,
@@ -274,7 +275,7 @@ abstract contract DripsHub {
         uint256 userId,
         uint256 assetId,
         SplitsReceiver[] memory currReceivers
-    ) public virtual returns (uint128 collectableAmt, uint128 splitAmt) {
+    ) public whenNotPaused returns (uint128 collectableAmt, uint128 splitAmt) {
         return Splits.split(_dripsHubStorage().splits, userId, assetId, currReceivers);
     }
 
@@ -293,12 +294,12 @@ abstract contract DripsHub {
     /// @return amt The collected amount
     function collect(uint256 userId, uint256 assetId)
         public
-        virtual
+        whenNotPaused
         onlyAccountOwner(userId)
         returns (uint128 amt)
     {
         amt = Splits.collect(_dripsHubStorage().splits, userId, assetId);
-        _transfer(assetId, int128(amt));
+        _settleBalance(assetId, -int128(amt));
     }
 
     /// @notice Gives funds from the user or their account to the receiver.
@@ -308,14 +309,14 @@ abstract contract DripsHub {
     /// @param receiver The receiver
     /// @param assetId The used asset ID
     /// @param amt The given amount
-    function _give(
+    function give(
         uint256 userId,
         uint256 receiver,
         uint256 assetId,
         uint128 amt
-    ) internal onlyAccountOwner(userId) {
+    ) public whenNotPaused onlyAccountOwner(userId) {
         Splits.give(_dripsHubStorage().splits, userId, receiver, assetId, amt);
-        _transfer(assetId, -int128(amt));
+        _settleBalance(assetId, int128(amt));
     }
 
     /// @notice Current user drips hash, see `hashDrips`.
@@ -349,7 +350,7 @@ abstract contract DripsHub {
     /// @return newBalance The new drips balance of the user or the account.
     /// Pass it as `lastBalance` when updating that user or the account for the next time.
     /// @return realBalanceDelta The actually applied drips balance change.
-    function _setDrips(
+    function setDrips(
         uint256 userId,
         uint256 assetId,
         uint64 lastUpdate,
@@ -357,7 +358,12 @@ abstract contract DripsHub {
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers
-    ) internal onlyAccountOwner(userId) returns (uint128 newBalance, int128 realBalanceDelta) {
+    )
+        public
+        whenNotPaused
+        onlyAccountOwner(userId)
+        returns (uint128 newBalance, int128 realBalanceDelta)
+    {
         (newBalance, realBalanceDelta) = Drips.setDrips(
             _dripsHubStorage().drips,
             cycleSecs,
@@ -369,7 +375,7 @@ abstract contract DripsHub {
             balanceDelta,
             newReceivers
         );
-        _transfer(assetId, -realBalanceDelta);
+        _settleBalance(assetId, realBalanceDelta);
     }
 
     /// @notice Calculates the hash of the drips configuration.
@@ -396,8 +402,9 @@ abstract contract DripsHub {
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
     /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the user.
-    function _setSplits(uint256 userId, SplitsReceiver[] memory receivers)
-        internal
+    function setSplits(uint256 userId, SplitsReceiver[] memory receivers)
+        public
+        whenNotPaused
         onlyAccountOwner(userId)
     {
         Splits.setSplits(_dripsHubStorage().splits, userId, receivers);
@@ -422,10 +429,30 @@ abstract contract DripsHub {
         return Splits.hashSplits(receivers);
     }
 
-    /// @notice Called when funds need to be transferred between the user and the drips hub.
-    /// The function must be called no more than once per transaction.
+    /// @notice Settles the change in balance of funds stored in DripHub.
+    /// It's done by transferring funds between `msg.sender` and the reserve.
     /// @param assetId The used asset ID
-    /// @param amt The transferred amount.
-    /// Positive to transfer funds to the user, negative to transfer from them.
-    function _transfer(uint256 assetId, int128 amt) internal virtual;
+    /// @param balanceDelta The change in balance.
+    /// Positive values cause transfer of funds from `msg.sender` to the reserve.
+    /// Negative values cause transfer of funds from the reserve to `msg.sender`.
+    /// Zero value causes no effect.
+    function _settleBalance(uint256 assetId, int128 balanceDelta) internal {
+        IERC20 erc20 = IERC20(address(uint160(assetId)));
+        if (balanceDelta > 0) {
+            reserve.deposit(erc20, msg.sender, uint128(balanceDelta));
+        } else if (balanceDelta < 0) {
+            reserve.withdraw(erc20, msg.sender, uint128(-balanceDelta));
+        }
+    }
+
+    /// @notice Returns the DripsHub storage.
+    /// @return storageRef The storage.
+    function _dripsHubStorage() internal view returns (DripsHubStorage storage storageRef) {
+        bytes32 slot = storageSlot;
+        // solhint-disable-next-line no-inline-assembly
+        assembly {
+            // Based on OpenZeppelin's StorageSlot
+            storageRef.slot := slot
+        }
+    }
 }

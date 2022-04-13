@@ -2,8 +2,7 @@
 
 pragma solidity ^0.8.7;
 
-import {DripsHub} from "../DripsHub.sol";
-import {SplitsReceiver, ERC20DripsHub, DripsReceiver, IERC20} from "../ERC20DripsHub.sol";
+import {DripsHub, DripsReceiver, SplitsReceiver} from "../DripsHub.sol";
 import {AddressId} from "../AddressId.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
