@@ -3,20 +3,10 @@
 Radicle Drips Hub is the smart contract running the drips and splits ecosystem.
 
 ## Getting started
-Radicle Drips Hub uses [dapp.tools](https://github.com/dapphub/dapptools) for development. Please install the `dapp` client. Then, run the following command to install the dependencies:
+Radicle Drips Hub uses [foundry](https://github.com/gakonst/foundry) for development. Please install the `forge` client. Then, run the following command to install the dependencies:
 
 ```bash
 make install
-```
-
-### Run linter
-```bash
-make lint
-```
-
-### Run prettier
-```bash
-make prettier
 ```
 
 ### Run all tests
@@ -28,7 +18,16 @@ make test
 A regular expression can be used to only run specific tests.
 
 ```bash
-dapp test -m <REGEX>
-dapp test -m testName
-dapp test -m ':ContractName\.'
+forge test --match-test <REGEX_TEST_PATTERN>
+forge test --match-contract <REGEX_CONTRACT_PATTERN>
+```
+
+### Run linter
+```bash
+make lint
+```
+
+### Run prettier
+```bash
+make prettier
 ```
