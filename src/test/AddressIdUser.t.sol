@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-pragma solidity ^0.8.7;
+pragma solidity ^0.8.13;
 
 import {DripsHub, DripsReceiver, SplitsReceiver} from "../DripsHub.sol";
 import {AddressId} from "../AddressId.sol";
