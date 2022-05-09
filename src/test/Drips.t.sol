@@ -12,6 +12,9 @@ contract DripsTest is DSTest {
         DripsReceiver[] currReceivers;
     }
 
+    string internal constant ERROR_NOT_SORTED = "Receivers not sorted";
+    string internal constant ERROR_INVALID_CONFIG = "Invalid current drips configuration";
+
     Drips.Storage internal s;
     uint64 internal cycleSecs = 10;
     // Keys are assetId and userId
@@ -65,28 +68,53 @@ contract DripsTest is DSTest {
         }
     }
 
-    function dripsReceivers() internal pure returns (DripsReceiver[] memory list) {
+    function recv() internal pure returns (DripsReceiver[] memory list) {
         list = new DripsReceiver[](0);
     }
 
-    function dripsReceivers(uint256 userId, uint128 amtPerSec)
+    function recv(uint256 userId, uint256 amtPerSec)
         internal
         pure
-        returns (DripsReceiver[] memory list)
+        returns (DripsReceiver[] memory receivers)
     {
-        list = new DripsReceiver[](1);
-        list[0] = DripsReceiver(userId, amtPerSec, 0, 0);
+        return recv(userId, amtPerSec, 0, 0);
     }
 
-    function dripsReceivers(
-        uint256 userId1,
-        uint128 amtPerSec1,
-        uint256 userId2,
-        uint128 amtPerSec2
-    ) internal pure returns (DripsReceiver[] memory list) {
-        list = new DripsReceiver[](2);
-        list[0] = DripsReceiver(userId1, amtPerSec1, 0, 0);
-        list[1] = DripsReceiver(userId2, amtPerSec2, 0, 0);
+    function recv(
+        uint256 userId,
+        uint256 amtPerSec,
+        uint256 start,
+        uint256 duration
+    ) internal pure returns (DripsReceiver[] memory receivers) {
+        receivers = new DripsReceiver[](1);
+        receivers[0] = DripsReceiver(userId, uint128(amtPerSec), uint64(start), uint64(duration));
+    }
+
+    function recv(DripsReceiver[] memory recv1, DripsReceiver[] memory recv2)
+        internal
+        pure
+        returns (DripsReceiver[] memory receivers)
+    {
+        receivers = new DripsReceiver[](recv1.length + recv2.length);
+        for (uint256 i = 0; i < recv1.length; i++) receivers[i] = recv1[i];
+        for (uint256 i = 0; i < recv2.length; i++) receivers[recv1.length + i] = recv2[i];
+    }
+
+    function recv(
+        DripsReceiver[] memory recv1,
+        DripsReceiver[] memory recv2,
+        DripsReceiver[] memory recv3
+    ) internal pure returns (DripsReceiver[] memory) {
+        return recv(recv(recv1, recv2), recv3);
+    }
+
+    function recv(
+        DripsReceiver[] memory recv1,
+        DripsReceiver[] memory recv2,
+        DripsReceiver[] memory recv3,
+        DripsReceiver[] memory recv4
+    ) internal pure returns (DripsReceiver[] memory) {
+        return recv(recv(recv1, recv2, recv3), recv4);
     }
 
     function setDrips(
@@ -296,7 +324,7 @@ contract DripsTest is DSTest {
     }
 
     function testAllowsDrippingToASingleReceiver() public {
-        setDrips(sender, 0, 100, dripsReceivers(receiver, 1));
+        setDrips(sender, 0, 100, recv(receiver, 1));
         warpBy(15);
         // Sender had 15 seconds paying 1 per second
         changeBalance(sender, 85, 0);
@@ -306,7 +334,7 @@ contract DripsTest is DSTest {
     }
 
     function testDripsToTwoReceivers() public {
-        setDrips(sender, 0, 100, dripsReceivers(receiver1, 1, receiver2, 1));
+        setDrips(sender, 0, 100, recv(recv(receiver1, 1), recv(receiver2, 1)));
         warpBy(14);
         // Sender had 14 seconds paying 2 per second
         changeBalance(sender, 72, 0);
@@ -318,9 +346,9 @@ contract DripsTest is DSTest {
     }
 
     function testDripsFromTwoSendersToASingleReceiver() public {
-        setDrips(sender1, 0, 100, dripsReceivers(receiver, 1));
+        setDrips(sender1, 0, 100, recv(receiver, 1));
         warpBy(2);
-        setDrips(sender2, 0, 100, dripsReceivers(receiver, 2));
+        setDrips(sender2, 0, 100, recv(receiver, 2));
         warpBy(15);
         // Sender1 had 17 seconds paying 1 per second
         changeBalance(sender1, 83, 0);
@@ -336,7 +364,7 @@ contract DripsTest is DSTest {
     }
 
     function testAllowsReceivingWhileBeingDrippedTo() public {
-        setDrips(sender, 0, cycleSecs + 10, dripsReceivers(receiver, 1));
+        setDrips(sender, 0, cycleSecs + 10, recv(receiver, 1));
         warpToCycleEnd();
         // Receiver had cycleSecs seconds paying 1 per second
         receiveDrips(receiver, cycleSecs);
@@ -349,7 +377,7 @@ contract DripsTest is DSTest {
     }
 
     function testDripsFundsUntilTheyRunOut() public {
-        setDrips(sender, 0, 100, dripsReceivers(receiver, 9));
+        setDrips(sender, 0, 100, recv(receiver, 9));
         warpBy(10);
         // Sender had 10 seconds paying 9 per second, drips balance is about to run out
         assertDripsBalance(sender, 10);
@@ -363,7 +391,7 @@ contract DripsTest is DSTest {
     }
 
     function testAllowsToppingUpWhileDripping() public {
-        setDrips(sender, 0, 100, dripsReceivers(receiver, 10));
+        setDrips(sender, 0, 100, recv(receiver, 10));
         warpBy(6);
         // Sender had 6 seconds paying 10 per second
         changeBalance(sender, 40, 60);
@@ -376,7 +404,7 @@ contract DripsTest is DSTest {
     }
 
     function testAllowsToppingUpAfterFundsRunOut() public {
-        setDrips(sender, 0, 100, dripsReceivers(receiver, 10));
+        setDrips(sender, 0, 100, recv(receiver, 10));
         warpBy(10);
         // Sender had 10 seconds paying 10 per second
         assertDripsBalance(sender, 0);
@@ -394,7 +422,7 @@ contract DripsTest is DSTest {
 
     function testAllowsDrippingWhichShouldEndAfterMaxTimestamp() public {
         uint128 balance = type(uint64).max + uint128(6);
-        setDrips(sender, 0, balance, dripsReceivers(receiver, 1));
+        setDrips(sender, 0, balance, recv(receiver, 1));
         warpBy(10);
         // Sender had 10 seconds paying 1 per second
         changeBalance(sender, balance - 10, 0);
@@ -404,9 +432,9 @@ contract DripsTest is DSTest {
     }
 
     function testAllowsChangingReceiversWhileDripping() public {
-        setDrips(sender, 0, 100, dripsReceivers(receiver1, 6, receiver2, 6));
+        setDrips(sender, 0, 100, recv(recv(receiver1, 6), recv(receiver2, 6)));
         warpBy(3);
-        setDrips(sender, 64, 64, dripsReceivers(receiver1, 4, receiver2, 8));
+        setDrips(sender, 64, 64, recv(recv(receiver1, 4), recv(receiver2, 8)));
         warpBy(4);
         // Sender had 7 seconds paying 12 per second
         changeBalance(sender, 16, 0);
@@ -418,11 +446,11 @@ contract DripsTest is DSTest {
     }
 
     function testAllowsRemovingReceiversWhileDripping() public {
-        setDrips(sender, 0, 100, dripsReceivers(receiver1, 5, receiver2, 5));
+        setDrips(sender, 0, 100, recv(recv(receiver1, 5), recv(receiver2, 5)));
         warpBy(3);
-        setDrips(sender, 70, 70, dripsReceivers(receiver2, 10));
+        setDrips(sender, 70, 70, recv(receiver2, 10));
         warpBy(4);
-        setDrips(sender, 30, 30, dripsReceivers());
+        setDrips(sender, 30, 30, recv());
         warpBy(10);
         // Sender had 7 seconds paying 10 per second
         changeBalance(sender, 30, 0);
@@ -435,83 +463,72 @@ contract DripsTest is DSTest {
 
     function testLimitsTheTotalReceiversCount() public {
         uint160 countMax = Drips.MAX_DRIPS_RECEIVERS;
-        DripsReceiver[] memory receiversGood = new DripsReceiver[](countMax);
-        DripsReceiver[] memory receiversBad = new DripsReceiver[](countMax + 1);
+        DripsReceiver[] memory receivers = new DripsReceiver[](countMax);
         for (uint160 i = 0; i < countMax; i++) {
-            receiversGood[i] = DripsReceiver(i, 1, 0, 0);
-            receiversBad[i] = receiversGood[i];
+            receivers[i] = recv(i, 1, 0, 0)[0];
         }
-        receiversBad[countMax] = DripsReceiver(countMax, 1, 0, 0);
-
-        setDrips(sender, 0, 0, receiversGood);
-        assertSetDripsReverts(sender, receiversBad, "Too many drips receivers");
+        setDrips(sender, 0, 0, receivers);
+        receivers = recv(receivers, recv(countMax, 1, 0, 0));
+        assertSetDripsReverts(sender, receivers, "Too many drips receivers");
     }
 
     function testRejectsZeroAmtPerSecReceivers() public {
-        assertSetDripsReverts(
-            sender,
-            dripsReceivers(receiver, 0),
-            "Drips receiver amtPerSec is zero"
-        );
+        assertSetDripsReverts(sender, recv(receiver, 0), "Drips receiver amtPerSec is zero");
     }
 
     function testRejectsUnsortedReceivers() public {
         assertSetDripsReverts(
             sender,
-            dripsReceivers(receiver2, 1, receiver1, 1),
-            "Receivers not sorted"
+            recv(recv(receiver2, 1), recv(receiver1, 1)),
+            ERROR_NOT_SORTED
         );
     }
 
     function testRejectsDuplicateReceivers() public {
-        assertSetDripsReverts(
-            sender,
-            dripsReceivers(receiver, 1, receiver, 1),
-            "Receivers not sorted"
-        );
+        assertSetDripsReverts(sender, recv(recv(receiver, 1), recv(receiver, 1)), ERROR_NOT_SORTED);
     }
 
     function testSetDripsRevertsIfInvalidLastUpdate() public {
-        setDrips(sender, 0, 0, dripsReceivers(receiver, 1));
+        setDrips(sender, 0, 0, recv(receiver, 1));
         assertSetDripsReverts(
             sender,
             uint64(block.timestamp) + 1,
             0,
-            dripsReceivers(receiver, 1),
+            recv(receiver, 1),
             0,
-            dripsReceivers(),
-            "Invalid current drips configuration"
+            recv(),
+            ERROR_INVALID_CONFIG
         );
     }
 
     function testSetDripsRevertsIfInvalidLastBalance() public {
-        setDrips(sender, 0, 1, dripsReceivers(receiver, 1));
+        setDrips(sender, 0, 1, recv(receiver, 1));
         assertSetDripsReverts(
             sender,
             uint64(block.timestamp),
             2,
-            dripsReceivers(receiver, 1),
+            recv(receiver, 1),
             0,
-            dripsReceivers(),
-            "Invalid current drips configuration"
+            recv(),
+            ERROR_INVALID_CONFIG
         );
     }
 
     function testSetDripsRevertsIfInvalidCurrReceivers() public {
-        setDrips(sender, 0, 0, dripsReceivers(receiver, 1));
+        setDrips(sender, 0, 0, recv(receiver, 1));
         assertSetDripsReverts(
             sender,
             uint64(block.timestamp),
             0,
-            dripsReceivers(receiver, 2),
+            recv(receiver, 2),
             0,
-            dripsReceivers(),
-            "Invalid current drips configuration"
+            recv(),
+            ERROR_INVALID_CONFIG
         );
     }
 
     function testAllowsAnAddressToDripAndReceiveIndependently() public {
-        setDrips(sender, 0, 10, dripsReceivers(sender, 10));
+        setDrips(sender, 0, 10, recv(sender, 10));
         warpBy(1);
         // Sender had 1 second paying 10 per second
         assertDripsBalance(sender, 0);
@@ -521,7 +538,7 @@ contract DripsTest is DSTest {
     }
 
     function testCapsWithdrawalOfMoreThanDripsBalance() public {
-        DripsReceiver[] memory receivers = dripsReceivers(receiver, 1);
+        DripsReceiver[] memory receivers = recv(receiver, 1);
         setDrips(sender, 0, 10, receivers);
         uint64 lastUpdate = uint64(block.timestamp);
         warpBy(4);
@@ -550,7 +567,7 @@ contract DripsTest is DSTest {
         // Enough for 3 cycles
         uint128 amt = cycleSecs * 3;
         warpToCycleEnd();
-        setDrips(sender, 0, amt, dripsReceivers(receiver, 1));
+        setDrips(sender, 0, amt, recv(receiver, 1));
         warpToCycleEnd();
         warpToCycleEnd();
         warpToCycleEnd();
@@ -568,7 +585,7 @@ contract DripsTest is DSTest {
     function testSenderCanDripToThemselves() public {
         uint128 amt = cycleSecs * 3;
         warpToCycleEnd();
-        setDrips(sender, 0, amt, dripsReceivers(sender, 1, receiver, 2));
+        setDrips(sender, 0, amt, recv(recv(sender, 1), recv(receiver, 2)));
         warpToCycleEnd();
         receiveDrips(sender, cycleSecs);
         receiveDrips(receiver, cycleSecs * 2);
@@ -581,12 +598,12 @@ contract DripsTest is DSTest {
             sender,
             0,
             9 * cycleSecs,
-            dripsReceivers(receiver1, 4, receiver2, 2)
+            recv(recv(receiver1, 4), recv(receiver2, 2))
         );
 
         warpToCycleEnd();
         // Covers 2 cycles of dripping
-        setDrips(otherAsset, sender, 0, 6 * cycleSecs, dripsReceivers(receiver1, 3));
+        setDrips(otherAsset, sender, 0, 6 * cycleSecs, recv(receiver1, 3));
 
         warpToCycleEnd();
         // receiver1 had 1.5 cycles of 4 per second
