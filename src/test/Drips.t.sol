@@ -14,6 +14,7 @@ contract DripsTest is DSTest {
 
     string internal constant ERROR_NOT_SORTED = "Receivers not sorted";
     string internal constant ERROR_INVALID_CONFIG = "Invalid current drips configuration";
+    string internal constant ERROR_BALANCE = "Insufficient balance";
 
     Drips.Storage internal s;
     uint64 internal cycleSecs = 10;
@@ -27,6 +28,12 @@ contract DripsTest is DSTest {
     uint256 internal receiver = 4;
     uint256 internal receiver1 = 5;
     uint256 internal receiver2 = 6;
+    uint256 internal receiver3 = 7;
+    uint256 internal receiver4 = 8;
+
+    function setUp() public {
+        warpToCycleEnd();
+    }
 
     function warpToCycleEnd() internal {
         warpBy(cycleSecs - (block.timestamp % cycleSecs));
@@ -203,6 +210,29 @@ contract DripsTest is DSTest {
 
     function assertSetDripsReverts(
         uint256 userId,
+        uint128 balanceFrom,
+        uint128 balanceTo,
+        DripsReceiver[] memory newReceivers,
+        string memory expectedReason
+    ) internal {
+        int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
+        (uint64 lastUpdate, uint128 lastBalance, DripsReceiver[] memory currReceivers) = loadConfig(
+            defaultAsset,
+            userId
+        );
+        assertSetDripsReverts(
+            userId,
+            lastUpdate,
+            lastBalance,
+            currReceivers,
+            balanceDelta,
+            newReceivers,
+            expectedReason
+        );
+    }
+
+    function assertSetDripsReverts(
+        uint256 userId,
         uint64 lastUpdate,
         uint128 lastBalance,
         DripsReceiver[] memory currReceivers,
@@ -359,6 +389,142 @@ contract DripsTest is DSTest {
         receiveDrips(receiver, 47);
     }
 
+    function testDripsWithStartAndDuration() public {
+        setDrips(sender, 0, 10, recv(receiver, 1, block.timestamp + 5, 10));
+        warpBy(5);
+        assertDripsBalance(sender, 10);
+        warpBy(10);
+        assertDripsBalance(sender, 0);
+        warpToCycleEnd();
+        receiveDrips(receiver, 10);
+    }
+
+    function testDripsWithStartAndDurationRequireSufficientBalance() public {
+        assertSetDripsReverts(
+            sender,
+            0,
+            1,
+            recv(receiver, 1, block.timestamp + 1, 2),
+            ERROR_BALANCE
+        );
+    }
+
+    function testDripsWithOnlyDuration() public {
+        setDrips(sender, 0, 10, recv(receiver, 1, 0, 10));
+        warpBy(10);
+        warpToCycleEnd();
+        receiveDrips(receiver, 10);
+    }
+
+    function testDripsWithOnlyDurationRequireSufficientBalance() public {
+        assertSetDripsReverts(sender, 0, 1, recv(receiver, 1, 0, 2), ERROR_BALANCE);
+    }
+
+    function testDripsWithOnlyStart() public {
+        setDrips(sender, 0, 10, recv(receiver, 1, block.timestamp + 5, 0));
+        warpBy(5);
+        assertDripsBalance(sender, 10);
+        warpBy(10);
+        assertDripsBalance(sender, 0);
+        warpToCycleEnd();
+        receiveDrips(receiver, 10);
+    }
+
+    function testDripsWithoutDurationHaveCommonEndTime() public {
+        // Enough for 8 seconds of dripping
+        setDrips(
+            sender,
+            0,
+            39,
+            recv(
+                recv(receiver1, 1, block.timestamp + 5, 0),
+                recv(receiver2, 2, 0, 0),
+                recv(receiver3, 3, block.timestamp + 3, 0)
+            )
+        );
+        warpBy(8);
+        assertDripsBalance(sender, 5);
+        warpToCycleEnd();
+        receiveDrips(receiver1, 3);
+        receiveDrips(receiver2, 16);
+        receiveDrips(receiver3, 15);
+        changeBalance(sender, 5, 0);
+    }
+
+    function testTwoDripsToSingleReceiver() public {
+        setDrips(
+            sender,
+            0,
+            28,
+            recv(
+                recv(receiver, 1, block.timestamp + 5, 10),
+                recv(receiver, 2, block.timestamp + 10, 9)
+            )
+        );
+        warpBy(19);
+        assertDripsBalance(sender, 0);
+        warpToCycleEnd();
+        receiveDrips(receiver, 28);
+    }
+
+    function testDripsOfAllSchedulingModes() public {
+        setDrips(
+            sender,
+            0,
+            62,
+            recv(
+                recv(receiver1, 1, 0, 0),
+                recv(receiver2, 2, 0, 4),
+                recv(receiver3, 3, block.timestamp + 2, 0),
+                recv(receiver4, 4, block.timestamp + 3, 5)
+            )
+        );
+        warpBy(10);
+        warpToCycleEnd();
+        receiveDrips(receiver1, 10);
+        receiveDrips(receiver2, 8);
+        receiveDrips(receiver3, 24);
+        receiveDrips(receiver4, 20);
+    }
+
+    function testDripsWithStartInThePast() public {
+        warpBy(5);
+        setDrips(sender, 0, 3, recv(receiver, 1, block.timestamp - 5, 0));
+        warpBy(3);
+        assertDripsBalance(sender, 0);
+        warpToCycleEnd();
+        receiveDrips(receiver, 3);
+    }
+
+    function testDripsWithStartInThePastAndDurationIntoFuture() public {
+        warpBy(5);
+        setDrips(sender, 0, 3, recv(receiver, 1, block.timestamp - 5, 8));
+        warpBy(3);
+        assertDripsBalance(sender, 0);
+        warpToCycleEnd();
+        receiveDrips(receiver, 3);
+    }
+
+    function testDripsWithStartAndDurationInThePast() public {
+        warpBy(5);
+        setDrips(sender, 0, 0, recv(receiver, 1, block.timestamp - 5, 3));
+        warpToCycleEnd();
+        receiveDrips(receiver, 0);
+    }
+
+    function testDripsWithStartAfterFundsRunOut() public {
+        setDrips(
+            sender,
+            0,
+            4,
+            recv(recv(receiver1, 1), recv(receiver2, 2, block.timestamp + 5, 0))
+        );
+        warpBy(6);
+        warpToCycleEnd();
+        receiveDrips(receiver1, 4);
+        receiveDrips(receiver2, 0);
+    }
+
     function testDoesNotRequireReceiverToBeInitialized() public {
         receiveDrips(receiver, 0);
     }
@@ -431,6 +597,17 @@ contract DripsTest is DSTest {
         receiveDrips(receiver, 10);
     }
 
+    function testAllowsDrippingWithDurationEndingAfterMaxTimestamp() public {
+        uint64 maxTimestamp = Drips.MAX_TIMESTAMP;
+        uint64 currTimestamp = uint64(block.timestamp);
+        uint64 maxDuration = maxTimestamp - currTimestamp;
+        uint64 duration = maxDuration + 5;
+        setDrips(sender, 0, duration, recv(receiver, 1, 0, duration));
+        warpToCycleEnd();
+        receiveDrips(receiver, cycleSecs);
+        setDrips(sender, duration - cycleSecs, 0, recv());
+    }
+
     function testAllowsChangingReceiversWhileDripping() public {
         setDrips(sender, 0, 100, recv(recv(receiver1, 6), recv(receiver2, 6)));
         warpBy(3);
@@ -476,10 +653,30 @@ contract DripsTest is DSTest {
         assertSetDripsReverts(sender, recv(receiver, 0), "Drips receiver amtPerSec is zero");
     }
 
-    function testRejectsUnsortedReceivers() public {
+    function testDripsNotSortedByReceiverAreRejected() public {
         assertSetDripsReverts(
             sender,
             recv(recv(receiver2, 1), recv(receiver1, 1)),
+            ERROR_NOT_SORTED
+        );
+    }
+
+    function testDripsNotSortedByAmtPerSecAreRejected() public {
+        assertSetDripsReverts(sender, recv(recv(receiver, 2), recv(receiver, 1)), ERROR_NOT_SORTED);
+    }
+
+    function testDripsNotSortedByStartAreRejected() public {
+        assertSetDripsReverts(
+            sender,
+            recv(recv(receiver, 1, 2, 0), recv(receiver, 1, 1, 0)),
+            ERROR_NOT_SORTED
+        );
+    }
+
+    function testDripsNotSortedByDurationAreRejected() public {
+        assertSetDripsReverts(
+            sender,
+            recv(recv(receiver, 1, 1, 2), recv(receiver, 1, 1, 1)),
             ERROR_NOT_SORTED
         );
     }
