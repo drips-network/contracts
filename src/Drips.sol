@@ -286,11 +286,14 @@ library Drips {
             require(receiver.amtPerSec != 0, "Drips receiver amtPerSec is zero");
             if (i > 0) require(_isOrdered(receivers[i - 1], receiver), "Receivers not sorted");
             uint64 start = receiver.start;
-            if (start < dripsStart) start = dripsStart;
+            if (receiver.start == 0) start = dripsStart;
             if (receiver.duration == 0) {
+                if (start < dripsStart) start = dripsStart;
                 length = _addDefaultEnd(defaults, length, start, receiver.amtPerSec);
             } else {
                 uint64 end = _capTimestamp(uint72(start) + receiver.duration);
+                if (start < dripsStart) start = dripsStart;
+                if (end < start) end = start;
                 uint192 spent = (end - start) * receiver.amtPerSec;
                 require(balance >= spent, "Insufficient balance");
                 balance -= uint128(spent);
