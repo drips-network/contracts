@@ -59,7 +59,7 @@ library Drips {
 
     struct Storage {
         /// @notice User drips states.
-        /// The keys are the user ID and the asset ID.
+        /// The keys are the asset ID and the user ID.
         mapping(uint256 => mapping(uint256 => DripsState)) dripsStates;
     }
 
@@ -100,7 +100,7 @@ library Drips {
         uint256 userId,
         uint256 assetId
     ) internal view returns (uint64 cycles) {
-        uint64 collectedCycle = s.dripsStates[userId][assetId].nextCollectedCycle;
+        uint64 collectedCycle = s.dripsStates[assetId][userId].nextCollectedCycle;
         if (collectedCycle == 0) return 0;
         uint64 currFinishedCycle = _currTimestamp() / cycleSecs;
         return currFinishedCycle + 1 - collectedCycle;
@@ -125,7 +125,7 @@ library Drips {
         uint64 allReceivableCycles = receivableDripsCycles(s, cycleSecs, userId, assetId);
         uint64 receivedCycles = maxCycles < allReceivableCycles ? maxCycles : allReceivableCycles;
         receivableCycles = allReceivableCycles - receivedCycles;
-        DripsState storage state = s.dripsStates[userId][assetId];
+        DripsState storage state = s.dripsStates[assetId][userId];
         uint64 collectedCycle = state.nextCollectedCycle;
         int128 cycleAmt = 0;
         for (uint256 i = 0; i < receivedCycles; i++) {
@@ -158,7 +158,7 @@ library Drips {
         uint64 cycles = maxCycles < receivableCycles ? maxCycles : receivableCycles;
         receivableCycles -= cycles;
         if (cycles > 0) {
-            DripsState storage state = s.dripsStates[userId][assetId];
+            DripsState storage state = s.dripsStates[assetId][userId];
             uint64 cycle = state.nextCollectedCycle;
             int128 cycleAmt = 0;
             for (uint256 i = 0; i < cycles; i++) {
@@ -196,7 +196,7 @@ library Drips {
             uint128 balance
         )
     {
-        DripsState storage state = s.dripsStates[userId][assetId];
+        DripsState storage state = s.dripsStates[assetId][userId];
         return (state.dripsHash, state.updateTime, state.balance);
     }
 
@@ -224,7 +224,7 @@ library Drips {
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers
     ) internal returns (uint128 newBalance, int128 realBalanceDelta) {
-        DripsState storage state = s.dripsStates[userId][assetId];
+        DripsState storage state = s.dripsStates[assetId][userId];
         require(hashDrips(currReceivers) == state.dripsHash, "Invalid current drips list");
         uint64 lastUpdate = state.updateTime;
         uint128 lastBalance = state.balance;
@@ -243,9 +243,8 @@ library Drips {
         }
         uint64 newDefaultEnd = _defaultEnd(newBalance, _currTimestamp(), newReceivers);
         _updateReceiverStates(
-            s,
+            s.dripsStates[assetId],
             cycleSecs_,
-            assetId,
             currReceivers,
             lastUpdate,
             currDefaultEnd,
@@ -395,9 +394,8 @@ library Drips {
     }
 
     /// @notice Applies the effects of the change of the drips on the receivers' drips states.
-    /// @param s The drips storage
+    /// @param states The drips states for a single asset, the key is the user ID
     /// @param cycleSecs_ The cycle length
-    /// @param assetId The used asset ID
     /// @param currReceivers The list of the drips receivers set in the last drips update
     /// of the user.
     /// If this is the first update, pass an empty array.
@@ -410,9 +408,8 @@ library Drips {
     /// @param newDefaultEnd Time when drips without duration
     /// will end according to the new drips configuration.
     function _updateReceiverStates(
-        Storage storage s,
+        mapping(uint256 => DripsState) storage states,
         uint64 cycleSecs_,
-        uint256 assetId,
         DripsReceiver[] memory currReceivers,
         uint64 lastUpdate,
         uint64 currDefaultEnd,
@@ -444,8 +441,7 @@ library Drips {
 
             if (pickCurr && pickNew) {
                 // Shift the existing drip to fulfil the new configuration
-                mapping(uint64 => AmtDelta) storage deltas = s
-                .dripsStates[currRecv.userId][assetId].amtDeltas;
+                mapping(uint64 => AmtDelta) storage deltas = states[currRecv.userId].amtDeltas;
                 (uint64 currStart, uint64 currEnd) = _dripsRange(
                     currRecv,
                     lastUpdate,
@@ -467,13 +463,12 @@ library Drips {
                 );
             } else if (pickCurr) {
                 // Remove an existing drip
-                mapping(uint64 => AmtDelta) storage deltas = s
-                .dripsStates[currRecv.userId][assetId].amtDeltas;
+                mapping(uint64 => AmtDelta) storage deltas = states[currRecv.userId].amtDeltas;
                 (uint64 start, uint64 end) = _dripsRange(currRecv, lastUpdate, currDefaultEnd);
                 _clearDeltaRange(deltas, cycleSecs, start, end, currRecv.amtPerSec);
             } else if (pickNew) {
                 // Create a new drip
-                DripsState storage state = s.dripsStates[newRecv.userId][assetId];
+                DripsState storage state = states[newRecv.userId];
                 (uint64 start, uint64 end) = _dripsRange(newRecv, _currTimestamp(), newDefaultEnd);
                 _setDeltaRange(state.amtDeltas, cycleSecs, start, end, newRecv.amtPerSec);
                 // The receiver may have never been used, initialize it
