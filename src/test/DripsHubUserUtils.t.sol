@@ -128,6 +128,10 @@ abstract contract DripsHubUserUtils is DSTest {
         storeDrips(erc20, user, newReceivers);
         assertEq(newBalance, balanceTo, "Invalid drips balance");
         assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
+        (, uint64 updateTime, uint128 actualBalance) = dripsHub.dripsState(user.userId(), erc20);
+        assertEq(updateTime, block.timestamp, "Invalid new last update time");
+        assertEq(balanceTo, actualBalance, "Invalid drips balance");
+        assertEq(balanceTo, actualBalance, "Invalid drips balance");
         assertBalance(erc20, user, expectedBalance);
     }
 
@@ -136,7 +140,7 @@ abstract contract DripsHubUserUtils is DSTest {
         AddressIdUser user,
         DripsReceiver[] memory currReceivers
     ) internal {
-        bytes32 actual = dripsHub.dripsHash(user.userId(), erc20);
+        (bytes32 actual, , ) = dripsHub.dripsState(user.userId(), erc20);
         bytes32 expected = dripsHub.hashDrips(currReceivers);
         assertEq(actual, expected, "Invalid drips configuration");
     }
@@ -173,16 +177,6 @@ abstract contract DripsHubUserUtils is DSTest {
         } catch Error(string memory reason) {
             assertEq(reason, expectedReason, "Invalid set drips revert reason");
         }
-    }
-
-    function assertDrips(
-        IERC20 erc20,
-        uint256 user,
-        DripsReceiver[] memory currReceivers
-    ) internal {
-        bytes32 actual = dripsHub.dripsHash(user, erc20);
-        bytes32 expected = dripsHub.hashDrips(currReceivers);
-        assertEq(actual, expected, "Invalid drips configuration");
     }
 
     function give(

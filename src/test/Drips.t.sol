@@ -135,6 +135,9 @@ contract DripsTest is DSTest {
 
         storeCurrReceivers(assetId, userId, newReceivers);
         assertEq(newBalance, balanceTo, "Invalid drips balance");
+        (, uint64 updateTime, uint128 actualBalance) = Drips.dripsState(s, userId, assetId);
+        assertEq(updateTime, block.timestamp, "Invalid new last update time");
+        assertEq(balanceTo, actualBalance, "Invalid drips balance");
         assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
     }
 
@@ -143,12 +146,12 @@ contract DripsTest is DSTest {
         uint256 userId,
         DripsReceiver[] memory currReceivers
     ) internal {
-        bytes32 actual = Drips.dripsHash(s, userId, assetId);
+        (bytes32 actual, , ) = Drips.dripsState(s, userId, assetId);
         bytes32 expected = Drips.hashDrips(currReceivers);
         assertEq(actual, expected, "Invalid drips configuration");
     }
 
-    function assertDripsBalance(uint256 userId, uint128 expected) internal {
+    function assertBalance(uint256 userId, uint128 expected) internal {
         changeBalance(userId, expected, expected);
     }
 
@@ -323,9 +326,9 @@ contract DripsTest is DSTest {
     function testDripsWithStartAndDuration() public {
         setDrips(sender, 0, 10, recv(receiver, 1, block.timestamp + 5, 10));
         warpBy(5);
-        assertDripsBalance(sender, 10);
+        assertBalance(sender, 10);
         warpBy(10);
-        assertDripsBalance(sender, 0);
+        assertBalance(sender, 0);
         warpToCycleEnd();
         receiveDrips(receiver, 10);
     }
@@ -354,9 +357,9 @@ contract DripsTest is DSTest {
     function testDripsWithOnlyStart() public {
         setDrips(sender, 0, 10, recv(receiver, 1, block.timestamp + 5, 0));
         warpBy(5);
-        assertDripsBalance(sender, 10);
+        assertBalance(sender, 10);
         warpBy(10);
-        assertDripsBalance(sender, 0);
+        assertBalance(sender, 0);
         warpToCycleEnd();
         receiveDrips(receiver, 10);
     }
@@ -374,7 +377,7 @@ contract DripsTest is DSTest {
             )
         );
         warpBy(8);
-        assertDripsBalance(sender, 5);
+        assertBalance(sender, 5);
         warpToCycleEnd();
         receiveDrips(receiver1, 3);
         receiveDrips(receiver2, 16);
@@ -393,7 +396,7 @@ contract DripsTest is DSTest {
             )
         );
         warpBy(19);
-        assertDripsBalance(sender, 0);
+        assertBalance(sender, 0);
         warpToCycleEnd();
         receiveDrips(receiver, 28);
     }
@@ -422,7 +425,7 @@ contract DripsTest is DSTest {
         warpBy(5);
         setDrips(sender, 0, 3, recv(receiver, 1, block.timestamp - 5, 0));
         warpBy(3);
-        assertDripsBalance(sender, 0);
+        assertBalance(sender, 0);
         warpToCycleEnd();
         receiveDrips(receiver, 3);
     }
@@ -431,7 +434,7 @@ contract DripsTest is DSTest {
         warpBy(5);
         setDrips(sender, 0, 3, recv(receiver, 1, block.timestamp - 5, 8));
         warpBy(3);
-        assertDripsBalance(sender, 0);
+        assertBalance(sender, 0);
         warpToCycleEnd();
         receiveDrips(receiver, 3);
     }
@@ -477,10 +480,10 @@ contract DripsTest is DSTest {
         setDrips(sender, 0, 100, recv(receiver, 9));
         warpBy(10);
         // Sender had 10 seconds paying 9 per second, drips balance is about to run out
-        assertDripsBalance(sender, 10);
+        assertBalance(sender, 10);
         warpBy(1);
         // Sender had 11 seconds paying 9 per second, drips balance has run out
-        assertDripsBalance(sender, 1);
+        assertBalance(sender, 1);
         // Nothing more will be dripped
         warpToCycleEnd();
         changeBalance(sender, 1, 0);
@@ -504,7 +507,7 @@ contract DripsTest is DSTest {
         setDrips(sender, 0, 100, recv(receiver, 10));
         warpBy(10);
         // Sender had 10 seconds paying 10 per second
-        assertDripsBalance(sender, 0);
+        assertBalance(sender, 0);
         warpToCycleEnd();
         // Receiver had 10 seconds paying 10 per second
         assertReceivableDrips(receiver, 100);
@@ -643,7 +646,7 @@ contract DripsTest is DSTest {
         setDrips(sender, 0, 10, recv(sender, 10));
         warpBy(1);
         // Sender had 1 second paying 10 per second
-        assertDripsBalance(sender, 0);
+        assertBalance(sender, 0);
         warpToCycleEnd();
         // Sender had 1 second paying 10 per second
         receiveDrips(sender, 10);
@@ -666,7 +669,7 @@ contract DripsTest is DSTest {
         storeCurrReceivers(defaultAsset, sender, receivers);
         assertEq(newBalance, 0, "Invalid balance");
         assertEq(realBalanceDelta, -6, "Invalid real balance delta");
-        assertDripsBalance(sender, 0);
+        assertBalance(sender, 0);
         warpToCycleEnd();
         // Receiver had 4 seconds paying 1 per second
         receiveDrips(receiver, 4);

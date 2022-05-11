@@ -336,9 +336,19 @@ contract DripsHub is Managed {
     /// @notice Current user drips hash, see `hashDrips`.
     /// @param userId The user ID
     /// @param erc20 The used ERC-20 token
-    /// @return currDripsHash The current user account's drips hash
-    function dripsHash(uint256 userId, IERC20 erc20) public view returns (bytes32 currDripsHash) {
-        return Drips.dripsHash(_dripsHubStorage().drips, userId, _assetId(erc20));
+    /// @return dripsHash The current drips receivers list hash
+    /// @return updateTime The time when drips have been configured for the last time
+    /// @return balance The balance when drips have been configured for the last time
+    function dripsState(uint256 userId, IERC20 erc20)
+        public
+        view
+        returns (
+            bytes32 dripsHash,
+            uint64 updateTime,
+            uint128 balance
+        )
+    {
+        return Drips.dripsState(_dripsHubStorage().drips, userId, _assetId(erc20));
     }
 
     /// @notice Sets the user's or the account's drips configuration.

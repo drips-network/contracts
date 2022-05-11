@@ -64,7 +64,7 @@ library Drips {
     }
 
     struct DripsState {
-        /// @notice Drips receivers hash, see `hashDrips`.
+        /// @notice Drips receivers list hash, see `hashDrips`.
         bytes32 dripsHash;
         /// @notice The next cycle to be collected
         uint64 nextCollectedCycle;
@@ -125,13 +125,13 @@ library Drips {
         uint64 allReceivableCycles = receivableDripsCycles(s, cycleSecs, userId, assetId);
         uint64 receivedCycles = maxCycles < allReceivableCycles ? maxCycles : allReceivableCycles;
         receivableCycles = allReceivableCycles - receivedCycles;
-        DripsState storage dripsState = s.dripsStates[userId][assetId];
-        uint64 collectedCycle = dripsState.nextCollectedCycle;
+        DripsState storage state = s.dripsStates[userId][assetId];
+        uint64 collectedCycle = state.nextCollectedCycle;
         int128 cycleAmt = 0;
         for (uint256 i = 0; i < receivedCycles; i++) {
-            cycleAmt += dripsState.amtDeltas[collectedCycle].thisCycle;
+            cycleAmt += state.amtDeltas[collectedCycle].thisCycle;
             receivableAmt += uint128(cycleAmt);
-            cycleAmt += dripsState.amtDeltas[collectedCycle].nextCycle;
+            cycleAmt += state.amtDeltas[collectedCycle].nextCycle;
             collectedCycle++;
         }
     }
@@ -158,20 +158,20 @@ library Drips {
         uint64 cycles = maxCycles < receivableCycles ? maxCycles : receivableCycles;
         receivableCycles -= cycles;
         if (cycles > 0) {
-            DripsState storage dripsState = s.dripsStates[userId][assetId];
-            uint64 cycle = dripsState.nextCollectedCycle;
+            DripsState storage state = s.dripsStates[userId][assetId];
+            uint64 cycle = state.nextCollectedCycle;
             int128 cycleAmt = 0;
             for (uint256 i = 0; i < cycles; i++) {
-                cycleAmt += dripsState.amtDeltas[cycle].thisCycle;
+                cycleAmt += state.amtDeltas[cycle].thisCycle;
                 receivedAmt += uint128(cycleAmt);
-                cycleAmt += dripsState.amtDeltas[cycle].nextCycle;
-                delete dripsState.amtDeltas[cycle];
+                cycleAmt += state.amtDeltas[cycle].nextCycle;
+                delete state.amtDeltas[cycle];
                 cycle++;
             }
             // The next cycle delta must be relative to the last collected cycle, which got zeroed.
             // In other words the next cycle delta must be an absolute value.
-            if (cycleAmt != 0) dripsState.amtDeltas[cycle].thisCycle += cycleAmt;
-            dripsState.nextCollectedCycle = cycle;
+            if (cycleAmt != 0) state.amtDeltas[cycle].thisCycle += cycleAmt;
+            state.nextCollectedCycle = cycle;
         }
         emit ReceivedDrips(userId, assetId, receivedAmt, receivableCycles);
     }
@@ -180,13 +180,24 @@ library Drips {
     /// @param s The drips storage
     /// @param userId The user ID
     /// @param assetId The used asset ID
-    /// @return currDripsHash The current user account's drips hash
-    function dripsHash(
+    /// @return dripsHash The current drips receivers list hash
+    /// @return updateTime The time when drips have been configured for the last time
+    /// @return balance The balance when drips have been configured for the last time
+    function dripsState(
         Storage storage s,
         uint256 userId,
         uint256 assetId
-    ) internal view returns (bytes32 currDripsHash) {
-        return s.dripsStates[userId][assetId].dripsHash;
+    )
+        internal
+        view
+        returns (
+            bytes32 dripsHash,
+            uint64 updateTime,
+            uint128 balance
+        )
+    {
+        DripsState storage state = s.dripsStates[userId][assetId];
+        return (state.dripsHash, state.updateTime, state.balance);
     }
 
     /// @notice Sets the user's drips configuration.
@@ -213,10 +224,10 @@ library Drips {
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers
     ) internal returns (uint128 newBalance, int128 realBalanceDelta) {
-        DripsState storage dripsState = s.dripsStates[userId][assetId];
-        require(hashDrips(currReceivers) == dripsState.dripsHash, "Invalid current drips list");
-        uint64 lastUpdate = dripsState.updateTime;
-        uint128 lastBalance = dripsState.balance;
+        DripsState storage state = s.dripsStates[userId][assetId];
+        require(hashDrips(currReceivers) == state.dripsHash, "Invalid current drips list");
+        uint64 lastUpdate = state.updateTime;
+        uint128 lastBalance = state.balance;
         uint64 currDefaultEnd = _defaultEnd(lastBalance, lastUpdate, currReceivers);
         {
             uint128 currBalance = _currBalance(
@@ -241,9 +252,9 @@ library Drips {
             newReceivers,
             newDefaultEnd
         );
-        dripsState.dripsHash = hashDrips(newReceivers);
-        dripsState.updateTime = _currTimestamp();
-        dripsState.balance = newBalance;
+        state.dripsHash = hashDrips(newReceivers);
+        state.updateTime = _currTimestamp();
+        state.balance = newBalance;
         emit DripsUpdated(userId, assetId, newBalance, newReceivers);
     }
 
@@ -462,12 +473,12 @@ library Drips {
                 _clearDeltaRange(deltas, cycleSecs, start, end, currRecv.amtPerSec);
             } else if (pickNew) {
                 // Create a new drip
-                DripsState storage dripsState = s.dripsStates[newRecv.userId][assetId];
+                DripsState storage state = s.dripsStates[newRecv.userId][assetId];
                 (uint64 start, uint64 end) = _dripsRange(newRecv, _currTimestamp(), newDefaultEnd);
-                _setDeltaRange(dripsState.amtDeltas, cycleSecs, start, end, newRecv.amtPerSec);
+                _setDeltaRange(state.amtDeltas, cycleSecs, start, end, newRecv.amtPerSec);
                 // The receiver may have never been used, initialize it
-                if (dripsState.nextCollectedCycle == 0) {
-                    dripsState.nextCollectedCycle = _currTimestamp() / cycleSecs + 1;
+                if (state.nextCollectedCycle == 0) {
+                    state.nextCollectedCycle = _currTimestamp() / cycleSecs + 1;
                 }
             } else {
                 break;
