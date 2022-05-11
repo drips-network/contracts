@@ -64,10 +64,14 @@ library Drips {
     }
 
     struct DripsState {
-        /// @notice User drips configuration hashes, see `hashDrips`.
+        /// @notice Drips receivers hash, see `hashDrips`.
         bytes32 dripsHash;
-        // The next cycle to be collected
+        /// @notice The next cycle to be collected
         uint64 nextCollectedCycle;
+        /// @notice The time when drips have been configured for the last time
+        uint64 updateTime;
+        /// @notice The balance when drips have been configured for the last time
+        uint128 balance;
         /// @notice The changes of collected amounts on specific cycle.
         /// The keys are cycles, each cycle `C` becomes collectable on timestamp `C * cycleSecs`.
         /// Values for cycles before `nextCollectedCycle` are guaranteed to be zeroed.
@@ -190,10 +194,6 @@ library Drips {
     /// @param cycleSecs_ The cycle length
     /// @param userId The user ID
     /// @param assetId The used asset ID
-    /// @param lastUpdate The timestamp of the last drips update of the user.
-    /// If this is the first update, pass zero.
-    /// @param lastBalance The drips balance after the last drips update of the user.
-    /// If this is the first update, pass zero.
     /// @param currReceivers The list of the drips receivers set in the last drips update
     /// of the user.
     /// If this is the first update, pass an empty array.
@@ -209,19 +209,27 @@ library Drips {
         uint64 cycleSecs_,
         uint256 userId,
         uint256 assetId,
-        uint64 lastUpdate,
-        uint128 lastBalance,
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers
     ) internal returns (uint128 newBalance, int128 realBalanceDelta) {
-        _assertCurrDrips(s, userId, assetId, lastUpdate, lastBalance, currReceivers);
+        DripsState storage dripsState = s.dripsStates[userId][assetId];
+        require(hashDrips(currReceivers) == dripsState.dripsHash, "Invalid current drips list");
+        uint64 lastUpdate = dripsState.updateTime;
+        uint128 lastBalance = dripsState.balance;
         uint64 currDefaultEnd = _defaultEnd(lastBalance, lastUpdate, currReceivers);
-        uint128 currBalance = _currBalance(lastBalance, lastUpdate, currDefaultEnd, currReceivers);
-        int136 balance = int128(currBalance) + int136(balanceDelta);
-        if (balance < 0) balance = 0;
-        newBalance = uint128(uint136(balance));
-        realBalanceDelta = int128(balance - int128(currBalance));
+        {
+            uint128 currBalance = _currBalance(
+                lastBalance,
+                lastUpdate,
+                currDefaultEnd,
+                currReceivers
+            );
+            int136 balance = int128(currBalance) + int136(balanceDelta);
+            if (balance < 0) balance = 0;
+            newBalance = uint128(uint136(balance));
+            realBalanceDelta = int128(balance - int128(currBalance));
+        }
         uint64 newDefaultEnd = _defaultEnd(newBalance, _currTimestamp(), newReceivers);
         _updateReceiverStates(
             s,
@@ -233,37 +241,10 @@ library Drips {
             newReceivers,
             newDefaultEnd
         );
-        s.dripsStates[userId][assetId].dripsHash = hashDrips(
-            _currTimestamp(),
-            newBalance,
-            newReceivers
-        );
+        dripsState.dripsHash = hashDrips(newReceivers);
+        dripsState.updateTime = _currTimestamp();
+        dripsState.balance = newBalance;
         emit DripsUpdated(userId, assetId, newBalance, newReceivers);
-    }
-
-    /// @notice Asserts that the drips configuration is the currently used one.
-    /// @param s The drips storage
-    /// @param userId The user ID
-    /// @param assetId The used asset ID
-    /// @param lastUpdate The timestamp of the last drips update of the user.
-    /// If this is the first update, pass zero.
-    /// @param lastBalance The drips balance after the last drips update of the user.
-    /// If this is the first update, pass zero.
-    /// @param currReceivers The list of the drips receivers set in the last drips update
-    /// of the user.
-    /// If this is the first update, pass an empty array.
-    function _assertCurrDrips(
-        Storage storage s,
-        uint256 userId,
-        uint256 assetId,
-        uint64 lastUpdate,
-        uint128 lastBalance,
-        DripsReceiver[] memory currReceivers
-    ) private view {
-        require(
-            hashDrips(lastUpdate, lastBalance, currReceivers) == dripsHash(s, userId, assetId),
-            "Invalid current drips configuration"
-        );
     }
 
     /// @notice Calculates the end time of drips without duration.
@@ -389,21 +370,17 @@ library Drips {
 
     /// @notice Calculates the hash of the drips configuration.
     /// It's used to verify if drips configuration is the previously set one.
-    /// @param update The timestamp of the drips update.
-    /// If the drips have never been updated, pass zero.
-    /// @param balance The drips balance.
-    /// If the drips have never been updated, pass zero.
     /// @param receivers The list of the drips receivers.
     /// Must be sorted, deduplicated and without 0 amtPerSecs.
     /// If the drips have never been updated, pass an empty array.
     /// @return dripsConfigurationHash The hash of the drips configuration
-    function hashDrips(
-        uint64 update,
-        uint128 balance,
-        DripsReceiver[] memory receivers
-    ) internal pure returns (bytes32 dripsConfigurationHash) {
-        if (update == 0 && balance == 0 && receivers.length == 0) return bytes32(0);
-        return keccak256(abi.encode(receivers, update, balance));
+    function hashDrips(DripsReceiver[] memory receivers)
+        internal
+        pure
+        returns (bytes32 dripsConfigurationHash)
+    {
+        if (receivers.length == 0) return bytes32(0);
+        return keccak256(abi.encode(receivers));
     }
 
     /// @notice Applies the effects of the change of the drips on the receivers' drips states.

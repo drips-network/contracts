@@ -346,10 +346,6 @@ contract DripsHub is Managed {
     /// to fulfill the change of the drips balance.
     /// @param userId The user ID
     /// @param erc20 The used ERC-20 token
-    /// @param lastUpdate The timestamp of the last drips update of the user or the account.
-    /// If this is the first update, pass zero.
-    /// @param lastBalance The drips balance after the last drips update of the user or the account.
-    /// If this is the first update, pass zero.
     /// @param currReceivers The list of the drips receivers set in the last drips update
     /// of the user or the account.
     /// If this is the first update, pass an empty array.
@@ -363,8 +359,6 @@ contract DripsHub is Managed {
     function setDrips(
         uint256 userId,
         IERC20 erc20,
-        uint64 lastUpdate,
-        uint128 lastBalance,
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers
@@ -379,8 +373,6 @@ contract DripsHub is Managed {
             cycleSecs,
             userId,
             _assetId(erc20),
-            lastUpdate,
-            lastBalance,
             currReceivers,
             balanceDelta,
             newReceivers
@@ -394,20 +386,16 @@ contract DripsHub is Managed {
 
     /// @notice Calculates the hash of the drips configuration.
     /// It's used to verify if drips configuration is the previously set one.
-    /// @param update The timestamp of the drips update.
-    /// If the drips have never been updated, pass zero.
-    /// @param balance The drips balance.
-    /// If the drips have never been updated, pass zero.
     /// @param receivers The list of the drips receivers.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
     /// If the drips have never been updated, pass an empty array.
     /// @return dripsConfigurationHash The hash of the drips configuration
-    function hashDrips(
-        uint64 update,
-        uint128 balance,
-        DripsReceiver[] memory receivers
-    ) public pure returns (bytes32 dripsConfigurationHash) {
-        return Drips.hashDrips(update, balance, receivers);
+    function hashDrips(DripsReceiver[] memory receivers)
+        public
+        pure
+        returns (bytes32 dripsConfigurationHash)
+    {
+        return Drips.hashDrips(receivers);
     }
 
     /// @notice Sets user splits configuration.

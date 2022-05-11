@@ -443,8 +443,6 @@ contract DripsHubTest is DripsHubUserUtils {
             dripsHub.setDrips(
                 calcUserId(dripsHub.nextAccountId(), 0),
                 defaultErc20,
-                0,
-                0,
                 dripsReceivers(),
                 0,
                 dripsReceivers()
@@ -611,7 +609,7 @@ contract DripsHubTest is DripsHubUserUtils {
 
     function testSetDripsCanBePaused() public {
         admin.pause();
-        try user.setDrips(defaultErc20, 0, 0, dripsReceivers(), 1, dripsReceivers()) {
+        try user.setDrips(defaultErc20, dripsReceivers(), 1, dripsReceivers()) {
             assertTrue(false, "SetDrips hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid setDrips revert reason");
@@ -620,7 +618,7 @@ contract DripsHubTest is DripsHubUserUtils {
 
     function testSetDripsFromAccountCanBePaused() public {
         admin.pause();
-        try user.setDrips(defaultErc20, 0, 0, dripsReceivers(), 1, dripsReceivers()) {
+        try user.setDrips(defaultErc20, dripsReceivers(), 1, dripsReceivers()) {
             assertTrue(false, "SetDrips hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid setDrips revert reason");

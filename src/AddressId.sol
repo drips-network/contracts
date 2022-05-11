@@ -65,10 +65,6 @@ contract AddressId {
     /// Transfers funds between the msg.sender's wallet and the drips hub contract
     /// to fulfill the change of the drips balance.
     /// @param erc20 The token to use
-    /// @param lastUpdate The timestamp of the last drips update of the user or the account.
-    /// If this is the first update, pass zero.
-    /// @param lastBalance The drips balance after the last drips update of the user or the account.
-    /// If this is the first update, pass zero.
     /// @param currReceivers The list of the drips receivers set in the last drips update
     /// of the user or the account.
     /// If this is the first update, pass an empty array.
@@ -81,8 +77,6 @@ contract AddressId {
     /// @return realBalanceDelta The actually applied drips balance change.
     function setDrips(
         IERC20 erc20,
-        uint64 lastUpdate,
-        uint128 lastBalance,
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers
@@ -91,8 +85,6 @@ contract AddressId {
         (newBalance, realBalanceDelta) = dripsHub.setDrips(
             calcUserId(msg.sender),
             erc20,
-            lastUpdate,
-            lastBalance,
             currReceivers,
             balanceDelta,
             newReceivers

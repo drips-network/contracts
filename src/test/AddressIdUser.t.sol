@@ -17,22 +17,12 @@ contract AddressIdUser {
 
     function setDrips(
         IERC20 erc20,
-        uint64 lastUpdate,
-        uint128 lastBalance,
         DripsReceiver[] calldata currReceivers,
         int128 balanceDelta,
         DripsReceiver[] calldata newReceivers
     ) public returns (uint128 newBalance, int128 realBalanceDelta) {
         if (balanceDelta > 0) erc20.approve(address(addressId), uint128(balanceDelta));
-        return
-            addressId.setDrips(
-                erc20,
-                lastUpdate,
-                lastBalance,
-                currReceivers,
-                balanceDelta,
-                newReceivers
-            );
+        return addressId.setDrips(erc20, currReceivers, balanceDelta, newReceivers);
     }
 
     function give(

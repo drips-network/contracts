@@ -6,20 +6,14 @@ import {Hevm} from "./Hevm.t.sol";
 import {Drips, DripsReceiver} from "../Drips.sol";
 
 contract DripsTest is DSTest {
-    struct Config {
-        uint64 lastUpdate;
-        uint128 lastBalance;
-        DripsReceiver[] currReceivers;
-    }
-
     string internal constant ERROR_NOT_SORTED = "Receivers not sorted";
-    string internal constant ERROR_INVALID_CONFIG = "Invalid current drips configuration";
+    string internal constant ERROR_INVALID_DRIPS_LIST = "Invalid current drips list";
     string internal constant ERROR_BALANCE = "Insufficient balance";
 
     Drips.Storage internal s;
     uint64 internal cycleSecs = 10;
     // Keys are assetId and userId
-    mapping(uint256 => mapping(uint256 => Config)) internal configs;
+    mapping(uint256 => mapping(uint256 => DripsReceiver[])) internal currReceiversStore;
     uint256 internal defaultAsset = 1;
     uint256 internal otherAsset = 2;
     uint256 internal sender = 1;
@@ -43,35 +37,23 @@ contract DripsTest is DSTest {
         Hevm(HEVM_ADDRESS).warp(block.timestamp + secs);
     }
 
-    function loadConfig(uint256 assetId, uint256 userId)
+    function loadCurrReceivers(uint256 assetId, uint256 userId)
         internal
-        returns (
-            uint64 lastUpdate,
-            uint128 lastBalance,
-            DripsReceiver[] memory currReceivers
-        )
+        returns (DripsReceiver[] memory currReceivers)
     {
-        Config storage config = configs[assetId][userId];
-        lastUpdate = config.lastUpdate;
-        lastBalance = config.lastBalance;
-        currReceivers = config.currReceivers;
-        assertDrips(assetId, userId, lastUpdate, lastBalance, currReceivers);
+        currReceivers = currReceiversStore[assetId][userId];
+        assertDrips(assetId, userId, currReceivers);
     }
 
-    function storeConfig(
+    function storeCurrReceivers(
         uint256 assetId,
         uint256 userId,
-        uint128 newBalance,
         DripsReceiver[] memory newReceivers
     ) internal {
-        uint64 currTimestamp = uint64(block.timestamp);
-        assertDrips(assetId, userId, currTimestamp, newBalance, newReceivers);
-        Config storage config = configs[assetId][userId];
-        config.lastUpdate = currTimestamp;
-        config.lastBalance = newBalance;
-        delete config.currReceivers;
+        assertDrips(assetId, userId, newReceivers);
+        delete currReceiversStore[assetId][userId];
         for (uint256 i = 0; i < newReceivers.length; i++) {
-            config.currReceivers.push(newReceivers[i]);
+            currReceiversStore[assetId][userId].push(newReceivers[i]);
         }
     }
 
@@ -141,24 +123,17 @@ contract DripsTest is DSTest {
         DripsReceiver[] memory newReceivers
     ) internal {
         int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
-        (uint64 lastUpdate, uint128 lastBalance, DripsReceiver[] memory currReceivers) = loadConfig(
-            assetId,
-            userId
-        );
-
         (uint128 newBalance, int128 realBalanceDelta) = Drips.setDrips(
             s,
             cycleSecs,
             userId,
             assetId,
-            lastUpdate,
-            lastBalance,
-            currReceivers,
+            loadCurrReceivers(assetId, userId),
             balanceDelta,
             newReceivers
         );
 
-        storeConfig(assetId, userId, newBalance, newReceivers);
+        storeCurrReceivers(assetId, userId, newReceivers);
         assertEq(newBalance, balanceTo, "Invalid drips balance");
         assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
     }
@@ -166,12 +141,10 @@ contract DripsTest is DSTest {
     function assertDrips(
         uint256 assetId,
         uint256 userId,
-        uint64 lastUpdate,
-        uint128 lastBalance,
         DripsReceiver[] memory currReceivers
     ) internal {
         bytes32 actual = Drips.dripsHash(s, userId, assetId);
-        bytes32 expected = Drips.hashDrips(lastUpdate, lastBalance, currReceivers);
+        bytes32 expected = Drips.hashDrips(currReceivers);
         assertEq(actual, expected, "Invalid drips configuration");
     }
 
@@ -184,28 +157,7 @@ contract DripsTest is DSTest {
         uint128 balanceFrom,
         uint128 balanceTo
     ) internal {
-        (, , DripsReceiver[] memory currReceivers) = loadConfig(defaultAsset, userId);
-        setDrips(userId, balanceFrom, balanceTo, currReceivers);
-    }
-
-    function assertSetDripsReverts(
-        uint256 userId,
-        DripsReceiver[] memory newReceivers,
-        string memory expectedReason
-    ) internal {
-        (uint64 lastUpdate, uint128 lastBalance, DripsReceiver[] memory currReceivers) = loadConfig(
-            defaultAsset,
-            userId
-        );
-        assertSetDripsReverts(
-            userId,
-            lastUpdate,
-            lastBalance,
-            currReceivers,
-            0,
-            newReceivers,
-            expectedReason
-        );
+        setDrips(userId, balanceFrom, balanceTo, loadCurrReceivers(defaultAsset, userId));
     }
 
     function assertSetDripsReverts(
@@ -215,17 +167,11 @@ contract DripsTest is DSTest {
         DripsReceiver[] memory newReceivers,
         string memory expectedReason
     ) internal {
-        int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
-        (uint64 lastUpdate, uint128 lastBalance, DripsReceiver[] memory currReceivers) = loadConfig(
-            defaultAsset,
-            userId
-        );
         assertSetDripsReverts(
             userId,
-            lastUpdate,
-            lastBalance,
-            currReceivers,
-            balanceDelta,
+            loadCurrReceivers(defaultAsset, userId),
+            balanceFrom,
+            balanceTo,
             newReceivers,
             expectedReason
         );
@@ -233,10 +179,9 @@ contract DripsTest is DSTest {
 
     function assertSetDripsReverts(
         uint256 userId,
-        uint64 lastUpdate,
-        uint128 lastBalance,
         DripsReceiver[] memory currReceivers,
-        int128 balanceDelta,
+        uint128 balanceFrom,
+        uint128 balanceTo,
         DripsReceiver[] memory newReceivers,
         string memory expectedReason
     ) internal {
@@ -244,10 +189,8 @@ contract DripsTest is DSTest {
             this.setDripsExternal(
                 defaultAsset,
                 userId,
-                lastUpdate,
-                lastBalance,
                 currReceivers,
-                balanceDelta,
+                int128(balanceTo) - int128(balanceFrom),
                 newReceivers
             )
         {
@@ -260,23 +203,11 @@ contract DripsTest is DSTest {
     function setDripsExternal(
         uint256 assetId,
         uint256 userId,
-        uint64 lastUpdate,
-        uint128 lastBalance,
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers
     ) external {
-        Drips.setDrips(
-            s,
-            cycleSecs,
-            userId,
-            assetId,
-            lastUpdate,
-            lastBalance,
-            currReceivers,
-            balanceDelta,
-            newReceivers
-        );
+        Drips.setDrips(s, cycleSecs, userId, assetId, currReceivers, balanceDelta, newReceivers);
     }
 
     function receiveDrips(uint256 userId, uint128 expectedAmt) internal {
@@ -646,28 +577,38 @@ contract DripsTest is DSTest {
         }
         setDrips(sender, 0, 0, receivers);
         receivers = recv(receivers, recv(countMax, 1, 0, 0));
-        assertSetDripsReverts(sender, receivers, "Too many drips receivers");
+        assertSetDripsReverts(sender, 0, 0, receivers, "Too many drips receivers");
     }
 
     function testRejectsZeroAmtPerSecReceivers() public {
-        assertSetDripsReverts(sender, recv(receiver, 0), "Drips receiver amtPerSec is zero");
+        assertSetDripsReverts(sender, 0, 0, recv(receiver, 0), "Drips receiver amtPerSec is zero");
     }
 
     function testDripsNotSortedByReceiverAreRejected() public {
         assertSetDripsReverts(
             sender,
+            0,
+            0,
             recv(recv(receiver2, 1), recv(receiver1, 1)),
             ERROR_NOT_SORTED
         );
     }
 
     function testDripsNotSortedByAmtPerSecAreRejected() public {
-        assertSetDripsReverts(sender, recv(recv(receiver, 2), recv(receiver, 1)), ERROR_NOT_SORTED);
+        assertSetDripsReverts(
+            sender,
+            0,
+            0,
+            recv(recv(receiver, 2), recv(receiver, 1)),
+            ERROR_NOT_SORTED
+        );
     }
 
     function testDripsNotSortedByStartAreRejected() public {
         assertSetDripsReverts(
             sender,
+            0,
+            0,
             recv(recv(receiver, 1, 2, 0), recv(receiver, 1, 1, 0)),
             ERROR_NOT_SORTED
         );
@@ -676,52 +617,26 @@ contract DripsTest is DSTest {
     function testDripsNotSortedByDurationAreRejected() public {
         assertSetDripsReverts(
             sender,
+            0,
+            0,
             recv(recv(receiver, 1, 1, 2), recv(receiver, 1, 1, 1)),
             ERROR_NOT_SORTED
         );
     }
 
     function testRejectsDuplicateReceivers() public {
-        assertSetDripsReverts(sender, recv(recv(receiver, 1), recv(receiver, 1)), ERROR_NOT_SORTED);
-    }
-
-    function testSetDripsRevertsIfInvalidLastUpdate() public {
-        setDrips(sender, 0, 0, recv(receiver, 1));
         assertSetDripsReverts(
             sender,
-            uint64(block.timestamp) + 1,
             0,
-            recv(receiver, 1),
             0,
-            recv(),
-            ERROR_INVALID_CONFIG
-        );
-    }
-
-    function testSetDripsRevertsIfInvalidLastBalance() public {
-        setDrips(sender, 0, 1, recv(receiver, 1));
-        assertSetDripsReverts(
-            sender,
-            uint64(block.timestamp),
-            2,
-            recv(receiver, 1),
-            0,
-            recv(),
-            ERROR_INVALID_CONFIG
+            recv(recv(receiver, 1), recv(receiver, 1)),
+            ERROR_NOT_SORTED
         );
     }
 
     function testSetDripsRevertsIfInvalidCurrReceivers() public {
         setDrips(sender, 0, 0, recv(receiver, 1));
-        assertSetDripsReverts(
-            sender,
-            uint64(block.timestamp),
-            0,
-            recv(receiver, 2),
-            0,
-            recv(),
-            ERROR_INVALID_CONFIG
-        );
+        assertSetDripsReverts(sender, recv(receiver, 2), 0, 0, recv(), ERROR_INVALID_DRIPS_LIST);
     }
 
     function testAllowsAnAddressToDripAndReceiveIndependently() public {
@@ -737,7 +652,6 @@ contract DripsTest is DSTest {
     function testCapsWithdrawalOfMoreThanDripsBalance() public {
         DripsReceiver[] memory receivers = recv(receiver, 1);
         setDrips(sender, 0, 10, receivers);
-        uint64 lastUpdate = uint64(block.timestamp);
         warpBy(4);
         // Sender had 4 second paying 1 per second
         (uint128 newBalance, int128 realBalanceDelta) = Drips.setDrips(
@@ -745,13 +659,11 @@ contract DripsTest is DSTest {
             cycleSecs,
             sender,
             defaultAsset,
-            lastUpdate,
-            10,
             receivers,
             type(int128).min,
             receivers
         );
-        storeConfig(defaultAsset, sender, newBalance, receivers);
+        storeCurrReceivers(defaultAsset, sender, receivers);
         assertEq(newBalance, 0, "Invalid balance");
         assertEq(realBalanceDelta, -6, "Invalid real balance delta");
         assertDripsBalance(sender, 0);
