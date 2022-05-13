@@ -212,7 +212,7 @@ library Splits {
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
     /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the user.
-    function setSplits(
+   function setSplits(
         Storage storage s,
         uint256 userId,
         SplitsReceiver[] memory receivers
@@ -225,7 +225,6 @@ library Splits {
         }
         emit SplitsSet(userId, newSplitsHash);
     }
-
     /// @notice Validates a list of splits receivers and emits events for them
     /// @param receivers The list of splits receivers
     /// @param receiversHash The hash of the list of splits receivers.
