@@ -1,10 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.13;
 
+/// @notice A drips receiver
 struct DripsReceiver {
+    /// @notice The user ID.
     uint256 userId;
+    /// @notice The amount per second being dripped. Must never be zero.
     uint128 amtPerSec;
+    /// @notice The timestamp when dripping should start.
+    /// If zero, use the timestamp when drips are configured.
     uint64 start;
+    /// @notice The duration of dripping.
+    /// If zero, drip until balance runs out.
     uint64 duration;
 }
 
@@ -15,34 +22,32 @@ library Drips {
     /// Limits cost of changes in drips configuration.
     uint32 internal constant MAX_DRIPS_RECEIVERS = 100;
 
-    /// @notice Emitted when drips from a user to a receiver are updated.
-    /// Funds are being dripped on every second between the event block's timestamp (inclusively)
-    /// and`endTime` (exclusively) or until the timestamp of the next drips update (exclusively).
-    /// @param userId The dripping user ID.
-    /// @param receiver The receiver user ID
-    /// @param assetId The used asset ID
-    /// @param amtPerSec The new amount per second dripped from the user
-    /// to the receiver or 0 if the drips are stopped
-    /// @param endTime The timestamp when dripping will stop,
-    /// always larger than the block timestamp or equal to it if the drips are stopped
-    event Dripping(
-        uint256 indexed userId,
-        uint256 indexed receiver,
-        uint256 indexed assetId,
-        uint128 amtPerSec,
-        uint64 endTime
-    );
-
     /// @notice Emitted when the drips configuration of a user is updated.
     /// @param userId The user ID.
     /// @param assetId The used asset ID
+    /// @param receiversHash The drips receivers list hash
     /// @param balance The new drips balance. These funds will be dripped to the receivers.
-    /// @param receivers The new list of the drips receivers.
-    event DripsUpdated(
+    event DripsSet(
         uint256 indexed userId,
         uint256 indexed assetId,
-        uint128 balance,
-        DripsReceiver[] receivers
+        bytes32 indexed receiversHash,
+        uint128 balance
+    );
+
+    /// @notice Emitted when a user is seen in a drips receivers list.
+    /// @param receiversHash The drips receivers list hash
+    /// @param userId The user ID.
+    /// @param amtPerSec The amount per second being dripped. Must never be zero.
+    /// @param start The timestamp when dripping should start.
+    /// If zero, use the timestamp when drips are configured.
+    /// @param duration The duration of dripping.
+    /// If zero, drip until balance runs out.
+    event DripsReceiverSeen(
+        bytes32 indexed receiversHash,
+        uint256 indexed userId,
+        uint128 amtPerSec,
+        uint64 start,
+        uint64 duration
     );
 
     /// @notice Emitted when drips are received and are ready to be split.
@@ -225,7 +230,8 @@ library Drips {
         DripsReceiver[] memory newReceivers
     ) internal returns (uint128 newBalance, int128 realBalanceDelta) {
         DripsState storage state = s.dripsStates[assetId][userId];
-        require(hashDrips(currReceivers) == state.dripsHash, "Invalid current drips list");
+        bytes32 currDripsHash = hashDrips(currReceivers);
+        require(currDripsHash == state.dripsHash, "Invalid current drips list");
         uint64 lastUpdate = state.updateTime;
         uint128 lastBalance = state.balance;
         uint64 currDefaultEnd = _defaultEnd(lastBalance, lastUpdate, currReceivers);
@@ -251,10 +257,23 @@ library Drips {
             newReceivers,
             newDefaultEnd
         );
-        state.dripsHash = hashDrips(newReceivers);
         state.updateTime = _currTimestamp();
         state.balance = newBalance;
-        emit DripsUpdated(userId, assetId, newBalance, newReceivers);
+        bytes32 newDripsHash = hashDrips(newReceivers);
+        if (newDripsHash != currDripsHash) {
+            state.dripsHash = newDripsHash;
+            for (uint256 i = 0; i < newReceivers.length; i++) {
+                DripsReceiver memory receiver = newReceivers[i];
+                emit DripsReceiverSeen(
+                    newDripsHash,
+                    receiver.userId,
+                    receiver.amtPerSec,
+                    receiver.start,
+                    receiver.duration
+                );
+            }
+        }
+        emit DripsSet(userId, assetId, newDripsHash, newBalance);
     }
 
     /// @notice Calculates the end time of drips without duration.

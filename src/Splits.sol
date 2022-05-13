@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.13;
 
+/// @notice A splits receiver
 struct SplitsReceiver {
+    /// @notice The user ID.
     uint256 userId;
+    /// @notice The splits weight. Must never be zero.
+    /// The user will be getting `weight / TOTAL_SPLITS_WEIGHT`
+    /// share of the funds collected by the splitting user.
     uint32 weight;
 }
 
@@ -52,8 +57,16 @@ library Splits {
 
     /// @notice Emitted when the user's splits are updated.
     /// @param userId The user ID
-    /// @param receivers The list of the user's splits receivers.
-    event SplitsUpdated(uint256 indexed userId, SplitsReceiver[] receivers);
+    /// @param receiversHash The splits receivers list hash
+    event SplitsSet(uint256 indexed userId, bytes32 indexed receiversHash);
+
+    /// @notice Emitted when a user is seen in a splits receivers list.
+    /// @param receiversHash The splits receivers list hash
+    /// @param userId The user ID.
+    /// @param weight The splits weight. Must never be zero.
+    /// The user will be getting `weight / TOTAL_SPLITS_WEIGHT`
+    /// share of the funds collected by the splitting user.
+    event SplitsReceiverSeen(bytes32 indexed receiversHash, uint256 indexed userId, uint32 weight);
 
     struct Storage {
         /// @notice User splits states.
@@ -204,28 +217,35 @@ library Splits {
         uint256 userId,
         SplitsReceiver[] memory receivers
     ) internal {
-        assertSplitsValid(receivers);
-        s.splitsStates[userId].splitsHash = hashSplits(receivers);
-        emit SplitsUpdated(userId, receivers);
+        SplitsState storage state = s.splitsStates[userId];
+        bytes32 newSplitsHash = hashSplits(receivers);
+        if (newSplitsHash != state.splitsHash) {
+            assertSplitsValid(receivers, newSplitsHash);
+            state.splitsHash = newSplitsHash;
+        }
+        emit SplitsSet(userId, newSplitsHash);
     }
 
-    /// @notice Validates a list of splits receivers
+    /// @notice Validates a list of splits receivers and emits events for them
     /// @param receivers The list of splits receivers
+    /// @param receiversHash The hash of the list of splits receivers.
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
-    function assertSplitsValid(SplitsReceiver[] memory receivers) internal pure {
+    function assertSplitsValid(SplitsReceiver[] memory receivers, bytes32 receiversHash) internal {
         require(receivers.length <= MAX_SPLITS_RECEIVERS, "Too many splits receivers");
         uint64 totalWeight = 0;
-        uint256 prevReceiver;
+        uint256 prevUserId;
         for (uint256 i = 0; i < receivers.length; i++) {
-            uint32 weight = receivers[i].weight;
+            SplitsReceiver memory receiver = receivers[i];
+            uint32 weight = receiver.weight;
             require(weight != 0, "Splits receiver weight is zero");
             totalWeight += weight;
-            uint256 receiver = receivers[i].userId;
+            uint256 userId = receiver.userId;
             if (i > 0) {
-                require(prevReceiver != receiver, "Duplicate splits receivers");
-                require(prevReceiver < receiver, "Splits receivers not sorted by user ID");
+                require(prevUserId != userId, "Duplicate splits receivers");
+                require(prevUserId < userId, "Splits receivers not sorted by user ID");
             }
-            prevReceiver = receiver;
+            prevUserId = userId;
+            emit SplitsReceiverSeen(receiversHash, userId, weight);
         }
         require(totalWeight <= TOTAL_SPLITS_WEIGHT, "Splits weights sum too high");
     }
