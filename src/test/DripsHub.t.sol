@@ -89,54 +89,6 @@ contract DripsHubTest is DripsHubUserUtils {
         }
     }
 
-    function testLimitsTheTotalSplitsReceiversCount() public {
-        uint160 countMax = dripsHub.maxSplitsReceivers();
-        SplitsReceiver[] memory receiversGood = new SplitsReceiver[](countMax);
-        SplitsReceiver[] memory receiversBad = new SplitsReceiver[](countMax + 1);
-        for (uint160 i = 0; i < countMax; i++) {
-            receiversGood[i] = SplitsReceiver(i, 1);
-            receiversBad[i] = receiversGood[i];
-        }
-        receiversBad[countMax] = SplitsReceiver(countMax, 1);
-
-        setSplits(user, receiversGood);
-        assertSetSplitsReverts(user, receiversBad, "Too many splits receivers");
-    }
-
-    function testRejectsTooHighTotalWeightSplitsReceivers() public {
-        uint32 totalWeight = dripsHub.totalSplitsWeight();
-        setSplits(user, splitsReceivers(receiver, totalWeight));
-        assertSetSplitsReverts(
-            user,
-            splitsReceivers(receiver, totalWeight + 1),
-            "Splits weights sum too high"
-        );
-    }
-
-    function testRejectsZeroWeightSplitsReceivers() public {
-        assertSetSplitsReverts(
-            user,
-            splitsReceivers(receiver, 0),
-            "Splits receiver weight is zero"
-        );
-    }
-
-    function testRejectsUnsortedSplitsReceivers() public {
-        assertSetSplitsReverts(
-            user,
-            splitsReceivers(receiver2, 1, receiver1, 1),
-            "Splits receivers not sorted by user ID"
-        );
-    }
-
-    function testRejectsDuplicateSplitsReceivers() public {
-        assertSetSplitsReverts(
-            user,
-            splitsReceivers(receiver, 1, receiver, 2),
-            "Duplicate splits receivers"
-        );
-    }
-
     function testCollectAllSplits() public {
         uint32 totalWeight = dripsHub.totalSplitsWeight();
         setDrips(user, 0, 10, dripsReceivers(receiver1, 10));
@@ -209,22 +161,6 @@ contract DripsHubTest is DripsHubUserUtils {
         collectAll(receiver2, 2);
         // Receiver3 got 2/3 of 7 split from receiver1, which is 5
         collectAll(receiver3, 5);
-    }
-
-    function testCanSplitAllWhenCollectedDoesntSplitEvenly() public {
-        uint32 totalWeight = dripsHub.totalSplitsWeight();
-        setDrips(user, 0, 3, dripsReceivers(receiver1, 3));
-        setSplits(
-            receiver1,
-            splitsReceivers(receiver2, totalWeight / 2, receiver3, totalWeight / 2)
-        );
-        warpToCycleEnd();
-        // Receiver1 had 1 second paying 3 per second of which 3 is split
-        collectAll(receiver1, 0, 3);
-        // Receiver2 got 1 split from receiver
-        collectAll(receiver2, 1);
-        // Receiver3 got 2 split from receiver
-        collectAll(receiver3, 2);
     }
 
     function testReceiveSomeDripsCycles() public {
