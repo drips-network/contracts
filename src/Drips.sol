@@ -9,10 +9,10 @@ struct DripsReceiver {
     uint128 amtPerSec;
     /// @notice The timestamp when dripping should start.
     /// If zero, use the timestamp when drips are configured.
-    uint64 start;
+    uint32 start;
     /// @notice The duration of dripping.
     /// If zero, drip until balance runs out.
-    uint64 duration;
+    uint32 duration;
 }
 
 library Drips {
@@ -44,8 +44,8 @@ library Drips {
         bytes32 indexed receiversHash,
         uint256 indexed userId,
         uint128 amtPerSec,
-        uint64 start,
-        uint64 duration
+        uint32 start,
+        uint32 duration
     );
 
     /// @notice Emitted when drips are received and are ready to be split.
@@ -57,7 +57,7 @@ library Drips {
         uint256 indexed userId,
         uint256 indexed assetId,
         uint128 amt,
-        uint64 receivableCycles
+        uint32 receivableCycles
     );
 
     struct Storage {
@@ -70,9 +70,9 @@ library Drips {
         /// @notice Drips receivers list hash, see `hashDrips`.
         bytes32 dripsHash;
         /// @notice The next cycle to be collected
-        uint64 nextCollectedCycle;
+        uint32 nextCollectedCycle;
         /// @notice The time when drips have been configured for the last time
-        uint64 updateTime;
+        uint32 updateTime;
         /// @notice The balance when drips have been configured for the last time
         uint128 balance;
         /// @notice The changes of collected amounts on specific cycle.
@@ -80,7 +80,7 @@ library Drips {
         /// Values for cycles before `nextCollectedCycle` are guaranteed to be zeroed.
         /// This means that the value of `amtDeltas[nextCollectedCycle].thisCycle` is always
         /// relative to 0 or in other words it's an absolute value independent from other cycles.
-        mapping(uint64 => AmtDelta) amtDeltas;
+        mapping(uint32 => AmtDelta) amtDeltas;
     }
 
     struct AmtDelta {
@@ -101,13 +101,13 @@ library Drips {
     /// @return cycles The number of cycles which can be flushed
     function receivableDripsCycles(
         Storage storage s,
-        uint64 cycleSecs,
+        uint32 cycleSecs,
         uint256 userId,
         uint256 assetId
-    ) internal view returns (uint64 cycles) {
-        uint64 collectedCycle = s.dripsStates[assetId][userId].nextCollectedCycle;
+    ) internal view returns (uint32 cycles) {
+        uint32 collectedCycle = s.dripsStates[assetId][userId].nextCollectedCycle;
         if (collectedCycle == 0) return 0;
-        uint64 currFinishedCycle = _currTimestamp() / cycleSecs;
+        uint32 currFinishedCycle = _currTimestamp() / cycleSecs;
         return currFinishedCycle + 1 - collectedCycle;
     }
 
@@ -124,16 +124,16 @@ library Drips {
     /// @return receivableCycles The number of cycles which would still be receivable after the call
     function receivableDrips(
         Storage storage s,
-        uint64 cycleSecs,
+        uint32 cycleSecs,
         uint256 userId,
         uint256 assetId,
-        uint64 maxCycles
-    ) internal view returns (uint128 receivableAmt, uint64 receivableCycles) {
-        uint64 allReceivableCycles = receivableDripsCycles(s, cycleSecs, userId, assetId);
-        uint64 receivedCycles = maxCycles < allReceivableCycles ? maxCycles : allReceivableCycles;
+        uint32 maxCycles
+    ) internal view returns (uint128 receivableAmt, uint32 receivableCycles) {
+        uint32 allReceivableCycles = receivableDripsCycles(s, cycleSecs, userId, assetId);
+        uint32 receivedCycles = maxCycles < allReceivableCycles ? maxCycles : allReceivableCycles;
         receivableCycles = allReceivableCycles - receivedCycles;
         DripsState storage state = s.dripsStates[assetId][userId];
-        uint64 collectedCycle = state.nextCollectedCycle;
+        uint32 collectedCycle = state.nextCollectedCycle;
         int128 cycleAmt = 0;
         for (uint256 i = 0; i < receivedCycles; i++) {
             cycleAmt += state.amtDeltas[collectedCycle].thisCycle;
@@ -158,17 +158,17 @@ library Drips {
     /// @return receivableCycles The number of cycles which still can be received
     function receiveDrips(
         Storage storage s,
-        uint64 cycleSecs,
+        uint32 cycleSecs,
         uint256 userId,
         uint256 assetId,
-        uint64 maxCycles
-    ) internal returns (uint128 receivedAmt, uint64 receivableCycles) {
+        uint32 maxCycles
+    ) internal returns (uint128 receivedAmt, uint32 receivableCycles) {
         receivableCycles = receivableDripsCycles(s, cycleSecs, userId, assetId);
-        uint64 cycles = maxCycles < receivableCycles ? maxCycles : receivableCycles;
+        uint32 cycles = maxCycles < receivableCycles ? maxCycles : receivableCycles;
         receivableCycles -= cycles;
         if (cycles > 0) {
             DripsState storage state = s.dripsStates[assetId][userId];
-            uint64 cycle = state.nextCollectedCycle;
+            uint32 cycle = state.nextCollectedCycle;
             int128 cycleAmt = 0;
             for (uint256 i = 0; i < cycles; i++) {
                 cycleAmt += state.amtDeltas[cycle].thisCycle;
@@ -201,7 +201,7 @@ library Drips {
         view
         returns (
             bytes32 dripsHash,
-            uint64 updateTime,
+            uint32 updateTime,
             uint128 balance
         )
     {
@@ -227,7 +227,7 @@ library Drips {
     /// @return realBalanceDelta The actually applied drips balance change.
     function setDrips(
         Storage storage s,
-        uint64 cycleSecs,
+        uint32 cycleSecs,
         uint256 userId,
         uint256 assetId,
         DripsReceiver[] memory currReceivers,
@@ -237,9 +237,9 @@ library Drips {
         DripsState storage state = s.dripsStates[assetId][userId];
         bytes32 currDripsHash = hashDrips(currReceivers);
         require(currDripsHash == state.dripsHash, "Invalid current drips list");
-        uint64 lastUpdate = state.updateTime;
+        uint32 lastUpdate = state.updateTime;
         uint128 lastBalance = state.balance;
-        uint64 currDefaultEnd = _defaultEnd(lastBalance, lastUpdate, currReceivers);
+        uint32 currDefaultEnd = _defaultEnd(lastBalance, lastUpdate, currReceivers);
         {
             uint128 currBalance = _currBalance(
                 lastBalance,
@@ -252,7 +252,7 @@ library Drips {
             newBalance = uint128(uint136(balance));
             realBalanceDelta = int128(balance - int128(currBalance));
         }
-        uint64 newDefaultEnd = _defaultEnd(newBalance, _currTimestamp(), newReceivers);
+        uint32 newDefaultEnd = _defaultEnd(newBalance, _currTimestamp(), newReceivers);
         _updateReceiverStates(
             s.dripsStates[assetId],
             cycleSecs,
@@ -289,9 +289,9 @@ library Drips {
     /// @return defaultEndTime The end time of drips without duration.
     function _defaultEnd(
         uint128 balance,
-        uint64 dripsStart,
+        uint32 dripsStart,
         DripsReceiver[] memory receivers
-    ) private pure returns (uint64 defaultEndTime) {
+    ) private pure returns (uint32 defaultEndTime) {
         require(receivers.length <= MAX_DRIPS_RECEIVERS, "Too many drips receivers");
         DefaultEnd[] memory defaults = new DefaultEnd[](receivers.length);
         uint256 length = 0;
@@ -300,13 +300,13 @@ library Drips {
             DripsReceiver memory receiver = receivers[i];
             require(receiver.amtPerSec != 0, "Drips receiver amtPerSec is zero");
             if (i > 0) require(_isOrdered(receivers[i - 1], receiver), "Receivers not sorted");
-            uint64 start = receiver.start;
+            uint32 start = receiver.start;
             if (receiver.start == 0) start = dripsStart;
             if (receiver.duration == 0) {
                 if (start < dripsStart) start = dripsStart;
                 length = _addDefaultEnd(defaults, length, start, receiver.amtPerSec);
             } else {
-                uint64 end = _capTimestamp(uint72(start) + receiver.duration);
+                uint32 end = _capTimestamp(uint40(start) + receiver.duration);
                 if (start < dripsStart) start = dripsStart;
                 if (end < start) end = start;
                 uint192 spent = (end - start) * receiver.amtPerSec;
@@ -319,7 +319,7 @@ library Drips {
 
     /// @notice The internal representation of a receiver without a duration
     struct DefaultEnd {
-        uint64 start;
+        uint32 start;
         uint128 amtPerSec;
     }
 
@@ -332,7 +332,7 @@ library Drips {
     function _addDefaultEnd(
         DefaultEnd[] memory defaults,
         uint256 length,
-        uint64 start,
+        uint32 start,
         uint128 amtPerSec
     ) private pure returns (uint256 newLength) {
         for (uint256 i = 0; i < length; i++) {
@@ -363,12 +363,12 @@ library Drips {
         DefaultEnd[] memory defaults,
         uint256 length,
         uint128 balance
-    ) private pure returns (uint64 end) {
-        uint64 lastStart = 0;
+    ) private pure returns (uint32 end) {
+        uint32 lastStart = 0;
         uint128 amtPerSec = 0;
-        end = type(uint64).max;
+        end = type(uint32).max;
         for (uint256 i = 0; i < length; i++) {
-            uint64 start = defaults[i].start;
+            uint32 start = defaults[i].start;
             if (start >= end) break;
             balance -= amtPerSec * (start - lastStart);
             lastStart = start;
@@ -385,17 +385,17 @@ library Drips {
     /// @return balance The current drips balance.
     function _currBalance(
         uint128 lastBalance,
-        uint64 lastUpdate,
-        uint64 defaultEnd,
+        uint32 lastUpdate,
+        uint32 defaultEnd,
         DripsReceiver[] memory receivers
     ) private view returns (uint128 balance) {
         balance = lastBalance;
         for (uint256 i = 0; i < receivers.length; i++) {
             DripsReceiver memory receiver = receivers[i];
-            uint64 start = receiver.start;
+            uint32 start = receiver.start;
             if (start == 0) start = lastUpdate;
-            uint64 end = defaultEnd;
-            if (receiver.duration != 0) end = _capTimestamp(uint72(start) + receiver.duration);
+            uint32 end = defaultEnd;
+            if (receiver.duration != 0) end = _capTimestamp(uint40(start) + receiver.duration);
             if (start < lastUpdate) start = lastUpdate;
             if (end > _currTimestamp()) end = _currTimestamp();
             if (start < end) balance -= (end - start) * receiver.amtPerSec;
@@ -434,15 +434,15 @@ library Drips {
     /// will end according to the new drips configuration.
     function _updateReceiverStates(
         mapping(uint256 => DripsState) storage states,
-        uint64 cycleSecs_,
+        uint32 cycleSecs_,
         DripsReceiver[] memory currReceivers,
-        uint64 lastUpdate,
-        uint64 currDefaultEnd,
+        uint32 lastUpdate,
+        uint32 currDefaultEnd,
         DripsReceiver[] memory newReceivers,
-        uint64 newDefaultEnd
+        uint32 newDefaultEnd
     ) private {
         // A copy shallow in the stack, prevents "stack too deep" errors
-        uint64 cycleSecs = cycleSecs_;
+        uint32 cycleSecs = cycleSecs_;
         uint256 currIdx = 0;
         uint256 newIdx = 0;
         while (true) {
@@ -466,13 +466,13 @@ library Drips {
 
             if (pickCurr && pickNew) {
                 // Shift the existing drip to fulfil the new configuration
-                mapping(uint64 => AmtDelta) storage deltas = states[currRecv.userId].amtDeltas;
-                (uint64 currStart, uint64 currEnd) = _dripsRange(
+                mapping(uint32 => AmtDelta) storage deltas = states[currRecv.userId].amtDeltas;
+                (uint32 currStart, uint32 currEnd) = _dripsRange(
                     currRecv,
                     lastUpdate,
                     currDefaultEnd
                 );
-                (uint64 newStart, uint64 newEnd) = _dripsRange(
+                (uint32 newStart, uint32 newEnd) = _dripsRange(
                     newRecv,
                     _currTimestamp(),
                     newDefaultEnd
@@ -488,13 +488,13 @@ library Drips {
                 );
             } else if (pickCurr) {
                 // Remove an existing drip
-                mapping(uint64 => AmtDelta) storage deltas = states[currRecv.userId].amtDeltas;
-                (uint64 start, uint64 end) = _dripsRange(currRecv, lastUpdate, currDefaultEnd);
+                mapping(uint32 => AmtDelta) storage deltas = states[currRecv.userId].amtDeltas;
+                (uint32 start, uint32 end) = _dripsRange(currRecv, lastUpdate, currDefaultEnd);
                 _clearDeltaRange(deltas, cycleSecs, start, end, currRecv.amtPerSec);
             } else if (pickNew) {
                 // Create a new drip
                 DripsState storage state = states[newRecv.userId];
-                (uint64 start, uint64 end) = _dripsRange(newRecv, _currTimestamp(), newDefaultEnd);
+                (uint32 start, uint32 end) = _dripsRange(newRecv, _currTimestamp(), newDefaultEnd);
                 _setDeltaRange(state.amtDeltas, cycleSecs, start, end, newRecv.amtPerSec);
                 // The receiver may have never been used, initialize it
                 if (state.nextCollectedCycle == 0) {
@@ -517,13 +517,13 @@ library Drips {
     /// @return end The dripping time range end
     function _dripsRange(
         DripsReceiver memory receiver,
-        uint64 updateTime,
-        uint64 defaultEnd
-    ) private view returns (uint64 start, uint64 end) {
+        uint32 updateTime,
+        uint32 defaultEnd
+    ) private view returns (uint32 start, uint32 end) {
         start = updateTime;
         if (receiver.start != 0) start = receiver.start;
         end = defaultEnd;
-        if (receiver.duration != 0) end = _capTimestamp(uint72(start) + receiver.duration);
+        if (receiver.duration != 0) end = _capTimestamp(uint40(start) + receiver.duration);
         if (start < _currTimestamp()) start = _currTimestamp();
         if (end < start) end = start;
     }
@@ -531,9 +531,9 @@ library Drips {
     /// @notice Caps a timestamp to the timestamp when all drips must stop
     /// @param timestamp The uncapped timestamp
     /// @param cappedTimestamp The capped timestamp
-    function _capTimestamp(uint256 timestamp) private pure returns (uint64 cappedTimestamp) {
-        if (timestamp > type(uint64).max) timestamp = type(uint64).max;
-        return uint64(timestamp);
+    function _capTimestamp(uint256 timestamp) private pure returns (uint32 cappedTimestamp) {
+        if (timestamp > type(uint32).max) timestamp = type(uint32).max;
+        return uint32(timestamp);
     }
 
     /// @notice Changes amt delta to move a time range of received funds by a user
@@ -546,12 +546,12 @@ library Drips {
     /// @param newEnd The timestamp until which the delta will start taking effect
     /// @param amtPerSec The receiving rate
     function _moveDeltaRange(
-        mapping(uint64 => AmtDelta) storage amtDeltas,
-        uint64 cycleSecs,
-        uint64 currStart,
-        uint64 currEnd,
-        uint64 newStart,
-        uint64 newEnd,
+        mapping(uint32 => AmtDelta) storage amtDeltas,
+        uint32 cycleSecs,
+        uint32 currStart,
+        uint32 currEnd,
+        uint32 newStart,
+        uint32 newEnd,
         uint128 amtPerSec
     ) private {
         _clearDeltaRange(amtDeltas, cycleSecs, currStart, newStart, amtPerSec);
@@ -566,10 +566,10 @@ library Drips {
     /// @param end The timestamp until which the delta takes effect
     /// @param amtPerSec The receiving rate
     function _clearDeltaRange(
-        mapping(uint64 => AmtDelta) storage amtDeltas,
-        uint64 cycleSecs,
-        uint64 start,
-        uint64 end,
+        mapping(uint32 => AmtDelta) storage amtDeltas,
+        uint32 cycleSecs,
+        uint32 start,
+        uint32 end,
         uint128 amtPerSec
     ) private {
         // start and end are swapped
@@ -584,10 +584,10 @@ library Drips {
     /// @param end The timestamp until which the delta takes effect
     /// @param amtPerSec The receiving rate
     function _setDeltaRange(
-        mapping(uint64 => AmtDelta) storage amtDeltas,
-        uint64 cycleSecs,
-        uint64 start,
-        uint64 end,
+        mapping(uint32 => AmtDelta) storage amtDeltas,
+        uint32 cycleSecs,
+        uint32 start,
+        uint32 end,
         uint128 amtPerSec
     ) private {
         if (start == end) return;
@@ -602,17 +602,17 @@ library Drips {
     /// @param timestamp The timestamp from which the delta takes effect
     /// @param amtPerSecDelta Change of the per-second receiving rate
     function _setDelta(
-        mapping(uint64 => AmtDelta) storage amtDeltas,
-        uint64 cycleSecs,
-        uint64 timestamp,
+        mapping(uint32 => AmtDelta) storage amtDeltas,
+        uint32 cycleSecs,
+        uint32 timestamp,
         int128 amtPerSecDelta
     ) private {
         // In order to set a delta on a specific timestamp it must be introduced in two cycles.
         // The cycle delta is split proportionally based on how much this cycle is affected.
         // The next cycle has the rest of the delta applied, so the update is fully completed.
-        uint64 thisCycle = timestamp / cycleSecs + 1;
-        uint64 nextCycleSecs = timestamp % cycleSecs;
-        uint64 thisCycleSecs = cycleSecs - nextCycleSecs;
+        uint32 thisCycle = timestamp / cycleSecs + 1;
+        uint32 nextCycleSecs = timestamp % cycleSecs;
+        uint32 thisCycleSecs = cycleSecs - nextCycleSecs;
         AmtDelta storage amtDelta = amtDeltas[thisCycle];
         amtDelta.thisCycle += int128(uint128(thisCycleSecs)) * amtPerSecDelta;
         amtDelta.nextCycle += int128(uint128(nextCycleSecs)) * amtPerSecDelta;
@@ -634,7 +634,7 @@ library Drips {
 
     // /@notice The current timestamp, casted to the library's internal representation.
     /// @return timestamp The current timestamp
-    function _currTimestamp() private view returns (uint64 timestamp) {
-        return uint64(block.timestamp);
+    function _currTimestamp() private view returns (uint32 timestamp) {
+        return uint32(block.timestamp);
     }
 }

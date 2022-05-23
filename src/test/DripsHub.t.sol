@@ -237,7 +237,7 @@ contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testDripsInDifferentTokensAreIndependent() public {
-        uint64 cycleLength = dripsHub.cycleSecs();
+        uint32 cycleLength = dripsHub.cycleSecs();
         // Covers 1.5 cycles of dripping
         setDrips(
             defaultErc20,
@@ -349,7 +349,7 @@ contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testContractCanBeUpgraded() public {
-        uint64 newCycleLength = dripsHub.cycleSecs() + 1;
+        uint32 newCycleLength = dripsHub.cycleSecs() + 1;
         DripsHub newLogic = new DripsHub(newCycleLength, dripsHub.reserve());
         admin.upgradeTo(address(newLogic));
         assertEq(dripsHub.cycleSecs(), newCycleLength, "Invalid new cycle length");
