@@ -532,7 +532,7 @@ contract DripsTest is DSTest {
     }
 
     function testAllowsDrippingWithDurationEndingAfterMaxTimestamp() public {
-        uint64 maxTimestamp = Drips.MAX_TIMESTAMP;
+        uint64 maxTimestamp = type(uint64).max;
         uint64 currTimestamp = uint64(block.timestamp);
         uint64 maxDuration = maxTimestamp - currTimestamp;
         uint64 duration = maxDuration + 5;

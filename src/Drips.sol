@@ -16,8 +16,6 @@ struct DripsReceiver {
 }
 
 library Drips {
-    /// @notice Timestamp at which all drips must be finished
-    uint64 internal constant MAX_TIMESTAMP = type(uint64).max - 2;
     /// @notice Maximum number of drips receivers of a single user.
     /// Limits cost of changes in drips configuration.
     uint32 internal constant MAX_DRIPS_RECEIVERS = 100;
@@ -96,6 +94,8 @@ library Drips {
     /// This function can be used to detect that there are
     /// too many cycles to analyze in a single transaction.
     /// @param s The drips storage
+    /// @param cycleSecs The cycle length in seconds.
+    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @return cycles The number of cycles which can be flushed
@@ -113,6 +113,8 @@ library Drips {
 
     /// @notice Calculate effects of calling `receiveDrips` with the given parameters.
     /// @param s The drips storage
+    /// @param cycleSecs The cycle length in seconds.
+    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param maxCycles The maximum number of received drips cycles.
@@ -145,6 +147,8 @@ library Drips {
     /// Received drips cycles won't need to be analyzed ever again.
     /// Calling this function does not collect but makes the funds ready to be split and collected.
     /// @param s The drips storage
+    /// @param cycleSecs The cycle length in seconds.
+    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param maxCycles The maximum number of received drips cycles.
@@ -207,7 +211,8 @@ library Drips {
 
     /// @notice Sets the user's drips configuration.
     /// @param s The drips storage
-    /// @param cycleSecs_ The cycle length
+    /// @param cycleSecs The cycle length in seconds.
+    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param currReceivers The list of the drips receivers set in the last drips update
@@ -222,7 +227,7 @@ library Drips {
     /// @return realBalanceDelta The actually applied drips balance change.
     function setDrips(
         Storage storage s,
-        uint64 cycleSecs_,
+        uint64 cycleSecs,
         uint256 userId,
         uint256 assetId,
         DripsReceiver[] memory currReceivers,
@@ -250,7 +255,7 @@ library Drips {
         uint64 newDefaultEnd = _defaultEnd(newBalance, _currTimestamp(), newReceivers);
         _updateReceiverStates(
             s.dripsStates[assetId],
-            cycleSecs_,
+            cycleSecs,
             currReceivers,
             lastUpdate,
             currDefaultEnd,
@@ -361,7 +366,7 @@ library Drips {
     ) private pure returns (uint64 end) {
         uint64 lastStart = 0;
         uint128 amtPerSec = 0;
-        end = MAX_TIMESTAMP;
+        end = type(uint64).max;
         for (uint256 i = 0; i < length; i++) {
             uint64 start = defaults[i].start;
             if (start >= end) break;
@@ -414,7 +419,8 @@ library Drips {
 
     /// @notice Applies the effects of the change of the drips on the receivers' drips states.
     /// @param states The drips states for a single asset, the key is the user ID
-    /// @param cycleSecs_ The cycle length
+    /// @param cycleSecs_ The cycle length in seconds.
+    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param currReceivers The list of the drips receivers set in the last drips update
     /// of the user.
     /// If this is the first update, pass an empty array.
@@ -526,13 +532,14 @@ library Drips {
     /// @param timestamp The uncapped timestamp
     /// @param cappedTimestamp The capped timestamp
     function _capTimestamp(uint256 timestamp) private pure returns (uint64 cappedTimestamp) {
-        if (timestamp > MAX_TIMESTAMP) timestamp = MAX_TIMESTAMP;
+        if (timestamp > type(uint64).max) timestamp = type(uint64).max;
         return uint64(timestamp);
     }
 
     /// @notice Changes amt delta to move a time range of received funds by a user
     /// @param amtDeltas The user deltas
-    /// @param cycleSecs The cycle length
+    /// @param cycleSecs The cycle length in seconds.
+    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param currStart The timestamp from which the delta currently takes effect
     /// @param currEnd The timestamp until which the delta currently takes effect
     /// @param newStart The timestamp from which the delta will start taking effect
@@ -553,7 +560,8 @@ library Drips {
 
     /// @notice Clears amt delta of received funds by a user in a given time range
     /// @param amtDeltas The user deltas
-    /// @param cycleSecs The cycle length
+    /// @param cycleSecs The cycle length in seconds.
+    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param start The timestamp from which the delta takes effect
     /// @param end The timestamp until which the delta takes effect
     /// @param amtPerSec The receiving rate
@@ -570,7 +578,8 @@ library Drips {
 
     /// @notice Sets amt delta of received funds by a user in a given time range
     /// @param amtDeltas The user deltas
-    /// @param cycleSecs The cycle length
+    /// @param cycleSecs The cycle length in seconds.
+    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param start The timestamp from which the delta takes effect
     /// @param end The timestamp until which the delta takes effect
     /// @param amtPerSec The receiving rate
@@ -588,7 +597,8 @@ library Drips {
 
     /// @notice Sets amt delta of received funds by a user on a given timestamp
     /// @param amtDeltas The user deltas
-    /// @param cycleSecs The cycle length
+    /// @param cycleSecs The cycle length in seconds.
+    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param timestamp The timestamp from which the delta takes effect
     /// @param amtPerSecDelta Change of the per-second receiving rate
     function _setDelta(
