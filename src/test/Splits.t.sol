@@ -347,7 +347,7 @@ contract SplitsTest is DSTest {
         );
         assertSplittable(receiver2, 0);
         assertSplittable(receiver3, 0);
-        // Receiver1 received 10 with a gi, of which 3/4 is split, which is 7
+        // Receiver1 received 10 with a give, of which 3/4 is split, which is 7
         splitCollect(receiver1, 3, 7);
         // Receiver2 got 1/3 of 7 split from receiver1, which is 2
         splitCollect(receiver2, 2, 0);
