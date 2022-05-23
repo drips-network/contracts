@@ -116,22 +116,6 @@ contract DripsHubTest is DripsHubUserUtils {
         collectAll(receiver2, 10);
     }
 
-    function testCollectAllSplitsFundsFromSplits() public {
-        uint32 totalWeight = dripsHub.totalSplitsWeight();
-        setDrips(user, 0, 10, dripsReceivers(receiver1, 10));
-        setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
-        setSplits(receiver2, splitsReceivers(receiver3, totalWeight));
-        warpToCycleEnd();
-        assertCollectableAll(receiver2, 0);
-        assertCollectableAll(receiver3, 0);
-        // Receiver1 had 1 second paying 10 per second of which 10 is split
-        collectAll(receiver1, 0, 10);
-        // Receiver2 got 10 split from receiver1 of which 10 is split
-        collectAll(receiver2, 0, 10);
-        // Receiver3 got 10 split from receiver2
-        collectAll(receiver3, 10);
-    }
-
     function testCollectAllMixesDripsAndSplits() public {
         uint32 totalWeight = dripsHub.totalSplitsWeight();
         setDrips(user, 0, 10, dripsReceivers(receiver1, 5, receiver2, 5));
@@ -143,24 +127,6 @@ contract DripsHubTest is DripsHubUserUtils {
         collectAll(receiver1, 0, 5);
         // Receiver2 had 1 second paying 5 per second and got 5 split from receiver1
         collectAll(receiver2, 10);
-    }
-
-    function testCollectAllSplitsFundsBetweenReceiverAndSplits() public {
-        uint32 totalWeight = dripsHub.totalSplitsWeight();
-        setDrips(user, 0, 10, dripsReceivers(receiver1, 10));
-        setSplits(
-            receiver1,
-            splitsReceivers(receiver2, totalWeight / 4, receiver3, totalWeight / 2)
-        );
-        warpToCycleEnd();
-        assertCollectableAll(receiver2, 0);
-        assertCollectableAll(receiver3, 0);
-        // Receiver1 had 1 second paying 10 per second, of which 3/4 is split, which is 7
-        collectAll(receiver1, 3, 7);
-        // Receiver2 got 1/3 of 7 split from receiver1, which is 2
-        collectAll(receiver2, 2);
-        // Receiver3 got 2/3 of 7 split from receiver1, which is 5
-        collectAll(receiver3, 5);
     }
 
     function testReceiveSomeDripsCycles() public {
@@ -203,7 +169,6 @@ contract DripsHubTest is DripsHubUserUtils {
 
     function testSplitSplitsFundsReceivedFromAllSources() public {
         uint32 totalWeight = dripsHub.totalSplitsWeight();
-
         // Gives
         give(user2, user1, 1);
 
@@ -221,62 +186,6 @@ contract DripsHubTest is DripsHubUserUtils {
         setSplits(user1, splitsReceivers(receiver1, totalWeight / 4));
         split(user1, 6, 2);
         collect(user1, 6);
-    }
-
-    function testSplitRevertsIfInvalidCurrSplitsReceivers() public {
-        setSplits(user, splitsReceivers(receiver, 1));
-        try dripsHub.split(user.userId(), defaultErc20, splitsReceivers(receiver, 2)) {
-            assertTrue(false, "Split hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, "Invalid current splits receivers", "Invalid split revert reason");
-        }
-    }
-
-    function testSplittingSplitsAllFundsEvenWhenTheyDontDivideEvenly() public {
-        uint32 totalWeight = dripsHub.totalSplitsWeight();
-        setSplits(
-            user,
-            splitsReceivers(receiver1, (totalWeight / 5) * 2, receiver2, totalWeight / 5)
-        );
-        give(user, user, 9);
-        // user gets 40% of 9, receiver1 40 % and receiver2 20%
-        split(user, 4, 5);
-        collectAll(receiver1, 3);
-        collectAll(receiver2, 2);
-    }
-
-    function testUserCanSplitToThemselves() public {
-        uint32 totalWeight = dripsHub.totalSplitsWeight();
-        // receiver1 receives 30%, gets 50% split to themselves and receiver2 gets split 20%
-        setSplits(
-            receiver1,
-            splitsReceivers(receiver1, totalWeight / 2, receiver2, totalWeight / 5)
-        );
-        give(receiver1, receiver1, 20);
-
-        // Splitting 20
-        (uint128 collectableAmt, uint128 splitAmt) = dripsHub.split(
-            receiver1.userId(),
-            defaultErc20,
-            getCurrSplitsReceivers(receiver1)
-        );
-        assertEq(collectableAmt, 6, "Invalid collectable amount");
-        assertEq(splitAmt, 14, "Invalid split amount");
-        assertSplittable(receiver1, 10);
-        collect(receiver1, 6);
-        collectAll(receiver2, 4);
-
-        // Splitting 10 which has been split to receiver1 themselves in the previous step
-        (collectableAmt, splitAmt) = dripsHub.split(
-            receiver1.userId(),
-            defaultErc20,
-            getCurrSplitsReceivers(receiver1)
-        );
-        assertEq(collectableAmt, 3, "Invalid collectable amount");
-        assertEq(splitAmt, 7, "Invalid split amount");
-        assertSplittable(receiver1, 5);
-        collect(receiver1, 3);
-        collectAll(receiver2, 2);
     }
 
     function testCreateAccount() public {
@@ -361,17 +270,6 @@ contract DripsHubTest is DripsHubUserUtils {
         collectAll(otherErc20, receiver1, 3 * cycleLength);
         // receiver2 received nothing
         collectAll(otherErc20, receiver2, 0);
-    }
-
-    function testSplitsConfigurationIsCommonBetweenTokens() public {
-        uint32 totalWeight = dripsHub.totalSplitsWeight();
-        setSplits(user, splitsReceivers(receiver1, totalWeight / 10));
-        give(defaultErc20, receiver2, user, 30);
-        give(otherErc20, receiver2, user, 100);
-        collectAll(defaultErc20, user, 27, 3);
-        collectAll(otherErc20, user, 90, 10);
-        collectAll(defaultErc20, receiver1, 3);
-        collectAll(otherErc20, receiver1, 10);
     }
 
     function testSetDripsRevertsWhenNotAccountOwner() public {
