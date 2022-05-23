@@ -128,7 +128,7 @@ abstract contract DripsHubUserUtils is DSTest {
         storeDrips(erc20, user, newReceivers);
         assertEq(newBalance, balanceTo, "Invalid drips balance");
         assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
-        (, uint64 updateTime, uint128 actualBalance) = dripsHub.dripsState(user.userId(), erc20);
+        (, uint32 updateTime, uint128 actualBalance) = dripsHub.dripsState(user.userId(), erc20);
         assertEq(updateTime, block.timestamp, "Invalid new last update time");
         assertEq(balanceTo, actualBalance, "Invalid drips balance");
         assertEq(balanceTo, actualBalance, "Invalid drips balance");
@@ -354,26 +354,26 @@ abstract contract DripsHubUserUtils is DSTest {
     function receiveDrips(
         AddressIdUser user,
         uint128 expectedReceivedAmt,
-        uint64 expectedReceivedCycles
+        uint32 expectedReceivedCycles
     ) internal {
-        receiveDrips(user, type(uint64).max, expectedReceivedAmt, expectedReceivedCycles, 0, 0);
+        receiveDrips(user, type(uint32).max, expectedReceivedAmt, expectedReceivedCycles, 0, 0);
     }
 
     function receiveDrips(
         AddressIdUser user,
-        uint64 maxCycles,
+        uint32 maxCycles,
         uint128 expectedReceivedAmt,
-        uint64 expectedReceivedCycles,
+        uint32 expectedReceivedCycles,
         uint128 expectedAmtAfter,
-        uint64 expectedCyclesAfter
+        uint32 expectedCyclesAfter
     ) internal {
         uint128 expectedTotalAmt = expectedReceivedAmt + expectedAmtAfter;
-        uint64 expectedTotalCycles = expectedReceivedCycles + expectedCyclesAfter;
+        uint32 expectedTotalCycles = expectedReceivedCycles + expectedCyclesAfter;
         assertReceivableDripsCycles(user, expectedTotalCycles);
-        assertReceivableDrips(user, type(uint64).max, expectedTotalAmt, 0);
+        assertReceivableDrips(user, type(uint32).max, expectedTotalAmt, 0);
         assertReceivableDrips(user, maxCycles, expectedReceivedAmt, expectedCyclesAfter);
 
-        (uint128 receivedAmt, uint64 receivableCycles) = dripsHub.receiveDrips(
+        (uint128 receivedAmt, uint32 receivableCycles) = dripsHub.receiveDrips(
             user.userId(),
             defaultErc20,
             maxCycles
@@ -382,21 +382,21 @@ abstract contract DripsHubUserUtils is DSTest {
         assertEq(receivedAmt, expectedReceivedAmt, "Invalid amount received from drips");
         assertEq(receivableCycles, expectedCyclesAfter, "Invalid receivable drips cycles left");
         assertReceivableDripsCycles(user, expectedCyclesAfter);
-        assertReceivableDrips(user, type(uint64).max, expectedAmtAfter, 0);
+        assertReceivableDrips(user, type(uint32).max, expectedAmtAfter, 0);
     }
 
-    function assertReceivableDripsCycles(AddressIdUser user, uint64 expectedCycles) internal {
-        uint64 actualCycles = dripsHub.receivableDripsCycles(user.userId(), defaultErc20);
+    function assertReceivableDripsCycles(AddressIdUser user, uint32 expectedCycles) internal {
+        uint32 actualCycles = dripsHub.receivableDripsCycles(user.userId(), defaultErc20);
         assertEq(actualCycles, expectedCycles, "Invalid total receivable drips cycles");
     }
 
     function assertReceivableDrips(
         AddressIdUser user,
-        uint64 maxCycles,
+        uint32 maxCycles,
         uint128 expectedAmt,
-        uint64 expectedCycles
+        uint32 expectedCycles
     ) internal {
-        (uint128 actualAmt, uint64 actualCycles) = dripsHub.receivableDrips(
+        (uint128 actualAmt, uint32 actualCycles) = dripsHub.receivableDrips(
             user.userId(),
             defaultErc20,
             maxCycles

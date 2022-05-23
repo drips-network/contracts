@@ -49,7 +49,7 @@ contract DripsHub is Managed {
     IReserve public immutable reserve;
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
     /// gain access to drips collected during `T - cycleSecs` to `T - 1`.
-    uint64 public immutable cycleSecs;
+    uint32 public immutable cycleSecs;
     /// @notice Maximum number of drips receivers of a single user.
     /// Limits cost of changes in drips configuration.
     uint32 public immutable maxDripsReceivers;
@@ -94,7 +94,7 @@ contract DripsHub is Managed {
     /// between being taken from the users' drips balances and being collectable by their receivers.
     /// High value makes collecting cheaper by making it process less cycles for a given time range.
     /// @param _reserve The address of the ERC-20 reserve which the drips hub will work with
-    constructor(uint64 _cycleSecs, IReserve _reserve) {
+    constructor(uint32 _cycleSecs, IReserve _reserve) {
         require(_cycleSecs > 1, "Cycle length too low");
         cycleSecs = _cycleSecs;
         maxDripsReceivers = Drips.MAX_DRIPS_RECEIVERS;
@@ -168,7 +168,7 @@ contract DripsHub is Managed {
             cycleSecs,
             userId,
             assetId,
-            type(uint64).max
+            type(uint32).max
         );
         // Collectable independently from cycles
         collectedAmt += Splits.splittable(_dripsHubStorage().splits, userId, assetId);
@@ -195,7 +195,7 @@ contract DripsHub is Managed {
         IERC20 erc20,
         SplitsReceiver[] memory currReceivers
     ) public whenNotPaused returns (uint128 collectedAmt, uint128 splitAmt) {
-        receiveDrips(userId, erc20, type(uint64).max);
+        receiveDrips(userId, erc20, type(uint32).max);
         (, splitAmt) = split(userId, erc20, currReceivers);
         collectedAmt = collect(userId, erc20);
     }
@@ -209,7 +209,7 @@ contract DripsHub is Managed {
     function receivableDripsCycles(uint256 userId, IERC20 erc20)
         public
         view
-        returns (uint64 cycles)
+        returns (uint32 cycles)
     {
         return
             Drips.receivableDripsCycles(
@@ -231,8 +231,8 @@ contract DripsHub is Managed {
     function receivableDrips(
         uint256 userId,
         IERC20 erc20,
-        uint64 maxCycles
-    ) public view returns (uint128 receivableAmt, uint64 receivableCycles) {
+        uint32 maxCycles
+    ) public view returns (uint128 receivableAmt, uint32 receivableCycles) {
         return
             Drips.receivableDrips(
                 _dripsHubStorage().drips,
@@ -256,8 +256,8 @@ contract DripsHub is Managed {
     function receiveDrips(
         uint256 userId,
         IERC20 erc20,
-        uint64 maxCycles
-    ) public whenNotPaused returns (uint128 receivedAmt, uint64 receivableCycles) {
+        uint32 maxCycles
+    ) public whenNotPaused returns (uint128 receivedAmt, uint32 receivableCycles) {
         uint256 assetId = _assetId(erc20);
         (receivedAmt, receivableCycles) = Drips.receiveDrips(
             _dripsHubStorage().drips,
@@ -345,7 +345,7 @@ contract DripsHub is Managed {
         view
         returns (
             bytes32 dripsHash,
-            uint64 updateTime,
+            uint32 updateTime,
             uint128 balance
         )
     {
