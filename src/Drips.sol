@@ -73,6 +73,8 @@ library Drips {
         uint32 nextCollectedCycle;
         /// @notice The time when drips have been configured for the last time
         uint32 updateTime;
+        /// @notice The end time of drips without duration
+        uint32 defaultEnd;
         /// @notice The balance when drips have been configured for the last time
         uint128 balance;
         /// @notice The changes of collected amounts on specific cycle.
@@ -238,8 +240,8 @@ library Drips {
         bytes32 currDripsHash = hashDrips(currReceivers);
         require(currDripsHash == state.dripsHash, "Invalid current drips list");
         uint32 lastUpdate = state.updateTime;
+        uint32 currDefaultEnd = state.defaultEnd;
         uint128 lastBalance = state.balance;
-        uint32 currDefaultEnd = _defaultEnd(lastBalance, lastUpdate, currReceivers);
         {
             uint128 currBalance = _currBalance(
                 lastBalance,
@@ -252,7 +254,7 @@ library Drips {
             newBalance = uint128(uint136(balance));
             realBalanceDelta = int128(balance - int128(currBalance));
         }
-        uint32 newDefaultEnd = _defaultEnd(newBalance, _currTimestamp(), newReceivers);
+        uint32 newDefaultEnd = _defaultEnd(newBalance, newReceivers);
         _updateReceiverStates(
             s.dripsStates[assetId],
             cycleSecs,
@@ -263,6 +265,7 @@ library Drips {
             newDefaultEnd
         );
         state.updateTime = _currTimestamp();
+        state.defaultEnd = newDefaultEnd;
         state.balance = newBalance;
         bytes32 newDripsHash = hashDrips(newReceivers);
         if (newDripsHash != currDripsHash) {
@@ -283,15 +286,14 @@ library Drips {
 
     /// @notice Calculates the end time of drips without duration.
     /// @param balance The balance when drips have started
-    /// @param dripsStart The timestamp when drips have started.
     /// @param receivers The list of drips receivers.
     /// Must be sorted, deduplicated and without 0 amtPerSecs.
     /// @return defaultEndTime The end time of drips without duration.
-    function _defaultEnd(
-        uint128 balance,
-        uint32 dripsStart,
-        DripsReceiver[] memory receivers
-    ) private pure returns (uint32 defaultEndTime) {
+    function _defaultEnd(uint128 balance, DripsReceiver[] memory receivers)
+        private
+        view
+        returns (uint32 defaultEndTime)
+    {
         require(receivers.length <= MAX_DRIPS_RECEIVERS, "Too many drips receivers");
         DefaultEnd[] memory defaults = new DefaultEnd[](receivers.length);
         uint256 length = 0;
@@ -301,13 +303,13 @@ library Drips {
             require(receiver.amtPerSec != 0, "Drips receiver amtPerSec is zero");
             if (i > 0) require(_isOrdered(receivers[i - 1], receiver), "Receivers not sorted");
             uint32 start = receiver.start;
-            if (receiver.start == 0) start = dripsStart;
             if (receiver.duration == 0) {
-                if (start < dripsStart) start = dripsStart;
+                if (start < _currTimestamp()) start = _currTimestamp();
                 length = _addDefaultEnd(defaults, length, start, receiver.amtPerSec);
             } else {
+                if (start == 0) start = _currTimestamp();
                 uint32 end = _capTimestamp(uint40(start) + receiver.duration);
-                if (start < dripsStart) start = dripsStart;
+                if (start < _currTimestamp()) start = _currTimestamp();
                 if (end < start) end = start;
                 uint192 spent = (end - start) * receiver.amtPerSec;
                 require(balance >= spent, "Insufficient balance");
