@@ -95,6 +95,7 @@ contract DripsHub is Managed {
     /// High value makes collecting cheaper by making it process less cycles for a given time range.
     /// @param _reserve The address of the ERC-20 reserve which the drips hub will work with
     constructor(uint64 _cycleSecs, IReserve _reserve) {
+        require(_cycleSecs > 1, "Cycle length too low");
         cycleSecs = _cycleSecs;
         maxDripsReceivers = Drips.MAX_DRIPS_RECEIVERS;
         maxSplitsReceivers = Splits.MAX_SPLITS_RECEIVERS;
