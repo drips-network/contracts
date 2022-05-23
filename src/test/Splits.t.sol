@@ -16,7 +16,6 @@ contract SplitsTest is DSTest {
     uint256 internal receiver1 = 5;
     uint256 internal receiver2 = 6;
     uint256 internal receiver3 = 7;
-    uint256 internal receiver4 = 8;
     uint256 internal user = 9;
 
     function splitsReceivers() internal pure returns (SplitsReceiver[] memory list) {
