@@ -2,7 +2,6 @@
 pragma solidity ^0.8.13;
 
 import {DSTest} from "ds-test/test.sol";
-import {Hevm} from "./Hevm.t.sol";
 import {Splits, SplitsReceiver} from "../Splits.sol";
 
 contract SplitsTest is DSTest {
@@ -320,7 +319,7 @@ contract SplitsTest is DSTest {
         splitCollect(otherAsset, receiver1, 10, 0);
     }
 
-    function testCollectAllSplitsFundsFromSplits() public {
+    function testForwardSplits() public {
         uint32 totalWeight = Splits.TOTAL_SPLITS_WEIGHT;
 
         give(user, receiver1, 10);
@@ -337,7 +336,7 @@ contract SplitsTest is DSTest {
         splitCollect(receiver3, 10, 0);
     }
 
-    function testCollectAllSplitsFundsBetweenReceiverAndSplits() public {
+    function testSplitMultipleReceivers() public {
         uint32 totalWeight = Splits.TOTAL_SPLITS_WEIGHT;
         give(user, receiver1, 10);
 
