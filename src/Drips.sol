@@ -18,7 +18,7 @@ struct DripsReceiver {
 library Drips {
     /// @notice Maximum number of drips receivers of a single user.
     /// Limits cost of changes in drips configuration.
-    uint32 internal constant MAX_DRIPS_RECEIVERS = 100;
+    uint8 internal constant MAX_DRIPS_RECEIVERS = 100;
 
     /// @notice Emitted when the drips configuration of a user is updated.
     /// @param userId The user ID.
@@ -296,7 +296,7 @@ library Drips {
     {
         require(receivers.length <= MAX_DRIPS_RECEIVERS, "Too many drips receivers");
         DefaultEnd[] memory defaults = new DefaultEnd[](receivers.length);
-        uint256 length = 0;
+        uint8 length = 0;
 
         for (uint256 i = 0; i < receivers.length; i++) {
             DripsReceiver memory receiver = receivers[i];
@@ -319,7 +319,7 @@ library Drips {
     /// @notice The internal representation of a receiver without a duration
     struct DefaultEnd {
         uint32 start;
-        uint128 amtPerSec;
+        uint136 amtPerSec;
     }
 
     /// @notice Adds a `DefaultEnd` to the list of receivers while keeping it sorted.
@@ -330,11 +330,11 @@ library Drips {
     /// @return newLength The new length of the list
     function _addDefaultEnd(
         DefaultEnd[] memory defaults,
-        uint256 length,
+        uint8 length,
         uint32 start,
         uint128 amtPerSec
-    ) private pure returns (uint256 newLength) {
-        for (uint256 i = 0; i < length; i++) {
+    ) private pure returns (uint8 newLength) {
+        for (uint8 i = 0; i < length; i++) {
             DefaultEnd memory defaultEnd = defaults[i];
             if (defaultEnd.start == start) {
                 defaultEnd.amtPerSec += amtPerSec;
@@ -342,7 +342,7 @@ library Drips {
             }
             if (defaultEnd.start > start) {
                 // Shift existing entries to make space for inserting the new entry
-                for (uint256 j = length; j > i; j--) {
+                for (uint8 j = length; j > i; j--) {
                     defaults[j] = defaults[j - 1];
                 }
                 defaultEnd = DefaultEnd(start, amtPerSec);
@@ -357,23 +357,26 @@ library Drips {
     /// @param defaults The list of default ends, must be sorted by start
     /// @param length The length of the list
     /// @param balance The balance available for drips without duration
-    /// @return end The end time of drips without duration
+    /// @return end_ The end time of drips without duration
     function _receiversDefaultEnd(
         DefaultEnd[] memory defaults,
-        uint256 length,
+        uint8 length,
         uint128 balance
-    ) private pure returns (uint32 end) {
+    ) private pure returns (uint32 end_) {
         uint32 lastStart = 0;
-        uint128 amtPerSec = 0;
-        end = type(uint32).max;
-        for (uint256 i = 0; i < length; i++) {
-            uint32 start = defaults[i].start;
+        uint136 amtPerSec = 0;
+        uint136 end = type(uint136).max;
+        for (uint8 i = 0; i < length; i++) {
+            DefaultEnd memory defaultEnd = defaults[i];
+            uint32 start = defaultEnd.start;
             if (start >= end) break;
-            balance -= amtPerSec * (start - lastStart);
+            balance -= uint128(amtPerSec * (start - lastStart));
             lastStart = start;
-            amtPerSec += defaults[i].amtPerSec;
-            end = _capTimestamp(start + (balance / amtPerSec));
+            amtPerSec += defaultEnd.amtPerSec;
+            end = start + (balance / amtPerSec);
         }
+        if (end > type(uint32).max) end = type(uint32).max;
+        return uint32(end);
     }
 
     /// @notice Calculates the current drips balance.
@@ -558,14 +561,6 @@ library Drips {
         if (end > endCap) end = endCap;
         if (end < start) end = start;
         return (start, uint32(end));
-    }
-
-    /// @notice Caps a timestamp to the timestamp when all drips must stop
-    /// @param timestamp The uncapped timestamp
-    /// @param cappedTimestamp The capped timestamp
-    function _capTimestamp(uint256 timestamp) private pure returns (uint32 cappedTimestamp) {
-        if (timestamp > type(uint32).max) timestamp = type(uint32).max;
-        return uint32(timestamp);
     }
 
     /// @notice Changes amt delta to move a time range of received funds by a user

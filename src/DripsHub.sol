@@ -52,7 +52,7 @@ contract DripsHub is Managed {
     uint32 public immutable cycleSecs;
     /// @notice Maximum number of drips receivers of a single user.
     /// Limits cost of changes in drips configuration.
-    uint32 public immutable maxDripsReceivers;
+    uint8 public immutable maxDripsReceivers;
     /// @notice Maximum number of splits receivers of a single user.
     /// Limits cost of collecting.
     uint32 public immutable maxSplitsReceivers;

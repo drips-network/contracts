@@ -531,6 +531,15 @@ contract DripsTest is DSTest {
         receiveDrips(receiver, 10);
     }
 
+    function testAllowsDripsConfigurationWithOverflowingTotalAmtPerSec() public {
+        setDrips(sender, 0, 2, recv(recv(receiver, 1), recv(receiver, type(uint128).max)));
+        warpToCycleEnd();
+        // Sender hasn't sent anything
+        changeBalance(sender, 2, 0);
+        // Receiver hasnt received anything
+        receiveDrips(receiver, 0);
+    }
+
     function testAllowsDrippingWithDurationEndingAfterMaxTimestamp() public {
         uint32 maxTimestamp = type(uint32).max;
         uint32 currTimestamp = uint32(block.timestamp);
