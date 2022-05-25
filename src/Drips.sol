@@ -439,12 +439,14 @@ library Drips {
         uint32 cycleSecs = cycleSecs_;
         uint256 currIdx = 0;
         uint256 newIdx = 0;
-        while (true) {
-            bool pickCurr = currIdx < currReceivers.length;
+        bool pickCurr;
+        bool pickNew;
+        do {
+            pickCurr = currIdx < currReceivers.length;
             DripsReceiver memory currRecv;
             if (pickCurr) currRecv = currReceivers[currIdx];
 
-            bool pickNew = newIdx < newReceivers.length;
+            pickNew = newIdx < newReceivers.length;
             DripsReceiver memory newRecv;
             if (pickNew) newRecv = newReceivers[newIdx];
 
@@ -459,7 +461,7 @@ library Drips {
             }
 
             if (pickCurr && pickNew) {
-                // Shift the existing drip to fulfil the new configuration
+                // Update existing drip with new config
                 mapping(uint32 => AmtDelta) storage deltas = states[currRecv.userId].amtDeltas;
                 (uint32 currStart, uint32 currEnd) = _dripsRangeInFuture(
                     currRecv,
@@ -480,11 +482,14 @@ library Drips {
                     currEnd,
                     newEnd
                 );
+                currIdx++;
+                newIdx++;
             } else if (pickCurr) {
                 // Remove an existing drip
                 mapping(uint32 => AmtDelta) storage deltas = states[currRecv.userId].amtDeltas;
                 (, uint32 currEnd) = _dripsRangeInFuture(currRecv, lastUpdate, currDefaultEnd);
                 _removeDrip(deltas, cycleSecs, currRecv.amtPerSec, currEnd);
+                currIdx++;
             } else if (pickNew) {
                 // Create a new drip
                 DripsState storage state = states[newRecv.userId];
@@ -499,15 +504,17 @@ library Drips {
                 if (state.nextCollectedCycle == 0) {
                     state.nextCollectedCycle = _currTimestamp() / cycleSecs + 1;
                 }
-            } else {
-                break;
+                newIdx++;
             }
-
-            if (pickCurr) currIdx++;
-            if (pickNew) newIdx++;
-        }
+        } while (pickNew || pickCurr);
     }
 
+    /// @notice adds a drip to the deltas of a receiver
+    /// @param deltas The deltas of the receiver
+    /// @param cycleSecs The cycle length in seconds
+    /// @param amtPerSec The amount of drips per second
+    /// @param start The start of the drip
+    /// @param end The end of the drip
     function _addDrip(
         mapping(uint32 => AmtDelta) storage deltas,
         uint32 cycleSecs,
@@ -518,7 +525,12 @@ library Drips {
         _setDelta(deltas, cycleSecs, start, int128(amtPerSec));
         _setDelta(deltas, cycleSecs, end, -int128(amtPerSec));
     }
-
+    /// @notice removes a drip from the deltas of a receiver
+    /// the drip will end at the current block.stimestamp
+    /// @param deltas The deltas of the receiver
+    /// @param cycleSecs The cycle length in seconds
+    /// @param amtPerSec The amount of drips per second
+    /// @param currEnd the current end time of the drips which needs to be removed
     function _removeDrip(
         mapping(uint32 => AmtDelta) storage deltas,
         uint32 cycleSecs,
@@ -531,6 +543,13 @@ library Drips {
         _setDelta(deltas, cycleSecs, _currTimestamp(), -int128(amtPerSec));
     }
 
+    /// @notice updates the exiting deltas of a receiver with the same amtPerSec only if start or end has changed
+    /// @param deltas The deltas of the receiver
+    /// @param cycleSecs The cycle length in seconds
+    /// @param currStart the current start time of the drip
+    /// @param newStart the new start time of the drip
+    /// @param currEnd the current end time of the drip
+    /// @param newEnd the new end time of the drip
     function _updateDrip(
         mapping(uint32 => AmtDelta) storage deltas,
         uint32 cycleSecs,
@@ -541,8 +560,8 @@ library Drips {
         uint32 newEnd
     ) internal {
         if (currStart != newStart) {
-            _setDelta(deltas, cycleSecs, currStart, int128(amtPerSec));
-            _setDelta(deltas, cycleSecs, newStart, -int128(amtPerSec));
+            _setDelta(deltas, cycleSecs, currStart, -int128(amtPerSec));
+            _setDelta(deltas, cycleSecs, newStart, int128(amtPerSec));
         }
         if (currEnd != newEnd) {
             _setDelta(deltas, cycleSecs, currEnd, int128(amtPerSec));
