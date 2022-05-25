@@ -738,4 +738,3 @@ contract DripsTest is DSTest {
         receiveDrips(otherAsset, receiver2, 0);
     }
 }
-

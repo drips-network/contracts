@@ -525,6 +525,7 @@ library Drips {
         _setDelta(deltas, cycleSecs, start, int128(amtPerSec));
         _setDelta(deltas, cycleSecs, end, -int128(amtPerSec));
     }
+
     /// @notice removes a drip from the deltas of a receiver
     /// the drip will end at the current block.stimestamp
     /// @param deltas The deltas of the receiver
