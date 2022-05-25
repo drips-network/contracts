@@ -107,10 +107,10 @@ library Drips {
         uint256 userId,
         uint256 assetId
     ) internal view returns (uint32 cycles) {
-        uint32 collectedCycle = s.dripsStates[assetId][userId].nextCollectedCycle;
-        if (collectedCycle == 0) return 0;
+        uint32 nextCollectedCycle = s.dripsStates[assetId][userId].nextCollectedCycle;
         uint32 currFinishedCycle = _currTimestamp() / cycleSecs;
-        return currFinishedCycle + 1 - collectedCycle;
+        if (nextCollectedCycle == 0 || nextCollectedCycle > currFinishedCycle) return 0;
+        return currFinishedCycle - nextCollectedCycle + 1;
     }
 
     /// @notice Calculate effects of calling `receiveDrips` with the given parameters.
@@ -501,9 +501,10 @@ library Drips {
                     newDefaultEnd
                 );
                 _setDeltaRange(state.amtDeltas, cycleSecs, start, end, newRecv.amtPerSec);
-                // The receiver may have never been used, initialize it
-                if (state.nextCollectedCycle == 0) {
-                    state.nextCollectedCycle = _currTimestamp() / cycleSecs + 1;
+                // Ensure that the receiver collects the updated cycles
+                uint32 startCycle = start / cycleSecs + 1;
+                if (state.nextCollectedCycle == 0 || state.nextCollectedCycle > startCycle) {
+                    state.nextCollectedCycle = startCycle;
                 }
             } else {
                 break;

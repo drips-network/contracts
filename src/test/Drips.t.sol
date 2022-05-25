@@ -463,6 +463,24 @@ contract DripsTest is DSTest {
         receiveDrips(receiver, 0);
     }
 
+    function testDoesNotCollectCyclesBeforeFirstDrip() public {
+        warpBy(cycleSecs / 2);
+        // Dripping starts in 2 cycles
+        setDrips(sender, 0, 1, recv(receiver, 1, block.timestamp + cycleSecs * 2, 0));
+        // The first cycle hasn't been dripping
+        warpToCycleEnd();
+        assertReceivableDripsCycles(receiver, 0);
+        assertReceivableDrips(receiver, 0);
+        // The second cycle hasn't been dripping
+        warpToCycleEnd();
+        assertReceivableDripsCycles(receiver, 0);
+        assertReceivableDrips(receiver, 0);
+        // The third cycle has been dripping
+        warpToCycleEnd();
+        assertReceivableDripsCycles(receiver, 1);
+        receiveDrips(receiver, 1);
+    }
+
     function testAllowsReceivingWhileBeingDrippedTo() public {
         setDrips(sender, 0, cycleSecs + 10, recv(receiver, 1));
         warpToCycleEnd();
