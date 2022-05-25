@@ -471,24 +471,29 @@ library Drips {
                     _currTimestamp(),
                     newDefaultEnd
                 );
-                _moveDeltaRange(
-                    deltas,
-                    cycleSecs,
-                    currStart,
-                    currEnd,
-                    newStart,
-                    newEnd,
-                    currRecv.amtPerSec
-                );
+
+                if(currStart != newStart) {
+                    _setDelta(deltas, cycleSecs, currStart, int128(currRecv.amtPerSec));
+                    _setDelta(deltas, cycleSecs, newStart, -int128(currRecv.amtPerSec));
+                }
+                if (currEnd != newEnd) {
+                    _setDelta(deltas, cycleSecs, currEnd, int128(currRecv.amtPerSec));
+                    _setDelta(deltas, cycleSecs, newEnd, -int128(currRecv.amtPerSec));
+                }
+
             } else if (pickCurr) {
                 // Remove an existing drip
                 mapping(uint32 => AmtDelta) storage deltas = states[currRecv.userId].amtDeltas;
-                (uint32 start, uint32 end) = _dripsRangeInFuture(
+                (, uint32 currEnd) = _dripsRangeInFuture(
                     currRecv,
                     lastUpdate,
                     currDefaultEnd
                 );
-                _clearDeltaRange(deltas, cycleSecs, start, end, currRecv.amtPerSec);
+                // remove currEnd by adding as a positive delta
+                _setDelta(deltas, cycleSecs, currEnd, int128(currRecv.amtPerSec));
+                // stop drip by adding negative delta at current timestamp
+                _setDelta(deltas, cycleSecs, _currTimestamp(), -int128(currRecv.amtPerSec));
+
             } else if (pickNew) {
                 // Create a new drip
                 DripsState storage state = states[newRecv.userId];
@@ -497,7 +502,9 @@ library Drips {
                     _currTimestamp(),
                     newDefaultEnd
                 );
-                _setDeltaRange(state.amtDeltas, cycleSecs, start, end, newRecv.amtPerSec);
+
+                _setDelta(state.amtDeltas, cycleSecs, start, int128(newRecv.amtPerSec));
+                _setDelta(state.amtDeltas, cycleSecs, end, -int128(newRecv.amtPerSec));
                 // The receiver may have never been used, initialize it
                 if (state.nextCollectedCycle == 0) {
                     state.nextCollectedCycle = _currTimestamp() / cycleSecs + 1;
@@ -566,65 +573,6 @@ library Drips {
     function _capTimestamp(uint256 timestamp) private pure returns (uint32 cappedTimestamp) {
         if (timestamp > type(uint32).max) timestamp = type(uint32).max;
         return uint32(timestamp);
-    }
-
-    /// @notice Changes amt delta to move a time range of received funds by a user
-    /// @param amtDeltas The user deltas
-    /// @param cycleSecs The cycle length in seconds.
-    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
-    /// @param currStart The timestamp from which the delta currently takes effect
-    /// @param currEnd The timestamp until which the delta currently takes effect
-    /// @param newStart The timestamp from which the delta will start taking effect
-    /// @param newEnd The timestamp until which the delta will start taking effect
-    /// @param amtPerSec The receiving rate
-    function _moveDeltaRange(
-        mapping(uint32 => AmtDelta) storage amtDeltas,
-        uint32 cycleSecs,
-        uint32 currStart,
-        uint32 currEnd,
-        uint32 newStart,
-        uint32 newEnd,
-        uint128 amtPerSec
-    ) private {
-        _clearDeltaRange(amtDeltas, cycleSecs, currStart, newStart, amtPerSec);
-        _setDeltaRange(amtDeltas, cycleSecs, currEnd, newEnd, amtPerSec);
-    }
-
-    /// @notice Clears amt delta of received funds by a user in a given time range
-    /// @param amtDeltas The user deltas
-    /// @param cycleSecs The cycle length in seconds.
-    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
-    /// @param start The timestamp from which the delta takes effect
-    /// @param end The timestamp until which the delta takes effect
-    /// @param amtPerSec The receiving rate
-    function _clearDeltaRange(
-        mapping(uint32 => AmtDelta) storage amtDeltas,
-        uint32 cycleSecs,
-        uint32 start,
-        uint32 end,
-        uint128 amtPerSec
-    ) private {
-        // start and end are swapped
-        _setDeltaRange(amtDeltas, cycleSecs, end, start, amtPerSec);
-    }
-
-    /// @notice Sets amt delta of received funds by a user in a given time range
-    /// @param amtDeltas The user deltas
-    /// @param cycleSecs The cycle length in seconds.
-    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
-    /// @param start The timestamp from which the delta takes effect
-    /// @param end The timestamp until which the delta takes effect
-    /// @param amtPerSec The receiving rate
-    function _setDeltaRange(
-        mapping(uint32 => AmtDelta) storage amtDeltas,
-        uint32 cycleSecs,
-        uint32 start,
-        uint32 end,
-        uint128 amtPerSec
-    ) private {
-        if (start == end) return;
-        _setDelta(amtDeltas, cycleSecs, start, int128(amtPerSec));
-        _setDelta(amtDeltas, cycleSecs, end, -int128(amtPerSec));
     }
 
     /// @notice Sets amt delta of received funds by a user on a given timestamp
