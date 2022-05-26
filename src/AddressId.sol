@@ -31,7 +31,7 @@ contract AddressId {
     function collectAll(
         address user,
         IERC20 erc20,
-        SplitsReceiver[] memory currReceivers
+        SplitsReceiver[] calldata currReceivers
     ) public returns (uint128 collectedAmt, uint128 splitAmt) {
         (collectedAmt, splitAmt) = dripsHub.collectAll(calcUserId(user), erc20, currReceivers);
         _transferTo(user, erc20, collectedAmt);
@@ -77,9 +77,9 @@ contract AddressId {
     /// @return realBalanceDelta The actually applied drips balance change.
     function setDrips(
         IERC20 erc20,
-        DripsReceiver[] memory currReceivers,
+        DripsReceiver[] calldata currReceivers,
         int128 balanceDelta,
-        DripsReceiver[] memory newReceivers
+        DripsReceiver[] calldata newReceivers
     ) public returns (uint128 newBalance, int128 realBalanceDelta) {
         if (balanceDelta > 0) _transferFromCaller(erc20, uint128(balanceDelta));
         (newBalance, realBalanceDelta) = dripsHub.setDrips(
@@ -97,7 +97,7 @@ contract AddressId {
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
     /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the user.
-    function setSplits(SplitsReceiver[] memory receivers) public {
+    function setSplits(SplitsReceiver[] calldata receivers) public {
         dripsHub.setSplits(calcUserId(msg.sender), receivers);
     }
 
