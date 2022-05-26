@@ -116,6 +116,22 @@ contract DripsHubTest is DripsHubUserUtils {
         collectAll(receiver2, 10);
     }
 
+    function testCollectAllSplitsFundsFromSplits() public {
+        uint32 totalWeight = dripsHub.totalSplitsWeight();
+        setDrips(user, 0, 10, dripsReceivers(receiver1, 10));
+        setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
+        setSplits(receiver2, splitsReceivers(receiver3, totalWeight));
+        warpToCycleEnd();
+        assertCollectableAll(receiver2, 0);
+        assertCollectableAll(receiver3, 0);
+        // Receiver1 had 1 second paying 10 per second of which 10 is split
+        collectAll(receiver1, 0, 10);
+        // Receiver2 got 10 split from receiver1 of which 10 is split
+        collectAll(receiver2, 0, 10);
+        // Receiver3 got 10 split from receiver2
+        collectAll(receiver3, 10);
+    }
+
     function testCollectAllMixesDripsAndSplits() public {
         uint32 totalWeight = dripsHub.totalSplitsWeight();
         setDrips(user, 0, 10, dripsReceivers(receiver1, 5, receiver2, 5));
@@ -127,6 +143,24 @@ contract DripsHubTest is DripsHubUserUtils {
         collectAll(receiver1, 0, 5);
         // Receiver2 had 1 second paying 5 per second and got 5 split from receiver1
         collectAll(receiver2, 10);
+    }
+
+    function testCollectAllSplitsFundsBetweenReceiverAndSplits() public {
+        uint32 totalWeight = dripsHub.totalSplitsWeight();
+        setDrips(user, 0, 10, dripsReceivers(receiver1, 10));
+        setSplits(
+            receiver1,
+            splitsReceivers(receiver2, totalWeight / 4, receiver3, totalWeight / 2)
+        );
+        warpToCycleEnd();
+        assertCollectableAll(receiver2, 0);
+        assertCollectableAll(receiver3, 0);
+        // Receiver1 had 1 second paying 10 per second, of which 3/4 is split, which is 7
+        collectAll(receiver1, 3, 7);
+        // Receiver2 got 1/3 of 7 split from receiver1, which is 2
+        collectAll(receiver2, 2);
+        // Receiver3 got 2/3 of 7 split from receiver1, which is 5
+        collectAll(receiver3, 5);
     }
 
     function testReceiveSomeDripsCycles() public {
@@ -486,37 +520,13 @@ contract DripsHubTest is DripsHubUserUtils {
         }
     }
 
-    function testCollectAllSplitsFundsFromSplits() public {
-        uint32 totalWeight = dripsHub.totalSplitsWeight();
-        setDrips(user, 0, 10, dripsReceivers(receiver1, 10));
-        setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
-        setSplits(receiver2, splitsReceivers(receiver3, totalWeight));
-        warpToCycleEnd();
-        assertCollectableAll(receiver2, 0);
-        assertCollectableAll(receiver3, 0);
-        // Receiver1 had 1 second paying 10 per second of which 10 is split
-        collectAll(receiver1, 0, 10);
-        // Receiver2 got 10 split from receiver1 of which 10 is split
-        collectAll(receiver2, 0, 10);
-        // Receiver3 got 10 split from receiver2
-        collectAll(receiver3, 10);
-    }
-
-    function testCollectAllSplitsFundsBetweenReceiverAndSplits() public {
-        uint32 totalWeight = dripsHub.totalSplitsWeight();
-        setDrips(user, 0, 10, dripsReceivers(receiver1, 10));
-        setSplits(
-            receiver1,
-            splitsReceivers(receiver2, totalWeight / 4, receiver3, totalWeight / 2)
-        );
-        warpToCycleEnd();
-        assertCollectableAll(receiver2, 0);
-        assertCollectableAll(receiver3, 0);
-        // Receiver1 had 1 second paying 10 per second, of which 3/4 is split, which is 7
-        collectAll(receiver1, 3, 7);
-        // Receiver2 got 1/3 of 7 split from receiver1, which is 2
-        collectAll(receiver2, 2);
-        // Receiver3 got 2/3 of 7 split from receiver1, which is 5
-        collectAll(receiver3, 5);
+    function testTransferAccountCanBePaused() public {
+        uint32 accountId = dripsHub.createAccount(address(this));
+        admin.pause();
+        try dripsHub.transferAccount(accountId, address(0x1234)) {
+            assertTrue(false, "TransferAccount hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, ERROR_PAUSED, "Invalid transferAccount revert reason");
+        }
     }
 }

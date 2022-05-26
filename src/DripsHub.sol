@@ -138,7 +138,7 @@ contract DripsHub is Managed {
     /// Must be called by the current account owner.
     /// @param accountId The account which ownership is transferred
     /// @param newOwner The new account owner
-    function transferAccount(uint32 accountId, address newOwner) public {
+    function transferAccount(uint32 accountId, address newOwner) public whenNotPaused {
         _assertCallerIsAccountOwner(accountId);
         _dripsHubStorage().accountsOwners[accountId] = newOwner;
         emit AccountTransferred(accountId, msg.sender, newOwner);
