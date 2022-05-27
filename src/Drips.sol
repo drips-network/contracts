@@ -345,7 +345,7 @@ library Drips {
                 for (uint8 j = length; j > i; j--) {
                     defaults[j] = defaults[j - 1];
                 }
-                defaultEnd = DefaultEnd(start, amtPerSec);
+                defaults[i] = DefaultEnd(start, amtPerSec);
                 return length + 1;
             }
         }

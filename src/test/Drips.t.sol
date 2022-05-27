@@ -459,6 +459,24 @@ contract DripsTest is DSTest {
         receiveDrips(receiver2, 0);
     }
 
+    function testDripsWithZeroDurationReceiversNotSortedByStart() public {
+        setDrips(
+            sender,
+            0,
+            7,
+            recv(
+                recv(receiver1, 2, block.timestamp + 2, 0),
+                recv(receiver2, 1, block.timestamp + 1, 0)
+            )
+        );
+        warpBy(3);
+        warpToCycleEnd();
+        // Has been receiving 2 per second for 2 seconds
+        receiveDrips(receiver1, 4);
+        // Has been receiving 1 per second for 3 seconds
+        receiveDrips(receiver2, 3);
+    }
+
     function testDoesNotRequireReceiverToBeInitialized() public {
         receiveDrips(receiver, 0);
     }
