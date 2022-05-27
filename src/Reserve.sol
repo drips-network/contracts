@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import {Ownable} from "openzeppelin-contracts/access/Ownable.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @notice The reserve interface as seen by the users.
 interface IReserve {
@@ -66,6 +67,7 @@ interface IReservePlugin {
 /// The reserve by default doesn't do anything with the tokens,
 /// but for each ERC-20 address a plugin can be registered for tokens storage.
 contract Reserve is IReserve, Ownable {
+    using SafeERC20 for IERC20;
     /// @notice The dummy plugin address meaning that no plugin is being used.
     IReservePlugin public constant NO_PLUGIN = IReservePlugin(address(0));
 
@@ -259,12 +261,7 @@ contract Reserve is IReserve, Ownable {
         address to,
         uint256 amt
     ) internal {
-        bool success;
-        if (from == address(this)) {
-            success = token.transfer(to, amt);
-        } else {
-            success = token.transferFrom(from, to, amt);
-        }
-        require(success, "Reserve: transfer failed");
+        if (from == address(this)) token.safeTransfer(to, amt);
+        else token.safeTransferFrom(from, to, amt);
     }
 }

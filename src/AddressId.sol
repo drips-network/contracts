@@ -2,8 +2,11 @@
 pragma solidity ^0.8.13;
 
 import {DripsHub, DripsReceiver, IERC20, SplitsReceiver} from "./DripsHub.sol";
+import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract AddressId {
+    using SafeERC20 for IERC20;
+
     DripsHub public immutable dripsHub;
     address public immutable reserve;
     uint32 public immutable accountId;
@@ -34,7 +37,7 @@ contract AddressId {
         SplitsReceiver[] calldata currReceivers
     ) public returns (uint128 collectedAmt, uint128 splitAmt) {
         (collectedAmt, splitAmt) = dripsHub.collectAll(calcUserId(user), erc20, currReceivers);
-        _transferTo(user, erc20, collectedAmt);
+        erc20.safeTransfer(user, collectedAmt);
     }
 
     /// @notice Collects the user's received already split funds
@@ -43,7 +46,7 @@ contract AddressId {
     /// @return amt The collected amount
     function collect(address user, IERC20 erc20) public returns (uint128 amt) {
         amt = dripsHub.collect(calcUserId(user), erc20);
-        _transferTo(user, erc20, amt);
+        erc20.safeTransfer(user, amt);
     }
 
     /// @notice Gives funds from the msg.sender to the receiver.
@@ -89,7 +92,7 @@ contract AddressId {
             balanceDelta,
             newReceivers
         );
-        if (realBalanceDelta < 0) _transferTo(msg.sender, erc20, uint128(-realBalanceDelta));
+        if (realBalanceDelta < 0) erc20.safeTransfer(msg.sender, uint128(-realBalanceDelta));
     }
 
     /// @notice Sets msg.sender's splits configuration.
@@ -102,17 +105,9 @@ contract AddressId {
     }
 
     function _transferFromCaller(IERC20 erc20, uint128 amt) internal {
-        require(erc20.transferFrom(msg.sender, address(this), amt), "Transfer from caller failed");
+        erc20.safeTransferFrom(msg.sender, address(this), amt);
         if (erc20.allowance(address(this), reserve) < amt) {
             erc20.approve(reserve, type(uint256).max);
         }
-    }
-
-    function _transferTo(
-        address receiver,
-        IERC20 erc20,
-        uint128 amt
-    ) internal {
-        require(erc20.transfer(receiver, amt), "Transfer to caller failed");
     }
 }
