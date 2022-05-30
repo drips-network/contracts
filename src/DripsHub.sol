@@ -24,7 +24,7 @@ import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 /// Every user has a receiver balance, in which they have funds received from other users.
 /// The dripped funds are added to the receiver balances in global cycles.
 /// Every `cycleSecs` seconds the drips hub adds dripped funds to the receivers' balances,
-/// so recently dripped funds may not be collectable immediately.
+/// so recently dripped funds may not be receivable immediately.
 /// `cycleSecs` is a constant configured when the drips hub is deployed.
 /// The receiver balance is independent from the drips balance,
 /// to drip received funds they need to be first collected and then added to the drips balance.
@@ -48,7 +48,7 @@ contract DripsHub is Managed {
     /// @notice The address of the ERC-20 reserve which the drips hub works with
     IReserve public immutable reserve;
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
-    /// gain access to drips collected during `T - cycleSecs` to `T - 1`.
+    /// gain access to drips received during `T - cycleSecs` to `T - 1`.
     uint32 public immutable cycleSecs;
     /// @notice Maximum number of drips receivers of a single user.
     /// Limits cost of changes in drips configuration.
@@ -91,8 +91,8 @@ contract DripsHub is Managed {
 
     /// @param _cycleSecs The length of cycleSecs to be used in the contract instance.
     /// Low value makes funds more available by shortening the average time of funds being frozen
-    /// between being taken from the users' drips balances and being collectable by their receivers.
-    /// High value makes collecting cheaper by making it process less cycles for a given time range.
+    /// between being taken from the users' drips balances and being receivable by their receivers.
+    /// High value makes receiving cheaper by making it process less cycles for a given time range.
     /// @param _reserve The address of the ERC-20 reserve which the drips hub will work with
     constructor(uint32 _cycleSecs, IReserve _reserve) {
         require(_cycleSecs > 1, "Cycle length too low");
@@ -162,8 +162,8 @@ contract DripsHub is Managed {
         SplitsReceiver[] memory currReceivers
     ) public view returns (uint128 collectedAmt, uint128 splitAmt) {
         uint256 assetId = _assetId(erc20);
-        // Collectable from cycles
-        (collectedAmt, ) = Drips.receivableDrips(
+        // Receivable from cycles
+        (uint128 receivedAmt, ) = Drips.receivableDrips(
             _dripsHubStorage().drips,
             cycleSecs,
             userId,
@@ -171,13 +171,13 @@ contract DripsHub is Managed {
             type(uint32).max
         );
         // Collectable independently from cycles
-        collectedAmt += Splits.splittable(_dripsHubStorage().splits, userId, assetId);
+        receivedAmt += Splits.splittable(_dripsHubStorage().splits, userId, assetId);
         // Split when collected
         (collectedAmt, splitAmt) = Splits.splitResults(
             _dripsHubStorage().splits,
             userId,
             currReceivers,
-            collectedAmt
+            receivedAmt
         );
         // Already split
         collectedAmt += Splits.collectable(_dripsHubStorage().splits, userId, assetId);
@@ -243,7 +243,7 @@ contract DripsHub is Managed {
             );
     }
 
-    /// @notice Receive drips from uncollected cycles of the user.
+    /// @notice Receive drips for the user.
     /// Received drips cycles won't need to be analyzed ever again.
     /// Calling this function does not collect but makes the funds ready to be split and collected.
     /// @param userId The user ID
@@ -318,7 +318,7 @@ contract DripsHub is Managed {
     }
 
     /// @notice Gives funds from the user or their account to the receiver.
-    /// The receiver can collect them immediately.
+    /// The receiver can split and collect them immediately.
     /// Transfers the funds to be given from the user's wallet to the drips hub contract.
     /// @param userId The user ID
     /// @param receiver The receiver

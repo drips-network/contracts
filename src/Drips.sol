@@ -69,18 +69,18 @@ library Drips {
     struct DripsState {
         /// @notice Drips receivers list hash, see `hashDrips`.
         bytes32 dripsHash;
-        /// @notice The next cycle to be collected
-        uint32 nextCollectedCycle;
+        /// @notice The next cycle to be received
+        uint32 nextReceivableCycle;
         /// @notice The time when drips have been configured for the last time
         uint32 updateTime;
         /// @notice The end time of drips without duration
         uint32 defaultEnd;
         /// @notice The balance when drips have been configured for the last time
         uint128 balance;
-        /// @notice The changes of collected amounts on specific cycle.
-        /// The keys are cycles, each cycle `C` becomes collectable on timestamp `C * cycleSecs`.
-        /// Values for cycles before `nextCollectedCycle` are guaranteed to be zeroed.
-        /// This means that the value of `amtDeltas[nextCollectedCycle].thisCycle` is always
+        /// @notice The changes of received amounts on specific cycle.
+        /// The keys are cycles, each cycle `C` becomes receivable on timestamp `C * cycleSecs`.
+        /// Values for cycles before `nextReceivableCycle` are guaranteed to be zeroed.
+        /// This means that the value of `amtDeltas[nextReceivableCycle].thisCycle` is always
         /// relative to 0 or in other words it's an absolute value independent from other cycles.
         mapping(uint32 => AmtDelta) amtDeltas;
     }
@@ -92,7 +92,7 @@ library Drips {
         int128 nextCycle;
     }
 
-    /// @notice Counts cycles from which drips can be collected.
+    /// @notice Counts cycles from which drips can be received.
     /// This function can be used to detect that there are
     /// too many cycles to analyze in a single transaction.
     /// @param s The drips storage
@@ -107,11 +107,11 @@ library Drips {
         uint256 userId,
         uint256 assetId
     ) internal view returns (uint32 cycles) {
-        uint32 nextCollectedCycle = s.dripsStates[assetId][userId].nextCollectedCycle;
+        uint32 nextReceivableCycle = s.dripsStates[assetId][userId].nextReceivableCycle;
         // The currently running cycle is not receivable yet
         uint32 currCycle = _cycleOf(_currTimestamp(), cycleSecs);
-        if (nextCollectedCycle == 0 || nextCollectedCycle > currCycle) return 0;
-        return currCycle - nextCollectedCycle;
+        if (nextReceivableCycle == 0 || nextReceivableCycle > currCycle) return 0;
+        return currCycle - nextReceivableCycle;
     }
 
     /// @notice Calculate effects of calling `receiveDrips` with the given parameters.
@@ -136,19 +136,19 @@ library Drips {
         uint32 receivedCycles = maxCycles < allReceivableCycles ? maxCycles : allReceivableCycles;
         receivableCycles = allReceivableCycles - receivedCycles;
         DripsState storage state = s.dripsStates[assetId][userId];
-        uint32 collectedCycle = state.nextCollectedCycle;
+        uint32 receivedCycle = state.nextReceivableCycle;
         int128 cycleAmt = 0;
         for (uint256 i = 0; i < receivedCycles; i++) {
-            cycleAmt += state.amtDeltas[collectedCycle].thisCycle;
+            cycleAmt += state.amtDeltas[receivedCycle].thisCycle;
             receivableAmt += uint128(cycleAmt);
-            cycleAmt += state.amtDeltas[collectedCycle].nextCycle;
-            collectedCycle++;
+            cycleAmt += state.amtDeltas[receivedCycle].nextCycle;
+            receivedCycle++;
         }
     }
 
-    /// @notice Receive drips from uncollected cycles of the user.
+    /// @notice Receive drips from unreceived cycles of the user.
     /// Received drips cycles won't need to be analyzed ever again.
-    /// Calling this function does not collect but makes the funds ready to be split and collected.
+    /// Calling this function does not receive but makes the funds ready to be split and received.
     /// @param s The drips storage
     /// @param cycleSecs The cycle length in seconds.
     /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
@@ -171,7 +171,7 @@ library Drips {
         receivableCycles -= cycles;
         if (cycles > 0) {
             DripsState storage state = s.dripsStates[assetId][userId];
-            uint32 cycle = state.nextCollectedCycle;
+            uint32 cycle = state.nextReceivableCycle;
             int128 cycleAmt = 0;
             for (uint256 i = 0; i < cycles; i++) {
                 cycleAmt += state.amtDeltas[cycle].thisCycle;
@@ -180,10 +180,10 @@ library Drips {
                 delete state.amtDeltas[cycle];
                 cycle++;
             }
-            // The next cycle delta must be relative to the last collected cycle, which got zeroed.
+            // The next cycle delta must be relative to the last received cycle, which got zeroed.
             // In other words the next cycle delta must be an absolute value.
             if (cycleAmt != 0) state.amtDeltas[cycle].thisCycle += cycleAmt;
-            state.nextCollectedCycle = cycle;
+            state.nextReceivableCycle = cycle;
         }
         emit ReceivedDrips(userId, assetId, receivedAmt, receivableCycles);
     }
@@ -502,10 +502,10 @@ library Drips {
                     newDefaultEnd
                 );
                 _setDeltaRange(state.amtDeltas, cycleSecs, start, end, newRecv.amtPerSec);
-                // Ensure that the receiver collects the updated cycles
+                // Ensure that the user receives the updated cycles
                 uint32 startCycle = _cycleOf(start, cycleSecs);
-                if (state.nextCollectedCycle == 0 || state.nextCollectedCycle > startCycle) {
-                    state.nextCollectedCycle = startCycle;
+                if (state.nextReceivableCycle == 0 || state.nextReceivableCycle > startCycle) {
+                    state.nextReceivableCycle = startCycle;
                 }
             } else {
                 break;
