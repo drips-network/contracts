@@ -259,7 +259,6 @@ library Drips {
             s.dripsStates[assetId],
             cycleSecs,
             currReceivers,
-            lastUpdate,
             currDefaultEnd,
             newReceivers,
             newDefaultEnd
@@ -304,7 +303,7 @@ library Drips {
             if (i > 0) require(_isOrdered(receivers[i - 1], receiver), "Receivers not sorted");
             // Default drips end doesn't matter here, the end time is ignored when
             // the duration is zero and if it's non-zero the default end is not used anyway
-            (uint32 start, uint32 end) = _dripsRangeInFuture(receiver, _currTimestamp(), 0);
+            (uint32 start, uint32 end) = _dripsRangeInFuture(receiver, 0);
             if (receiver.duration == 0) {
                 length = _addDefaultEnd(defaults, length, start, receiver.amtPerSec);
             } else {
@@ -418,7 +417,6 @@ library Drips {
     /// @param currReceivers The list of the drips receivers set in the last drips update
     /// of the user.
     /// If this is the first update, pass an empty array.
-    /// @param lastUpdate The timestamp of the last drips update of the user.
     /// If this is the first update, pass zero.
     /// @param currDefaultEnd Time when drips without duration
     /// were supposed to end according to the last drips update.
@@ -430,7 +428,6 @@ library Drips {
         mapping(uint256 => DripsState) storage states,
         uint32 cycleSecs_,
         DripsReceiver[] memory currReceivers,
-        uint32 lastUpdate,
         uint32 currDefaultEnd,
         DripsReceiver[] memory newReceivers,
         uint32 newDefaultEnd
@@ -461,16 +458,8 @@ library Drips {
             if (pickCurr && pickNew) {
                 // Shift the existing drip to fulfil the new configuration
                 mapping(uint32 => AmtDelta) storage deltas = states[currRecv.userId].amtDeltas;
-                (uint32 currStart, uint32 currEnd) = _dripsRangeInFuture(
-                    currRecv,
-                    lastUpdate,
-                    currDefaultEnd
-                );
-                (uint32 newStart, uint32 newEnd) = _dripsRangeInFuture(
-                    newRecv,
-                    _currTimestamp(),
-                    newDefaultEnd
-                );
+                (uint32 currStart, uint32 currEnd) = _dripsRangeInFuture(currRecv, currDefaultEnd);
+                (uint32 newStart, uint32 newEnd) = _dripsRangeInFuture(newRecv, newDefaultEnd);
                 _moveDeltaRange(
                     deltas,
                     cycleSecs,
@@ -483,20 +472,12 @@ library Drips {
             } else if (pickCurr) {
                 // Remove an existing drip
                 mapping(uint32 => AmtDelta) storage deltas = states[currRecv.userId].amtDeltas;
-                (uint32 start, uint32 end) = _dripsRangeInFuture(
-                    currRecv,
-                    lastUpdate,
-                    currDefaultEnd
-                );
+                (uint32 start, uint32 end) = _dripsRangeInFuture(currRecv, currDefaultEnd);
                 _clearDeltaRange(deltas, cycleSecs, start, end, currRecv.amtPerSec);
             } else if (pickNew) {
                 // Create a new drip
                 DripsState storage state = states[newRecv.userId];
-                (uint32 start, uint32 end) = _dripsRangeInFuture(
-                    newRecv,
-                    _currTimestamp(),
-                    newDefaultEnd
-                );
+                (uint32 start, uint32 end) = _dripsRangeInFuture(newRecv, newDefaultEnd);
                 _setDeltaRange(state.amtDeltas, cycleSecs, start, end, newRecv.amtPerSec);
                 // The receiver may have never been used, initialize it
                 if (state.nextCollectedCycle == 0) {
@@ -520,40 +501,36 @@ library Drips {
         uint32 updateTime,
         uint32 defaultEnd
     ) private view returns (uint32 start, uint32 end) {
-        return _dripsRange(receiver, updateTime, defaultEnd, 0, _currTimestamp());
+        return _dripsRange(receiver, defaultEnd, updateTime, _currTimestamp());
     }
 
     /// @notice Calculates the time range in the future in which a receiver will be dripped to.
     /// @param receiver The drips receiver
-    /// @param updateTime The time when drips are configured
     /// @param defaultEnd The end time of drips without duration
-    function _dripsRangeInFuture(
-        DripsReceiver memory receiver,
-        uint32 updateTime,
-        uint32 defaultEnd
-    ) private view returns (uint32 start, uint32 end) {
-        return _dripsRange(receiver, updateTime, defaultEnd, _currTimestamp(), type(uint32).max);
+    function _dripsRangeInFuture(DripsReceiver memory receiver, uint32 defaultEnd)
+        private
+        view
+        returns (uint32 start, uint32 end)
+    {
+        return _dripsRange(receiver, defaultEnd, _currTimestamp(), type(uint32).max);
     }
 
     /// @notice Calculates the time range in which a receiver is to be dripped to.
     /// This range is capped to provide a view on drips through a specific time window.
     /// @param receiver The drips receiver
-    /// @param updateTime The time when drips are configured
     /// @param defaultEnd The end time of drips without duration
     /// @param startCap The timestamp the drips range start should be capped to
     /// @param endCap The timestamp the drips range end should be capped to
     function _dripsRange(
         DripsReceiver memory receiver,
-        uint32 updateTime,
         uint32 defaultEnd,
         uint32 startCap,
         uint32 endCap
     ) private pure returns (uint32 start, uint32 end_) {
-        start = updateTime;
+        start = startCap;
         if (receiver.start != 0) start = receiver.start;
         uint40 end = defaultEnd;
         if (receiver.duration != 0) end = uint40(start) + receiver.duration;
-        if (start < updateTime) start = updateTime;
         if (start < startCap) start = startCap;
         if (end > endCap) end = endCap;
         if (end < start) end = start;
