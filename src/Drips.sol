@@ -418,8 +418,8 @@ library Drips {
     /// @param currReceivers The list of the drips receivers set in the last drips update
     /// of the user.
     /// If this is the first update, pass an empty array.
-    /// If this is the first update, pass zero.
     /// @param lastUpdate the last time the sender updated the drips.
+    /// If this is the first update, pass zero.
     /// @param currDefaultEnd Time when drips without duration
     /// were supposed to end according to the last drips update.
     /// @param newReceivers  The list of the drips receivers of the user to be set.
