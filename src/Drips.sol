@@ -414,12 +414,12 @@ library Drips {
     /// @notice Applies the effects of the change of the drips on the receivers' drips states.
     /// @param states The drips states for a single asset, the key is the user ID
     /// @param cycleSecs_ The cycle length in seconds.
-    /// @param lastUpdate the last time the sender updated the drips.
     /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param currReceivers The list of the drips receivers set in the last drips update
     /// of the user.
     /// If this is the first update, pass an empty array.
     /// If this is the first update, pass zero.
+    /// @param lastUpdate the last time the sender updated the drips.
     /// @param currDefaultEnd Time when drips without duration
     /// were supposed to end according to the last drips update.
     /// @param newReceivers  The list of the drips receivers of the user to be set.
@@ -537,8 +537,8 @@ library Drips {
     /// @notice Calculates the time range in which a receiver is to be dripped to.
     /// This range is capped to provide a view on drips through a specific time window.
     /// @param receiver The drips receiver
-    /// @param defaultEnd The end time of drips without duration
     /// @param updateTime The time when drips are configured
+    /// @param defaultEnd The end time of drips without duration
     /// @param startCap The timestamp the drips range start should be capped to
     /// @param endCap The timestamp the drips range end should be capped to
     function _dripsRange(
