@@ -422,7 +422,7 @@ library Drips {
     /// @param currReceivers The list of the drips receivers set in the last drips update
     /// of the user.
     /// If this is the first update, pass an empty array.
-    /// @param lastUpdate The timestamp of the last drips update of the user.
+    /// @param lastUpdate the last time the sender updated the drips.
     /// If this is the first update, pass zero.
     /// @param currDefaultEnd Time when drips without duration
     /// were supposed to end according to the last drips update.
@@ -525,12 +525,11 @@ library Drips {
         uint32 updateTime,
         uint32 defaultEnd
     ) private view returns (uint32 start, uint32 end) {
-        return _dripsRange(receiver, updateTime, defaultEnd, 0, _currTimestamp());
+        return _dripsRange(receiver, updateTime, defaultEnd, updateTime, _currTimestamp());
     }
 
     /// @notice Calculates the time range in the future in which a receiver will be dripped to.
     /// @param receiver The drips receiver
-    /// @param updateTime The time when drips are configured
     /// @param defaultEnd The end time of drips without duration
     function _dripsRangeInFuture(
         DripsReceiver memory receiver,
@@ -558,7 +557,6 @@ library Drips {
         if (receiver.start != 0) start = receiver.start;
         uint40 end = defaultEnd;
         if (receiver.duration != 0) end = uint40(start) + receiver.duration;
-        if (start < updateTime) start = updateTime;
         if (start < startCap) start = startCap;
         if (end > endCap) end = endCap;
         if (end < start) end = start;

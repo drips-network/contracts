@@ -748,6 +748,25 @@ contract DripsTest is DSTest {
         receiveDrips(receiver, cycleSecs * 2);
     }
 
+    function testUpdateDefaultStartDrip() public {
+        warpToCycleEnd();
+        uint256 start = 0;
+        uint128 amt = 3 * cycleSecs;
+        uint32 duration = 3 * cycleSecs;
+        uint256 amtPerSec = 1;
+        // currRecv.start == 0 && currRecv.duration != 0
+        setDrips(sender, 0, amt, recv(receiver, amtPerSec, start, duration));
+        warpToCycleEnd();
+
+        warpBy(cycleSecs);
+        // remove drips after two cycles, no balance change
+        setDrips(sender, 10, 10, recv());
+
+        warpBy(cycleSecs * 5);
+        // only two cycles should be dripped
+        receiveDrips(defaultAsset, receiver, 2 * cycleSecs);
+    }
+
     function testDripsOfDifferentAssetsAreIndependent() public {
         // Covers 1.5 cycles of dripping
         setDrips(
