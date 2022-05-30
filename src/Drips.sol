@@ -538,17 +538,17 @@ library Drips {
     /// This range is capped to provide a view on drips through a specific time window.
     /// @param receiver The drips receiver
     /// @param defaultEnd The end time of drips without duration
-    /// @param lastUpdate the last time the drips has been changed
+    /// @param updateTime The time when drips are configured
     /// @param startCap The timestamp the drips range start should be capped to
     /// @param endCap The timestamp the drips range end should be capped to
     function _dripsRange(
         DripsReceiver memory receiver,
-        uint32 lastUpdate,
+        uint32 updateTime,
         uint32 defaultEnd,
         uint32 startCap,
         uint32 endCap
     ) private pure returns (uint32 start, uint32 end_) {
-        start = lastUpdate;
+        start = updateTime;
         if (receiver.start != 0) start = receiver.start;
         uint40 end = defaultEnd;
         if (receiver.duration != 0) end = uint40(start) + receiver.duration;
