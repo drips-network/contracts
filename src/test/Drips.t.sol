@@ -459,6 +459,15 @@ contract DripsTest is DSTest {
         receiveDrips(receiver2, 0);
     }
 
+    function testDripsWithStartInTheFutureCycleCanBeMovedToAnEarlierOne() public {
+        setDrips(sender, 0, 1, recv(receiver, 1, block.timestamp + cycleSecs, 0));
+        setDrips(sender, 1, 1, recv(receiver, 1));
+        warpToCycleEnd();
+        receiveDrips(receiver, 1);
+        warpToCycleEnd();
+        receiveDrips(receiver, 0);
+    }
+
     function testDripsWithZeroDurationReceiversNotSortedByStart() public {
         setDrips(
             sender,

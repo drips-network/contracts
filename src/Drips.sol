@@ -464,7 +464,7 @@ library Drips {
 
             if (pickCurr && pickNew) {
                 // Shift the existing drip to fulfil the new configuration
-                mapping(uint32 => AmtDelta) storage deltas = states[currRecv.userId].amtDeltas;
+                DripsState storage state = states[currRecv.userId];
                 (uint32 currStart, uint32 currEnd) = _dripsRangeInFuture(
                     currRecv,
                     lastUpdate,
@@ -476,7 +476,7 @@ library Drips {
                     newDefaultEnd
                 );
                 _moveDeltaRange(
-                    deltas,
+                    state.amtDeltas,
                     cycleSecs,
                     currStart,
                     currEnd,
@@ -484,6 +484,11 @@ library Drips {
                     newEnd,
                     currRecv.amtPerSec
                 );
+                // Ensure that the user receives the updated cycles
+                uint32 startCycle = _cycleOf(newStart, cycleSecs);
+                if (state.nextReceivableCycle > startCycle) {
+                    state.nextReceivableCycle = startCycle;
+                }
             } else if (pickCurr) {
                 // Remove an existing drip
                 mapping(uint32 => AmtDelta) storage deltas = states[currRecv.userId].amtDeltas;
