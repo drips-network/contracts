@@ -108,9 +108,10 @@ library Drips {
         uint256 assetId
     ) internal view returns (uint32 cycles) {
         uint32 nextCollectedCycle = s.dripsStates[assetId][userId].nextCollectedCycle;
-        uint32 currFinishedCycle = _currTimestamp() / cycleSecs;
-        if (nextCollectedCycle == 0 || nextCollectedCycle > currFinishedCycle) return 0;
-        return currFinishedCycle - nextCollectedCycle + 1;
+        // The currently running cycle is not receivable yet
+        uint32 currCycle = _cycleOf(_currTimestamp(), cycleSecs);
+        if (nextCollectedCycle == 0 || nextCollectedCycle > currCycle) return 0;
+        return currCycle - nextCollectedCycle;
     }
 
     /// @notice Calculate effects of calling `receiveDrips` with the given parameters.
@@ -502,7 +503,7 @@ library Drips {
                 );
                 _setDeltaRange(state.amtDeltas, cycleSecs, start, end, newRecv.amtPerSec);
                 // Ensure that the receiver collects the updated cycles
-                uint32 startCycle = start / cycleSecs + 1;
+                uint32 startCycle = _cycleOf(start, cycleSecs);
                 if (state.nextCollectedCycle == 0 || state.nextCollectedCycle > startCycle) {
                     state.nextCollectedCycle = startCycle;
                 }
@@ -638,7 +639,7 @@ library Drips {
         // In order to set a delta on a specific timestamp it must be introduced in two cycles.
         // The cycle delta is split proportionally based on how much this cycle is affected.
         // The next cycle has the rest of the delta applied, so the update is fully completed.
-        uint32 thisCycle = timestamp / cycleSecs + 1;
+        uint32 thisCycle = _cycleOf(timestamp, cycleSecs);
         uint32 nextCycleSecs = timestamp % cycleSecs;
         uint32 thisCycleSecs = cycleSecs - nextCycleSecs;
         AmtDelta storage amtDelta = amtDeltas[thisCycle];
@@ -660,7 +661,15 @@ library Drips {
         return prev.duration < next.duration;
     }
 
-    // /@notice The current timestamp, casted to the library's internal representation.
+    /// @notice Calculates the cycle containing the given timestamp.
+    /// @param timestamp The timestamp.
+    /// @param cycleSecs The cycle length in seconds.
+    /// @return cycle The cycle containing the timestamp.
+    function _cycleOf(uint32 timestamp, uint32 cycleSecs) internal pure returns (uint32 cycle) {
+        return timestamp / cycleSecs + 1;
+    }
+
+    /// @notice The current timestamp, casted to the library's internal representation.
     /// @return timestamp The current timestamp
     function _currTimestamp() private view returns (uint32 timestamp) {
         return uint32(block.timestamp);
