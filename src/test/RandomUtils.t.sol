@@ -21,4 +21,20 @@ contract RandomUtils {
         seed = keccak256(bytes.concat(seed));
         return uint256(seed);
     }
+
+    function randomUint128(uint128 maxValue) public returns (uint128) {
+        return uint128(random(maxValue));
+    }
+
+    function randomUint128() public returns (uint128) {
+        return randomUint128(type(uint128).max);
+    }
+
+    function randomUint32(uint32 range) public returns (uint32) {
+        return uint32(random(range));
+    }
+
+    function randomUint32() public returns (uint32) {
+        return randomUint32(type(uint32).max);
+    }
 }

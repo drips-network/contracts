@@ -297,8 +297,11 @@ library Drips {
         returns (uint32 defaultEndTime)
     {
         require(receivers.length <= MAX_DRIPS_RECEIVERS, "Too many drips receivers");
-        DefaultEnd[] memory defaults = new DefaultEnd[](receivers.length);
-        uint8 length = 0;
+        // Default ends found among receivers
+        uint256[] memory defaultEnds = new uint256[](receivers.length);
+        uint256 length = 0;
+        // The total amount per second in the current timestamp of receivers with the default end
+        uint136 currAmtPerSec = 0;
 
         for (uint256 i = 0; i < receivers.length; i++) {
             DripsReceiver memory receiver = receivers[i];
@@ -308,74 +311,43 @@ library Drips {
             // the duration is zero and if it's non-zero the default end is not used anyway
             (uint32 start, uint32 end) = _dripsRangeInFuture(receiver, _currTimestamp(), 0);
             if (receiver.duration == 0) {
-                length = _addDefaultEnd(defaults, length, start, receiver.amtPerSec);
+                if (start == _currTimestamp()) currAmtPerSec += receiver.amtPerSec;
+                else defaultEnds.push(length++, start, receiver.amtPerSec);
             } else {
                 uint192 spent = (end - start) * receiver.amtPerSec;
                 require(balance >= spent, "Insufficient balance");
                 balance -= uint128(spent);
             }
         }
-        return _receiversDefaultEnd(defaults, length, balance);
-    }
-
-    /// @notice The internal representation of a receiver without a duration
-    struct DefaultEnd {
-        uint32 start;
-        uint136 amtPerSec;
-    }
-
-    /// @notice Adds a `DefaultEnd` to the list of receivers while keeping it sorted.
-    /// @param defaults The list of default ends, must be sorted by start
-    /// @param length The length of the list
-    /// @param start The start time of the added receiver
-    /// @param amtPerSec The amtPerSec of the added receiver
-    /// @return newLength The new length of the list
-    function _addDefaultEnd(
-        DefaultEnd[] memory defaults,
-        uint8 length,
-        uint32 start,
-        uint128 amtPerSec
-    ) private pure returns (uint8 newLength) {
-        for (uint8 i = 0; i < length; i++) {
-            DefaultEnd memory defaultEnd = defaults[i];
-            if (defaultEnd.start == start) {
-                defaultEnd.amtPerSec += amtPerSec;
-                return length;
-            }
-            if (defaultEnd.start > start) {
-                // Shift existing entries to make space for inserting the new entry
-                for (uint8 j = length; j > i; j--) {
-                    defaults[j] = defaults[j - 1];
-                }
-                defaults[i] = DefaultEnd(start, amtPerSec);
-                return length + 1;
-            }
-        }
-        defaults[length] = DefaultEnd(start, amtPerSec);
-        return length + 1;
+        return _receiversDefaultEnd(defaultEnds, length, currAmtPerSec, balance);
     }
 
     /// @notice Calculates the end time of drips without duration.
-    /// @param defaults The list of default ends, must be sorted by start
+    /// @param defaultEnds The list of default ends.
+    /// Must not contain entries with start time equal to the current timestamp.
     /// @param length The length of the list
+    /// @param currAmtPerSec The total amount per second in the current timestamp
     /// @param balance The balance available for drips without duration
     /// @return end_ The end time of drips without duration
     function _receiversDefaultEnd(
-        DefaultEnd[] memory defaults,
-        uint8 length,
+        uint256[] memory defaultEnds,
+        uint256 length,
+        uint136 currAmtPerSec,
         uint128 balance
-    ) private pure returns (uint32 end_) {
-        uint32 lastStart = 0;
-        uint136 amtPerSec = 0;
-        uint136 end = type(uint136).max;
-        for (uint8 i = 0; i < length; i++) {
-            DefaultEnd memory defaultEnd = defaults[i];
-            uint32 start = defaultEnd.start;
+    ) private view returns (uint32 end_) {
+        defaultEnds.heapify(length);
+        uint32 lastStart = _currTimestamp();
+        uint136 end = type(uint32).max;
+        if (currAmtPerSec != 0) end = lastStart + (balance / currAmtPerSec);
+        while (length > 0) {
+            uint32 start = defaultEnds.peekStart();
             if (start >= end) break;
-            balance -= uint128(amtPerSec * (start - lastStart));
+            balance -= uint128(currAmtPerSec * (start - lastStart));
             lastStart = start;
-            amtPerSec += defaultEnd.amtPerSec;
-            end = start + (balance / amtPerSec);
+            uint136 amtPerSec;
+            (length, amtPerSec) = defaultEnds.popAmtPerSec(length);
+            currAmtPerSec += amtPerSec;
+            end = start + (balance / currAmtPerSec);
         }
         if (end > type(uint32).max) end = type(uint32).max;
         return uint32(end);
@@ -677,5 +649,117 @@ library Drips {
     /// @return timestamp The current timestamp
     function _currTimestamp() private view returns (uint32 timestamp) {
         return uint32(block.timestamp);
+    }
+}
+
+using DefaultEndsHeap for uint256[];
+
+/// @notice A heap of default ends used for calculating drips default ends.
+library DefaultEndsHeap {
+    /// @notice Add a default end to the list, does not maintain the heap property.
+    /// @param defaults The list of default ends. Must have enough capacity to hold another element.
+    /// @param length The current length of the list.
+    /// @param start The start time of the added default end.
+    /// @param amtPerSec The amount per second of the added default end.
+    function push(
+        uint256[] memory defaults,
+        uint256 length,
+        uint32 start,
+        uint128 amtPerSec
+    ) internal pure {
+        unchecked {
+            defaults[length] = (uint256(start) << 128) | amtPerSec;
+        }
+    }
+
+    /// @notice Turn a list of default ends into a binary heap allowing peeking and popping.
+    /// The heap is ordered by the defaults' start times from the lowest to the hightest.
+    /// @param defaults The list of default ends.
+    /// @param length The current length of the list.
+    function heapify(uint256[] memory defaults, uint256 length) internal pure {
+        unchecked {
+            // All the childless elements of the heap are already valid one element heaps.
+            // Remove and insert each element which has children to gradually build a valid heap.
+            for (uint256 i = length / 2; i-- > 0; ) {
+                _siftDown(defaults, length, i, defaults[i]);
+            }
+        }
+    }
+
+    /// @notice Peek the lowest start time in the heap of default ends.
+    /// @param defaults The binary heap of default ends. Must not be empty.
+    /// @return start The lowest start time.
+    function peekStart(uint256[] memory defaults) internal pure returns (uint32 start) {
+        unchecked {
+            return uint32(defaults[0] >> 128);
+        }
+    }
+
+    /// @notice Pop the lowest start time in the heap of default ends.
+    /// If there are multiple elements describing that start time, removes them all.
+    /// @param defaults The binary heap of default ends.
+    /// @param length The current length of the binary heap.
+    /// @return newLength The length of the binary heap after popping.
+    /// @return amtPerSec The total amount per second of the popped start time.
+    function popAmtPerSec(uint256[] memory defaults, uint256 length)
+        internal
+        pure
+        returns (uint256 newLength, uint136 amtPerSec)
+    {
+        unchecked {
+            uint256 defaultEnd = defaults[0];
+            amtPerSec = uint128(defaultEnd);
+            // The highest value with start time equal to the popped value
+            uint256 defaultEndNoAmtPerSec = defaultEnd | type(uint128).max;
+            while (--length > 0) {
+                // Remove the lowest element and fill its place with the last element of the heap
+                _siftDown(defaults, length, 0, defaults[length]);
+                defaultEnd = defaults[0];
+                if (defaultEnd > defaultEndNoAmtPerSec) break;
+                amtPerSec += uint128(defaultEnd);
+            }
+            return (length, amtPerSec);
+        }
+    }
+
+    /// @notice Insert an item into an empty space in the heap of default ends.
+    /// Makes sure that the space and all items below it still form a valid heap.
+    /// @param defaults The binary heap of default ends.
+    /// @param length The current length of the binary heap.
+    /// @param empty The index of the space considered empty. It will be overwritten.
+    /// @param inserted The inserted item.
+    function _siftDown(
+        uint256[] memory defaults,
+        uint256 length,
+        uint256 empty,
+        uint256 inserted
+    ) private pure {
+        unchecked {
+            // The lowest value with start time equal to the inserted value
+            uint256 insertedNoAmtPerSec = inserted ^ uint128(inserted);
+            while (true) {
+                uint256 child = empty * 2 + 1;
+                // Empty has no children
+                if (child >= length) break;
+                uint256 childVal = defaults[child];
+                uint256 otherChild = child + 1;
+                // Empty has 2 children
+                if (otherChild < length) {
+                    uint256 otherChildVal = defaults[otherChild];
+                    // Pick the smaller child
+                    if (otherChildVal < childVal) {
+                        child = otherChild;
+                        childVal = otherChildVal;
+                    }
+                }
+                // No child is smaller than the inserted value
+                if (childVal >= insertedNoAmtPerSec) break;
+                // Move the smaller child one level up
+                // and keep looking for the right space for the inserted value
+                defaults[empty] = childVal;
+                empty = child;
+            }
+            defaults[empty] = inserted;
+        }
     }
 }
