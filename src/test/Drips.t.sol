@@ -106,6 +106,78 @@ contract DripsTest is DSTest {
         return recv(recv(recv1, recv2, recv3), recv4);
     }
 
+    function random(
+        bytes32 name,
+        uint256 salt,
+        uint256 range
+    ) internal pure returns (uint256) {
+        return uint256(keccak256(abi.encode(name, salt))) % range;
+    }
+
+    function combineSalt(uint256 a, uint256 b) public pure returns (uint256) {
+        return uint256(keccak256(abi.encode(a, b)));
+    }
+
+    function genRandomRecv(
+        uint256 randomSalt,
+        uint8 amountReceiver,
+        uint128 maxAmtPerSec,
+        uint32 maxStart,
+        uint32 maxDuration
+    ) internal pure returns (DripsReceiver[] memory) {
+        uint256 inPercent = 100;
+        uint256 probDefaultEnd = random("default.end", randomSalt, inPercent);
+        uint256 probStartNow = random("start.now", randomSalt, inPercent);
+        DripsReceiver[] memory receivers = new DripsReceiver[](amountReceiver);
+        for (uint8 i = 0; i < amountReceiver; i++) {
+            uint256 salt = combineSalt(randomSalt, i);
+            uint256 amtPerSec = random("amtPerSec", salt, maxAmtPerSec) + 1;
+            uint256 start = random("start", salt, maxStart);
+            if (start % 100 <= probStartNow) start = 0;
+            uint256 duration = random("duration", salt, maxDuration);
+            if (duration % 100 <= probDefaultEnd) duration = 0;
+
+            receivers[i] = DripsReceiver(i, uint128(amtPerSec), uint32(start), uint32(duration));
+        }
+        return receivers;
+    }
+
+    function receiveDrips(
+        DripsReceiver[] memory receivers,
+        uint32 defaultEnd,
+        uint32 updateTime
+    ) internal {
+        emit log_named_uint("defaultEnd:", defaultEnd);
+        for (uint256 i = 0; i < receivers.length; i++) {
+            DripsReceiver memory r = receivers[i];
+            uint32 duration = r.duration;
+            uint32 start = r.start;
+            if (start == 0) start = updateTime;
+            if (duration == 0) duration = defaultEnd - start;
+            if (start < updateTime) duration -= updateTime - start;
+
+            // drips was in the past, not added
+            if (start + duration < updateTime) duration = 0;
+
+            uint256 expectedAmt = duration * r.amtPerSec;
+            (uint128 actualAmt, ) = Drips.receiveDrips(
+                s,
+                cycleSecs,
+                r.userId,
+                defaultAsset,
+                type(uint32).max
+            );
+            // only log if acutalAmt doesn't match exptectedAmt
+            if (expectedAmt != actualAmt) {
+                emit log_named_uint("userId:", r.userId);
+                emit log_named_uint("start:", r.start);
+                emit log_named_uint("duration:", r.duration);
+                emit log_named_uint("amtPerSec:", r.amtPerSec);
+            }
+            assertEq(actualAmt, expectedAmt);
+        }
+    }
+
     function setDrips(
         uint256 user,
         uint128 balanceFrom,
@@ -781,5 +853,36 @@ contract DripsTest is DSTest {
         receiveDrips(otherAsset, receiver1, 3 * cycleSecs);
         // receiver2 received nothing
         receiveDrips(otherAsset, receiver2, 0);
+    }
+
+    function testFuzzDripsReceiver(uint256 salt) public {
+        uint8 amountReceivers = 10;
+        uint128 maxAmtPerSec = 50;
+        uint32 maxDuration = 100;
+        uint32 maxStart = 100;
+
+        uint128 maxCosts = amountReceivers * maxAmtPerSec * maxDuration;
+        emit log_named_uint("topUp", maxCosts);
+        uint128 maxAllDripsFinished = maxStart + maxDuration;
+
+        DripsReceiver[] memory receivers = genRandomRecv(
+            salt,
+            amountReceivers,
+            maxAmtPerSec,
+            maxStart,
+            maxDuration
+        );
+        emit log_named_uint("setDrips.updateTime", block.timestamp);
+        setDrips(sender, 0, maxCosts, receivers);
+
+        (, uint32 updateTime, , uint32 defaultEnd) = Drips.dripsState(s, sender, defaultAsset);
+
+        if (defaultEnd > maxAllDripsFinished && defaultEnd != type(uint32).max)
+            maxAllDripsFinished = defaultEnd;
+
+        warpBy(maxAllDripsFinished);
+        warpToCycleEnd();
+        emit log_named_uint("receiveDrips.time", block.timestamp);
+        receiveDrips(receivers, defaultEnd, updateTime);
     }
 }
