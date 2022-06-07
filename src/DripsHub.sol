@@ -346,7 +346,8 @@ contract DripsHub is Managed {
         returns (
             bytes32 dripsHash,
             uint32 updateTime,
-            uint128 balance
+            uint128 balance,
+            uint32 defaultEnd
         )
     {
         return Drips.dripsState(_dripsHubStorage().drips, userId, _assetId(erc20));

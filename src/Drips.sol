@@ -205,11 +205,12 @@ library Drips {
         returns (
             bytes32 dripsHash,
             uint32 updateTime,
-            uint128 balance
+            uint128 balance,
+            uint32 defaultEnd
         )
     {
         DripsState storage state = s.dripsStates[assetId][userId];
-        return (state.dripsHash, state.updateTime, state.balance);
+        return (state.dripsHash, state.updateTime, state.balance, state.defaultEnd);
     }
 
     /// @notice Sets the user's drips configuration.
