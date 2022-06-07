@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import {DSTest} from "ds-test/test.sol";
 import {Hevm} from "./Hevm.t.sol";
-import {Drips, DripsReceiver} from "../Drips.sol";
+import {Drips, DripsConfig, DripsConfigImpl, DripsReceiver} from "../Drips.sol";
 
 contract PseudoRandomUtils {
     bytes32 private salt;
@@ -101,7 +101,10 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         uint256 duration
     ) internal pure returns (DripsReceiver[] memory receivers) {
         receivers = new DripsReceiver[](1);
-        receivers[0] = DripsReceiver(userId, uint128(amtPerSec), uint32(start), uint32(duration));
+        receivers[0] = DripsReceiver(
+            userId,
+            DripsConfigImpl.create(uint128(amtPerSec), uint32(start), uint32(duration))
+        );
     }
 
     function recv(DripsReceiver[] memory recv1, DripsReceiver[] memory recv2)
@@ -167,7 +170,10 @@ contract DripsTest is DSTest, PseudoRandomUtils {
             uint256 duration = random(maxDuration);
             if (duration % 100 <= probDefaultEnd) duration = 0;
 
-            receivers[i] = DripsReceiver(i, uint128(amtPerSec), uint32(start), uint32(duration));
+            receivers[i] = DripsReceiver(
+                i,
+                DripsConfigImpl.create(uint128(amtPerSec), uint32(start), uint32(duration))
+            );
         }
         return receivers;
     }
@@ -180,8 +186,8 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         emit log_named_uint("defaultEnd:", defaultEnd);
         for (uint256 i = 0; i < receivers.length; i++) {
             DripsReceiver memory r = receivers[i];
-            uint32 duration = r.duration;
-            uint32 start = r.start;
+            uint32 duration = r.config.duration();
+            uint32 start = r.config.start();
             if (start == 0) start = updateTime;
             if (duration == 0) duration = defaultEnd - start;
             if (start < updateTime) duration -= updateTime - start;
@@ -189,7 +195,7 @@ contract DripsTest is DSTest, PseudoRandomUtils {
             // drips was in the past, not added
             if (start + duration < updateTime) duration = 0;
 
-            uint256 expectedAmt = duration * r.amtPerSec;
+            uint256 expectedAmt = duration * r.config.amtPerSec();
             (uint128 actualAmt, ) = Drips.receiveDrips(
                 s,
                 cycleSecs,
@@ -200,9 +206,9 @@ contract DripsTest is DSTest, PseudoRandomUtils {
             // only log if acutalAmt doesn't match exptectedAmt
             if (expectedAmt != actualAmt) {
                 emit log_named_uint("userId:", r.userId);
-                emit log_named_uint("start:", r.start);
-                emit log_named_uint("duration:", r.duration);
-                emit log_named_uint("amtPerSec:", r.amtPerSec);
+                emit log_named_uint("start:", r.config.start());
+                emit log_named_uint("duration:", r.config.duration());
+                emit log_named_uint("amtPerSec:", r.config.amtPerSec());
             }
             assertEq(actualAmt, expectedAmt);
         }
@@ -435,6 +441,30 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         );
         assertEq(actualAmt, expectedAmt, "Invalid receivable amount");
         assertEq(actualCycles, expectedCycles, "Invalid receivable drips cycles");
+    }
+
+    function testDripsConfigStoresParameters() public {
+        DripsConfig config = DripsConfigImpl.create(1, 2, 3);
+        assertEq(config.amtPerSec(), 1, "Invalid amtPerSec");
+        assertEq(config.start(), 2, "Invalid start");
+        assertEq(config.duration(), 3, "Invalid duration");
+    }
+
+    function testDripsConfigChecksOrdering() public {
+        DripsConfig config = DripsConfigImpl.create(1, 1, 1);
+        assertTrue(!config.lt(config), "Configs equal");
+
+        DripsConfig higherAmtPerSec = DripsConfigImpl.create(2, 1, 1);
+        assertTrue(config.lt(higherAmtPerSec), "AmtPerSec higher");
+        assertTrue(!higherAmtPerSec.lt(config), "AmtPerSec lower");
+
+        DripsConfig higherStart = DripsConfigImpl.create(1, 2, 1);
+        assertTrue(config.lt(higherStart), "Start higher");
+        assertTrue(!higherStart.lt(config), "Start lower");
+
+        DripsConfig higherDuration = DripsConfigImpl.create(1, 1, 2);
+        assertTrue(config.lt(higherDuration), "Duration higher");
+        assertTrue(!higherDuration.lt(config), "Duration lower");
     }
 
     function testAllowsDrippingToASingleReceiver() public {
@@ -1006,7 +1036,7 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         DripsReceiver[] memory receivers = recv(receiver, 1);
         setDrips(defaultAsset, sender, 0, 10, receivers);
         warpBy(2);
-        receivers[0].amtPerSec++;
+        receivers = recv(receiver, 2);
         assertBalanceAtReverts(sender, receivers, block.timestamp, ERROR_INVALID_DRIPS_LIST);
     }
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.13;
 
-import {Drips, DripsReceiver} from "./Drips.sol";
+import {Drips, DripsConfig, DripsConfigImpl, DripsReceiver} from "./Drips.sol";
 import {IReserve} from "./Reserve.sol";
 import {Managed} from "./Managed.sol";
 import {Splits, SplitsReceiver} from "./Splits.sol";

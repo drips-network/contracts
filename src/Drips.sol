@@ -5,14 +5,60 @@ pragma solidity ^0.8.13;
 struct DripsReceiver {
     /// @notice The user ID.
     uint256 userId;
-    /// @notice The amount per second being dripped. Must never be zero.
-    uint128 amtPerSec;
-    /// @notice The timestamp when dripping should start.
+    /// @notice The drips configuration.
+    DripsConfig config;
+}
+
+/// @notice Describes a drips configuration.
+/// It's constructed from `amtPerSec`, `start` and `duration` as
+/// `amtPerSec << 64 | start << 32 | duration`.
+/// `amtPerSec` is the amount per second being dripped. Must never be zero.
+/// `start` is the timestamp when dripping should start.
+/// If zero, use the timestamp when drips are configured.
+/// `duration` is the duration of dripping.
+/// If zero, drip until balance runs out.
+type DripsConfig is uint192;
+
+using DripsConfigImpl for DripsConfig global;
+
+library DripsConfigImpl {
+    /// @notice Create a new DripsConfig.
+    /// @param _amtPerSec The amount per second being dripped. Must never be zero.
+    /// @param _start The timestamp when dripping should start.
     /// If zero, use the timestamp when drips are configured.
-    uint32 start;
-    /// @notice The duration of dripping.
+    /// @param _duration The duration of dripping.
     /// If zero, drip until balance runs out.
-    uint32 duration;
+    function create(
+        uint128 _amtPerSec,
+        uint32 _start,
+        uint32 _duration
+    ) internal pure returns (DripsConfig) {
+        uint192 config = _amtPerSec;
+        config = (config << 32) | _start;
+        config = (config << 32) | _duration;
+        return DripsConfig.wrap(config);
+    }
+
+    /// @notice Extracts amtPerSec from a `DripsConfig`
+    function amtPerSec(DripsConfig config) internal pure returns (uint128) {
+        return uint128(DripsConfig.unwrap(config) >> 64);
+    }
+
+    /// @notice Extracts start from a `DripsConfig`
+    function start(DripsConfig config) internal pure returns (uint32) {
+        return uint32(DripsConfig.unwrap(config) >> 32);
+    }
+
+    /// @notice Extracts duration from a `DripsConfig`
+    function duration(DripsConfig config) internal pure returns (uint32) {
+        return uint32(DripsConfig.unwrap(config));
+    }
+
+    /// @notice Compares two `DripsConfig`s.
+    /// First compares their `amtPerSec`s, then their `start`s and then their `duration`s.
+    function lt(DripsConfig config, DripsConfig otherConfig) internal pure returns (bool) {
+        return DripsConfig.unwrap(config) < DripsConfig.unwrap(otherConfig);
+    }
 }
 
 library Drips {
@@ -35,17 +81,11 @@ library Drips {
     /// @notice Emitted when a user is seen in a drips receivers list.
     /// @param receiversHash The drips receivers list hash
     /// @param userId The user ID.
-    /// @param amtPerSec The amount per second being dripped. Must never be zero.
-    /// @param start The timestamp when dripping should start.
-    /// If zero, use the timestamp when drips are configured.
-    /// @param duration The duration of dripping.
-    /// If zero, drip until balance runs out.
+    /// @param config The drips configuration.
     event DripsReceiverSeen(
         bytes32 indexed receiversHash,
         uint256 indexed userId,
-        uint128 amtPerSec,
-        uint32 start,
-        uint32 duration
+        DripsConfig config
     );
 
     /// @notice Emitted when drips are received and are ready to be split.
@@ -297,13 +337,7 @@ library Drips {
             state.dripsHash = newDripsHash;
             for (uint256 i = 0; i < newReceivers.length; i++) {
                 DripsReceiver memory receiver = newReceivers[i];
-                emit DripsReceiverSeen(
-                    newDripsHash,
-                    receiver.userId,
-                    receiver.amtPerSec,
-                    receiver.start,
-                    receiver.duration
-                );
+                emit DripsReceiverSeen(newDripsHash, receiver.userId, receiver.config);
             }
         }
         emit DripsSet(userId, assetId, newDripsHash, newBalance);
@@ -328,17 +362,18 @@ library Drips {
 
         for (uint256 i = 0; i < receivers.length; i++) {
             DripsReceiver memory receiver = receivers[i];
-            require(receiver.amtPerSec != 0, "Drips receiver amtPerSec is zero");
+            uint128 amtPerSec = receiver.config.amtPerSec();
+            require(amtPerSec != 0, "Drips receiver amtPerSec is zero");
             if (i > 0) require(_isOrdered(receivers[i - 1], receiver), "Receivers not sorted");
             // Default drips end doesn't matter here, the end time is ignored when
             // the duration is zero and if it's non-zero the default end is not used anyway
             (uint32 start, uint32 end) = _dripsRangeInFuture(receiver, _currTimestamp(), 0);
-            if (receiver.duration == 0) {
+            if (receiver.config.duration() == 0) {
                 if (start > defaultsHighestStart) defaultsHighestStart = start;
-                costsFromZeroToStart += uint256(receiver.amtPerSec) * start;
-                totalAmtPerSec += receiver.amtPerSec;
+                costsFromZeroToStart += uint256(amtPerSec) * start;
+                totalAmtPerSec += amtPerSec;
             } else {
-                uint192 spent = (end - start) * receiver.amtPerSec;
+                uint192 spent = (end - start) * amtPerSec;
                 require(balance >= spent, "Insufficient balance");
                 balance -= uint128(spent);
             }
@@ -384,7 +419,7 @@ library Drips {
                 startCap: lastUpdate,
                 endCap: timestamp
             });
-            balance -= (end - start) * receiver.amtPerSec;
+            balance -= (end - start) * receiver.config.amtPerSec();
         }
     }
 
@@ -444,7 +479,8 @@ library Drips {
             if (
                 pickCurr &&
                 pickNew &&
-                (currRecv.userId != newRecv.userId || currRecv.amtPerSec != newRecv.amtPerSec)
+                (currRecv.userId != newRecv.userId ||
+                    currRecv.config.amtPerSec() != newRecv.config.amtPerSec())
             ) {
                 pickCurr = _isOrdered(currRecv, newRecv);
                 pickNew = !pickCurr;
@@ -470,7 +506,7 @@ library Drips {
                     currEnd,
                     newStart,
                     newEnd,
-                    currRecv.amtPerSec
+                    currRecv.config.amtPerSec()
                 );
                 // Ensure that the user receives the updated cycles
                 uint32 startCycle = _cycleOf(newStart, cycleSecs);
@@ -485,7 +521,7 @@ library Drips {
                     lastUpdate,
                     currDefaultEnd
                 );
-                _clearDeltaRange(deltas, cycleSecs, start, end, currRecv.amtPerSec);
+                _clearDeltaRange(deltas, cycleSecs, start, end, currRecv.config.amtPerSec());
             } else if (pickNew) {
                 // Create a new drip
                 DripsState storage state = states[newRecv.userId];
@@ -494,7 +530,7 @@ library Drips {
                     _currTimestamp(),
                     newDefaultEnd
                 );
-                _setDeltaRange(state.amtDeltas, cycleSecs, start, end, newRecv.amtPerSec);
+                _setDeltaRange(state.amtDeltas, cycleSecs, start, end, newRecv.config.amtPerSec());
                 // Ensure that the user receives the updated cycles
                 uint32 startCycle = _cycleOf(start, cycleSecs);
                 if (state.nextReceivableCycle == 0 || state.nextReceivableCycle > startCycle) {
@@ -534,10 +570,10 @@ library Drips {
         uint32 startCap,
         uint32 endCap
     ) private pure returns (uint32 start, uint32 end_) {
-        start = updateTime;
-        if (receiver.start != 0) start = receiver.start;
-        uint40 end = defaultEnd;
-        if (receiver.duration != 0) end = uint40(start) + receiver.duration;
+        start = receiver.config.start();
+        if (start == 0) start = updateTime;
+        uint40 end = uint40(start) + receiver.config.duration();
+        if (end == start) end = defaultEnd;
         if (start < startCap) start = startCap;
         if (end > endCap) end = endCap;
         if (end < start) end = start;
@@ -635,9 +671,7 @@ library Drips {
         returns (bool)
     {
         if (prev.userId != next.userId) return prev.userId < next.userId;
-        if (prev.amtPerSec != next.amtPerSec) return prev.amtPerSec < next.amtPerSec;
-        if (prev.start != next.start) return prev.start < next.start;
-        return prev.duration < next.duration;
+        return prev.config.lt(next.config);
     }
 
     /// @notice Calculates the cycle containing the given timestamp.

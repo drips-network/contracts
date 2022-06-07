@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 import {DSTest} from "ds-test/test.sol";
 import {AddressAppUser} from "./AddressAppUser.t.sol";
 import {Hevm} from "./Hevm.t.sol";
-import {SplitsReceiver, DripsHub, DripsReceiver} from "../DripsHub.sol";
+import {SplitsReceiver, DripsConfigImpl, DripsHub, DripsReceiver} from "../DripsHub.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
 abstract contract DripsHubUserUtils is DSTest {
@@ -87,7 +87,7 @@ abstract contract DripsHubUserUtils is DSTest {
         returns (DripsReceiver[] memory list)
     {
         list = new DripsReceiver[](1);
-        list[0] = DripsReceiver(user.userId(), amtPerSec, 0, 0);
+        list[0] = DripsReceiver(user.userId(), DripsConfigImpl.create(amtPerSec, 0, 0));
     }
 
     function dripsReceivers(
@@ -97,8 +97,8 @@ abstract contract DripsHubUserUtils is DSTest {
         uint128 amtPerSec2
     ) internal view returns (DripsReceiver[] memory list) {
         list = new DripsReceiver[](2);
-        list[0] = DripsReceiver(user1.userId(), amtPerSec1, 0, 0);
-        list[1] = DripsReceiver(user2.userId(), amtPerSec2, 0, 0);
+        list[0] = DripsReceiver(user1.userId(), DripsConfigImpl.create(amtPerSec1, 0, 0));
+        list[1] = DripsReceiver(user2.userId(), DripsConfigImpl.create(amtPerSec2, 0, 0));
     }
 
     function setDrips(
