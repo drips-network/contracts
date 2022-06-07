@@ -5,7 +5,25 @@ import {DSTest} from "ds-test/test.sol";
 import {Hevm} from "./Hevm.t.sol";
 import {Drips, DripsReceiver} from "../Drips.sol";
 
-contract DripsTest is DSTest {
+contract PseudoRandomUtils {
+    bytes32 private salt;
+    bool private initialized = false;
+
+    // returns a pseudo-random number between 0 and range
+    function random(uint256 range) public returns (uint256) {
+        require(initialized, "salt not set for test run");
+        salt = keccak256(bytes.concat(salt));
+        return uint256(salt) % range;
+    }
+
+    function initSalt(bytes32 salt_) public {
+        require(initialized == false, "only init salt once per test run");
+        salt = salt_;
+        initialized = true;
+    }
+}
+
+contract DripsTest is DSTest, PseudoRandomUtils {
     string internal constant ERROR_NOT_SORTED = "Receivers not sorted";
     string internal constant ERROR_INVALID_DRIPS_LIST = "Invalid current drips list";
     string internal constant ERROR_BALANCE = "Insufficient balance";
@@ -104,6 +122,64 @@ contract DripsTest is DSTest {
         DripsReceiver[] memory recv4
     ) internal pure returns (DripsReceiver[] memory) {
         return recv(recv(recv1, recv2, recv3), recv4);
+    }
+
+    function genRandomRecv(
+        uint8 amountReceiver,
+        uint128 maxAmtPerSec,
+        uint32 maxStart,
+        uint32 maxDuration
+    ) internal returns (DripsReceiver[] memory) {
+        uint256 inPercent = 100;
+        uint256 probDefaultEnd = random(inPercent);
+        uint256 probStartNow = random(inPercent);
+        DripsReceiver[] memory receivers = new DripsReceiver[](amountReceiver);
+        for (uint8 i = 0; i < amountReceiver; i++) {
+            uint256 amtPerSec = random(maxAmtPerSec) + 1;
+            uint256 start = random(maxStart);
+            if (start % 100 <= probStartNow) start = 0;
+            uint256 duration = random(maxDuration);
+            if (duration % 100 <= probDefaultEnd) duration = 0;
+
+            receivers[i] = DripsReceiver(i, uint128(amtPerSec), uint32(start), uint32(duration));
+        }
+        return receivers;
+    }
+
+    function receiveDrips(
+        DripsReceiver[] memory receivers,
+        uint32 defaultEnd,
+        uint32 updateTime
+    ) internal {
+        emit log_named_uint("defaultEnd:", defaultEnd);
+        for (uint256 i = 0; i < receivers.length; i++) {
+            DripsReceiver memory r = receivers[i];
+            uint32 duration = r.duration;
+            uint32 start = r.start;
+            if (start == 0) start = updateTime;
+            if (duration == 0) duration = defaultEnd - start;
+            if (start < updateTime) duration -= updateTime - start;
+
+            // drips was in the past, not added
+            if (start + duration < updateTime) duration = 0;
+
+            uint256 expectedAmt = duration * r.amtPerSec;
+            (uint128 actualAmt, ) = Drips.receiveDrips(
+                s,
+                cycleSecs,
+                r.userId,
+                defaultAsset,
+                type(uint32).max
+            );
+            // only log if acutalAmt doesn't match exptectedAmt
+            if (expectedAmt != actualAmt) {
+                emit log_named_uint("userId:", r.userId);
+                emit log_named_uint("start:", r.start);
+                emit log_named_uint("duration:", r.duration);
+                emit log_named_uint("amtPerSec:", r.amtPerSec);
+            }
+            assertEq(actualAmt, expectedAmt);
+        }
     }
 
     function setDrips(
@@ -809,5 +885,36 @@ contract DripsTest is DSTest {
         receiveDrips(otherAsset, receiver1, 3 * cycleSecs);
         // receiver2 received nothing
         receiveDrips(otherAsset, receiver2, 0);
+    }
+
+    function testFuzzDripsReceiver(bytes32 salt) public {
+        initSalt(salt);
+        uint8 amountReceivers = 10;
+        uint128 maxAmtPerSec = 50;
+        uint32 maxDuration = 100;
+        uint32 maxStart = 100;
+
+        uint128 maxCosts = amountReceivers * maxAmtPerSec * maxDuration;
+        emit log_named_uint("topUp", maxCosts);
+        uint128 maxAllDripsFinished = maxStart + maxDuration;
+
+        DripsReceiver[] memory receivers = genRandomRecv(
+            amountReceivers,
+            maxAmtPerSec,
+            maxStart,
+            maxDuration
+        );
+        emit log_named_uint("setDrips.updateTime", block.timestamp);
+        setDrips(sender, 0, maxCosts, receivers);
+
+        (, uint32 updateTime, , uint32 defaultEnd) = Drips.dripsState(s, sender, defaultAsset);
+
+        if (defaultEnd > maxAllDripsFinished && defaultEnd != type(uint32).max)
+            maxAllDripsFinished = defaultEnd;
+
+        warpBy(maxAllDripsFinished);
+        warpToCycleEnd();
+        emit log_named_uint("receiveDrips.time", block.timestamp);
+        receiveDrips(receivers, defaultEnd, updateTime);
     }
 }
