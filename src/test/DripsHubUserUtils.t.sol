@@ -128,7 +128,7 @@ abstract contract DripsHubUserUtils is DSTest {
         storeDrips(erc20, user, newReceivers);
         assertEq(newBalance, balanceTo, "Invalid drips balance");
         assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
-        (, uint32 updateTime, uint128 actualBalance) = dripsHub.dripsState(user.userId(), erc20);
+        (, uint32 updateTime, uint128 actualBalance, ) = dripsHub.dripsState(user.userId(), erc20);
         assertEq(updateTime, block.timestamp, "Invalid new last update time");
         assertEq(balanceTo, actualBalance, "Invalid drips balance");
         assertEq(balanceTo, actualBalance, "Invalid drips balance");
@@ -140,7 +140,7 @@ abstract contract DripsHubUserUtils is DSTest {
         AddressIdUser user,
         DripsReceiver[] memory currReceivers
     ) internal {
-        (bytes32 actual, , ) = dripsHub.dripsState(user.userId(), erc20);
+        (bytes32 actual, , , ) = dripsHub.dripsState(user.userId(), erc20);
         bytes32 expected = dripsHub.hashDrips(currReceivers);
         assertEq(actual, expected, "Invalid drips configuration");
     }
