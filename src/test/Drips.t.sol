@@ -6,18 +6,20 @@ import {Hevm} from "./Hevm.t.sol";
 import {Drips, DripsReceiver} from "../Drips.sol";
 
 contract PseudoRandomUtils {
-    bytes32 private constant SALT_NOT_SET = "salt not set";
-    bytes32 private salt = SALT_NOT_SET;
+    bytes32 private salt;
+    bool private initialized = false;
 
     // returns a pseudo-random number between 0 and range
     function random(uint256 range) public returns (uint256) {
-        require(salt != SALT_NOT_SET, "Salt not set");
+        require(initialized, "salt not set for test run");
         salt = keccak256(bytes.concat(salt));
         return uint256(salt) % range;
     }
 
     function initSalt(bytes32 salt_) public {
+        require(initialized == false, "only init salt once per test run");
         salt = salt_;
+        initialized = true;
     }
 }
 
