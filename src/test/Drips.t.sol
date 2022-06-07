@@ -135,7 +135,7 @@ contract DripsTest is DSTest {
 
         storeCurrReceivers(assetId, userId, newReceivers);
         assertEq(newBalance, balanceTo, "Invalid drips balance");
-        (, uint32 updateTime, uint128 actualBalance) = Drips.dripsState(s, userId, assetId);
+        (, uint32 updateTime, uint128 actualBalance, ) = Drips.dripsState(s, userId, assetId);
         assertEq(updateTime, block.timestamp, "Invalid new last update time");
         assertEq(balanceTo, actualBalance, "Invalid drips balance");
         assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
@@ -146,7 +146,7 @@ contract DripsTest is DSTest {
         uint256 userId,
         DripsReceiver[] memory currReceivers
     ) internal {
-        (bytes32 actual, , ) = Drips.dripsState(s, userId, assetId);
+        (bytes32 actual, , , ) = Drips.dripsState(s, userId, assetId);
         bytes32 expected = Drips.hashDrips(currReceivers);
         assertEq(actual, expected, "Invalid drips configuration");
     }
