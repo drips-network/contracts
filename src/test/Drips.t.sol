@@ -5,7 +5,23 @@ import {DSTest} from "ds-test/test.sol";
 import {Hevm} from "./Hevm.t.sol";
 import {Drips, DripsReceiver} from "../Drips.sol";
 
-contract DripsTest is DSTest {
+contract PseudoRandomUtils {
+    bytes32 internal constant SALT_NOT_SET = "salt not set";
+    bytes32 salt = SALT_NOT_SET;
+
+    // returns a pseudo-random number between 0 and range
+    function random(uint256 range) internal returns (uint256) {
+        require(salt != SALT_NOT_SET, "Salt not set");
+        salt = keccak256(bytes.concat(salt));
+        return uint256(salt) % range;
+    }
+
+    function initSalt(bytes32 salt_) internal {
+        salt = salt_;
+    }
+}
+
+contract DripsTest is DSTest, PseudoRandomUtils {
     string internal constant ERROR_NOT_SORTED = "Receivers not sorted";
     string internal constant ERROR_INVALID_DRIPS_LIST = "Invalid current drips list";
     string internal constant ERROR_BALANCE = "Insufficient balance";
@@ -106,35 +122,21 @@ contract DripsTest is DSTest {
         return recv(recv(recv1, recv2, recv3), recv4);
     }
 
-    function random(
-        bytes32 name,
-        uint256 salt,
-        uint256 range
-    ) internal pure returns (uint256) {
-        return uint256(keccak256(abi.encode(name, salt))) % range;
-    }
-
-    function combineSalt(uint256 a, uint256 b) public pure returns (uint256) {
-        return uint256(keccak256(abi.encode(a, b)));
-    }
-
     function genRandomRecv(
-        uint256 randomSalt,
         uint8 amountReceiver,
         uint128 maxAmtPerSec,
         uint32 maxStart,
         uint32 maxDuration
-    ) internal pure returns (DripsReceiver[] memory) {
+    ) internal returns (DripsReceiver[] memory) {
         uint256 inPercent = 100;
-        uint256 probDefaultEnd = random("default.end", randomSalt, inPercent);
-        uint256 probStartNow = random("start.now", randomSalt, inPercent);
+        uint256 probDefaultEnd = random(inPercent);
+        uint256 probStartNow = random(inPercent);
         DripsReceiver[] memory receivers = new DripsReceiver[](amountReceiver);
         for (uint8 i = 0; i < amountReceiver; i++) {
-            uint256 salt = combineSalt(randomSalt, i);
-            uint256 amtPerSec = random("amtPerSec", salt, maxAmtPerSec) + 1;
-            uint256 start = random("start", salt, maxStart);
+            uint256 amtPerSec = random(maxAmtPerSec) + 1;
+            uint256 start = random(maxStart);
             if (start % 100 <= probStartNow) start = 0;
-            uint256 duration = random("duration", salt, maxDuration);
+            uint256 duration = random(maxDuration);
             if (duration % 100 <= probDefaultEnd) duration = 0;
 
             receivers[i] = DripsReceiver(i, uint128(amtPerSec), uint32(start), uint32(duration));
@@ -855,7 +857,8 @@ contract DripsTest is DSTest {
         receiveDrips(otherAsset, receiver2, 0);
     }
 
-    function testFuzzDripsReceiver(uint256 salt) public {
+    function testFuzzDripsReceiver(bytes32 salt) public {
+        initSalt(salt);
         uint8 amountReceivers = 10;
         uint128 maxAmtPerSec = 50;
         uint32 maxDuration = 100;
@@ -866,7 +869,6 @@ contract DripsTest is DSTest {
         uint128 maxAllDripsFinished = maxStart + maxDuration;
 
         DripsReceiver[] memory receivers = genRandomRecv(
-            salt,
             amountReceivers,
             maxAmtPerSec,
             maxStart,
