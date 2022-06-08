@@ -134,6 +134,19 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         uint256 inPercent = 100;
         uint256 probDefaultEnd = random(inPercent);
         uint256 probStartNow = random(inPercent);
+        return genRandomRecv(amountReceiver, maxAmtPerSec, maxStart, maxDuration, probDefaultEnd, probStartNow);
+    
+    }
+
+    function genRandomRecv(
+        uint8 amountReceiver,
+        uint128 maxAmtPerSec,
+        uint32 maxStart,
+        uint32 maxDuration,
+        uint256 probDefaultEnd,
+        uint256 probStartNow
+    ) internal returns (DripsReceiver[] memory) {
+        uint256 inPercent = 100;
         DripsReceiver[] memory receivers = new DripsReceiver[](amountReceiver);
         for (uint8 i = 0; i < amountReceiver; i++) {
             uint256 amtPerSec = random(maxAmtPerSec) + 1;
@@ -986,5 +999,27 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         warpToCycleEnd();
         emit log_named_uint("receiveDrips.time", block.timestamp);
         receiveDrips(receivers, defaultEnd, updateTime);
+    }
+
+    function testBenchmarkReceivers() public {
+        initSalt("42");
+        uint8 amountReceivers = 100;
+        uint128 maxAmtPerSec = 50;
+        uint32 maxDuration = 100;
+        uint32 maxStart = 100;
+        // percent
+        uint256 probDefaultEnd = 100;
+        uint256 probStartNow = 20;
+
+        uint128 maxCosts = amountReceivers * maxAmtPerSec * maxDuration;
+        DripsReceiver[] memory receivers = genRandomRecv(
+            amountReceivers,
+            maxAmtPerSec,
+            maxStart,
+            maxDuration,
+            probDefaultEnd,
+            probStartNow
+        );
+        setDrips(sender, 0, maxCosts, receivers);
     }
 }
