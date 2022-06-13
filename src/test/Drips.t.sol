@@ -4,26 +4,9 @@ pragma solidity ^0.8.13;
 import {DSTest} from "ds-test/test.sol";
 import {Hevm} from "./Hevm.t.sol";
 import {Drips, DripsReceiver} from "../Drips.sol";
+import {RandomUtils} from "./RandomUtils.t.sol";
 
-contract PseudoRandomUtils {
-    bytes32 private salt;
-    bool private initialized = false;
-
-    // returns a pseudo-random number between 0 and range
-    function random(uint256 range) public returns (uint256) {
-        require(initialized, "salt not set for test run");
-        salt = keccak256(bytes.concat(salt));
-        return uint256(salt) % range;
-    }
-
-    function initSalt(bytes32 salt_) public {
-        require(initialized == false, "only init salt once per test run");
-        salt = salt_;
-        initialized = true;
-    }
-}
-
-contract DripsTest is DSTest, PseudoRandomUtils {
+contract DripsTest is DSTest, RandomUtils {
     string internal constant ERROR_NOT_SORTED = "Receivers not sorted";
     string internal constant ERROR_INVALID_DRIPS_LIST = "Invalid current drips list";
     string internal constant ERROR_BALANCE = "Insufficient balance";
@@ -887,8 +870,8 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         receiveDrips(otherAsset, receiver2, 0);
     }
 
-    function testFuzzDripsReceiver(bytes32 salt) public {
-        initSalt(salt);
+    function testFuzzDripsReceiver(bytes32 seed) public {
+        setSeed(seed);
         uint8 amountReceivers = 10;
         uint128 maxAmtPerSec = 50;
         uint32 maxDuration = 100;
