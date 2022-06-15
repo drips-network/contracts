@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import {DSTest} from "ds-test/test.sol";
 import {Hevm} from "./Hevm.t.sol";
-import {Drips, DripsReceiver} from "../Drips.sol";
+import {Drips, DripsReceiver, DefaultEnd} from "../Drips.sol";
 
 contract PseudoRandomUtils {
     bytes32 private salt;
@@ -1021,5 +1021,37 @@ contract DripsTest is DSTest, PseudoRandomUtils {
             probStartNow
         );
         setDrips(sender, 0, maxCosts, receivers);
+    }
+    function testReceiverDefaultEndExampleA() public {
+        DefaultEnd[] memory defaults = new DefaultEnd[](2);
+        defaults[0] = DefaultEnd(50, 1);
+        defaults[1] = DefaultEnd(0, 1);
+
+        uint32 endtime = Drips._receiversDefaultEnd(defaults, 2, 100);
+        assertEq(endtime, 75);
+    }
+
+    function testReceiverDefaultEndExampleB() public {
+        DefaultEnd[] memory defaults = new DefaultEnd[](2);
+        defaults[0] = DefaultEnd(100, 2);
+        defaults[1] = DefaultEnd(120, 4);
+
+        uint32 endtime = Drips._receiversDefaultEnd(defaults, 2, 100);
+        assertEq(endtime, 130);
+    }
+
+    function testReceiverDefaultEndNotEnoughToCoverAll() public {
+        uint8 length = 4;
+        DefaultEnd[] memory defaults = new DefaultEnd[](length);
+        defaults[0] = DefaultEnd(50, 1);
+
+        // not enough to cover this two
+        defaults[1] = DefaultEnd(170, 1);
+        defaults[2] = DefaultEnd(150, 4);
+
+        defaults[3] = DefaultEnd(0, 1);
+
+        uint32 endtime = Drips._receiversDefaultEnd(defaults, length, 100);
+        assertEq(endtime, 75);
     }
 }

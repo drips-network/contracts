@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.13;
 
+/// @notice The internal representation of a receiver without a duration
+struct DefaultEnd {
+    uint32 start;
+    uint136 amtPerSec;
+}
+
 /// @notice A drips receiver
 struct DripsReceiver {
     /// @notice The user ID.
@@ -332,7 +338,8 @@ library Drips {
             // the duration is zero and if it's non-zero the default end is not used anyway
             (uint32 start, uint32 end) = _dripsRangeInFuture(receiver, _currTimestamp(), 0);
             if (receiver.duration == 0) {
-                length = _addDefaultEnd(defaults, length, start, receiver.amtPerSec);
+                defaults[length] = DefaultEnd(start, receiver.amtPerSec);
+                length++;
             } else {
                 uint192 spent = (end - start) * receiver.amtPerSec;
                 require(balance >= spent, "Insufficient balance");
@@ -342,65 +349,57 @@ library Drips {
         return _receiversDefaultEnd(defaults, length, balance);
     }
 
-    /// @notice The internal representation of a receiver without a duration
-    struct DefaultEnd {
-        uint32 start;
-        uint136 amtPerSec;
-    }
-
-    /// @notice Adds a `DefaultEnd` to the list of receivers while keeping it sorted.
-    /// @param defaults The list of default ends, must be sorted by start
-    /// @param length The length of the list
-    /// @param start The start time of the added receiver
-    /// @param amtPerSec The amtPerSec of the added receiver
-    /// @return newLength The new length of the list
-    function _addDefaultEnd(
-        DefaultEnd[] memory defaults,
-        uint8 length,
-        uint32 start,
-        uint128 amtPerSec
-    ) private pure returns (uint8 newLength) {
-        for (uint8 i = 0; i < length; i++) {
-            DefaultEnd memory defaultEnd = defaults[i];
-            if (defaultEnd.start == start) {
-                defaultEnd.amtPerSec += amtPerSec;
-                return length;
-            }
-            if (defaultEnd.start > start) {
-                // Shift existing entries to make space for inserting the new entry
-                for (uint8 j = length; j > i; j--) {
-                    defaults[j] = defaults[j - 1];
-                }
-                defaults[i] = DefaultEnd(start, amtPerSec);
-                return length + 1;
-            }
-        }
-        defaults[length] = DefaultEnd(start, amtPerSec);
-        return length + 1;
-    }
-
     /// @notice Calculates the end time of drips without duration.
-    /// @param defaults The list of default ends, must be sorted by start
+    /// @param d The list of default ends, must be sorted by start
     /// @param length The length of the list
     /// @param balance The balance available for drips without duration
     /// @return end_ The end time of drips without duration
     function _receiversDefaultEnd(
-        DefaultEnd[] memory defaults,
+        DefaultEnd[] memory d,
         uint8 length,
         uint128 balance
-    ) private pure returns (uint32 end_) {
-        uint32 lastStart = 0;
-        uint136 amtPerSec = 0;
-        uint136 end = type(uint136).max;
-        for (uint8 i = 0; i < length; i++) {
-            DefaultEnd memory defaultEnd = defaults[i];
-            uint32 start = defaultEnd.start;
-            if (start >= end) break;
-            balance -= uint128(amtPerSec * (start - lastStart));
-            lastStart = start;
-            amtPerSec += defaultEnd.amtPerSec;
-            end = start + (balance / amtPerSec);
+    ) internal pure returns (uint32 end_) {
+        if (length == 0) {
+            return 0;
         }
+
+        // main formular to calculate default end time
+        // a ...  amtPerSec
+        // s ...  start
+        // defaultEnd =(balance + a_1*s_1 + ... + a_n*s_n)/(a_1 + ... a_n)
+
+        // helper variables for the the formular
+        uint256 sum = 0;
+        uint256 divisor = 0;
+
+        // index of of the highest seen start date
+        uint8 highest = 0;
+
+        // default end time
+        uint136 end;
+        for (uint8 i = 0; i < length; i++) {
+            if (d[i].start > d[highest].start) highest = i;
+            sum += uint256(d[i].amtPerSec * d[i].start);
+            divisor += uint256(d[i].amtPerSec);
+
+            end = uint136((balance + sum) / divisor);
+            // not enough funds to cover all default drips
+            if (end < d[highest].start) {
+                // remove current element from sum, divisor and end
+                sum -= uint256(d[highest].amtPerSec * d[highest].start);
+                divisor -= d[highest].amtPerSec;
+                end = uint136((balance + sum) / divisor);
+
+                // set to zero that it is not the highest anymore
+                d[highest].start = 0;
+                // find previous highest
+                highest = 0;
+                for (uint8 j = 0; j < i; j++) {
+                    if (d[j].start > d[highest].start) highest = j;
+                }
+            }
+        }
+
         if (end > type(uint32).max) end = type(uint32).max;
         return uint32(end);
     }
