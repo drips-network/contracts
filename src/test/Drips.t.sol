@@ -28,6 +28,8 @@ contract DripsTest is DSTest, PseudoRandomUtils {
     string internal constant ERROR_INVALID_DRIPS_LIST = "Invalid current drips list";
     string internal constant ERROR_BALANCE = "Insufficient balance";
     string internal constant ERROR_TIMESTAMP_EARLY = "Timestamp before last drips update";
+    string internal constant ERROR_NOT_ENOUGH_FOR_DEFAULT_DRIPS =
+        "Run out of funds before default drips start";
 
     Drips.Storage internal s;
     uint32 internal cycleSecs = 10;
@@ -134,8 +136,15 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         uint256 inPercent = 100;
         uint256 probDefaultEnd = random(inPercent);
         uint256 probStartNow = random(inPercent);
-        return genRandomRecv(amountReceiver, maxAmtPerSec, maxStart, maxDuration, probDefaultEnd, probStartNow);
-    
+        return
+            genRandomRecv(
+                amountReceiver,
+                maxAmtPerSec,
+                maxStart,
+                maxDuration,
+                probDefaultEnd,
+                probStartNow
+            );
     }
 
     function genRandomRecv(
@@ -572,18 +581,15 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         receiveDrips(receiver, 0);
     }
 
-    function testDripsWithStartAfterFundsRunOut() public {
-        setDrips(
-            sender,
-            0,
-            4,
-            recv(recv(receiver1, 1), recv(receiver2, 2, block.timestamp + 5, 0))
-        );
-        warpBy(6);
-        warpToCycleEnd();
-        receiveDrips(receiver1, 4);
-        receiveDrips(receiver2, 0);
-    }
+    // function testDripsWithStartAfterFundsRunOut() public {
+
+    //     try  this.setDripsExternal(defaultAsset,sender, 4,recv(), recv(recv(receiver1, 1), recv(receiver2, 2, block.timestamp + 5, 0))) {
+    //         assertTrue(false, "Set drips hasn't reverted");
+    //     } catch Error(string memory reason) {
+    //         assertEq(reason, ERROR_NOT_ENOUGH_FOR_DEFAULT_DRIPS, "Invalid set drips revert reason");
+    //     }
+
+    // }
 
     function testDripsWithStartInTheFutureCycleCanBeMovedToAnEarlierOne() public {
         setDrips(sender, 0, 1, recv(receiver, 1, block.timestamp + cycleSecs, 0));
@@ -1022,6 +1028,15 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         );
         setDrips(sender, 0, maxCosts, receivers);
     }
+
+    function externalReceiverDefaultEnd(
+        DefaultEnd[] memory defaults,
+        uint8 length,
+        uint128 balance
+    ) external {
+        Drips._receiversDefaultEnd(defaults, length, balance);
+    }
+
     function testReceiverDefaultEndExampleA() public {
         DefaultEnd[] memory defaults = new DefaultEnd[](2);
         defaults[0] = DefaultEnd(50, 1);
@@ -1051,7 +1066,10 @@ contract DripsTest is DSTest, PseudoRandomUtils {
 
         defaults[3] = DefaultEnd(0, 1);
 
-        uint32 endtime = Drips._receiversDefaultEnd(defaults, length, 100);
-        assertEq(endtime, 75);
+        try this.externalReceiverDefaultEnd(defaults, length, 100) {
+            assertTrue(false, "Set drips hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, ERROR_NOT_ENOUGH_FOR_DEFAULT_DRIPS, "Invalid set drips revert reason");
+        }
     }
 }

@@ -372,35 +372,19 @@ library Drips {
         uint256 sum = 0;
         uint256 divisor = 0;
 
-        // index of of the highest seen start date
-        uint8 highest = 0;
+        // highest seen start date
+        uint32 highest = 0;
 
         // default end time
         uint136 end;
         for (uint8 i = 0; i < length; i++) {
-            if (d[i].start > d[highest].start) highest = i;
+            if (d[i].start > highest) highest = d[i].start;
             sum += uint256(d[i].amtPerSec * d[i].start);
             divisor += uint256(d[i].amtPerSec);
-
-            end = uint136((balance + sum) / divisor);
-            // not enough funds to cover all default drips
-            if (end < d[highest].start) {
-                // remove current element from sum, divisor and end
-                sum -= uint256(d[highest].amtPerSec * d[highest].start);
-                divisor -= d[highest].amtPerSec;
-                end = uint136((balance + sum) / divisor);
-
-                // set to zero that it is not the highest anymore
-                d[highest].start = 0;
-                // find previous highest
-                highest = 0;
-                for (uint8 j = 0; j < i; j++) {
-                    if (d[j].start > d[highest].start) highest = j;
-                }
-            }
         }
-
+        end = uint136((balance + sum) / divisor);
         if (end > type(uint32).max) end = type(uint32).max;
+        require(end >= highest, "Run out of funds before default drips start");
         return uint32(end);
     }
 
