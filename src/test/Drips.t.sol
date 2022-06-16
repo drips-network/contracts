@@ -1095,22 +1095,4 @@ contract DripsTest is DSTest, PseudoRandomUtils {
             assertEq(reason, ERROR_NOT_ENOUGH_FOR_DEFAULT_DRIPS, "Invalid set drips revert reason");
         }
     }
-
-    // function testReceiverDefaultEndNotEnoughToCoverAll() public {
-    //     uint8 length = 4;
-    //     DefaultEnd[] memory defaults = new DefaultEnd[](length);
-    //     defaults[0] = DefaultEnd(50, 1);
-
-    //     // not enough to cover this two
-    //     defaults[1] = DefaultEnd(170, 1);
-    //     defaults[2] = DefaultEnd(150, 4);
-
-    //     defaults[3] = DefaultEnd(0, 1);
-
-    //     try this.externalReceiverDefaultEnd(defaults, length, 100) {
-    //         assertTrue(false, "Set drips hasn't reverted");
-    //     } catch Error(string memory reason) {
-    //         assertEq(reason, ERROR_NOT_ENOUGH_FOR_DEFAULT_DRIPS, "Invalid set drips revert reason");
-    //     }
-    // }
 }
