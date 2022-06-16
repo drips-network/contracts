@@ -1,12 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.13;
 
-/// @notice The internal representation of a receiver without a duration
-struct DefaultEnd {
-    uint32 start;
-    uint136 amtPerSec;
-}
-
 /// @notice A drips receiver
 struct DripsReceiver {
     /// @notice The user ID.
@@ -322,13 +316,16 @@ library Drips {
     /// Must be sorted, deduplicated and without 0 amtPerSecs.
     /// @return defaultEndTime The end time of drips without duration.
     function _defaultEnd(uint128 balance, DripsReceiver[] memory receivers)
-        private
+        internal
         view
         returns (uint32 defaultEndTime)
     {
         require(receivers.length <= MAX_DRIPS_RECEIVERS, "Too many drips receivers");
-        DefaultEnd[] memory defaults = new DefaultEnd[](receivers.length);
-        uint8 length = 0;
+        // helper variables for the the default formular
+        uint256 defaultSum = 0;
+        uint256 defaultDivisor = 0;
+        // highest seen start date
+        uint32 highest = 0;
 
         for (uint256 i = 0; i < receivers.length; i++) {
             DripsReceiver memory receiver = receivers[i];
@@ -337,55 +334,28 @@ library Drips {
             // Default drips end doesn't matter here, the end time is ignored when
             // the duration is zero and if it's non-zero the default end is not used anyway
             (uint32 start, uint32 end) = _dripsRangeInFuture(receiver, _currTimestamp(), 0);
+            if (start > highest) highest = start;
             if (receiver.duration == 0) {
-                defaults[length] = DefaultEnd(start, receiver.amtPerSec);
-                length++;
+                defaultSum += uint256(uint256(receiver.amtPerSec) * start);
+                defaultDivisor += uint256(receiver.amtPerSec);
             } else {
                 uint192 spent = (end - start) * receiver.amtPerSec;
                 require(balance >= spent, "Insufficient balance");
                 balance -= uint128(spent);
             }
         }
-        return _receiversDefaultEnd(defaults, length, balance);
-    }
-
-    /// @notice Calculates the end time of drips without duration.
-    /// @param d The list of default ends, must be sorted by start
-    /// @param length The length of the list
-    /// @param balance The balance available for drips without duration
-    /// @return end_ The end time of drips without duration
-    function _receiversDefaultEnd(
-        DefaultEnd[] memory d,
-        uint8 length,
-        uint128 balance
-    ) internal pure returns (uint32 end_) {
-        if (length == 0) {
+        // no default drips
+        if (defaultDivisor == 0) {
             return 0;
         }
-
         // main formular to calculate default end time
         // a ...  amtPerSec
         // s ...  start
         // defaultEnd =(balance + a_1*s_1 + ... + a_n*s_n)/(a_1 + ... a_n)
-
-        // helper variables for the the formular
-        uint256 sum = 0;
-        uint256 divisor = 0;
-
-        // highest seen start date
-        uint32 highest = 0;
-
-        // default end time
-        uint136 end;
-        for (uint8 i = 0; i < length; i++) {
-            if (d[i].start > highest) highest = d[i].start;
-            sum += uint256(d[i].amtPerSec * d[i].start);
-            divisor += uint256(d[i].amtPerSec);
-        }
-        end = uint136((balance + sum) / divisor);
-        if (end > type(uint32).max) end = type(uint32).max;
-        require(end >= highest, "Run out of funds before default drips start");
-        return uint32(end);
+        uint136 defaultEnd = uint136((balance + defaultSum) / defaultDivisor);
+        if (defaultEnd > type(uint32).max) defaultEnd = type(uint32).max;
+        require(defaultEnd >= highest, "Run out of funds before default drips start");
+        return uint32(defaultEnd);
     }
 
     /// @notice Calculates the drips balance at a given timestamp.

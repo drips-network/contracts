@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import {DSTest} from "ds-test/test.sol";
 import {Hevm} from "./Hevm.t.sol";
-import {Drips, DripsReceiver, DefaultEnd} from "../Drips.sol";
+import {Drips, DripsReceiver} from "../Drips.sol";
 
 contract PseudoRandomUtils {
     bytes32 private salt;
@@ -155,7 +155,6 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         uint256 probDefaultEnd,
         uint256 probStartNow
     ) internal returns (DripsReceiver[] memory) {
-        uint256 inPercent = 100;
         DripsReceiver[] memory receivers = new DripsReceiver[](amountReceiver);
         for (uint8 i = 0; i < amountReceiver; i++) {
             uint256 amtPerSec = random(maxAmtPerSec) + 1;
@@ -581,15 +580,21 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         receiveDrips(receiver, 0);
     }
 
-    // function testDripsWithStartAfterFundsRunOut() public {
-
-    //     try  this.setDripsExternal(defaultAsset,sender, 4,recv(), recv(recv(receiver1, 1), recv(receiver2, 2, block.timestamp + 5, 0))) {
-    //         assertTrue(false, "Set drips hasn't reverted");
-    //     } catch Error(string memory reason) {
-    //         assertEq(reason, ERROR_NOT_ENOUGH_FOR_DEFAULT_DRIPS, "Invalid set drips revert reason");
-    //     }
-
-    // }
+    function testDripsWithStartAfterFundsRunOut() public {
+        try
+            this.setDripsExternal(
+                defaultAsset,
+                sender,
+                recv(),
+                4,
+                recv(recv(receiver1, 1), recv(receiver2, 2, block.timestamp + 5, 0))
+            )
+        {
+            assertTrue(false, "Set drips hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, ERROR_NOT_ENOUGH_FOR_DEFAULT_DRIPS, "Invalid set drips revert reason");
+        }
+    }
 
     function testDripsWithStartInTheFutureCycleCanBeMovedToAnEarlierOne() public {
         setDrips(sender, 0, 1, recv(receiver, 1, block.timestamp + cycleSecs, 0));
@@ -1029,47 +1034,83 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         setDrips(sender, 0, maxCosts, receivers);
     }
 
-    function externalReceiverDefaultEnd(
-        DefaultEnd[] memory defaults,
-        uint8 length,
-        uint128 balance
-    ) external {
-        Drips._receiversDefaultEnd(defaults, length, balance);
+    function defaultEndExternal(uint128 balance, DripsReceiver[] memory list)
+        public
+        view
+        returns (uint32 end)
+    {
+        return Drips._defaultEnd(balance, list);
     }
 
     function testReceiverDefaultEndExampleA() public {
-        DefaultEnd[] memory defaults = new DefaultEnd[](2);
-        defaults[0] = DefaultEnd(50, 1);
-        defaults[1] = DefaultEnd(0, 1);
+        uint256 start1 = 50;
+        uint256 amtPerSec1 = 1;
+        uint256 start2 = 0;
+        uint256 amtPerSec2 = 1;
 
-        uint32 endtime = Drips._receiversDefaultEnd(defaults, 2, 100);
+        Hevm(HEVM_ADDRESS).warp(0);
+        uint32 endtime = Drips._defaultEnd(
+            100,
+            recv(recv(receiver1, amtPerSec1, start1, 0), recv(receiver2, amtPerSec2, start2, 0))
+        );
         assertEq(endtime, 75);
     }
 
     function testReceiverDefaultEndExampleB() public {
-        DefaultEnd[] memory defaults = new DefaultEnd[](2);
-        defaults[0] = DefaultEnd(100, 2);
-        defaults[1] = DefaultEnd(120, 4);
+        uint256 start1 = 100;
+        uint256 amtPerSec1 = 2;
+        uint256 start2 = 120;
+        uint256 amtPerSec2 = 4;
 
-        uint32 endtime = Drips._receiversDefaultEnd(defaults, 2, 100);
+        Hevm(HEVM_ADDRESS).warp(0);
+        uint32 endtime = Drips._defaultEnd(
+            100,
+            recv(recv(receiver1, amtPerSec1, start1, 0), recv(receiver2, amtPerSec2, start2, 0))
+        );
         assertEq(endtime, 130);
     }
 
     function testReceiverDefaultEndNotEnoughToCoverAll() public {
-        uint8 length = 4;
-        DefaultEnd[] memory defaults = new DefaultEnd[](length);
-        defaults[0] = DefaultEnd(50, 1);
+        DripsReceiver[] memory receivers = new DripsReceiver[](4);
+        uint32 start1 = 50;
+        uint128 amtPerSec1 = 1;
+        receivers[0] = DripsReceiver(receiver1, amtPerSec1, start1, 0);
 
-        // not enough to cover this two
-        defaults[1] = DefaultEnd(170, 1);
-        defaults[2] = DefaultEnd(150, 4);
+        uint32 start2 = 170;
+        uint128 amtPerSec2 = 1;
+        receivers[1] = DripsReceiver(receiver1, amtPerSec2, start2, 0);
 
-        defaults[3] = DefaultEnd(0, 1);
+        uint32 start3 = 150;
+        uint128 amtPerSec3 = 1;
+        receivers[2] = DripsReceiver(receiver3, amtPerSec3, start3, 0);
 
-        try this.externalReceiverDefaultEnd(defaults, length, 100) {
-            assertTrue(false, "Set drips hasn't reverted");
+        uint32 start4 = 0;
+        uint128 amtPerSec4 = 4;
+        receivers[3] = DripsReceiver(receiver4, amtPerSec4, start4, 0);
+
+        Hevm(HEVM_ADDRESS).warp(0);
+        try this.defaultEndExternal(100, receivers) {
+            assertTrue(false, "default end hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_NOT_ENOUGH_FOR_DEFAULT_DRIPS, "Invalid set drips revert reason");
         }
     }
+
+    // function testReceiverDefaultEndNotEnoughToCoverAll() public {
+    //     uint8 length = 4;
+    //     DefaultEnd[] memory defaults = new DefaultEnd[](length);
+    //     defaults[0] = DefaultEnd(50, 1);
+
+    //     // not enough to cover this two
+    //     defaults[1] = DefaultEnd(170, 1);
+    //     defaults[2] = DefaultEnd(150, 4);
+
+    //     defaults[3] = DefaultEnd(0, 1);
+
+    //     try this.externalReceiverDefaultEnd(defaults, length, 100) {
+    //         assertTrue(false, "Set drips hasn't reverted");
+    //     } catch Error(string memory reason) {
+    //         assertEq(reason, ERROR_NOT_ENOUGH_FOR_DEFAULT_DRIPS, "Invalid set drips revert reason");
+    //     }
+    // }
 }
