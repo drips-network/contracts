@@ -336,8 +336,8 @@ library Drips {
             (uint32 start, uint32 end) = _dripsRangeInFuture(receiver, _currTimestamp(), 0);
             if (start > highest) highest = start;
             if (receiver.duration == 0) {
-                defaultSum += uint256(uint256(receiver.amtPerSec) * start);
-                defaultDivisor += uint256(receiver.amtPerSec);
+                defaultSum += uint256(receiver.amtPerSec) * start;
+                defaultDivisor += receiver.amtPerSec;
             } else {
                 uint192 spent = (end - start) * receiver.amtPerSec;
                 require(balance >= spent, "Insufficient balance");
