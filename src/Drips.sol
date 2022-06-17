@@ -325,7 +325,7 @@ library Drips {
         uint256 defaultSum = 0;
         uint256 defaultDivisor = 0;
         // highest seen start date
-        uint32 highest = 0;
+        uint32 defaultsHighestStart = 0;
 
         for (uint256 i = 0; i < receivers.length; i++) {
             DripsReceiver memory receiver = receivers[i];
@@ -334,8 +334,8 @@ library Drips {
             // Default drips end doesn't matter here, the end time is ignored when
             // the duration is zero and if it's non-zero the default end is not used anyway
             (uint32 start, uint32 end) = _dripsRangeInFuture(receiver, _currTimestamp(), 0);
-            if (start > highest) highest = start;
             if (receiver.duration == 0) {
+                if (start > defaultsHighestStart) defaultsHighestStart = start;
                 defaultSum += uint256(receiver.amtPerSec) * start;
                 defaultDivisor += receiver.amtPerSec;
             } else {
@@ -354,7 +354,7 @@ library Drips {
         // defaultEnd =(balance + a_1*s_1 + ... + a_n*s_n)/(a_1 + ... a_n)
         uint136 defaultEnd = uint136((balance + defaultSum) / defaultDivisor);
         if (defaultEnd > type(uint32).max) defaultEnd = type(uint32).max;
-        require(defaultEnd >= highest, "Run out of funds before default drips start");
+        require(defaultEnd >= defaultsHighestStart, "Run out of funds before default drips start");
         return uint32(defaultEnd);
     }
 

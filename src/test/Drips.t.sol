@@ -58,6 +58,10 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         Hevm(HEVM_ADDRESS).warp(block.timestamp + secs);
     }
 
+    function warpTo(uint256 timestamp) internal {
+        Hevm(HEVM_ADDRESS).warp(timestamp);
+    }
+
     function loadCurrReceivers(uint256 assetId, uint256 userId)
         internal
         returns (DripsReceiver[] memory currReceivers)
@@ -1043,52 +1047,36 @@ contract DripsTest is DSTest, PseudoRandomUtils {
     }
 
     function testReceiverDefaultEndExampleA() public {
-        uint256 start1 = 50;
-        uint256 amtPerSec1 = 1;
-        uint256 start2 = 0;
-        uint256 amtPerSec2 = 1;
-
-        Hevm(HEVM_ADDRESS).warp(0);
-        uint32 endtime = Drips._defaultEnd(
-            100,
-            recv(recv(receiver1, amtPerSec1, start1, 0), recv(receiver2, amtPerSec2, start2, 0))
+        DripsReceiver[] memory receivers = recv(
+            recv({userId: receiver1, amtPerSec: 1, start: 50, duration: 0}),
+            recv({userId: receiver2, amtPerSec: 1, start: 0, duration: 0})
         );
+
+        warpTo(0);
+        uint32 endtime = Drips._defaultEnd(100, receivers);
         assertEq(endtime, 75);
     }
 
     function testReceiverDefaultEndExampleB() public {
-        uint256 start1 = 100;
-        uint256 amtPerSec1 = 2;
-        uint256 start2 = 120;
-        uint256 amtPerSec2 = 4;
-
-        Hevm(HEVM_ADDRESS).warp(0);
-        uint32 endtime = Drips._defaultEnd(
-            100,
-            recv(recv(receiver1, amtPerSec1, start1, 0), recv(receiver2, amtPerSec2, start2, 0))
+        DripsReceiver[] memory receivers = recv(
+            recv({userId: receiver1, amtPerSec: 2, start: 100, duration: 0}),
+            recv({userId: receiver2, amtPerSec: 4, start: 120, duration: 0})
         );
+
+        // in the past
+        Hevm(HEVM_ADDRESS).warp(70);
+        uint32 endtime = Drips._defaultEnd(100, receivers);
         assertEq(endtime, 130);
     }
 
     function testReceiverDefaultEndNotEnoughToCoverAll() public {
-        DripsReceiver[] memory receivers = new DripsReceiver[](4);
-        uint32 start1 = 50;
-        uint128 amtPerSec1 = 1;
-        receivers[0] = DripsReceiver(receiver1, amtPerSec1, start1, 0);
-
-        uint32 start2 = 170;
-        uint128 amtPerSec2 = 1;
-        receivers[1] = DripsReceiver(receiver1, amtPerSec2, start2, 0);
-
-        uint32 start3 = 150;
-        uint128 amtPerSec3 = 1;
-        receivers[2] = DripsReceiver(receiver3, amtPerSec3, start3, 0);
-
-        uint32 start4 = 0;
-        uint128 amtPerSec4 = 4;
-        receivers[3] = DripsReceiver(receiver4, amtPerSec4, start4, 0);
-
-        Hevm(HEVM_ADDRESS).warp(0);
+        DripsReceiver[] memory receivers = recv(
+            recv({userId: receiver1, amtPerSec: 1, start: 50, duration: 0}),
+            recv({userId: receiver2, amtPerSec: 1, start: 170, duration: 0}),
+            recv({userId: receiver3, amtPerSec: 1, start: 150, duration: 0}),
+            recv({userId: receiver4, amtPerSec: 4, start: 0, duration: 0})
+        );
+        warpTo(0);
         try this.defaultEndExternal(100, receivers) {
             assertTrue(false, "default end hasn't reverted");
         } catch Error(string memory reason) {
