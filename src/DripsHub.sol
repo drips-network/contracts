@@ -334,10 +334,10 @@ contract DripsHub is Managed {
         reserve.deposit(erc20, msg.sender, amt);
     }
 
-    /// @notice Current user drips hash, see `hashDrips`.
+    /// @notice Current user drips state.
     /// @param userId The user ID
     /// @param erc20 The used ERC-20 token
-    /// @return dripsHash The current drips receivers list hash
+    /// @return dripsHash The current drips receivers list hash, see `hashDrips`
     /// @return updateTime The time when drips have been configured for the last time
     /// @return balance The balance when drips have been configured for the last time
     function dripsState(uint256 userId, IERC20 erc20)
@@ -351,6 +351,31 @@ contract DripsHub is Managed {
         )
     {
         return Drips.dripsState(_dripsHubStorage().drips, userId, _assetId(erc20));
+    }
+
+    /// @notice User drips balance at a given timestamp
+    /// @param userId The user ID
+    /// @param erc20 The used ERC-20 token
+    /// @param receivers The current drips receivers list
+    /// @param timestamp The timestamps for which balance should be calculated.
+    /// It can't be lower than the timestamp of the last call to `setDrips`.
+    /// If it's bigger than `block.timestamp`, then it's a prediction assuming
+    /// that `setDrips` won't be called before `timestamp`.
+    /// @return balance The user balance on `timestamp`
+    function balanceAt(
+        uint256 userId,
+        IERC20 erc20,
+        DripsReceiver[] memory receivers,
+        uint32 timestamp
+    ) public view returns (uint128 balance) {
+        return
+            Drips.balanceAt(
+                _dripsHubStorage().drips,
+                userId,
+                _assetId(erc20),
+                receivers,
+                timestamp
+            );
     }
 
     /// @notice Sets the user's or the account's drips configuration.

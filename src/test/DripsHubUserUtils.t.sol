@@ -146,7 +146,13 @@ abstract contract DripsHubUserUtils is DSTest {
     }
 
     function assertDripsBalance(AddressIdUser user, uint128 expected) internal {
-        changeBalance(user, expected, expected);
+        uint128 balance = dripsHub.balanceAt(
+            user.userId(),
+            defaultErc20,
+            loadDrips(user),
+            uint32(block.timestamp)
+        );
+        assertEq(balance, expected, "Invaild drips balance");
     }
 
     function changeBalance(

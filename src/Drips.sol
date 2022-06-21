@@ -188,11 +188,11 @@ library Drips {
         emit ReceivedDrips(userId, assetId, receivedAmt, receivableCycles);
     }
 
-    /// @notice Current user drips hash, see `hashDrips`.
+    /// @notice Current user drips state.
     /// @param s The drips storage
     /// @param userId The user ID
     /// @param assetId The used asset ID
-    /// @return dripsHash The current drips receivers list hash
+    /// @return dripsHash The current drips receivers list hash, see `hashDrips`
     /// @return updateTime The time when drips have been configured for the last time
     /// @return balance The balance when drips have been configured for the last time
     function dripsState(
@@ -211,6 +211,29 @@ library Drips {
     {
         DripsState storage state = s.dripsStates[assetId][userId];
         return (state.dripsHash, state.updateTime, state.balance, state.defaultEnd);
+    }
+
+    /// @notice User drips balance at a given timestamp
+    /// @param s The drips storage
+    /// @param userId The user ID
+    /// @param assetId The used asset ID
+    /// @param receivers The current drips receivers list
+    /// @param timestamp The timestamps for which balance should be calculated.
+    /// It can't be lower than the timestamp of the last call to `setDrips`.
+    /// If it's bigger than `block.timestamp`, then it's a prediction assuming
+    /// that `setDrips` won't be called before `timestamp`.
+    /// @return balance The user balance on `timestamp`
+    function balanceAt(
+        Storage storage s,
+        uint256 userId,
+        uint256 assetId,
+        DripsReceiver[] memory receivers,
+        uint32 timestamp
+    ) internal view returns (uint128 balance) {
+        DripsState storage state = s.dripsStates[assetId][userId];
+        require(timestamp >= state.updateTime, "Timestamp before last drips update");
+        require(hashDrips(receivers) == state.dripsHash, "Invalid current drips list");
+        return _balanceAt(state.balance, state.updateTime, state.defaultEnd, receivers, timestamp);
     }
 
     /// @notice Sets the user's drips configuration.
@@ -245,11 +268,12 @@ library Drips {
         uint32 currDefaultEnd = state.defaultEnd;
         uint128 lastBalance = state.balance;
         {
-            uint128 currBalance = _currBalance(
+            uint128 currBalance = _balanceAt(
                 lastBalance,
                 lastUpdate,
                 currDefaultEnd,
-                currReceivers
+                currReceivers,
+                _currTimestamp()
             );
             int136 balance = int128(currBalance) + int136(balanceDelta);
             if (balance < 0) balance = 0;
@@ -381,22 +405,33 @@ library Drips {
         return uint32(end);
     }
 
-    /// @notice Calculates the current drips balance.
+    /// @notice Calculates the drips balance at a given timestamp.
     /// @param lastBalance The balance when drips have started
     /// @param lastUpdate The timestamp when drips have started.
     /// @param defaultEnd The end time of drips without duration
     /// @param receivers The list of drips receivers.
-    /// @return balance The current drips balance.
-    function _currBalance(
+    /// @param timestamp The timestamps for which balance should be calculated.
+    /// It can't be lower than `lastUpdate`.
+    /// If it's bigger than `block.timestamp`, then it's a prediction assuming
+    /// that `setDrips` won't be called before `timestamp`.
+    /// @return balance The user balance on `timestamp`
+    function _balanceAt(
         uint128 lastBalance,
         uint32 lastUpdate,
         uint32 defaultEnd,
-        DripsReceiver[] memory receivers
-    ) private view returns (uint128 balance) {
+        DripsReceiver[] memory receivers,
+        uint32 timestamp
+    ) private pure returns (uint128 balance) {
         balance = lastBalance;
         for (uint256 i = 0; i < receivers.length; i++) {
             DripsReceiver memory receiver = receivers[i];
-            (uint32 start, uint32 end) = _dripsRangeInPast(receiver, lastUpdate, defaultEnd);
+            (uint32 start, uint32 end) = _dripsRange({
+                receiver: receiver,
+                updateTime: lastUpdate,
+                defaultEnd: defaultEnd,
+                startCap: lastUpdate,
+                endCap: timestamp
+            });
             balance -= (end - start) * receiver.amtPerSec;
         }
     }
@@ -520,18 +555,6 @@ library Drips {
             if (pickCurr) currIdx++;
             if (pickNew) newIdx++;
         }
-    }
-
-    /// @notice Calculates the time range in the past in which a receiver has been dripped to.
-    /// @param receiver The drips receiver
-    /// @param updateTime The time when drips are configured
-    /// @param defaultEnd The end time of drips without duration
-    function _dripsRangeInPast(
-        DripsReceiver memory receiver,
-        uint32 updateTime,
-        uint32 defaultEnd
-    ) private view returns (uint32 start, uint32 end) {
-        return _dripsRange(receiver, updateTime, defaultEnd, updateTime, _currTimestamp());
     }
 
     /// @notice Calculates the time range in the future in which a receiver will be dripped to.

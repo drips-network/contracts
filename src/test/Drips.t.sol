@@ -27,6 +27,7 @@ contract DripsTest is DSTest, PseudoRandomUtils {
     string internal constant ERROR_NOT_SORTED = "Receivers not sorted";
     string internal constant ERROR_INVALID_DRIPS_LIST = "Invalid current drips list";
     string internal constant ERROR_BALANCE = "Insufficient balance";
+    string internal constant ERROR_TIMESTAMP_EARLY = "Timestamp before last drips update";
 
     Drips.Storage internal s;
     uint32 internal cycleSecs = 10;
@@ -228,7 +229,43 @@ contract DripsTest is DSTest, PseudoRandomUtils {
     }
 
     function assertBalance(uint256 userId, uint128 expected) internal {
-        changeBalance(userId, expected, expected);
+        assertBalanceAt(userId, expected, block.timestamp);
+    }
+
+    function assertBalanceAt(
+        uint256 userId,
+        uint128 expected,
+        uint256 timestamp
+    ) internal {
+        uint128 balance = Drips.balanceAt(
+            s,
+            userId,
+            defaultAsset,
+            loadCurrReceivers(defaultAsset, userId),
+            uint32(timestamp)
+        );
+        assertEq(balance, expected, "Invaild drips balance");
+    }
+
+    function assertBalanceAtReverts(
+        uint256 userId,
+        DripsReceiver[] memory receivers,
+        uint256 timestamp,
+        string memory expectedReason
+    ) internal {
+        try this.balanceAtExternal(userId, receivers, timestamp) {
+            assertTrue(false, "BalanceAt hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, expectedReason, "Invalid balanceAt revert reason");
+        }
+    }
+
+    function balanceAtExternal(
+        uint256 userId,
+        DripsReceiver[] memory receivers,
+        uint256 timestamp
+    ) external view {
+        Drips.balanceAt(s, userId, defaultAsset, receivers, uint32(timestamp));
     }
 
     function changeBalance(
@@ -885,6 +922,39 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         receiveDrips(otherAsset, receiver1, 3 * cycleSecs);
         // receiver2 received nothing
         receiveDrips(otherAsset, receiver2, 0);
+    }
+
+    function testBalanceAtReturnsCurrentBalance() public {
+        setDrips(defaultAsset, sender, 0, 10, recv(receiver, 1));
+        warpBy(2);
+        assertBalanceAt(sender, 8, block.timestamp);
+    }
+
+    function testBalanceAtReturnsFutureBalance() public {
+        setDrips(defaultAsset, sender, 0, 10, recv(receiver, 1));
+        warpBy(2);
+        assertBalanceAt(sender, 6, block.timestamp + 2);
+    }
+
+    function testBalanceAtReturnsPastBalanceAfterSetDelta() public {
+        setDrips(defaultAsset, sender, 0, 10, recv(receiver, 1));
+        warpBy(2);
+        assertBalanceAt(sender, 10, block.timestamp - 2);
+    }
+
+    function testBalanceAtRevertsForTimestampBeforeSetDelta() public {
+        DripsReceiver[] memory receivers = recv(receiver, 1);
+        setDrips(defaultAsset, sender, 0, 10, receivers);
+        warpBy(2);
+        assertBalanceAtReverts(sender, receivers, block.timestamp - 3, ERROR_TIMESTAMP_EARLY);
+    }
+
+    function testBalanceAtRevertsForInvalidDripsList() public {
+        DripsReceiver[] memory receivers = recv(receiver, 1);
+        setDrips(defaultAsset, sender, 0, 10, receivers);
+        warpBy(2);
+        receivers[0].amtPerSec++;
+        assertBalanceAtReverts(sender, receivers, block.timestamp, ERROR_INVALID_DRIPS_LIST);
     }
 
     function testFuzzDripsReceiver(bytes32 salt) public {
