@@ -762,6 +762,10 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         receiveDrips(receiver2, 55);
     }
 
+    function testDefaultEndSmallerThenScheduledDripStart() public {
+        setDrips(sender, 0, 120, recv(recv(receiver1, 1), recv(receiver2, 1, 100, 100)));
+    }
+
     function testLimitsTheTotalReceiversCount() public {
         uint160 countMax = Drips.MAX_DRIPS_RECEIVERS;
         DripsReceiver[] memory receivers = new DripsReceiver[](countMax);
