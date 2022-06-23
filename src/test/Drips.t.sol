@@ -300,7 +300,7 @@ contract DripsTest is DSTest, PseudoRandomUtils {
     ) internal {
         DripsReceiver[] memory receivers = recv();
         if (balanceTo != 0) {
-           receivers = loadCurrReceivers(defaultAsset, userId);
+            receivers = loadCurrReceivers(defaultAsset, userId);
         }
         setDrips(userId, balanceFrom, balanceTo, receivers);
     }
@@ -721,15 +721,6 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         receiveDrips(receiver, 10);
     }
 
-    function testAllowsDripsConfigurationWithOverflowingTotalAmtPerSec() public {
-        setDrips(sender, 0, 2, recv(recv(receiver, 1), recv(receiver, type(uint128).max)));
-        warpToCycleEnd();
-        // Sender hasn't sent anything
-        changeBalance(sender, 2, 0);
-        // Receiver hasnt received anything
-        receiveDrips(receiver, 0);
-    }
-
     function testAllowsDrippingWithDurationEndingAfterMaxTimestamp() public {
         uint32 maxTimestamp = type(uint32).max;
         uint32 currTimestamp = uint32(block.timestamp);
@@ -777,9 +768,9 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         for (uint160 i = 0; i < countMax; i++) {
             receivers[i] = recv(i, 1, 0, 0)[0];
         }
-        setDrips(sender, 0, 0, receivers);
+        setDrips(sender, 0, 1 ether, receivers);
         receivers = recv(receivers, recv(countMax, 1, 0, 0));
-        assertSetDripsReverts(sender, 0, 0, receivers, "Too many drips receivers");
+        assertSetDripsReverts(sender, 1 ether, 1 ether, receivers, "Too many drips receivers");
     }
 
     function testRejectsZeroAmtPerSecReceivers() public {
@@ -837,7 +828,7 @@ contract DripsTest is DSTest, PseudoRandomUtils {
     }
 
     function testSetDripsRevertsIfInvalidCurrReceivers() public {
-        setDrips(sender, 0, 0, recv(receiver, 1));
+        setDrips(sender, 0, 1, recv(receiver, 1));
         assertSetDripsReverts(sender, recv(receiver, 2), 0, 0, recv(), ERROR_INVALID_DRIPS_LIST);
     }
 
@@ -852,10 +843,12 @@ contract DripsTest is DSTest, PseudoRandomUtils {
     }
 
     function testCapsWithdrawalOfMoreThanDripsBalance() public {
-        DripsReceiver[] memory receivers = recv(receiver, 1);
+        DripsReceiver[] memory receivers = recv(receiver, 1, 0, 10);
         setDrips(sender, 0, 10, receivers);
         warpBy(4);
         // Sender had 4 second paying 1 per second
+
+        DripsReceiver[] memory newRecv = recv();
         (uint128 newBalance, int128 realBalanceDelta) = Drips.setDrips(
             s,
             cycleSecs,
@@ -863,9 +856,9 @@ contract DripsTest is DSTest, PseudoRandomUtils {
             defaultAsset,
             receivers,
             type(int128).min,
-            receivers
+            recv()
         );
-        storeCurrReceivers(defaultAsset, sender, receivers);
+        storeCurrReceivers(defaultAsset, sender, newRecv);
         assertEq(newBalance, 0, "Invalid balance");
         assertEq(realBalanceDelta, -6, "Invalid real balance delta");
         assertBalance(sender, 0);
