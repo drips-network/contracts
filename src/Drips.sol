@@ -280,7 +280,7 @@ library Drips {
             newBalance = uint128(uint136(balance));
             realBalanceDelta = int128(balance - int128(currBalance));
         }
-        uint32 newDefaultEnd = _defaultEnd(newBalance, newReceivers);
+        uint32 newDefaultEnd = calcDefaultEnd(newBalance, newReceivers);
         _updateReceiverStates(
             s.dripsStates[assetId],
             cycleSecs,
@@ -315,7 +315,7 @@ library Drips {
     /// @param receivers The list of drips receivers.
     /// Must be sorted, deduplicated and without 0 amtPerSecs.
     /// @return defaultEndTime The end time of drips without duration.
-    function _defaultEnd(uint128 balance, DripsReceiver[] memory receivers)
+    function calcDefaultEnd(uint128 balance, DripsReceiver[] memory receivers)
         internal
         view
         returns (uint32 defaultEndTime)

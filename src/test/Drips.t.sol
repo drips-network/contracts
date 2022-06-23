@@ -1040,7 +1040,7 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         view
         returns (uint32 end)
     {
-        return Drips._defaultEnd(balance, list);
+        return Drips.calcDefaultEnd(balance, list);
     }
 
     function testReceiverDefaultEndExampleA() public {
@@ -1050,7 +1050,7 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         );
 
         warpTo(0);
-        uint32 endtime = Drips._defaultEnd(100, receivers);
+        uint32 endtime = Drips.calcDefaultEnd(100, receivers);
         assertEq(endtime, 75);
     }
 
@@ -1062,7 +1062,7 @@ contract DripsTest is DSTest, PseudoRandomUtils {
 
         // in the past
         Hevm(HEVM_ADDRESS).warp(70);
-        uint32 endtime = Drips._defaultEnd(100, receivers);
+        uint32 endtime = Drips.calcDefaultEnd(100, receivers);
         assertEq(endtime, 130);
     }
 
