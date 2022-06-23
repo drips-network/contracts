@@ -354,7 +354,7 @@ library Drips {
         // defaultEnd =(balance + a_1*s_1 + ... + a_n*s_n)/(a_1 + ... a_n)
         uint136 defaultEnd = uint136((balance + defaultSum) / defaultDivisor);
         if (defaultEnd > type(uint32).max) defaultEnd = type(uint32).max;
-        require(defaultEnd >= defaultsHighestStart, "Run out of funds before default drips start");
+        require(defaultEnd > defaultsHighestStart, "Run out of funds before default drips start");
         return uint32(defaultEnd);
     }
 

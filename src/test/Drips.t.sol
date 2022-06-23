@@ -298,7 +298,11 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         uint128 balanceFrom,
         uint128 balanceTo
     ) internal {
-        setDrips(userId, balanceFrom, balanceTo, loadCurrReceivers(defaultAsset, userId));
+        DripsReceiver[] memory receivers = recv();
+        if (balanceTo != 0) {
+           receivers = loadCurrReceivers(defaultAsset, userId);
+        }
+        setDrips(userId, balanceFrom, balanceTo, receivers);
     }
 
     function assertSetDripsReverts(
