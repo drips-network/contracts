@@ -22,12 +22,12 @@ abstract contract Managed is UUPSUpgradeable {
     bytes32 private immutable pausedSlot;
 
     /// @notice Emitted when the pause is triggered.
-    /// @param account The account which triggered the change.
-    event Paused(address account);
+    /// @param caller The caller who triggered the change.
+    event Paused(address caller);
 
     /// @notice Emitted when the pause is lifted.
-    /// @param account The account which triggered the change.
-    event Unpaused(address account);
+    /// @param caller The caller who triggered the change.
+    event Unpaused(address caller);
 
     /// @notice Initializes the contract in paused state and with no admin.
     /// The contract instance can be used only as a call delegation target for a proxy.
@@ -37,7 +37,7 @@ abstract contract Managed is UUPSUpgradeable {
         StorageSlot.getBooleanSlot(pausedSlot_).value = true;
     }
 
-    /// @notice Throws if called by any account other than the admin.
+    /// @notice Throws if called by any caller other than the admin.
     modifier onlyAdmin() {
         require(admin() == msg.sender, "Caller is not the admin");
         _;

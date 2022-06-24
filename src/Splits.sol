@@ -188,7 +188,7 @@ library Splits {
         emit Collected(userId, assetId, amt);
     }
 
-    /// @notice Gives funds from the user or their account to the receiver.
+    /// @notice Gives funds from the user to the receiver.
     /// The receiver can split and collect them immediately.
     /// Transfers the funds to be given from the user's wallet to the drips hub contract.
     /// @param userId The user ID

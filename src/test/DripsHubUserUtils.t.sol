@@ -24,8 +24,8 @@ abstract contract DripsHubUserUtils is DSTest {
         Hevm(HEVM_ADDRESS).warp(block.timestamp + secs);
     }
 
-    function calcUserId(uint32 account, uint224 subAccount) internal view returns (uint256) {
-        return (uint256(account) << dripsHub.BITS_SUB_ACCOUNT()) | subAccount;
+    function calcUserId(uint32 appId, uint224 userIdPart) internal view returns (uint256) {
+        return (uint256(appId) << dripsHub.APP_ID_OFFSET()) | userIdPart;
     }
 
     function loadDrips(AddressIdUser user) internal returns (DripsReceiver[] memory currReceivers) {

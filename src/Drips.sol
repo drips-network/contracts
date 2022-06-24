@@ -250,7 +250,6 @@ library Drips {
     /// @param newReceivers The list of the drips receivers of the user to be set.
     /// Must be sorted, deduplicated and without 0 amtPerSecs.
     /// @return newBalance The new drips balance of the user.
-    /// Pass it as `lastBalance` when updating that user for the next time.
     /// @return realBalanceDelta The actually applied drips balance change.
     function setDrips(
         Storage storage s,

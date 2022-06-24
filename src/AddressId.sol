@@ -9,20 +9,20 @@ contract AddressId {
 
     DripsHub public immutable dripsHub;
     address public immutable reserve;
-    uint32 public immutable accountId;
+    uint32 public immutable appId;
 
     /// @param _dripsHub The drips hub to use
     constructor(DripsHub _dripsHub) {
         dripsHub = _dripsHub;
         reserve = address(_dripsHub.reserve());
-        accountId = _dripsHub.createAccount(address(this));
+        appId = _dripsHub.registerApp(address(this));
     }
 
     /// @notice Calculates the user ID for an address
     /// @param userAddr The user address
     /// @return userId The user ID
     function calcUserId(address userAddr) public view returns (uint256 userId) {
-        return (uint256(accountId) << 224) | uint160(userAddr);
+        return (uint256(appId) << 224) | uint160(userAddr);
     }
 
     /// @notice Collects all received funds available for the user
@@ -69,14 +69,13 @@ contract AddressId {
     /// to fulfill the change of the drips balance.
     /// @param erc20 The token to use
     /// @param currReceivers The list of the drips receivers set in the last drips update
-    /// of the user or the account.
+    /// of the sender.
     /// If this is the first update, pass an empty array.
     /// @param balanceDelta The drips balance change to be applied.
     /// Positive to add funds to the drips balance, negative to remove them.
-    /// @param newReceivers The list of the drips receivers of the user or the account to be set.
+    /// @param newReceivers The list of the drips receivers of the sender to be set.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
-    /// @return newBalance The new drips balance of the user or the account.
-    /// Pass it as `lastBalance` when updating that user or the account for the next time.
+    /// @return newBalance The new drips balance of the sender.
     /// @return realBalanceDelta The actually applied drips balance change.
     function setDrips(
         IERC20 erc20,

@@ -13,13 +13,8 @@ import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 /// and configure a list of receivers, to whom they want to drip these funds.
 /// As soon as the drips balance is enough to cover at least 1 second of dripping
 /// to the configured receivers, the funds start dripping automatically.
-/// Every second funds are deducted from the drips balance and moved to their receivers' accounts.
+/// Every second funds are deducted from the drips balance and moved to their receivers.
 /// The process stops automatically when the drips balance is not enough to cover another second.
-///
-/// The user can have any number of independent configurations and drips balances by using accounts.
-/// An account is identified by the user address and an account identifier.
-/// Accounts of different users are separate entities, even if they have the same identifiers.
-/// An account can be used to drip or give, but not to receive funds.
 ///
 /// Every user has a receiver balance, in which they have funds received from other users.
 /// The dripped funds are added to the receiver balances in global cycles.
@@ -58,24 +53,25 @@ contract DripsHub is Managed {
     uint32 public immutable maxSplitsReceivers;
     /// @notice The total splits weight of a user
     uint32 public immutable totalSplitsWeight;
-    /// @notice Number of bits in the sub-account part of userId
-    uint256 public constant BITS_SUB_ACCOUNT = 224;
+    /// @notice The offset of the controlling app ID in the user ID.
+    /// In other words the controlling app ID is the higest 32 bits of the user ID.
+    uint256 public constant APP_ID_OFFSET = 224;
     /// @notice The ERC-1967 storage slot holding a single `DripsHubStorage` structure.
     bytes32 private immutable storageSlot = erc1967Slot("eip1967.dripsHub.storage");
 
-    /// @notice Emitted when an account is created
-    /// @param accountId The account ID
-    /// @param owner The account owner
-    event AccountCreated(uint32 indexed accountId, address indexed owner);
+    /// @notice Emitted when an app is registered
+    /// @param appId The app ID
+    /// @param appAddr The app address
+    event AppRegistered(uint32 indexed appId, address indexed appAddr);
 
-    /// @notice Emitted when an account ownership is transferred.
-    /// @param accountId The account ID
-    /// @param previousOwner The previous account owner
-    /// @param newOwner The new account owner
-    event AccountTransferred(
-        uint32 indexed accountId,
-        address indexed previousOwner,
-        address indexed newOwner
+    /// @notice Emitted when an app address is updated
+    /// @param appId The app ID
+    /// @param oldAppAddr The old app address
+    /// @param newAppAddr The new app address
+    event AppAddressUpdated(
+        uint32 indexed appId,
+        address indexed oldAppAddr,
+        address indexed newAppAddr
     );
 
     struct DripsHubStorage {
@@ -83,10 +79,10 @@ contract DripsHub is Managed {
         Drips.Storage drips;
         /// @notice The splits storage
         Splits.Storage splits;
-        /// @notice The next created account ID.
-        uint32 nextAccountId;
-        /// @notice Account owners. The key is the account ID, the value is the owner address.
-        mapping(uint32 => address) accountsOwners;
+        /// @notice The next app ID that will be used when registering.
+        uint32 nextAppId;
+        /// @notice App addresses. The key is the app ID, the value is the app address.
+        mapping(uint32 => address) appAddrs;
     }
 
     /// @param _cycleSecs The length of cycleSecs to be used in the contract instance.
@@ -103,51 +99,51 @@ contract DripsHub is Managed {
         reserve = _reserve;
     }
 
-    modifier onlyAccountOwner(uint256 userId) {
-        uint32 accountId = uint32(userId >> BITS_SUB_ACCOUNT);
-        _assertCallerIsAccountOwner(accountId);
+    /// @notice A modifier making functions callable only by the app controlling the user ID.
+    /// @param userId The user ID.
+    modifier onlyApp(uint256 userId) {
+        uint32 appId = uint32(userId >> APP_ID_OFFSET);
+        _assertCallerIsApp(appId);
         _;
     }
 
-    function _assertCallerIsAccountOwner(uint32 accountId) internal view {
-        require(
-            accountOwner(accountId) == msg.sender,
-            "Callable only by the owner of the user account"
-        );
+    function _assertCallerIsApp(uint32 appId) internal view {
+        require(appAddress(appId) == msg.sender, "Callable only by the app");
     }
 
-    /// @notice Creates an account.
-    /// Assigns it an ID and lets its owner perform actions on behalf of all its sub-accounts.
-    /// Multiple accounts can be registered for a single address, it will own all of them.
-    /// @return accountId The new account ID.
-    function createAccount(address owner) public whenNotPaused returns (uint32 accountId) {
+    /// @notice Registers an app.
+    /// The app is assigned a unique ID and a range of user IDs it can control.
+    /// That range consists of all 2^224 user IDs with highest 32 bits equal to the app ID.
+    /// Multiple apps can have the same address, it can then control all of them.
+    /// @return appId The registered app ID.
+    function registerApp(address appAddr) public whenNotPaused returns (uint32 appId) {
         DripsHubStorage storage dripsHubStorage = _dripsHubStorage();
-        accountId = dripsHubStorage.nextAccountId++;
-        dripsHubStorage.accountsOwners[accountId] = owner;
-        emit AccountCreated(accountId, owner);
+        appId = dripsHubStorage.nextAppId++;
+        dripsHubStorage.appAddrs[appId] = appAddr;
+        emit AppRegistered(appId, appAddr);
     }
 
-    /// @notice Returns account owner.
-    /// @param accountId The account to look up.
-    /// @return owner The owner of the account. If the account doesn't exist, returns address 0.
-    function accountOwner(uint32 accountId) public view returns (address owner) {
-        return _dripsHubStorage().accountsOwners[accountId];
+    /// @notice Returns the app address.
+    /// @param appId The app ID to look up.
+    /// @return appAddr The address of the app.
+    /// If the app hasn't been registered yet, returns address 0.
+    function appAddress(uint32 appId) public view returns (address appAddr) {
+        return _dripsHubStorage().appAddrs[appId];
     }
 
-    /// @notice Transfers the account ownership to a new address.
-    /// Must be called by the current account owner.
-    /// @param accountId The account which ownership is transferred
-    /// @param newOwner The new account owner
-    function transferAccount(uint32 accountId, address newOwner) public whenNotPaused {
-        _assertCallerIsAccountOwner(accountId);
-        _dripsHubStorage().accountsOwners[accountId] = newOwner;
-        emit AccountTransferred(accountId, msg.sender, newOwner);
+    /// @notice Updates the app address. Must be called from the current app address.
+    /// @param appId The app ID.
+    /// @param newAppAddr The new address of the app.
+    function updateAppAddress(uint32 appId, address newAppAddr) public whenNotPaused {
+        _assertCallerIsApp(appId);
+        _dripsHubStorage().appAddrs[appId] = newAppAddr;
+        emit AppAddressUpdated(appId, msg.sender, newAppAddr);
     }
 
-    /// @notice Returns the ID which will be assigned for the next created account.
-    /// @return accountId The account ID.
-    function nextAccountId() public view returns (uint32 accountId) {
-        return _dripsHubStorage().nextAccountId;
+    /// @notice Returns the app ID which will be assigned for the next registered app.
+    /// @return appId The next app ID.
+    function nextAppId() public view returns (uint32 appId) {
+        return _dripsHubStorage().nextAppId;
     }
 
     /// @notice Returns amount of received funds available for collection for a user.
@@ -310,14 +306,14 @@ contract DripsHub is Managed {
     function collect(uint256 userId, IERC20 erc20)
         public
         whenNotPaused
-        onlyAccountOwner(userId)
+        onlyApp(userId)
         returns (uint128 amt)
     {
         amt = Splits.collect(_dripsHubStorage().splits, userId, _assetId(erc20));
         reserve.withdraw(erc20, msg.sender, amt);
     }
 
-    /// @notice Gives funds from the user or their account to the receiver.
+    /// @notice Gives funds from the user to the receiver.
     /// The receiver can split and collect them immediately.
     /// Transfers the funds to be given from the user's wallet to the drips hub contract.
     /// @param userId The user ID
@@ -329,7 +325,7 @@ contract DripsHub is Managed {
         uint256 receiver,
         IERC20 erc20,
         uint128 amt
-    ) public whenNotPaused onlyAccountOwner(userId) {
+    ) public whenNotPaused onlyApp(userId) {
         Splits.give(_dripsHubStorage().splits, userId, receiver, _assetId(erc20), amt);
         reserve.deposit(erc20, msg.sender, amt);
     }
@@ -378,20 +374,19 @@ contract DripsHub is Managed {
             );
     }
 
-    /// @notice Sets the user's or the account's drips configuration.
+    /// @notice Sets the user's drips configuration.
     /// Transfers funds between the user's wallet and the drips hub contract
     /// to fulfill the change of the drips balance.
     /// @param userId The user ID
     /// @param erc20 The used ERC-20 token
     /// @param currReceivers The list of the drips receivers set in the last drips update
-    /// of the user or the account.
+    /// of the user.
     /// If this is the first update, pass an empty array.
     /// @param balanceDelta The drips balance change to be applied.
     /// Positive to add funds to the drips balance, negative to remove them.
-    /// @param newReceivers The list of the drips receivers of the user or the account to be set.
+    /// @param newReceivers The list of the drips receivers of the user to be set.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
-    /// @return newBalance The new drips balance of the user or the account.
-    /// Pass it as `lastBalance` when updating that user or the account for the next time.
+    /// @return newBalance The new drips balance of the user.
     /// @return realBalanceDelta The actually applied drips balance change.
     function setDrips(
         uint256 userId,
@@ -399,12 +394,7 @@ contract DripsHub is Managed {
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers
-    )
-        public
-        whenNotPaused
-        onlyAccountOwner(userId)
-        returns (uint128 newBalance, int128 realBalanceDelta)
-    {
+    ) public whenNotPaused onlyApp(userId) returns (uint128 newBalance, int128 realBalanceDelta) {
         (newBalance, realBalanceDelta) = Drips.setDrips(
             _dripsHubStorage().drips,
             cycleSecs,
@@ -444,7 +434,7 @@ contract DripsHub is Managed {
     function setSplits(uint256 userId, SplitsReceiver[] memory receivers)
         public
         whenNotPaused
-        onlyAccountOwner(userId)
+        onlyApp(userId)
     {
         Splits.setSplits(_dripsHubStorage().splits, userId, receivers);
     }

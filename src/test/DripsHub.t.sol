@@ -26,7 +26,7 @@ contract DripsHubTest is DripsHubUserUtils {
     ManagedUser internal admin;
     ManagedUser internal nonAdmin;
 
-    string internal constant ERROR_NOT_OWNER = "Callable only by the owner of the user account";
+    string internal constant ERROR_NOT_APP = "Callable only by the app";
     string private constant ERROR_NOT_ADMIN = "Caller is not the admin";
     string private constant ERROR_PAUSED = "Contract paused";
 
@@ -222,51 +222,51 @@ contract DripsHubTest is DripsHubUserUtils {
         collect(user1, 6);
     }
 
-    function testCreateAccount() public {
-        address owner = address(0x1234);
-        uint32 accountId = dripsHub.nextAccountId();
-        assertEq(address(0), dripsHub.accountOwner(accountId), "Invalid nonexistent account owner");
-        assertEq(accountId, dripsHub.createAccount(owner), "Invalid assigned account ID");
-        assertEq(owner, dripsHub.accountOwner(accountId), "Invalid account owner");
-        assertEq(accountId + 1, dripsHub.nextAccountId(), "Invalid next account ID");
+    function testRegisterApp() public {
+        address appAddr = address(0x1234);
+        uint32 appId = dripsHub.nextAppId();
+        assertEq(address(0), dripsHub.appAddress(appId), "Invalid nonexistent app address");
+        assertEq(appId, dripsHub.registerApp(appAddr), "Invalid assigned app ID");
+        assertEq(appAddr, dripsHub.appAddress(appId), "Invalid app address");
+        assertEq(appId + 1, dripsHub.nextAppId(), "Invalid next app ID");
     }
 
-    function testTransferAccount() public {
-        uint32 accountId = dripsHub.createAccount(address(this));
-        assertEq(address(this), dripsHub.accountOwner(accountId), "Invalid account owner before");
-        address newOwner = address(0x1234);
-        dripsHub.transferAccount(accountId, newOwner);
-        assertEq(newOwner, dripsHub.accountOwner(accountId), "Invalid account owner after");
+    function testUpdateAppAddress() public {
+        uint32 appId = dripsHub.registerApp(address(this));
+        assertEq(address(this), dripsHub.appAddress(appId), "Invalid app address before");
+        address newAppAddr = address(0x1234);
+        dripsHub.updateAppAddress(appId, newAppAddr);
+        assertEq(newAppAddr, dripsHub.appAddress(appId), "Invalid app address after");
     }
 
-    function testTransferAccountRevertsWhenNotAccountOwner() public {
-        uint32 accountId = dripsHub.createAccount(address(0x1234));
-        try dripsHub.transferAccount(accountId, address(0x5678)) {
-            assertTrue(false, "TransferAccount hasn't reverted");
+    function testUpdateAppAddressRevertsWhenNotCalledByTheApp() public {
+        uint32 appId = dripsHub.registerApp(address(0x1234));
+        try dripsHub.updateAppAddress(appId, address(0x5678)) {
+            assertTrue(false, "UpdateAppAddress hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_OWNER, "Invalid collect revert reason");
+            assertEq(reason, ERROR_NOT_APP, "Invalid collect revert reason");
         }
     }
 
-    function testCollectRevertsWhenNotAccountOwner() public {
-        try dripsHub.collect(calcUserId(dripsHub.nextAccountId(), 0), defaultErc20) {
+    function testCollectRevertsWhenNotCalledByTheApp() public {
+        try dripsHub.collect(calcUserId(dripsHub.nextAppId(), 0), defaultErc20) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_OWNER, "Invalid collect revert reason");
+            assertEq(reason, ERROR_NOT_APP, "Invalid collect revert reason");
         }
     }
 
-    function testCollectAllRevertsWhenNotAccountOwner() public {
+    function testCollectAllRevertsWhenNotCalledByTheApp() public {
         try
             dripsHub.collectAll(
-                calcUserId(dripsHub.nextAccountId(), 0),
+                calcUserId(dripsHub.nextAppId(), 0),
                 defaultErc20,
                 new SplitsReceiver[](0)
             )
         {
             assertTrue(false, "CollectAll hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_OWNER, "Invalid collectAll revert reason");
+            assertEq(reason, ERROR_NOT_APP, "Invalid collectAll revert reason");
         }
     }
 
@@ -306,10 +306,10 @@ contract DripsHubTest is DripsHubUserUtils {
         collectAll(otherErc20, receiver2, 0);
     }
 
-    function testSetDripsRevertsWhenNotAccountOwner() public {
+    function testSetDripsRevertsWhenNotCalledByTheApp() public {
         try
             dripsHub.setDrips(
-                calcUserId(dripsHub.nextAccountId(), 0),
+                calcUserId(dripsHub.nextAppId(), 0),
                 defaultErc20,
                 dripsReceivers(),
                 0,
@@ -318,23 +318,23 @@ contract DripsHubTest is DripsHubUserUtils {
         {
             assertTrue(false, "SetDrips hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_OWNER, "Invalid setDrips revert reason");
+            assertEq(reason, ERROR_NOT_APP, "Invalid setDrips revert reason");
         }
     }
 
-    function testGiveRevertsWhenNotAccountOwner() public {
-        try dripsHub.give(calcUserId(dripsHub.nextAccountId(), 0), 0, defaultErc20, 1) {
+    function testGiveRevertsWhenNotCalledByTheApp() public {
+        try dripsHub.give(calcUserId(dripsHub.nextAppId(), 0), 0, defaultErc20, 1) {
             assertTrue(false, "Give hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_OWNER, "Invalid give revert reason");
+            assertEq(reason, ERROR_NOT_APP, "Invalid give revert reason");
         }
     }
 
-    function testSetSplitsRevertsWhenNotAccountOwner() public {
-        try dripsHub.setSplits(calcUserId(dripsHub.nextAccountId(), 0), splitsReceivers()) {
+    function testSetSplitsRevertsWhenNotCalledByTheApp() public {
+        try dripsHub.setSplits(calcUserId(dripsHub.nextAppId(), 0), splitsReceivers()) {
             assertTrue(false, "SetSplits hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_OWNER, "Invalid setSplits revert reason");
+            assertEq(reason, ERROR_NOT_APP, "Invalid setSplits revert reason");
         }
     }
 
@@ -484,15 +484,6 @@ contract DripsHubTest is DripsHubUserUtils {
         }
     }
 
-    function testSetDripsFromAccountCanBePaused() public {
-        admin.pause();
-        try user.setDrips(defaultErc20, dripsReceivers(), 1, dripsReceivers()) {
-            assertTrue(false, "SetDrips hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_PAUSED, "Invalid setDrips revert reason");
-        }
-    }
-
     function testGiveCanBePaused() public {
         admin.pause();
         try user.give(0, defaultErc20, 1) {
@@ -511,22 +502,22 @@ contract DripsHubTest is DripsHubUserUtils {
         }
     }
 
-    function testCreateAccountCanBePaused() public {
+    function testRegisterAppCanBePaused() public {
         admin.pause();
-        try dripsHub.createAccount(address(0x1234)) {
-            assertTrue(false, "CreateAccount hasn't reverted");
+        try dripsHub.registerApp(address(0x1234)) {
+            assertTrue(false, "RegisterApp hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, ERROR_PAUSED, "Invalid createAccount revert reason");
+            assertEq(reason, ERROR_PAUSED, "Invalid registerApp revert reason");
         }
     }
 
-    function testTransferAccountCanBePaused() public {
-        uint32 accountId = dripsHub.createAccount(address(this));
+    function testUpdateAppAddressCanBePaused() public {
+        uint32 appId = dripsHub.registerApp(address(this));
         admin.pause();
-        try dripsHub.transferAccount(accountId, address(0x1234)) {
-            assertTrue(false, "TransferAccount hasn't reverted");
+        try dripsHub.updateAppAddress(appId, address(0x1234)) {
+            assertTrue(false, "UpdateAppAddress hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, ERROR_PAUSED, "Invalid transferAccount revert reason");
+            assertEq(reason, ERROR_PAUSED, "Invalid updateAppAddress revert reason");
         }
     }
 }
