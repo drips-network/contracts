@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {DSTest} from "ds-test/test.sol";
-import {AddressIdUser} from "./AddressIdUser.t.sol";
+import {AddressAppUser} from "./AddressAppUser.t.sol";
 import {Hevm} from "./Hevm.t.sol";
 import {SplitsReceiver, DripsHub, DripsReceiver} from "../DripsHub.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
@@ -28,11 +28,14 @@ abstract contract DripsHubUserUtils is DSTest {
         return (uint256(appId) << dripsHub.APP_ID_OFFSET()) | userIdPart;
     }
 
-    function loadDrips(AddressIdUser user) internal returns (DripsReceiver[] memory currReceivers) {
+    function loadDrips(AddressAppUser user)
+        internal
+        returns (DripsReceiver[] memory currReceivers)
+    {
         return loadDrips(defaultErc20, user);
     }
 
-    function loadDrips(IERC20 erc20, AddressIdUser user)
+    function loadDrips(IERC20 erc20, AddressAppUser user)
         internal
         returns (DripsReceiver[] memory currReceivers)
     {
@@ -40,13 +43,13 @@ abstract contract DripsHubUserUtils is DSTest {
         assertDrips(erc20, user, currReceivers);
     }
 
-    function storeDrips(AddressIdUser user, DripsReceiver[] memory newReceivers) internal {
+    function storeDrips(AddressAppUser user, DripsReceiver[] memory newReceivers) internal {
         storeDrips(defaultErc20, user, newReceivers);
     }
 
     function storeDrips(
         IERC20 erc20,
-        AddressIdUser user,
+        AddressAppUser user,
         DripsReceiver[] memory newReceivers
     ) internal {
         assertDrips(erc20, user, newReceivers);
@@ -56,7 +59,7 @@ abstract contract DripsHubUserUtils is DSTest {
         }
     }
 
-    function getCurrSplitsReceivers(AddressIdUser user)
+    function getCurrSplitsReceivers(AddressAppUser user)
         internal
         returns (SplitsReceiver[] memory currSplits)
     {
@@ -64,7 +67,7 @@ abstract contract DripsHubUserUtils is DSTest {
         assertSplits(user, currSplits);
     }
 
-    function setCurrSplitsReceivers(AddressIdUser user, SplitsReceiver[] memory newReceivers)
+    function setCurrSplitsReceivers(AddressAppUser user, SplitsReceiver[] memory newReceivers)
         internal
     {
         assertSplits(user, newReceivers);
@@ -78,7 +81,7 @@ abstract contract DripsHubUserUtils is DSTest {
         list = new DripsReceiver[](0);
     }
 
-    function dripsReceivers(AddressIdUser user, uint128 amtPerSec)
+    function dripsReceivers(AddressAppUser user, uint128 amtPerSec)
         internal
         view
         returns (DripsReceiver[] memory list)
@@ -88,9 +91,9 @@ abstract contract DripsHubUserUtils is DSTest {
     }
 
     function dripsReceivers(
-        AddressIdUser user1,
+        AddressAppUser user1,
         uint128 amtPerSec1,
-        AddressIdUser user2,
+        AddressAppUser user2,
         uint128 amtPerSec2
     ) internal view returns (DripsReceiver[] memory list) {
         list = new DripsReceiver[](2);
@@ -99,7 +102,7 @@ abstract contract DripsHubUserUtils is DSTest {
     }
 
     function setDrips(
-        AddressIdUser user,
+        AddressAppUser user,
         uint128 balanceFrom,
         uint128 balanceTo,
         DripsReceiver[] memory newReceivers
@@ -109,7 +112,7 @@ abstract contract DripsHubUserUtils is DSTest {
 
     function setDrips(
         IERC20 erc20,
-        AddressIdUser user,
+        AddressAppUser user,
         uint128 balanceFrom,
         uint128 balanceTo,
         DripsReceiver[] memory newReceivers
@@ -137,7 +140,7 @@ abstract contract DripsHubUserUtils is DSTest {
 
     function assertDrips(
         IERC20 erc20,
-        AddressIdUser user,
+        AddressAppUser user,
         DripsReceiver[] memory currReceivers
     ) internal {
         (bytes32 actual, , , ) = dripsHub.dripsState(user.userId(), erc20);
@@ -145,7 +148,7 @@ abstract contract DripsHubUserUtils is DSTest {
         assertEq(actual, expected, "Invalid drips configuration");
     }
 
-    function assertDripsBalance(AddressIdUser user, uint128 expected) internal {
+    function assertDripsBalance(AddressAppUser user, uint128 expected) internal {
         uint128 balance = dripsHub.balanceAt(
             user.userId(),
             defaultErc20,
@@ -156,7 +159,7 @@ abstract contract DripsHubUserUtils is DSTest {
     }
 
     function changeBalance(
-        AddressIdUser user,
+        AddressAppUser user,
         uint128 balanceFrom,
         uint128 balanceTo
     ) internal {
@@ -164,7 +167,7 @@ abstract contract DripsHubUserUtils is DSTest {
     }
 
     function assertSetReceiversReverts(
-        AddressIdUser user,
+        AddressAppUser user,
         DripsReceiver[] memory newReceivers,
         string memory expectedReason
     ) internal {
@@ -172,7 +175,7 @@ abstract contract DripsHubUserUtils is DSTest {
     }
 
     function assertSetDripsReverts(
-        AddressIdUser user,
+        AddressAppUser user,
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers,
@@ -186,8 +189,8 @@ abstract contract DripsHubUserUtils is DSTest {
     }
 
     function give(
-        AddressIdUser user,
-        AddressIdUser receiver,
+        AddressAppUser user,
+        AddressAppUser receiver,
         uint128 amt
     ) internal {
         give(defaultErc20, user, receiver, amt);
@@ -195,8 +198,8 @@ abstract contract DripsHubUserUtils is DSTest {
 
     function give(
         IERC20 erc20,
-        AddressIdUser user,
-        AddressIdUser receiver,
+        AddressAppUser user,
+        AddressAppUser receiver,
         uint128 amt
     ) internal {
         uint256 expectedBalance = uint256(erc20.balanceOf(address(user)) - amt);
@@ -212,7 +215,7 @@ abstract contract DripsHubUserUtils is DSTest {
         list = new SplitsReceiver[](0);
     }
 
-    function splitsReceivers(AddressIdUser user, uint32 weight)
+    function splitsReceivers(AddressAppUser user, uint32 weight)
         internal
         view
         returns (SplitsReceiver[] memory list)
@@ -222,9 +225,9 @@ abstract contract DripsHubUserUtils is DSTest {
     }
 
     function splitsReceivers(
-        AddressIdUser user1,
+        AddressAppUser user1,
         uint32 weight1,
-        AddressIdUser user2,
+        AddressAppUser user2,
         uint32 weight2
     ) internal view returns (SplitsReceiver[] memory list) {
         list = new SplitsReceiver[](2);
@@ -232,7 +235,7 @@ abstract contract DripsHubUserUtils is DSTest {
         list[1] = SplitsReceiver(user2.userId(), weight2);
     }
 
-    function setSplits(AddressIdUser user, SplitsReceiver[] memory newReceivers) internal {
+    function setSplits(AddressAppUser user, SplitsReceiver[] memory newReceivers) internal {
         SplitsReceiver[] memory curr = getCurrSplitsReceivers(user);
         assertSplits(user, curr);
 
@@ -243,7 +246,7 @@ abstract contract DripsHubUserUtils is DSTest {
     }
 
     function assertSetSplitsReverts(
-        AddressIdUser user,
+        AddressAppUser user,
         SplitsReceiver[] memory newReceivers,
         string memory expectedReason
     ) internal {
@@ -256,26 +259,26 @@ abstract contract DripsHubUserUtils is DSTest {
         }
     }
 
-    function assertSplits(AddressIdUser user, SplitsReceiver[] memory expectedReceivers) internal {
+    function assertSplits(AddressAppUser user, SplitsReceiver[] memory expectedReceivers) internal {
         bytes32 actual = dripsHub.splitsHash(user.userId());
         bytes32 expected = dripsHub.hashSplits(expectedReceivers);
         assertEq(actual, expected, "Invalid splits hash");
     }
 
-    function collectAll(AddressIdUser user, uint128 expectedAmt) internal {
+    function collectAll(AddressAppUser user, uint128 expectedAmt) internal {
         collectAll(defaultErc20, user, expectedAmt, 0);
     }
 
     function collectAll(
         IERC20 erc20,
-        AddressIdUser user,
+        AddressAppUser user,
         uint128 expectedAmt
     ) internal {
         collectAll(erc20, user, expectedAmt, 0);
     }
 
     function collectAll(
-        AddressIdUser user,
+        AddressAppUser user,
         uint128 expectedCollected,
         uint128 expectedSplit
     ) internal {
@@ -284,7 +287,7 @@ abstract contract DripsHubUserUtils is DSTest {
 
     function collectAll(
         IERC20 erc20,
-        AddressIdUser user,
+        AddressAppUser user,
         uint128 expectedCollected,
         uint128 expectedSplit
     ) internal {
@@ -303,20 +306,20 @@ abstract contract DripsHubUserUtils is DSTest {
         assertBalance(erc20, user, expectedBalance);
     }
 
-    function assertCollectableAll(AddressIdUser user, uint128 expected) internal {
+    function assertCollectableAll(AddressAppUser user, uint128 expected) internal {
         assertCollectableAll(defaultErc20, user, expected, 0);
     }
 
     function assertCollectableAll(
         IERC20 erc20,
-        AddressIdUser user,
+        AddressAppUser user,
         uint128 expected
     ) internal {
         assertCollectableAll(erc20, user, expected, 0);
     }
 
     function assertCollectableAll(
-        AddressIdUser user,
+        AddressAppUser user,
         uint128 expectedCollected,
         uint128 expectedSplit
     ) internal {
@@ -325,7 +328,7 @@ abstract contract DripsHubUserUtils is DSTest {
 
     function assertCollectableAll(
         IERC20 erc20,
-        AddressIdUser user,
+        AddressAppUser user,
         uint128 expectedCollected,
         uint128 expectedSplit
     ) internal {
@@ -338,7 +341,7 @@ abstract contract DripsHubUserUtils is DSTest {
         assertEq(actualSplit, expectedSplit, "Invalid split");
     }
 
-    function totalCollectableAll(IERC20 erc20, AddressIdUser user) internal returns (uint128) {
+    function totalCollectableAll(IERC20 erc20, AddressAppUser user) internal returns (uint128) {
         SplitsReceiver[] memory splits = getCurrSplitsReceivers(user);
         (uint128 collectableAmt, uint128 splittableAmt) = dripsHub.collectableAll(
             user.userId(),
@@ -350,7 +353,7 @@ abstract contract DripsHubUserUtils is DSTest {
 
     function assertTotalCollectableAll(
         IERC20 erc20,
-        AddressIdUser user,
+        AddressAppUser user,
         uint128 expectedCollectable
     ) internal {
         uint128 actualCollectable = totalCollectableAll(erc20, user);
@@ -358,7 +361,7 @@ abstract contract DripsHubUserUtils is DSTest {
     }
 
     function receiveDrips(
-        AddressIdUser user,
+        AddressAppUser user,
         uint128 expectedReceivedAmt,
         uint32 expectedReceivedCycles
     ) internal {
@@ -366,7 +369,7 @@ abstract contract DripsHubUserUtils is DSTest {
     }
 
     function receiveDrips(
-        AddressIdUser user,
+        AddressAppUser user,
         uint32 maxCycles,
         uint128 expectedReceivedAmt,
         uint32 expectedReceivedCycles,
@@ -391,13 +394,13 @@ abstract contract DripsHubUserUtils is DSTest {
         assertReceivableDrips(user, type(uint32).max, expectedAmtAfter, 0);
     }
 
-    function assertReceivableDripsCycles(AddressIdUser user, uint32 expectedCycles) internal {
+    function assertReceivableDripsCycles(AddressAppUser user, uint32 expectedCycles) internal {
         uint32 actualCycles = dripsHub.receivableDripsCycles(user.userId(), defaultErc20);
         assertEq(actualCycles, expectedCycles, "Invalid total receivable drips cycles");
     }
 
     function assertReceivableDrips(
-        AddressIdUser user,
+        AddressAppUser user,
         uint32 maxCycles,
         uint128 expectedAmt,
         uint32 expectedCycles
@@ -412,7 +415,7 @@ abstract contract DripsHubUserUtils is DSTest {
     }
 
     function split(
-        AddressIdUser user,
+        AddressAppUser user,
         uint128 expectedCollectable,
         uint128 expectedSplit
     ) internal {
@@ -431,12 +434,12 @@ abstract contract DripsHubUserUtils is DSTest {
         assertCollectable(user, collectableBefore + expectedCollectable);
     }
 
-    function assertSplittable(AddressIdUser user, uint256 expected) internal {
+    function assertSplittable(AddressAppUser user, uint256 expected) internal {
         uint256 actual = dripsHub.splittable(user.userId(), defaultErc20);
         assertEq(actual, expected, "Invalid splittable");
     }
 
-    function collect(AddressIdUser user, uint128 expectedAmt) internal {
+    function collect(AddressAppUser user, uint128 expectedAmt) internal {
         assertCollectable(user, expectedAmt);
         uint256 balanceBefore = defaultErc20.balanceOf(address(user));
 
@@ -447,21 +450,21 @@ abstract contract DripsHubUserUtils is DSTest {
         assertBalance(user, balanceBefore + expectedAmt);
     }
 
-    function collectable(AddressIdUser user) internal view returns (uint128 amt) {
+    function collectable(AddressAppUser user) internal view returns (uint128 amt) {
         return dripsHub.collectable(user.userId(), defaultErc20);
     }
 
-    function assertCollectable(AddressIdUser user, uint256 expected) internal {
+    function assertCollectable(AddressAppUser user, uint256 expected) internal {
         assertEq(collectable(user), expected, "Invalid collectable");
     }
 
-    function assertBalance(AddressIdUser user, uint256 expected) internal {
+    function assertBalance(AddressAppUser user, uint256 expected) internal {
         assertBalance(defaultErc20, user, expected);
     }
 
     function assertBalance(
         IERC20 erc20,
-        AddressIdUser user,
+        AddressAppUser user,
         uint256 expected
     ) internal {
         assertEq(erc20.balanceOf(address(user)), expected, "Invalid balance");

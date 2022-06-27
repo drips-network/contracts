@@ -3,26 +3,26 @@ pragma solidity ^0.8.13;
 
 import {DSTest} from "ds-test/test.sol";
 import {DripsHubUserUtils} from "./DripsHubUserUtils.t.sol";
-import {AddressIdUser} from "./AddressIdUser.t.sol";
+import {AddressAppUser} from "./AddressAppUser.t.sol";
 import {ManagedUser} from "./ManagedUser.t.sol";
-import {AddressId} from "../AddressId.sol";
+import {AddressApp} from "../AddressApp.sol";
 import {SplitsReceiver, DripsHub, DripsReceiver} from "../DripsHub.sol";
 import {Reserve} from "../Reserve.sol";
 import {Proxy} from "../Managed.sol";
 import {IERC20, ERC20PresetFixedSupply} from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
 contract DripsHubTest is DripsHubUserUtils {
-    AddressId private addressId;
+    AddressApp private addressApp;
 
     IERC20 private otherErc20;
 
-    AddressIdUser private user;
-    AddressIdUser private receiver;
-    AddressIdUser private user1;
-    AddressIdUser private receiver1;
-    AddressIdUser private user2;
-    AddressIdUser private receiver2;
-    AddressIdUser private receiver3;
+    AddressAppUser private user;
+    AddressAppUser private receiver;
+    AddressAppUser private user1;
+    AddressAppUser private receiver1;
+    AddressAppUser private user2;
+    AddressAppUser private receiver2;
+    AddressAppUser private receiver3;
     ManagedUser internal admin;
     ManagedUser internal nonAdmin;
 
@@ -37,7 +37,7 @@ contract DripsHubTest is DripsHubUserUtils {
         DripsHub hubLogic = new DripsHub(10, reserve);
         dripsHub = DripsHub(address(new Proxy(hubLogic, address(this))));
         reserve.addUser(address(dripsHub));
-        addressId = new AddressId(dripsHub);
+        addressApp = new AddressApp(dripsHub);
         user = createUser();
         receiver1 = createUser();
         receiver2 = createUser();
@@ -57,8 +57,8 @@ contract DripsHubTest is DripsHubUserUtils {
         if (receiver1 > receiver2) (receiver1, receiver2) = (receiver2, receiver1);
     }
 
-    function createUser() internal returns (AddressIdUser newUser) {
-        newUser = new AddressIdUser(addressId);
+    function createUser() internal returns (AddressAppUser newUser) {
+        newUser = new AddressAppUser(addressApp);
         defaultErc20.transfer(address(newUser), 100 ether);
         otherErc20.transfer(address(newUser), 100 ether);
     }
@@ -338,25 +338,25 @@ contract DripsHubTest is DripsHubUserUtils {
         }
     }
 
-    function testAnyoneCanCollectForAnyoneUsingAddressId() public {
+    function testAnyoneCanCollectForAnyoneUsingAddressApp() public {
         give(user, receiver1, 5);
         split(receiver1, 5, 0);
         assertCollectable(receiver1, 5);
         uint256 balanceBefore = defaultErc20.balanceOf(address(receiver1));
 
-        uint128 collected = addressId.collect(address(receiver1), defaultErc20);
+        uint128 collected = addressApp.collect(address(receiver1), defaultErc20);
 
         assertEq(collected, 5, "Invalid collected amount");
         assertCollectable(receiver1, 0);
         assertBalance(receiver1, balanceBefore + 5);
     }
 
-    function testAnyoneCanCollectAllForAnyoneUsingAddressId() public {
+    function testAnyoneCanCollectAllForAnyoneUsingAddressApp() public {
         give(user, receiver1, 5);
         assertCollectableAll(receiver1, 5);
         uint256 balanceBefore = defaultErc20.balanceOf(address(receiver1));
 
-        (uint128 collected, uint128 split) = addressId.collectAll(
+        (uint128 collected, uint128 split) = addressApp.collectAll(
             address(receiver1),
             defaultErc20,
             splitsReceivers()
