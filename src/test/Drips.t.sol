@@ -774,7 +774,7 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         }
         setDrips(sender, 0, 1 ether, receivers);
         receivers = recv(receivers, recv(countMax, 1, 0, 0));
-        assertSetDripsReverts(sender, 1 ether, 1 ether, receivers, "Too many drips receivers");
+        assertSetDripsReverts(sender, countMax, countMax + 1, receivers, "Too many drips receivers");
     }
 
     function testRejectsZeroAmtPerSecReceivers() public {
