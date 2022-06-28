@@ -688,6 +688,16 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         receiveDrips(receiver, 99);
     }
 
+    function testRevertOverflowingTotalAmtPerSec() public {
+        assertSetDripsReverts(
+            sender,
+            0,
+            type(uint128).max,
+            recv(recv(receiver, 1), recv(receiver, type(uint128).max)),
+            ERROR_NOT_ENOUGH_FOR_DEFAULT_DRIPS
+        );
+    }
+
     function testAllowsToppingUpWhileDripping() public {
         setDrips(sender, 0, 100, recv(receiver, 10));
         warpBy(6);
@@ -1054,12 +1064,28 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         assertEq(endtime, 130);
     }
 
+    function _receiverDefaultEndEdgeCase(uint128 balance) internal {
+        DripsReceiver[] memory receivers = recv(
+            recv({userId: receiver1, amtPerSec: 2, start: 0, duration: 0}),
+            recv({userId: receiver2, amtPerSec: 1, start: 2, duration: 0})
+        );
+        warpTo(0);
+        uint32 endtime = Drips.calcDefaultEnd(balance, receivers);
+        assertEq(endtime, 3);
+    }
+
+    function testReceiverDefaultEndEdgeCase() public {
+        _receiverDefaultEndEdgeCase(7);
+    }
+
+    function testFailReceiverDefaultEndEdgeCase() public {
+        _receiverDefaultEndEdgeCase(6);
+    }
+
     function testReceiverDefaultEndNotEnoughToCoverAll() public {
         DripsReceiver[] memory receivers = recv(
             recv({userId: receiver1, amtPerSec: 1, start: 50, duration: 0}),
-            recv({userId: receiver2, amtPerSec: 1, start: 170, duration: 0}),
-            recv({userId: receiver3, amtPerSec: 1, start: 150, duration: 0}),
-            recv({userId: receiver4, amtPerSec: 4, start: 0, duration: 0})
+            recv({userId: receiver2, amtPerSec: 1, start: 1000, duration: 0})
         );
         warpTo(0);
         try this.defaultEndExternal(100, receivers) {
