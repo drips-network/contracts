@@ -588,7 +588,7 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         receiveDrips(receiver, 0);
     }
 
-    function testDripsWithStartAfterFundsRunOut() public {
+    function testRejectsDripsWithStartAfterFundsRunOut() public {
         try
             this.setDripsExternal(
                 defaultAsset,
