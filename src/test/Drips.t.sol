@@ -55,7 +55,7 @@ contract DripsTest is DSTest, PseudoRandomUtils {
     }
 
     function warpBy(uint256 secs) internal {
-        Hevm(HEVM_ADDRESS).warp(block.timestamp + secs);
+        warpTo(block.timestamp + secs);
     }
 
     function warpTo(uint256 timestamp) internal {
