@@ -293,6 +293,14 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         Drips.balanceAt(s, userId, defaultAsset, receivers, uint32(timestamp));
     }
 
+    function defaultEndExternal(uint128 balance, DripsReceiver[] memory list)
+        public
+        view
+        returns (uint32 end)
+    {
+        return Drips.calcDefaultEnd(balance, list);
+    }
+
     function changeBalance(
         uint256 userId,
         uint128 balanceFrom,
@@ -774,7 +782,13 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         }
         setDrips(sender, 0, 1 ether, receivers);
         receivers = recv(receivers, recv(countMax, 1, 0, 0));
-        assertSetDripsReverts(sender, countMax, countMax + 1, receivers, "Too many drips receivers");
+        assertSetDripsReverts(
+            sender,
+            uint128(countMax),
+            uint128(countMax + 1),
+            receivers,
+            "Too many drips receivers"
+        );
     }
 
     function testRejectsZeroAmtPerSecReceivers() public {
@@ -860,7 +874,7 @@ contract DripsTest is DSTest, PseudoRandomUtils {
             defaultAsset,
             receivers,
             type(int128).min,
-            recv()
+            newRecv
         );
         storeCurrReceivers(defaultAsset, sender, newRecv);
         assertEq(newBalance, 0, "Invalid balance");
@@ -1015,36 +1029,6 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         warpToCycleEnd();
         emit log_named_uint("receiveDrips.time", block.timestamp);
         receiveDrips(receivers, defaultEnd, updateTime);
-    }
-
-    function testBenchmarkReceivers() public {
-        initSalt("42");
-        uint8 amountReceivers = 100;
-        uint128 maxAmtPerSec = 50;
-        uint32 maxDuration = 100;
-        uint32 maxStart = 100;
-        // percent
-        uint256 probDefaultEnd = 100;
-        uint256 probStartNow = 20;
-
-        uint128 maxCosts = amountReceivers * maxAmtPerSec * maxDuration;
-        DripsReceiver[] memory receivers = genRandomRecv(
-            amountReceivers,
-            maxAmtPerSec,
-            maxStart,
-            maxDuration,
-            probDefaultEnd,
-            probStartNow
-        );
-        setDrips(sender, 0, maxCosts, receivers);
-    }
-
-    function defaultEndExternal(uint128 balance, DripsReceiver[] memory list)
-        public
-        view
-        returns (uint32 end)
-    {
-        return Drips.calcDefaultEnd(balance, list);
     }
 
     function testReceiverDefaultEndExampleA() public {

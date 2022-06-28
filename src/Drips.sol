@@ -321,9 +321,9 @@ library Drips {
         returns (uint32 defaultEndTime)
     {
         require(receivers.length <= MAX_DRIPS_RECEIVERS, "Too many drips receivers");
-        // helper variables for the the default formular
-        uint256 defaultSum = 0;
-        uint256 defaultDivisor = 0;
+        // additional costs if all a drips would start from block.timestamp=0
+        uint256 costsFromZeroToStart = 0;
+        uint256 totalAmtPerSec = 0;
         // highest seen start date
         uint32 defaultsHighestStart = 0;
 
@@ -336,8 +336,8 @@ library Drips {
             (uint32 start, uint32 end) = _dripsRangeInFuture(receiver, _currTimestamp(), 0);
             if (receiver.duration == 0) {
                 if (start > defaultsHighestStart) defaultsHighestStart = start;
-                defaultSum += uint256(receiver.amtPerSec) * start;
-                defaultDivisor += receiver.amtPerSec;
+                costsFromZeroToStart += uint256(receiver.amtPerSec) * start;
+                totalAmtPerSec += receiver.amtPerSec;
             } else {
                 uint192 spent = (end - start) * receiver.amtPerSec;
                 require(balance >= spent, "Insufficient balance");
@@ -345,14 +345,14 @@ library Drips {
             }
         }
         // no default drips
-        if (defaultDivisor == 0) {
+        if (totalAmtPerSec == 0) {
             return 0;
         }
-        // main formular to calculate default end time
-        // a ...  amtPerSec
-        // s ...  start
-        // defaultEnd =(balance + a_1*s_1 + ... + a_n*s_n)/(a_1 + ... a_n)
-        uint136 defaultEnd = uint136((balance + defaultSum) / defaultDivisor);
+        // We increase the balance to cover the costs if all drips would start from timestamp zero
+        // If all drips would start at block.timestamp=0 but have enough balance to cover
+        // their costs until their actual start => the defaultEnd would be the same.
+        // This trick allows us to calculate the defaultEnd without the need of sorting the drips by start date
+        uint256 defaultEnd = uint256((balance + costsFromZeroToStart) / totalAmtPerSec);
         if (defaultEnd > type(uint32).max) defaultEnd = type(uint32).max;
         require(defaultEnd > defaultsHighestStart, "Run out of funds before default drips start");
         return uint32(defaultEnd);
