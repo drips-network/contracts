@@ -790,7 +790,7 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         for (uint160 i = 0; i < countMax; i++) {
             receivers[i] = recv(i, 1, 0, 0)[0];
         }
-        setDrips(sender, 0, 1 ether, receivers);
+        setDrips(sender, 0, uint128(countMax), receivers);
         receivers = recv(receivers, recv(countMax, 1, 0, 0));
         assertSetDripsReverts(
             sender,
