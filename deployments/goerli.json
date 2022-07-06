@@ -1,0 +1,10 @@
+{
+  "Network": "goerli",
+  "Deployer address": "0x341a08926dCa7fa7D135F96E4d76b696e5f6d38d",
+  "Reserve": "0x933FA52942fEe0B085bF7c1cd2a6B35e69095CFD",
+  "DripsHub": "0xe42A8Eb9B4432a64900488B77306E307aff144Bb",
+  "DripsHub logic": "0x185686C95599d037f67BD11F478CD35f340CB99F",
+  "DripsHub cycle seconds": "604800",
+  "AddressApp": "0x60CfC3a7006e4bB6998042bdefa30607C36C9Ac1",
+  "Commit hash": "682ea8a0c21891622e2a952721ab4fc748306788"
+}
