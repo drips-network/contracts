@@ -19,18 +19,16 @@ addValuesToFile() {
 deploy() {
     echo -e "Deploying $1\n"
     DEPLOYED_ADDR=$(dapp create "$2" "${@:3}")
-    verify "$2" "$DEPLOYED_ADDR" "${@:3}"
     echo -e "\nDeployed $1 to $DEPLOYED_ADDR\n"
-}
 
-verify() {
-  if [ -n "$ETHERSCAN_API_KEY" ]
-  then
-      sleep 5 # give etherscan some time to process the block
-      dapp verify-contract --async "$@"
-  else
-      echo "ETHERSCAN_API_KEY not provided, skipping verification"
-  fi
+    if [ -n "$ETHERSCAN_API_KEY" ]
+    then
+        echo -e "Verifying $1 on Etherscan\n"
+        sleep 10 # give etherscan some time to process the block
+        dapp verify-contract --async "$2" "$DEPLOYED_ADDR" "${@:3}"
+    else
+        echo -e "ETHERSCAN_API_KEY not provided, skipping Etherscan verification\n"
+    fi
 }
 
 # Set up the defaults
