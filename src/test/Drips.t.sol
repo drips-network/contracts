@@ -626,20 +626,17 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         receiveDrips(receiver, 0);
     }
 
-    function testRejectsDripsWithStartAfterFundsRunOut() public {
-        try
-            this.setDripsExternal(
-                defaultAsset,
-                sender,
-                recv(),
-                4,
-                recv(recv(receiver1, 1), recv(receiver2, 2, block.timestamp + 5, 0))
-            )
-        {
-            assertTrue(false, "Set drips hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_ENOUGH_FOR_DEFAULT_DRIPS, "Invalid set drips revert reason");
-        }
+    function testDripsWithStartAfterFundsRunOut() public {
+        setDrips(
+            sender,
+            0,
+            4,
+            recv(recv(receiver1, 1), recv(receiver2, 2, block.timestamp + 5, 0))
+        );
+        warpBy(6);
+        warpToCycleEnd();
+        receiveDrips(receiver1, 4);
+        receiveDrips(receiver2, 0);
     }
 
     function testDripsWithStartInTheFutureCycleCanBeMovedToAnEarlierOne() public {
@@ -718,14 +715,13 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         receiveDrips(receiver, 99);
     }
 
-    function testRevertOverflowingTotalAmtPerSec() public {
-        assertSetDripsReverts(
-            sender,
-            0,
-            type(uint128).max,
-            recv(recv(receiver, 1), recv(receiver, type(uint128).max)),
-            ERROR_NOT_ENOUGH_FOR_DEFAULT_DRIPS
-        );
+    function testAllowsDripsConfigurationWithOverflowingTotalAmtPerSec() public {
+        setDrips(sender, 0, 2, recv(recv(receiver, 1), recv(receiver, type(uint128).max)));
+        warpToCycleEnd();
+        // Sender hasn't sent anything
+        changeBalance(sender, 2, 0);
+        // Receiver hasnt received anything
+        receiveDrips(receiver, 0);
     }
 
     function testAllowsToppingUpWhileDripping() public {
@@ -829,6 +825,108 @@ contract DripsTest is DSTest, PseudoRandomUtils {
             receivers,
             "Too many drips receivers"
         );
+    }
+
+    function testBenchSetDrips100() public {
+        uint160 countMax = Drips.MAX_DRIPS_RECEIVERS;
+        DripsReceiver[] memory receivers = new DripsReceiver[](countMax);
+        for (uint160 i = 0; i < countMax; i++) {
+            receivers[i] = recv(i, 1, 1000 + i, 0)[0];
+        }
+
+        uint256 gas = gasleft();
+        Drips.setDrips(
+            s,
+            cycleSecs,
+            sender,
+            defaultAsset,
+            new DripsReceiver[](0),
+            int128(int160((countMax * countMax))),
+            receivers
+        );
+        gas -= gasleft();
+        emit log_named_uint("GAS USED", gas);
+    }
+
+    function testBenchSetDrips100Worst() public {
+        // The worst possible case: dripping until the maximum timestamp minus 1 second.
+        // Every candidate end time requires iterating over all the receivers to tell that
+        // the balance is enough to cover it, but on the highest possible timestamp
+        // there isn't enough funds, so we can't skip the whole search.
+        uint160 countMax = Drips.MAX_DRIPS_RECEIVERS;
+        DripsReceiver[] memory receivers = new DripsReceiver[](countMax);
+        for (uint160 i = 0; i < countMax; i++) {
+            receivers[i] = recv(i, 1, 0, 0)[0];
+        }
+        uint128 amt = (type(uint32).max - uint32(block.timestamp)) * uint128(countMax) - 1;
+
+        uint256 gas = gasleft();
+        Drips.setDrips(
+            s,
+            cycleSecs,
+            sender,
+            defaultAsset,
+            new DripsReceiver[](0),
+            int128(amt),
+            receivers
+        );
+        gas -= gasleft();
+        emit log_named_uint("GAS USED", gas);
+    }
+
+    function testBenchSetDrips10() public {
+        uint160 countMax = 10;
+        DripsReceiver[] memory receivers = new DripsReceiver[](countMax);
+        for (uint160 i = 0; i < countMax; i++) {
+            receivers[i] = recv(i, 1, 1000 + i, 0)[0];
+        }
+
+        uint256 gas = gasleft();
+        Drips.setDrips(
+            s,
+            cycleSecs,
+            sender,
+            defaultAsset,
+            new DripsReceiver[](0),
+            int128(int160((countMax * countMax))),
+            receivers
+        );
+        gas -= gasleft();
+        emit log_named_uint("GAS USED", gas);
+    }
+
+    function testBenchSetDrips10Worst() public {
+        // The worst possible case: dripping until the maximum timestamp minus 1 second.
+        // Every candidate end time requires iterating over all the receivers to tell that
+        // the balance is enough to cover it, but on the highest possible timestamp
+        // there isn't enough funds, so we can't skip the whole search.
+        uint160 countMax = 10;
+        DripsReceiver[] memory receivers = new DripsReceiver[](countMax);
+        for (uint160 i = 0; i < countMax; i++) {
+            receivers[i] = recv(i, 1, 0, 0)[0];
+        }
+        uint128 amt = (type(uint32).max - uint32(block.timestamp)) * uint128(countMax) - 1;
+
+        uint256 gas = gasleft();
+        Drips.setDrips(
+            s,
+            cycleSecs,
+            sender,
+            defaultAsset,
+            new DripsReceiver[](0),
+            int128(amt),
+            receivers
+        );
+        gas -= gasleft();
+        emit log_named_uint("GAS USED", gas);
+    }
+
+    function testBenchSetDrips1() public {
+        DripsReceiver[] memory receivers = recv(1, 1, 1000, 0);
+        uint256 gas = gasleft();
+        Drips.setDrips(s, cycleSecs, sender, defaultAsset, new DripsReceiver[](0), 1, receivers);
+        gas -= gasleft();
+        emit log_named_uint("GAS USED", gas);
     }
 
     function testRejectsZeroAmtPerSecReceivers() public {
@@ -1118,10 +1216,7 @@ contract DripsTest is DSTest, PseudoRandomUtils {
             recv({userId: receiver2, amtPerSec: 1, start: 1000, duration: 0})
         );
         warpTo(0);
-        try this.defaultEndExternal(100, receivers) {
-            assertTrue(false, "default end hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_ENOUGH_FOR_DEFAULT_DRIPS, "Invalid set drips revert reason");
-        }
+        uint32 endtime = Drips.calcDefaultEnd(100, receivers);
+        assertEq(endtime, 150);
     }
 }

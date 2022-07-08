@@ -343,6 +343,28 @@ library Drips {
         emit DripsSet(userId, assetId, newDripsHash, newBalance);
     }
 
+    function _addDefaultEnd(
+        uint256[] memory defaultEnds,
+        uint256 length,
+        uint128 amtPerSec,
+        uint32 start
+    ) private pure {
+        defaultEnds[length] = (uint256(amtPerSec) << 32) | start;
+    }
+
+    function _defaultEndAtIdx(uint256[] memory defaultEnds, uint256 idx)
+        private
+        pure
+        returns (uint256 amtPerSec, uint256 start)
+    {
+        uint256 val;
+        // solhint-disable-next-line no-inline-assembly
+        assembly ("memory-safe") {
+            val := mload(add(32, add(defaultEnds, shl(5, idx))))
+        }
+        return (val >> 32, uint32(val));
+    }
+
     /// @notice Calculates the end time of drips without duration.
     /// @param balance The balance when drips have started
     /// @param receivers The list of drips receivers.
@@ -354,12 +376,9 @@ library Drips {
         returns (uint32 defaultEndTime)
     {
         require(receivers.length <= MAX_DRIPS_RECEIVERS, "Too many drips receivers");
-        // additional costs if all a drips would start from block.timestamp=0
-        uint256 costsFromZeroToStart = 0;
-        uint256 totalAmtPerSec = 0;
-        // highest seen start date
-        uint32 defaultsHighestStart = 0;
-
+        uint256[] memory defaultEnds = new uint256[](receivers.length);
+        uint256 defaultEndsLen = 0;
+        uint168 spent = 0;
         for (uint256 i = 0; i < receivers.length; i++) {
             DripsReceiver memory receiver = receivers[i];
             uint128 amtPerSec = receiver.config.amtPerSec();
@@ -369,27 +388,56 @@ library Drips {
             // the duration is zero and if it's non-zero the default end is not used anyway
             (uint32 start, uint32 end) = _dripsRangeInFuture(receiver, _currTimestamp(), 0);
             if (receiver.config.duration() == 0) {
-                if (start > defaultsHighestStart) defaultsHighestStart = start;
-                costsFromZeroToStart += uint256(amtPerSec) * start;
-                totalAmtPerSec += amtPerSec;
+                _addDefaultEnd(defaultEnds, defaultEndsLen++, amtPerSec, start);
             } else {
-                uint192 spent = (end - start) * amtPerSec;
-                require(balance >= spent, "Insufficient balance");
-                balance -= uint128(spent);
+                spent += uint160(end - start) * amtPerSec;
             }
         }
-        // no default drips
-        if (totalAmtPerSec == 0) {
-            return 0;
+        require(balance >= spent, "Insufficient balance");
+        balance -= uint128(spent);
+        return _calcDefaultEnd(defaultEnds, defaultEndsLen, balance);
+    }
+
+    function _calcDefaultEnd(
+        uint256[] memory defaultEnds,
+        uint256 defaultEndsLen,
+        uint128 balance
+    ) private view returns (uint32 defaultEnd) {
+        unchecked {
+            uint32 minEnd = _currTimestamp();
+            uint32 maxEnd = type(uint32).max;
+            if (defaultEndsLen == 0 || balance == 0) return minEnd;
+            if (_isBalanceEnough(defaultEnds, defaultEndsLen, balance, maxEnd)) return maxEnd;
+            uint256 enoughEnd = minEnd;
+            uint256 notEnoughEnd = maxEnd;
+            while (true) {
+                uint256 end = (enoughEnd + notEnoughEnd) / 2;
+                if (end == enoughEnd) return uint32(end);
+                if (_isBalanceEnough(defaultEnds, defaultEndsLen, balance, end)) {
+                    enoughEnd = end;
+                } else {
+                    notEnoughEnd = end;
+                }
+            }
         }
-        // We increase the balance to cover the costs if all drips would start from timestamp zero
-        // If all drips would start at block.timestamp=0 but have enough balance to cover
-        // their costs until their actual start => the defaultEnd would be the same.
-        // This trick allows us to calculate the defaultEnd without the need of sorting the drips by start date
-        uint256 defaultEnd = uint256((balance + costsFromZeroToStart) / totalAmtPerSec);
-        if (defaultEnd > type(uint32).max) defaultEnd = type(uint32).max;
-        require(defaultEnd > defaultsHighestStart, "Run out of funds before default drips start");
-        return uint32(defaultEnd);
+    }
+
+    function _isBalanceEnough(
+        uint256[] memory defaultEnds,
+        uint256 defaultEndsLen,
+        uint256 balance,
+        uint256 end
+    ) private pure returns (bool) {
+        unchecked {
+            uint256 spent = 0;
+            for (uint256 i = 0; i < defaultEndsLen; i++) {
+                (uint256 amtPerSec, uint256 start) = _defaultEndAtIdx(defaultEnds, i);
+                if (end <= start) continue;
+                spent += amtPerSec * (end - start);
+                if (spent > balance) return false;
+            }
+            return true;
+        }
     }
 
     /// @notice Calculates the drips balance at a given timestamp.
