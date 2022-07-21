@@ -557,15 +557,10 @@ library Drips {
                     _currTimestamp(),
                     newDefaultEnd
                 );
-                _moveDeltaRange(
-                    state.amtDeltas,
-                    cycleSecs,
-                    currStart,
-                    currEnd,
-                    newStart,
-                    newEnd,
-                    currRecv.config.amtPerSec()
-                );
+                int256 amtPerSec = int256(uint256(currRecv.config.amtPerSec()));
+                // Move the start and end times if updated
+                _addDeltaRange(state, cycleSecs, currStart, newStart, -amtPerSec);
+                _addDeltaRange(state, cycleSecs, currEnd, newEnd, amtPerSec);
                 // Ensure that the user receives the updated cycles
                 uint32 startCycle = _cycleOf(newStart, cycleSecs);
                 if (state.nextReceivableCycle > startCycle) {
@@ -573,13 +568,14 @@ library Drips {
                 }
             } else if (pickCurr) {
                 // Remove an existing drip
-                mapping(uint32 => AmtDelta) storage deltas = states[currRecv.userId].amtDeltas;
+                DripsState storage state = states[currRecv.userId];
                 (uint32 start, uint32 end) = _dripsRangeInFuture(
                     currRecv,
                     lastUpdate,
                     currDefaultEnd
                 );
-                _clearDeltaRange(deltas, cycleSecs, start, end, currRecv.config.amtPerSec());
+                int256 amtPerSec = int256(uint256(currRecv.config.amtPerSec()));
+                _addDeltaRange(state, cycleSecs, start, end, -amtPerSec);
             } else if (pickNew) {
                 // Create a new drip
                 DripsState storage state = states[newRecv.userId];
@@ -588,7 +584,8 @@ library Drips {
                     _currTimestamp(),
                     newDefaultEnd
                 );
-                _setDeltaRange(state.amtDeltas, cycleSecs, start, end, newRecv.config.amtPerSec());
+                int256 amtPerSec = int256(uint256(newRecv.config.amtPerSec()));
+                _addDeltaRange(state, cycleSecs, start, end, amtPerSec);
                 // Ensure that the user receives the updated cycles
                 uint32 startCycle = _cycleOf(start, cycleSecs);
                 if (state.nextReceivableCycle == 0 || state.nextReceivableCycle > startCycle) {
@@ -638,76 +635,37 @@ library Drips {
         return (start, uint32(end));
     }
 
-    /// @notice Changes amt delta to move a time range of received funds by a user
-    /// @param amtDeltas The user deltas
-    /// @param cycleSecs The cycle length in seconds.
-    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
-    /// @param currStart The timestamp from which the delta currently takes effect
-    /// @param currEnd The timestamp until which the delta currently takes effect
-    /// @param newStart The timestamp from which the delta will start taking effect
-    /// @param newEnd The timestamp until which the delta will start taking effect
-    /// @param amtPerSec The receiving rate
-    function _moveDeltaRange(
-        mapping(uint32 => AmtDelta) storage amtDeltas,
-        uint32 cycleSecs,
-        uint32 currStart,
-        uint32 currEnd,
-        uint32 newStart,
-        uint32 newEnd,
-        uint128 amtPerSec
-    ) private {
-        _clearDeltaRange(amtDeltas, cycleSecs, currStart, newStart, amtPerSec);
-        _setDeltaRange(amtDeltas, cycleSecs, currEnd, newEnd, amtPerSec);
-    }
-
-    /// @notice Clears amt delta of received funds by a user in a given time range
-    /// @param amtDeltas The user deltas
+    /// @notice Adds funds received by a user in a given time range
+    /// @param state The user state
     /// @param cycleSecs The cycle length in seconds.
     /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param start The timestamp from which the delta takes effect
     /// @param end The timestamp until which the delta takes effect
-    /// @param amtPerSec The receiving rate
-    function _clearDeltaRange(
-        mapping(uint32 => AmtDelta) storage amtDeltas,
+    /// @param amtPerSec The dripping rate
+    function _addDeltaRange(
+        DripsState storage state,
         uint32 cycleSecs,
         uint32 start,
         uint32 end,
-        uint128 amtPerSec
-    ) private {
-        // start and end are swapped
-        _setDeltaRange(amtDeltas, cycleSecs, end, start, amtPerSec);
-    }
-
-    /// @notice Sets amt delta of received funds by a user in a given time range
-    /// @param amtDeltas The user deltas
-    /// @param cycleSecs The cycle length in seconds.
-    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
-    /// @param start The timestamp from which the delta takes effect
-    /// @param end The timestamp until which the delta takes effect
-    /// @param amtPerSec The receiving rate
-    function _setDeltaRange(
-        mapping(uint32 => AmtDelta) storage amtDeltas,
-        uint32 cycleSecs,
-        uint32 start,
-        uint32 end,
-        uint128 amtPerSec
+        int256 amtPerSec
     ) private {
         if (start == end) return;
-        _setDelta(amtDeltas, cycleSecs, start, int128(amtPerSec));
-        _setDelta(amtDeltas, cycleSecs, end, -int128(amtPerSec));
+        mapping(uint32 => AmtDelta) storage amtDeltas = state.amtDeltas;
+        _addDelta(amtDeltas, cycleSecs, start, amtPerSec);
+        _addDelta(amtDeltas, cycleSecs, end, -amtPerSec);
     }
 
-    /// @notice Sets amt delta of received funds by a user on a given timestamp
-    /// @param amtDeltas The user deltas
+    /// @notice Adds delta of funds received by a user at a given time
+    /// @param amtDeltas The user amount deltas
     /// @param cycleSecs The cycle length in seconds.
     /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
-    /// @param timestamp The timestamp from which the delta takes effect
-    /// @param amtPerSecDelta Change of the per-second receiving rate
-    function _setDelta(
+    /// @param timestamp The timestamp when the deltas need to be added
+    /// @param amtPerSec The dripping rate
+    function _addDelta(
         mapping(uint32 => AmtDelta) storage amtDeltas,
         uint32 cycleSecs,
         uint32 timestamp,
-        int128 amtPerSecDelta
+        int256 amtPerSec
     ) private {
         // In order to set a delta on a specific timestamp it must be introduced in two cycles.
         // The cycle delta is split proportionally based on how much this cycle is affected.
@@ -716,8 +674,8 @@ library Drips {
         uint32 nextCycleSecs = timestamp % cycleSecs;
         uint32 thisCycleSecs = cycleSecs - nextCycleSecs;
         AmtDelta storage amtDelta = amtDeltas[thisCycle];
-        amtDelta.thisCycle += int128(uint128(thisCycleSecs)) * amtPerSecDelta;
-        amtDelta.nextCycle += int128(uint128(nextCycleSecs)) * amtPerSecDelta;
+        amtDelta.thisCycle += int128(uint128(thisCycleSecs)) * int128(amtPerSec);
+        amtDelta.nextCycle += int128(uint128(nextCycleSecs)) * int128(amtPerSec);
     }
 
     /// @notice Checks if two receivers fulfil the sortedness requirement of the receivers list.
