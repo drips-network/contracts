@@ -557,14 +557,17 @@ library Drips {
                     _currTimestamp(),
                     newDefaultEnd
                 );
-                int256 amtPerSec = int256(uint256(currRecv.config.amtPerSec()));
-                // Move the start and end times if updated
-                _addDeltaRange(state, cycleSecs, currStart, newStart, -amtPerSec);
-                _addDeltaRange(state, cycleSecs, currEnd, newEnd, amtPerSec);
+                {
+                    int256 amtPerSec = int256(uint256(currRecv.config.amtPerSec()));
+                    // Move the start and end times if updated
+                    _addDeltaRange(state, cycleSecs, currStart, newStart, -amtPerSec);
+                    _addDeltaRange(state, cycleSecs, currEnd, newEnd, amtPerSec);
+                }
                 // Ensure that the user receives the updated cycles
-                uint32 startCycle = _cycleOf(newStart, cycleSecs);
-                if (state.nextReceivableCycle > startCycle) {
-                    state.nextReceivableCycle = startCycle;
+                uint32 currStartCycle = _cycleOf(currStart, cycleSecs);
+                uint32 newStartCycle = _cycleOf(newStart, cycleSecs);
+                if (currStartCycle > newStartCycle && state.nextReceivableCycle > newStartCycle) {
+                    state.nextReceivableCycle = newStartCycle;
                 }
             } else if (pickCurr) {
                 // Remove an existing drip
@@ -667,15 +670,27 @@ library Drips {
         uint32 timestamp,
         int256 amtPerSec
     ) private {
-        // In order to set a delta on a specific timestamp it must be introduced in two cycles.
-        // The cycle delta is split proportionally based on how much this cycle is affected.
-        // The next cycle has the rest of the delta applied, so the update is fully completed.
-        uint32 thisCycle = _cycleOf(timestamp, cycleSecs);
-        uint32 nextCycleSecs = timestamp % cycleSecs;
-        uint32 thisCycleSecs = cycleSecs - nextCycleSecs;
-        AmtDelta storage amtDelta = amtDeltas[thisCycle];
-        amtDelta.thisCycle += int128(uint128(thisCycleSecs)) * int128(amtPerSec);
-        amtDelta.nextCycle += int128(uint128(nextCycleSecs)) * int128(amtPerSec);
+        unchecked {
+            AmtDelta storage amtDelta = amtDeltas[_cycleOf(timestamp, cycleSecs)];
+            int256 thisCycleDelta = amtDelta.thisCycle;
+            int256 nextCycleDelta = amtDelta.nextCycle;
+
+            // In order to set a delta on a specific timestamp it must be introduced in two cycles.
+            // The cycle delta is split proportionally based on how much this cycle is affected.
+            // The next cycle has the rest of the delta applied, so the update is fully completed.
+            uint32 nextCycleSecs = timestamp % cycleSecs;
+            uint32 thisCycleSecs = cycleSecs - nextCycleSecs;
+            thisCycleDelta += int256(uint256(thisCycleSecs)) * amtPerSec;
+            nextCycleDelta += int256(uint256(nextCycleSecs)) * amtPerSec;
+            require(
+                int128(thisCycleDelta) == thisCycleDelta &&
+                    int128(nextCycleDelta) == nextCycleDelta,
+                "AmtDelta underflow or overflow"
+            );
+
+            amtDelta.thisCycle = int128(thisCycleDelta);
+            amtDelta.nextCycle = int128(nextCycleDelta);
+        }
     }
 
     /// @notice Checks if two receivers fulfil the sortedness requirement of the receivers list.
@@ -694,8 +709,10 @@ library Drips {
     /// @param timestamp The timestamp.
     /// @param cycleSecs The cycle length in seconds.
     /// @return cycle The cycle containing the timestamp.
-    function _cycleOf(uint32 timestamp, uint32 cycleSecs) internal pure returns (uint32 cycle) {
-        return timestamp / cycleSecs + 1;
+    function _cycleOf(uint32 timestamp, uint32 cycleSecs) private pure returns (uint32 cycle) {
+        unchecked {
+            return timestamp / cycleSecs + 1;
+        }
     }
 
     /// @notice The current timestamp, casted to the library's internal representation.
