@@ -345,14 +345,14 @@ library Drips {
 
     function _addDefaultEnd(
         uint256[] memory defaultEnds,
-        uint256 length,
-        uint128 amtPerSec,
+        uint256 idx,
+        uint192 amtPerSec,
         uint32 start
     ) private pure {
-        defaultEnds[length] = (uint256(amtPerSec) << 32) | start;
+        defaultEnds[idx] = (uint256(amtPerSec) << 32) | start;
     }
 
-    function _defaultEndAtIdx(uint256[] memory defaultEnds, uint256 idx)
+    function _getDefaultEnd(uint256[] memory defaultEnds, uint256 idx)
         private
         pure
         returns (uint256 amtPerSec, uint256 start)
@@ -398,6 +398,10 @@ library Drips {
         return _calcDefaultEnd(defaultEnds, defaultEndsLen, balance);
     }
 
+    /// @notice Calculates the end time of drips without duration.
+    /// @param defaultEnds The list of default ends
+    /// @param balance The balance when drips have started
+    /// @return defaultEnd The end time of drips without duration.
     function _calcDefaultEnd(
         uint256[] memory defaultEnds,
         uint256 defaultEndsLen,
@@ -422,16 +426,22 @@ library Drips {
         }
     }
 
+    /// @notice Check if a given balance is enough to cover default drips until the given time.
+    /// @param defaultEnds The list of default ends
+    /// @param defaultEndsLen The length of `defaultEnds`
+    /// @param balance The balance when drips have started
+    /// @param end The time until which the drips are checked to be covered
+    /// @return isEnough `true` if the balance is enough, `false` otherwise
     function _isBalanceEnough(
         uint256[] memory defaultEnds,
         uint256 defaultEndsLen,
         uint256 balance,
         uint256 end
-    ) private pure returns (bool) {
+    ) private pure returns (bool isEnough) {
         unchecked {
             uint256 spent = 0;
             for (uint256 i = 0; i < defaultEndsLen; i++) {
-                (uint256 amtPerSec, uint256 start) = _defaultEndAtIdx(defaultEnds, i);
+                (uint256 amtPerSec, uint256 start) = _getDefaultEnd(defaultEnds, i);
                 if (end <= start) continue;
                 spent += amtPerSec * (end - start);
                 if (spent > balance) return false;
