@@ -190,10 +190,9 @@ contract DripsTest is DSTest, PseudoRandomUtils {
             uint32 start = r.config.start();
             if (start == 0) start = updateTime;
             if (duration == 0) duration = defaultEnd - start;
-            if (start < updateTime) duration -= updateTime - start;
-
             // drips was in the past, not added
             if (start + duration < updateTime) duration = 0;
+            else if (start < updateTime) duration -= updateTime - start;
 
             uint256 expectedAmt = duration * r.config.amtPerSec();
             (uint128 actualAmt, ) = Drips.receiveDrips(
