@@ -333,6 +333,7 @@ library Drips {
         state.defaultEnd = newDefaultEnd;
         state.balance = newBalance;
         bytes32 newDripsHash = hashDrips(newReceivers);
+        emit DripsSet(userId, assetId, newDripsHash, newBalance);
         if (newDripsHash != currDripsHash) {
             state.dripsHash = newDripsHash;
             for (uint256 i = 0; i < newReceivers.length; i++) {
@@ -340,7 +341,6 @@ library Drips {
                 emit DripsReceiverSeen(newDripsHash, receiver.userId, receiver.config);
             }
         }
-        emit DripsSet(userId, assetId, newDripsHash, newBalance);
     }
 
     function _addDefaultEnd(

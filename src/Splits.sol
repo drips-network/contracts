@@ -219,11 +219,11 @@ library Splits {
     ) internal {
         SplitsState storage state = s.splitsStates[userId];
         bytes32 newSplitsHash = hashSplits(receivers);
+        emit SplitsSet(userId, newSplitsHash);
         if (newSplitsHash != state.splitsHash) {
             assertSplitsValid(receivers, newSplitsHash);
             state.splitsHash = newSplitsHash;
         }
-        emit SplitsSet(userId, newSplitsHash);
     }
 
     /// @notice Validates a list of splits receivers and emits events for them
