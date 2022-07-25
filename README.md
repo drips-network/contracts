@@ -3,7 +3,9 @@
 Radicle Drips Hub is the smart contract running the drips and splits ecosystem.
 
 ## Getting started
-Radicle Drips Hub uses [dapp.tools](https://github.com/dapphub/dapptools) for development. Please install the `dapp` client. Then, run the following command to install the dependencies:
+Radicle Drips Hub uses [Foundry](https://github.com/foundry-rs/foundry) for development.
+You can install it using [foundryup](https://github.com/foundry-rs/foundry#installation).
+Then, run the following command to install the dependencies:
 
 ```bash
 make install
@@ -28,16 +30,16 @@ make test
 A regular expression can be used to only run specific tests.
 
 ```bash
-dapp test -m <REGEX>
-dapp test -m testName
-dapp test -m ':ContractName\.'
+forge test -m <REGEX>
+forge test -m testName
+forge test -m ':ContractName\.'
 ```
 
 ## Deploy to a local testnet
 Start a local testnet node and let it run in the background:
 
 ```bash
-dapp testnet
+anvil
 ```
 
 Set up environment variables.
@@ -56,8 +58,6 @@ scripts/deploy.sh
 
 ## Deploy to a public network
 
-Use dapp.tools' `ethsign` to query or add keys available on the system for signing transactions.
-
 Set up environment variables controlling the deployment process:
 
 ```bash
@@ -65,22 +65,26 @@ Set up environment variables controlling the deployment process:
 # Contracts will be deployed to whatever network that endpoint works in.
 export ETH_RPC_URL="<URL>"
 
-# Address to use for deployment. Must be available in `ethsign`
-export ETH_FROM="<ADDRESS>"
-
-# OPTIONAL
-# The file containing password to decrypt `ETH_FROM` private key from keystore.
-# If not set, the password will be prompted multiple times during deployment.
-# If `ETH_FROM` is not password protected, can be set to `/dev/null`.
-export ETH_PASSWORD="<KEYSTORE_PASSWORD>"
+# Foundry wallet arguments. They will be passed to all commands needing signing.
+# Examples:
+# "--interactive" - Open an interactive prompt to enter your private key.
+# "--private-key <RAW_PRIVATE_KEY>" - Use the provided private key.
+# "--mnemonic-path <PATH> --mnemonic-index <INDEX>" - Use the mnemonic file
+# "--keystore <PATH> --password <PASSWORD>" - Use the keystore in the given folder or file.
+# "--ledger --hd-path <PATH>" - Use a Ledger hardware wallet.
+# "--trezor --hd-path <PATH>" - Use a Trezor hardware wallet.
+# "--from <ADDRESS>" - Use the Foundry sender account.
+# For the full list check Foundry's documentation e.g. by running `cast wallet address --help`.
+export WALLET_ARGS="<ARGS>"
 
 # OPTIONAL
 # The API key to use to submit contracts' code to Etherscan.
 # In case of deployments to networks other than Ethereum an appropriate equivalent service is used.
+# If not set, contracts won't be verified.
 export ETHERSCAN_API_KEY="<KEY>"
 
 # OPTIONAL
-# The JSON file to write deployment addresses to. Default is `./deployment_<BLOCKCHAIN_NAME>.json`.
+# The JSON file to write deployment addresses to. Default is `./deployment_<NETWORK_NAME>.json`.
 export DEPLOYMENT_JSON="<PATH>"
 ```
 
@@ -128,15 +132,6 @@ scripts/deploy.sh
 ```
 
 ### Deploying to Polygon Mumbai
-
-Polygon Mumbai is supported by dapp.tools' `seth` in versions **newer than** 0.11.0.
-If no such version is officially released yet, you must install it from `master`:
-
-```bash
-git clone git@github.com:dapphub/dapptools.git
-cd dapptools
-nix-env -iA solc dapp seth hevm -f .
-```
 
 As of now gas estimation isn't working and you need to set it manually to an arbitrary high value:
 

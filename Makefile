@@ -1,12 +1,11 @@
-install     : install_solc dapp_update yarn_install
-install_solc:; nix-env -f https://github.com/dapphub/dapptools/archive/master.tar.gz -iA solc-static-versions.solc_0_8_13
-dapp_update :; dapp update
-yarn_install:; yarn install
+install         :  forge_install yarn_install
+forge_install   :; forge install
+yarn_install    :; yarn install
 
-build       :; dapp build
-clean       :; dapp clean
+build           :; forge build
+clean           :; forge clean
 
-prettier    :; yarn run prettier
-lint        :; yarn run lint
-test        :; dapp test
-test_deep   :; dapp test --fuzz-runs 50000
+prettier        :; yarn run prettier
+lint            :; yarn run lint
+test            :; forge test
+test_deep       :; FOUNDRY_FUZZ_RUNS=50000 forge test
