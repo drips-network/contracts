@@ -13,8 +13,8 @@ struct DripsReceiver {
 /// It's constructed from `amtPerSec`, `start` and `duration` as
 /// `amtPerSec << 64 | start << 32 | duration`.
 /// `amtPerSec` is the amount per second being dripped. Must never be zero.
-/// It must have additional `Drips.AMT_PER_SEC_EXTRA_DECIMALS` decimals and can have fractions.
-/// To achieve that its value must be multiplied by `Drips.AMT_PER_SEC_MULTIPLIER`.
+/// It must have additional `Drips._AMT_PER_SEC_EXTRA_DECIMALS` decimals and can have fractions.
+/// To achieve that its value must be multiplied by `Drips._AMT_PER_SEC_MULTIPLIER`.
 /// `start` is the timestamp when dripping should start.
 /// If zero, use the timestamp when drips are configured.
 /// `duration` is the duration of dripping.
@@ -26,8 +26,8 @@ using DripsConfigImpl for DripsConfig global;
 library DripsConfigImpl {
     /// @notice Create a new DripsConfig.
     /// @param _amtPerSec The amount per second being dripped. Must never be zero.
-    /// It must have additional `Drips.AMT_PER_SEC_EXTRA_DECIMALS` decimals and can have fractions.
-    /// To achieve that the passed value must be multiplied by `Drips.AMT_PER_SEC_MULTIPLIER`.
+    /// It must have additional `Drips._AMT_PER_SEC_EXTRA_DECIMALS` decimals and can have fractions.
+    /// To achieve that the passed value must be multiplied by `Drips._AMT_PER_SEC_MULTIPLIER`.
     /// @param _start The timestamp when dripping should start.
     /// If zero, use the timestamp when drips are configured.
     /// @param _duration The duration of dripping.
@@ -71,7 +71,7 @@ abstract contract Drips {
     uint8 internal constant _MAX_DRIPS_RECEIVERS = 100;
     /// @notice The additional decimals for all amtPerSec values.
     uint8 internal constant _AMT_PER_SEC_EXTRA_DECIMALS = 18;
-    /// @notice The multiplier for all amtPerSec values. It's `10 ** AMT_PER_SEC_EXTRA_DECIMALS`.
+    /// @notice The multiplier for all amtPerSec values. It's `10 ** _AMT_PER_SEC_EXTRA_DECIMALS`.
     uint256 internal constant _AMT_PER_SEC_MULTIPLIER = 1_000_000_000_000_000_000;
 
     /// @notice Emitted when the drips configuration of a user is updated.
@@ -108,7 +108,7 @@ abstract contract Drips {
         uint32 receivableCycles
     );
 
-    struct Storage {
+    struct DripsStorage {
         /// @notice User drips states.
         /// The keys are the asset ID and the user ID.
         mapping(uint256 => mapping(uint256 => DripsState)) dripsStates;
@@ -150,7 +150,7 @@ abstract contract Drips {
     /// @param assetId The used asset ID
     /// @return cycles The number of cycles which can be flushed
     function _receivableDripsCycles(
-        Storage storage s,
+        DripsStorage storage s,
         uint32 cycleSecs,
         uint256 userId,
         uint256 assetId
@@ -174,7 +174,7 @@ abstract contract Drips {
     /// @return receivableAmt The amount which would be received
     /// @return receivableCycles The number of cycles which would still be receivable after the call
     function _receivableDrips(
-        Storage storage s,
+        DripsStorage storage s,
         uint32 cycleSecs,
         uint256 userId,
         uint256 assetId,
@@ -208,7 +208,7 @@ abstract contract Drips {
     /// @return receivedAmt The received amount
     /// @return receivableCycles The number of cycles which still can be received
     function _receiveDrips(
-        Storage storage s,
+        DripsStorage storage s,
         uint32 cycleSecs,
         uint256 userId,
         uint256 assetId,
@@ -244,7 +244,7 @@ abstract contract Drips {
     /// @return updateTime The time when drips have been configured for the last time
     /// @return balance The balance when drips have been configured for the last time
     function _dripsState(
-        Storage storage s,
+        DripsStorage storage s,
         uint256 userId,
         uint256 assetId
     )
@@ -274,7 +274,7 @@ abstract contract Drips {
     /// that `setDrips` won't be called before `timestamp`.
     /// @return balance The user balance on `timestamp`
     function _balanceAt(
-        Storage storage s,
+        DripsStorage storage s,
         uint32 cycleSecs,
         uint256 userId,
         uint256 assetId,
@@ -311,7 +311,7 @@ abstract contract Drips {
     /// @return newBalance The new drips balance of the user.
     /// @return realBalanceDelta The actually applied drips balance change.
     function _setDrips(
-        Storage storage s,
+        DripsStorage storage s,
         uint32 cycleSecs,
         uint256 userId,
         uint256 assetId,

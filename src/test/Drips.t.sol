@@ -31,7 +31,7 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
     string internal constant ERROR_NOT_ENOUGH_FOR_DEFAULT_DRIPS =
         "Run out of funds before default drips start";
 
-    Drips.Storage internal s;
+    Drips.DripsStorage internal s;
     uint32 internal cycleSecs = 10;
     // Keys are assetId and userId
     mapping(uint256 => mapping(uint256 => DripsReceiver[])) internal currReceiversStore;
