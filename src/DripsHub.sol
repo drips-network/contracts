@@ -39,7 +39,7 @@ import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 ///
 /// The contract assumes that all amounts in the system can be stored in signed 128-bit integers.
 /// It's guaranteed to be safe only when working with assets with supply lower than `2 ^ 127`.
-contract DripsHub is Managed {
+contract DripsHub is Managed, Drips {
     /// @notice The address of the ERC-20 reserve which the drips hub works with
     IReserve public immutable reserve;
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
@@ -47,11 +47,11 @@ contract DripsHub is Managed {
     uint32 public immutable cycleSecs;
     /// @notice Maximum number of drips receivers of a single user.
     /// Limits cost of changes in drips configuration.
-    uint8 public immutable maxDripsReceivers = Drips.MAX_DRIPS_RECEIVERS;
+    uint8 public immutable maxDripsReceivers = Drips._MAX_DRIPS_RECEIVERS;
     /// @notice The additional decimals for all amtPerSec values.
-    uint8 public immutable amtPerSecExtraDecimals = Drips.AMT_PER_SEC_EXTRA_DECIMALS;
+    uint8 public immutable amtPerSecExtraDecimals = Drips._AMT_PER_SEC_EXTRA_DECIMALS;
     /// @notice The multiplier for all amtPerSec values.
-    uint256 public immutable amtPerSecMultiplier = Drips.AMT_PER_SEC_MULTIPLIER;
+    uint256 public immutable amtPerSecMultiplier = Drips._AMT_PER_SEC_MULTIPLIER;
     /// @notice Maximum number of splits receivers of a single user.
     /// Limits cost of collecting.
     uint32 public immutable maxSplitsReceivers = Splits.MAX_SPLITS_RECEIVERS;
@@ -160,7 +160,7 @@ contract DripsHub is Managed {
     ) public view returns (uint128 collectedAmt, uint128 splitAmt) {
         uint256 assetId = _assetId(erc20);
         // Receivable from cycles
-        (uint128 receivedAmt, ) = Drips.receivableDrips(
+        (uint128 receivedAmt, ) = Drips._receivableDrips(
             _dripsHubStorage().drips,
             cycleSecs,
             userId,
@@ -209,7 +209,7 @@ contract DripsHub is Managed {
         returns (uint32 cycles)
     {
         return
-            Drips.receivableDripsCycles(
+            Drips._receivableDripsCycles(
                 _dripsHubStorage().drips,
                 cycleSecs,
                 userId,
@@ -231,7 +231,7 @@ contract DripsHub is Managed {
         uint32 maxCycles
     ) public view returns (uint128 receivableAmt, uint32 receivableCycles) {
         return
-            Drips.receivableDrips(
+            Drips._receivableDrips(
                 _dripsHubStorage().drips,
                 cycleSecs,
                 userId,
@@ -256,7 +256,7 @@ contract DripsHub is Managed {
         uint32 maxCycles
     ) public whenNotPaused returns (uint128 receivedAmt, uint32 receivableCycles) {
         uint256 assetId = _assetId(erc20);
-        (receivedAmt, receivableCycles) = Drips.receiveDrips(
+        (receivedAmt, receivableCycles) = Drips._receiveDrips(
             _dripsHubStorage().drips,
             cycleSecs,
             userId,
@@ -347,7 +347,7 @@ contract DripsHub is Managed {
             uint32 defaultEnd
         )
     {
-        return Drips.dripsState(_dripsHubStorage().drips, userId, _assetId(erc20));
+        return Drips._dripsState(_dripsHubStorage().drips, userId, _assetId(erc20));
     }
 
     /// @notice User drips balance at a given timestamp
@@ -366,7 +366,7 @@ contract DripsHub is Managed {
         uint32 timestamp
     ) public view returns (uint128 balance) {
         return
-            Drips.balanceAt(
+            Drips._balanceAt(
                 _dripsHubStorage().drips,
                 cycleSecs,
                 userId,
@@ -397,7 +397,7 @@ contract DripsHub is Managed {
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers
     ) public whenNotPaused onlyApp(userId) returns (uint128 newBalance, int128 realBalanceDelta) {
-        (newBalance, realBalanceDelta) = Drips.setDrips(
+        (newBalance, realBalanceDelta) = Drips._setDrips(
             _dripsHubStorage().drips,
             cycleSecs,
             userId,
@@ -424,7 +424,7 @@ contract DripsHub is Managed {
         pure
         returns (bytes32 dripsConfigurationHash)
     {
-        return Drips.hashDrips(receivers);
+        return Drips._hashDrips(receivers);
     }
 
     /// @notice Sets user splits configuration.

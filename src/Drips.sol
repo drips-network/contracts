@@ -65,14 +65,14 @@ library DripsConfigImpl {
     }
 }
 
-library Drips {
+abstract contract Drips {
     /// @notice Maximum number of drips receivers of a single user.
     /// Limits cost of changes in drips configuration.
-    uint8 internal constant MAX_DRIPS_RECEIVERS = 100;
+    uint8 internal constant _MAX_DRIPS_RECEIVERS = 100;
     /// @notice The additional decimals for all amtPerSec values.
-    uint8 internal constant AMT_PER_SEC_EXTRA_DECIMALS = 18;
+    uint8 internal constant _AMT_PER_SEC_EXTRA_DECIMALS = 18;
     /// @notice The multiplier for all amtPerSec values. It's `10 ** AMT_PER_SEC_EXTRA_DECIMALS`.
-    uint256 internal constant AMT_PER_SEC_MULTIPLIER = 1_000_000_000_000_000_000;
+    uint256 internal constant _AMT_PER_SEC_MULTIPLIER = 1_000_000_000_000_000_000;
 
     /// @notice Emitted when the drips configuration of a user is updated.
     /// @param userId The user ID.
@@ -149,7 +149,7 @@ library Drips {
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @return cycles The number of cycles which can be flushed
-    function receivableDripsCycles(
+    function _receivableDripsCycles(
         Storage storage s,
         uint32 cycleSecs,
         uint256 userId,
@@ -173,14 +173,14 @@ library Drips {
     /// If too high, receiving may become too expensive to fit in a single transaction.
     /// @return receivableAmt The amount which would be received
     /// @return receivableCycles The number of cycles which would still be receivable after the call
-    function receivableDrips(
+    function _receivableDrips(
         Storage storage s,
         uint32 cycleSecs,
         uint256 userId,
         uint256 assetId,
         uint32 maxCycles
     ) internal view returns (uint128 receivableAmt, uint32 receivableCycles) {
-        uint32 allReceivableCycles = receivableDripsCycles(s, cycleSecs, userId, assetId);
+        uint32 allReceivableCycles = _receivableDripsCycles(s, cycleSecs, userId, assetId);
         uint32 receivedCycles = maxCycles < allReceivableCycles ? maxCycles : allReceivableCycles;
         receivableCycles = allReceivableCycles - receivedCycles;
         DripsState storage state = s.dripsStates[assetId][userId];
@@ -207,14 +207,14 @@ library Drips {
     /// If too high, receiving may become too expensive to fit in a single transaction.
     /// @return receivedAmt The received amount
     /// @return receivableCycles The number of cycles which still can be received
-    function receiveDrips(
+    function _receiveDrips(
         Storage storage s,
         uint32 cycleSecs,
         uint256 userId,
         uint256 assetId,
         uint32 maxCycles
     ) internal returns (uint128 receivedAmt, uint32 receivableCycles) {
-        receivableCycles = receivableDripsCycles(s, cycleSecs, userId, assetId);
+        receivableCycles = _receivableDripsCycles(s, cycleSecs, userId, assetId);
         uint32 cycles = maxCycles < receivableCycles ? maxCycles : receivableCycles;
         receivableCycles -= cycles;
         if (cycles > 0) {
@@ -243,7 +243,7 @@ library Drips {
     /// @return dripsHash The current drips receivers list hash, see `hashDrips`
     /// @return updateTime The time when drips have been configured for the last time
     /// @return balance The balance when drips have been configured for the last time
-    function dripsState(
+    function _dripsState(
         Storage storage s,
         uint256 userId,
         uint256 assetId
@@ -273,7 +273,7 @@ library Drips {
     /// If it's bigger than `block.timestamp`, then it's a prediction assuming
     /// that `setDrips` won't be called before `timestamp`.
     /// @return balance The user balance on `timestamp`
-    function balanceAt(
+    function _balanceAt(
         Storage storage s,
         uint32 cycleSecs,
         uint256 userId,
@@ -283,7 +283,7 @@ library Drips {
     ) internal view returns (uint128 balance) {
         DripsState storage state = s.dripsStates[assetId][userId];
         require(timestamp >= state.updateTime, "Timestamp before last drips update");
-        require(hashDrips(receivers) == state.dripsHash, "Invalid current drips list");
+        require(_hashDrips(receivers) == state.dripsHash, "Invalid current drips list");
         return
             _balanceAt(
                 cycleSecs,
@@ -310,7 +310,7 @@ library Drips {
     /// Must be sorted, deduplicated and without 0 amtPerSecs.
     /// @return newBalance The new drips balance of the user.
     /// @return realBalanceDelta The actually applied drips balance change.
-    function setDrips(
+    function _setDrips(
         Storage storage s,
         uint32 cycleSecs,
         uint256 userId,
@@ -320,7 +320,7 @@ library Drips {
         DripsReceiver[] memory newReceivers
     ) internal returns (uint128 newBalance, int128 realBalanceDelta) {
         DripsState storage state = s.dripsStates[assetId][userId];
-        bytes32 currDripsHash = hashDrips(currReceivers);
+        bytes32 currDripsHash = _hashDrips(currReceivers);
         require(currDripsHash == state.dripsHash, "Invalid current drips list");
         uint32 lastUpdate = state.updateTime;
         uint32 currDefaultEnd = state.defaultEnd;
@@ -339,7 +339,7 @@ library Drips {
             newBalance = uint128(uint136(balance));
             realBalanceDelta = int128(balance - int128(currBalance));
         }
-        uint32 newDefaultEnd = calcDefaultEnd(cycleSecs, newBalance, newReceivers);
+        uint32 newDefaultEnd = _calcDefaultEnd(cycleSecs, newBalance, newReceivers);
         _updateReceiverStates(
             s.dripsStates[assetId],
             cycleSecs,
@@ -352,7 +352,7 @@ library Drips {
         state.updateTime = _currTimestamp();
         state.defaultEnd = newDefaultEnd;
         state.balance = newBalance;
-        bytes32 newDripsHash = hashDrips(newReceivers);
+        bytes32 newDripsHash = _hashDrips(newReceivers);
         emit DripsSet(userId, assetId, newDripsHash, newBalance);
         if (newDripsHash != currDripsHash) {
             state.dripsHash = newDripsHash;
@@ -392,12 +392,12 @@ library Drips {
     /// @param receivers The list of drips receivers.
     /// Must be sorted, deduplicated and without 0 amtPerSecs.
     /// @return defaultEnd The end time of drips without duration.
-    function calcDefaultEnd(
+    function _calcDefaultEnd(
         uint32 cycleSecs,
         uint128 balance,
         DripsReceiver[] memory receivers
     ) internal view returns (uint32 defaultEnd) {
-        require(receivers.length <= MAX_DRIPS_RECEIVERS, "Too many drips receivers");
+        require(receivers.length <= _MAX_DRIPS_RECEIVERS, "Too many drips receivers");
         uint256[] memory defaultEnds = new uint256[](receivers.length);
         uint256 defaultEndsLen = 0;
         uint256 spent = 0;
@@ -519,7 +519,7 @@ library Drips {
     /// Must be sorted, deduplicated and without 0 amtPerSecs.
     /// If the drips have never been updated, pass an empty array.
     /// @return dripsConfigurationHash The hash of the drips configuration
-    function hashDrips(DripsReceiver[] memory receivers)
+    function _hashDrips(DripsReceiver[] memory receivers)
         internal
         pure
         returns (bytes32 dripsConfigurationHash)
@@ -711,7 +711,7 @@ library Drips {
             // The cycle delta is split proportionally based on how much this cycle is affected.
             // The next cycle has the rest of the delta applied, so the update is fully completed.
             // These formulas follow the logic from `_drippedAmt`, see it for more details.
-            int256 amtPerSecMultiplier = int256(AMT_PER_SEC_MULTIPLIER);
+            int256 amtPerSecMultiplier = int256(_AMT_PER_SEC_MULTIPLIER);
             int256 amtPerCycle = (int256(cycleSecs) * amtPerSec) / amtPerSecMultiplier;
             // The part of `amtPerCycle` which is NOT dripped in this cycle
             int256 amtNextCycle = (int256(timestamp % cycleSecs) * amtPerSec) / amtPerSecMultiplier;
@@ -775,11 +775,11 @@ library Drips {
         // solhint-disable-next-line no-inline-assembly
         assembly {
             let endedCycles := sub(div(end, cycleSecs), div(start, cycleSecs))
-            let amtPerCycle := div(mul(cycleSecs, amtPerSec), AMT_PER_SEC_MULTIPLIER)
+            let amtPerCycle := div(mul(cycleSecs, amtPerSec), _AMT_PER_SEC_MULTIPLIER)
             amt := mul(endedCycles, amtPerCycle)
-            let amtEnd := div(mul(mod(end, cycleSecs), amtPerSec), AMT_PER_SEC_MULTIPLIER)
+            let amtEnd := div(mul(mod(end, cycleSecs), amtPerSec), _AMT_PER_SEC_MULTIPLIER)
             amt := add(amt, amtEnd)
-            let amtStart := div(mul(mod(start, cycleSecs), amtPerSec), AMT_PER_SEC_MULTIPLIER)
+            let amtStart := div(mul(mod(start, cycleSecs), amtPerSec), _AMT_PER_SEC_MULTIPLIER)
             amt := sub(amt, amtStart)
         }
     }
