@@ -32,7 +32,7 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         "Run out of funds before default drips start";
 
     Drips.DripsStorage internal s;
-    uint32 internal cycleSecs = 10;
+    uint32 internal cycleSecs;
     // Keys are assetId and userId
     mapping(uint256 => mapping(uint256 => DripsReceiver[])) internal currReceiversStore;
     uint256 internal defaultAsset = 1;
@@ -45,6 +45,10 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
     uint256 internal receiver2 = 6;
     uint256 internal receiver3 = 7;
     uint256 internal receiver4 = 8;
+
+    constructor() Drips(10) {
+        cycleSecs = Drips._cycleSecs;
+    }
 
     function setUp() public {
         warpToCycleEnd();
@@ -216,7 +220,6 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
             uint256 expectedAmt = (duration * r.config.amtPerSec()) >> 64;
             (uint128 actualAmt, ) = Drips._receiveDrips(
                 s,
-                cycleSecs,
                 r.userId,
                 defaultAsset,
                 type(uint32).max
@@ -251,7 +254,6 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
         (uint128 newBalance, int128 realBalanceDelta) = Drips._setDrips(
             s,
-            cycleSecs,
             userId,
             assetId,
             loadCurrReceivers(assetId, userId),
@@ -288,7 +290,6 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
     ) internal {
         uint128 balance = Drips._balanceAt(
             s,
-            cycleSecs,
             userId,
             defaultAsset,
             loadCurrReceivers(defaultAsset, userId),
@@ -315,7 +316,7 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         DripsReceiver[] memory receivers,
         uint256 timestamp
     ) external view {
-        Drips._balanceAt(s, cycleSecs, userId, defaultAsset, receivers, uint32(timestamp));
+        Drips._balanceAt(s, userId, defaultAsset, receivers, uint32(timestamp));
     }
 
     function assetDefaultEnd(uint256 userId, uint256 expected) public {
@@ -328,7 +329,7 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         view
         returns (uint32 end)
     {
-        return Drips._calcDefaultEnd(cycleSecs, balance, list);
+        return Drips._calcDefaultEnd(balance, list);
     }
 
     function changeBalance(
@@ -390,7 +391,7 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers
     ) external {
-        Drips._setDrips(s, cycleSecs, userId, assetId, currReceivers, balanceDelta, newReceivers);
+        Drips._setDrips(s, userId, assetId, currReceivers, balanceDelta, newReceivers);
     }
 
     function receiveDrips(uint256 userId, uint128 expectedAmt) internal {
@@ -402,13 +403,7 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         uint256 userId,
         uint128 expectedAmt
     ) internal {
-        (uint128 actualAmt, ) = Drips._receiveDrips(
-            s,
-            cycleSecs,
-            userId,
-            assetId,
-            type(uint32).max
-        );
+        (uint128 actualAmt, ) = Drips._receiveDrips(s, userId, assetId, type(uint32).max);
         assertEq(actualAmt, expectedAmt, "Invalid amount received from drips");
     }
 
@@ -428,7 +423,6 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
 
         (uint128 receivedAmt, uint32 receivableCycles) = Drips._receiveDrips(
             s,
-            cycleSecs,
             userId,
             defaultAsset,
             maxCycles
@@ -441,18 +435,12 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
     }
 
     function assertReceivableDripsCycles(uint256 userId, uint32 expectedCycles) internal {
-        uint32 actualCycles = Drips._receivableDripsCycles(s, cycleSecs, userId, defaultAsset);
+        uint32 actualCycles = Drips._receivableDripsCycles(s, userId, defaultAsset);
         assertEq(actualCycles, expectedCycles, "Invalid total receivable drips cycles");
     }
 
     function assertReceivableDrips(uint256 userId, uint128 expectedAmt) internal {
-        (uint128 actualAmt, ) = Drips._receivableDrips(
-            s,
-            cycleSecs,
-            userId,
-            defaultAsset,
-            type(uint32).max
-        );
+        (uint128 actualAmt, ) = Drips._receivableDrips(s, userId, defaultAsset, type(uint32).max);
         assertEq(actualAmt, expectedAmt, "Invalid receivable amount");
     }
 
@@ -464,7 +452,6 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
     ) internal {
         (uint128 actualAmt, uint32 actualCycles) = Drips._receivableDrips(
             s,
-            cycleSecs,
             userId,
             defaultAsset,
             maxCycles
@@ -1018,7 +1005,6 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         uint256 gas = gasleft();
         Drips._setDrips(
             s,
-            cycleSecs,
             sender,
             defaultAsset,
             new DripsReceiver[](0),
@@ -1042,15 +1028,7 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         uint128 amt = (type(uint32).max - uint32(block.timestamp)) * uint128(countMax) - 1;
 
         uint256 gas = gasleft();
-        Drips._setDrips(
-            s,
-            cycleSecs,
-            sender,
-            defaultAsset,
-            new DripsReceiver[](0),
-            int128(amt),
-            receivers
-        );
+        Drips._setDrips(s, sender, defaultAsset, new DripsReceiver[](0), int128(amt), receivers);
         gas -= gasleft();
         emit log_named_uint("GAS USED", gas);
     }
@@ -1065,7 +1043,6 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         uint256 gas = gasleft();
         Drips._setDrips(
             s,
-            cycleSecs,
             sender,
             defaultAsset,
             new DripsReceiver[](0),
@@ -1089,15 +1066,7 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         uint128 amt = (type(uint32).max - uint32(block.timestamp)) * uint128(countMax) - 1;
 
         uint256 gas = gasleft();
-        Drips._setDrips(
-            s,
-            cycleSecs,
-            sender,
-            defaultAsset,
-            new DripsReceiver[](0),
-            int128(amt),
-            receivers
-        );
+        Drips._setDrips(s, sender, defaultAsset, new DripsReceiver[](0), int128(amt), receivers);
         gas -= gasleft();
         emit log_named_uint("GAS USED", gas);
     }
@@ -1105,7 +1074,7 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
     function testBenchSetDrips1() public {
         DripsReceiver[] memory receivers = recv(1, 1, 1000, 0);
         uint256 gas = gasleft();
-        Drips._setDrips(s, cycleSecs, sender, defaultAsset, new DripsReceiver[](0), 1, receivers);
+        Drips._setDrips(s, sender, defaultAsset, new DripsReceiver[](0), 1, receivers);
         gas -= gasleft();
         emit log_named_uint("GAS USED", gas);
     }
@@ -1188,7 +1157,6 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         DripsReceiver[] memory newRecv = recv();
         (uint128 newBalance, int128 realBalanceDelta) = Drips._setDrips(
             s,
-            cycleSecs,
             sender,
             defaultAsset,
             receivers,
@@ -1357,7 +1325,7 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         );
 
         warpTo(0);
-        uint32 endtime = Drips._calcDefaultEnd(cycleSecs, 100, receivers);
+        uint32 endtime = Drips._calcDefaultEnd(100, receivers);
         assertEq(endtime, 75);
     }
 
@@ -1369,7 +1337,7 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
 
         // in the past
         Hevm(HEVM_ADDRESS).warp(70);
-        uint32 endtime = Drips._calcDefaultEnd(cycleSecs, 100, receivers);
+        uint32 endtime = Drips._calcDefaultEnd(100, receivers);
         assertEq(endtime, 130);
     }
 
@@ -1379,7 +1347,7 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
             recv({userId: receiver2, amtPerSec: 1, start: 2, duration: 0})
         );
         warpTo(0);
-        uint32 endtime = Drips._calcDefaultEnd(cycleSecs, balance, receivers);
+        uint32 endtime = Drips._calcDefaultEnd(balance, receivers);
         assertEq(endtime, 3);
     }
 
@@ -1397,7 +1365,7 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
             recv({userId: receiver2, amtPerSec: 1, start: 1000, duration: 0})
         );
         warpTo(0);
-        uint32 endtime = Drips._calcDefaultEnd(cycleSecs, 100, receivers);
+        uint32 endtime = Drips._calcDefaultEnd(100, receivers);
         assertEq(endtime, 150);
     }
 }

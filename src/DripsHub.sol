@@ -42,9 +42,6 @@ import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 contract DripsHub is Managed, Drips, Splits {
     /// @notice The address of the ERC-20 reserve which the drips hub works with
     IReserve public immutable reserve;
-    /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
-    /// gain access to drips received during `T - cycleSecs` to `T - 1`.
-    uint32 public immutable cycleSecs;
     /// @notice Maximum number of drips receivers of a single user.
     /// Limits cost of changes in drips configuration.
     uint8 public constant MAX_DRIPS_RECEIVERS = _MAX_DRIPS_RECEIVERS;
@@ -89,15 +86,14 @@ contract DripsHub is Managed, Drips, Splits {
         mapping(uint32 => address) appAddrs;
     }
 
-    /// @param _cycleSecs The length of cycleSecs to be used in the contract instance.
+    /// @param cycleSecs_ The length of cycleSecs to be used in the contract instance.
     /// Low value makes funds more available by shortening the average time of funds being frozen
     /// between being taken from the users' drips balances and being receivable by their receivers.
     /// High value makes receiving cheaper by making it process less cycles for a given time range.
-    /// @param _reserve The address of the ERC-20 reserve which the drips hub will work with
-    constructor(uint32 _cycleSecs, IReserve _reserve) {
-        require(_cycleSecs > 1, "Cycle length too low");
-        cycleSecs = _cycleSecs;
-        reserve = _reserve;
+    /// Must be higher than 1.
+    /// @param reserve_ The address of the ERC-20 reserve which the drips hub will work with
+    constructor(uint32 cycleSecs_, IReserve reserve_) Drips(cycleSecs_) {
+        reserve = reserve_;
     }
 
     /// @notice A modifier making functions callable only by the app controlling the user ID.
@@ -147,6 +143,15 @@ contract DripsHub is Managed, Drips, Splits {
         return _dripsHubStorage().nextAppId;
     }
 
+    /// @notice Returns the cycle length in seconds.
+    /// On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
+    /// gain access to drips received during `T - cycleSecs` to `T - 1`.
+    /// Always higher than 1.
+    /// @return cycleSecs_ The cycle length in seconds.
+    function cycleSecs() public view returns (uint32 cycleSecs_) {
+        return Drips._cycleSecs;
+    }
+
     /// @notice Returns amount of received funds available for collection for a user.
     /// @param userId The user ID
     /// @param erc20 The used ERC-20 token
@@ -162,7 +167,6 @@ contract DripsHub is Managed, Drips, Splits {
         // Receivable from cycles
         (uint128 receivedAmt, ) = Drips._receivableDrips(
             _dripsHubStorage().drips,
-            cycleSecs,
             userId,
             assetId,
             type(uint32).max
@@ -208,13 +212,7 @@ contract DripsHub is Managed, Drips, Splits {
         view
         returns (uint32 cycles)
     {
-        return
-            Drips._receivableDripsCycles(
-                _dripsHubStorage().drips,
-                cycleSecs,
-                userId,
-                _assetId(erc20)
-            );
+        return Drips._receivableDripsCycles(_dripsHubStorage().drips, userId, _assetId(erc20));
     }
 
     /// @notice Calculate effects of calling `receiveDrips` with the given parameters.
@@ -230,14 +228,7 @@ contract DripsHub is Managed, Drips, Splits {
         IERC20 erc20,
         uint32 maxCycles
     ) public view returns (uint128 receivableAmt, uint32 receivableCycles) {
-        return
-            Drips._receivableDrips(
-                _dripsHubStorage().drips,
-                cycleSecs,
-                userId,
-                _assetId(erc20),
-                maxCycles
-            );
+        return Drips._receivableDrips(_dripsHubStorage().drips, userId, _assetId(erc20), maxCycles);
     }
 
     /// @notice Receive drips for the user.
@@ -258,7 +249,6 @@ contract DripsHub is Managed, Drips, Splits {
         uint256 assetId = _assetId(erc20);
         (receivedAmt, receivableCycles) = Drips._receiveDrips(
             _dripsHubStorage().drips,
-            cycleSecs,
             userId,
             assetId,
             maxCycles
@@ -368,7 +358,6 @@ contract DripsHub is Managed, Drips, Splits {
         return
             Drips._balanceAt(
                 _dripsHubStorage().drips,
-                cycleSecs,
                 userId,
                 _assetId(erc20),
                 receivers,
@@ -399,7 +388,6 @@ contract DripsHub is Managed, Drips, Splits {
     ) public whenNotPaused onlyApp(userId) returns (uint128 newBalance, int128 realBalanceDelta) {
         (newBalance, realBalanceDelta) = Drips._setDrips(
             _dripsHubStorage().drips,
-            cycleSecs,
             userId,
             _assetId(erc20),
             currReceivers,

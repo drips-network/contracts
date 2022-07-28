@@ -73,6 +73,10 @@ abstract contract Drips {
     uint8 internal constant _AMT_PER_SEC_EXTRA_DECIMALS = 18;
     /// @notice The multiplier for all amtPerSec values. It's `10 ** _AMT_PER_SEC_EXTRA_DECIMALS`.
     uint256 internal constant _AMT_PER_SEC_MULTIPLIER = 1_000_000_000_000_000_000;
+    /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
+    /// gain access to drips received during `T - cycleSecs` to `T - 1`.
+    /// Always higher than 1.
+    uint32 internal immutable _cycleSecs;
 
     /// @notice Emitted when the drips configuration of a user is updated.
     /// @param userId The user ID.
@@ -140,32 +144,37 @@ abstract contract Drips {
         int128 nextCycle;
     }
 
+    /// @param cycleSecs The length of cycleSecs to be used in the contract instance.
+    /// Low value makes funds more available by shortening the average time of funds being frozen
+    /// between being taken from the users' drips balances and being receivable by their receivers.
+    /// High value makes receiving cheaper by making it process less cycles for a given time range.
+    /// Must be higher than 1.
+    constructor(uint32 cycleSecs) {
+        require(cycleSecs > 1, "Cycle length too low");
+        _cycleSecs = cycleSecs;
+    }
+
     /// @notice Counts cycles from which drips can be received.
     /// This function can be used to detect that there are
     /// too many cycles to analyze in a single transaction.
     /// @param s The drips storage
-    /// @param cycleSecs The cycle length in seconds.
-    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @return cycles The number of cycles which can be flushed
     function _receivableDripsCycles(
         DripsStorage storage s,
-        uint32 cycleSecs,
         uint256 userId,
         uint256 assetId
     ) internal view returns (uint32 cycles) {
         uint32 nextReceivableCycle = s.dripsStates[assetId][userId].nextReceivableCycle;
         // The currently running cycle is not receivable yet
-        uint32 currCycle = _cycleOf(_currTimestamp(), cycleSecs);
+        uint32 currCycle = _cycleOf(_currTimestamp());
         if (nextReceivableCycle == 0 || nextReceivableCycle > currCycle) return 0;
         return currCycle - nextReceivableCycle;
     }
 
     /// @notice Calculate effects of calling `receiveDrips` with the given parameters.
     /// @param s The drips storage
-    /// @param cycleSecs The cycle length in seconds.
-    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param maxCycles The maximum number of received drips cycles.
@@ -175,12 +184,11 @@ abstract contract Drips {
     /// @return receivableCycles The number of cycles which would still be receivable after the call
     function _receivableDrips(
         DripsStorage storage s,
-        uint32 cycleSecs,
         uint256 userId,
         uint256 assetId,
         uint32 maxCycles
     ) internal view returns (uint128 receivableAmt, uint32 receivableCycles) {
-        uint32 allReceivableCycles = _receivableDripsCycles(s, cycleSecs, userId, assetId);
+        uint32 allReceivableCycles = _receivableDripsCycles(s, userId, assetId);
         uint32 receivedCycles = maxCycles < allReceivableCycles ? maxCycles : allReceivableCycles;
         receivableCycles = allReceivableCycles - receivedCycles;
         DripsState storage state = s.dripsStates[assetId][userId];
@@ -198,8 +206,6 @@ abstract contract Drips {
     /// Received drips cycles won't need to be analyzed ever again.
     /// Calling this function does not receive but makes the funds ready to be split and received.
     /// @param s The drips storage
-    /// @param cycleSecs The cycle length in seconds.
-    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param maxCycles The maximum number of received drips cycles.
@@ -209,12 +215,11 @@ abstract contract Drips {
     /// @return receivableCycles The number of cycles which still can be received
     function _receiveDrips(
         DripsStorage storage s,
-        uint32 cycleSecs,
         uint256 userId,
         uint256 assetId,
         uint32 maxCycles
     ) internal returns (uint128 receivedAmt, uint32 receivableCycles) {
-        receivableCycles = _receivableDripsCycles(s, cycleSecs, userId, assetId);
+        receivableCycles = _receivableDripsCycles(s, userId, assetId);
         uint32 cycles = maxCycles < receivableCycles ? maxCycles : receivableCycles;
         receivableCycles -= cycles;
         if (cycles > 0) {
@@ -263,8 +268,6 @@ abstract contract Drips {
 
     /// @notice User drips balance at a given timestamp
     /// @param s The drips storage
-    /// @param cycleSecs The cycle length in seconds.
-    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param receivers The current drips receivers list
@@ -275,7 +278,6 @@ abstract contract Drips {
     /// @return balance The user balance on `timestamp`
     function _balanceAt(
         DripsStorage storage s,
-        uint32 cycleSecs,
         uint256 userId,
         uint256 assetId,
         DripsReceiver[] memory receivers,
@@ -284,21 +286,11 @@ abstract contract Drips {
         DripsState storage state = s.dripsStates[assetId][userId];
         require(timestamp >= state.updateTime, "Timestamp before last drips update");
         require(_hashDrips(receivers) == state.dripsHash, "Invalid current drips list");
-        return
-            _balanceAt(
-                cycleSecs,
-                state.balance,
-                state.updateTime,
-                state.defaultEnd,
-                receivers,
-                timestamp
-            );
+        return _balanceAt(state.balance, state.updateTime, state.defaultEnd, receivers, timestamp);
     }
 
     /// @notice Sets the user's drips configuration.
     /// @param s The drips storage
-    /// @param cycleSecs The cycle length in seconds.
-    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param currReceivers The list of the drips receivers set in the last drips update
@@ -312,7 +304,6 @@ abstract contract Drips {
     /// @return realBalanceDelta The actually applied drips balance change.
     function _setDrips(
         DripsStorage storage s,
-        uint32 cycleSecs,
         uint256 userId,
         uint256 assetId,
         DripsReceiver[] memory currReceivers,
@@ -327,7 +318,6 @@ abstract contract Drips {
         uint128 lastBalance = state.balance;
         {
             uint128 currBalance = _balanceAt(
-                cycleSecs,
                 lastBalance,
                 lastUpdate,
                 currDefaultEnd,
@@ -339,10 +329,9 @@ abstract contract Drips {
             newBalance = uint128(uint136(balance));
             realBalanceDelta = int128(balance - int128(currBalance));
         }
-        uint32 newDefaultEnd = _calcDefaultEnd(cycleSecs, newBalance, newReceivers);
+        uint32 newDefaultEnd = _calcDefaultEnd(newBalance, newReceivers);
         _updateReceiverStates(
             s.dripsStates[assetId],
-            cycleSecs,
             currReceivers,
             lastUpdate,
             currDefaultEnd,
@@ -386,17 +375,15 @@ abstract contract Drips {
     }
 
     /// @notice Calculates the end time of drips without duration.
-    /// @param cycleSecs The cycle length in seconds.
-    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param balance The balance when drips have started
     /// @param receivers The list of drips receivers.
     /// Must be sorted, deduplicated and without 0 amtPerSecs.
     /// @return defaultEnd The end time of drips without duration.
-    function _calcDefaultEnd(
-        uint32 cycleSecs,
-        uint128 balance,
-        DripsReceiver[] memory receivers
-    ) internal view returns (uint32 defaultEnd) {
+    function _calcDefaultEnd(uint128 balance, DripsReceiver[] memory receivers)
+        internal
+        view
+        returns (uint32 defaultEnd)
+    {
         require(receivers.length <= _MAX_DRIPS_RECEIVERS, "Too many drips receivers");
         uint256[] memory defaultEnds = new uint256[](receivers.length);
         uint256 defaultEndsLen = 0;
@@ -412,22 +399,19 @@ abstract contract Drips {
             if (receiver.config.duration() == 0) {
                 _addDefaultEnd(defaultEnds, defaultEndsLen++, amtPerSec, start);
             } else {
-                spent += _drippedAmt(cycleSecs, amtPerSec, start, end);
+                spent += _drippedAmt(amtPerSec, start, end);
             }
         }
         require(balance >= spent, "Insufficient balance");
         balance -= uint128(spent);
-        return _calcDefaultEnd(cycleSecs, defaultEnds, defaultEndsLen, balance);
+        return _calcDefaultEnd(defaultEnds, defaultEndsLen, balance);
     }
 
     /// @notice Calculates the end time of drips without duration.
-    /// @param cycleSecs The cycle length in seconds.
-    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param defaultEnds The list of default ends
     /// @param balance The balance when drips have started
     /// @return defaultEnd The end time of drips without duration.
     function _calcDefaultEnd(
-        uint32 cycleSecs,
         uint256[] memory defaultEnds,
         uint256 defaultEndsLen,
         uint128 balance
@@ -436,14 +420,13 @@ abstract contract Drips {
             uint32 minEnd = _currTimestamp();
             uint32 maxEnd = type(uint32).max;
             if (defaultEndsLen == 0 || balance == 0) return minEnd;
-            if (_isBalanceEnough(cycleSecs, defaultEnds, defaultEndsLen, balance, maxEnd))
-                return maxEnd;
+            if (_isBalanceEnough(defaultEnds, defaultEndsLen, balance, maxEnd)) return maxEnd;
             uint256 enoughEnd = minEnd;
             uint256 notEnoughEnd = maxEnd;
             while (true) {
                 uint256 end = (enoughEnd + notEnoughEnd) / 2;
                 if (end == enoughEnd) return uint32(end);
-                if (_isBalanceEnough(cycleSecs, defaultEnds, defaultEndsLen, balance, end)) {
+                if (_isBalanceEnough(defaultEnds, defaultEndsLen, balance, end)) {
                     enoughEnd = end;
                 } else {
                     notEnoughEnd = end;
@@ -453,26 +436,23 @@ abstract contract Drips {
     }
 
     /// @notice Check if a given balance is enough to cover default drips until the given time.
-    /// @param cycleSecs The cycle length in seconds.
-    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param defaultEnds The list of default ends
     /// @param defaultEndsLen The length of `defaultEnds`
     /// @param balance The balance when drips have started
     /// @param end The time until which the drips are checked to be covered
     /// @return isEnough `true` if the balance is enough, `false` otherwise
     function _isBalanceEnough(
-        uint256 cycleSecs,
         uint256[] memory defaultEnds,
         uint256 defaultEndsLen,
         uint256 balance,
         uint256 end
-    ) private pure returns (bool isEnough) {
+    ) private view returns (bool isEnough) {
         unchecked {
             uint256 spent = 0;
             for (uint256 i = 0; i < defaultEndsLen; i++) {
                 (uint256 amtPerSec, uint256 start) = _getDefaultEnd(defaultEnds, i);
                 if (end <= start) continue;
-                spent += _drippedAmt(cycleSecs, amtPerSec, start, end);
+                spent += _drippedAmt(amtPerSec, start, end);
                 if (spent > balance) return false;
             }
             return true;
@@ -480,8 +460,6 @@ abstract contract Drips {
     }
 
     /// @notice Calculates the drips balance at a given timestamp.
-    /// @param cycleSecs The cycle length in seconds.
-    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param lastBalance The balance when drips have started
     /// @param lastUpdate The timestamp when drips have started.
     /// @param defaultEnd The end time of drips without duration
@@ -492,13 +470,12 @@ abstract contract Drips {
     /// that `setDrips` won't be called before `timestamp`.
     /// @return balance The user balance on `timestamp`
     function _balanceAt(
-        uint32 cycleSecs,
         uint128 lastBalance,
         uint32 lastUpdate,
         uint32 defaultEnd,
         DripsReceiver[] memory receivers,
         uint32 timestamp
-    ) private pure returns (uint128 balance) {
+    ) private view returns (uint128 balance) {
         balance = lastBalance;
         for (uint256 i = 0; i < receivers.length; i++) {
             DripsReceiver memory receiver = receivers[i];
@@ -509,7 +486,7 @@ abstract contract Drips {
                 startCap: lastUpdate,
                 endCap: timestamp
             });
-            balance -= uint128(_drippedAmt(cycleSecs, receiver.config.amtPerSec(), start, end));
+            balance -= uint128(_drippedAmt(receiver.config.amtPerSec(), start, end));
         }
     }
 
@@ -530,8 +507,6 @@ abstract contract Drips {
 
     /// @notice Applies the effects of the change of the drips on the receivers' drips states.
     /// @param states The drips states for a single asset, the key is the user ID
-    /// @param cycleSecs_ The cycle length in seconds.
-    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param currReceivers The list of the drips receivers set in the last drips update
     /// of the user.
     /// If this is the first update, pass an empty array.
@@ -545,15 +520,12 @@ abstract contract Drips {
     /// will end according to the new drips configuration.
     function _updateReceiverStates(
         mapping(uint256 => DripsState) storage states,
-        uint32 cycleSecs_,
         DripsReceiver[] memory currReceivers,
         uint32 lastUpdate,
         uint32 currDefaultEnd,
         DripsReceiver[] memory newReceivers,
         uint32 newDefaultEnd
     ) private {
-        // A copy shallow in the stack, prevents "stack too deep" errors
-        uint32 cycleSecs = cycleSecs_;
         uint256 currIdx = 0;
         uint256 newIdx = 0;
         while (true) {
@@ -592,12 +564,12 @@ abstract contract Drips {
                 {
                     int256 amtPerSec = int256(uint256(currRecv.config.amtPerSec()));
                     // Move the start and end times if updated
-                    _addDeltaRange(state, cycleSecs, currStart, newStart, -amtPerSec);
-                    _addDeltaRange(state, cycleSecs, currEnd, newEnd, amtPerSec);
+                    _addDeltaRange(state, currStart, newStart, -amtPerSec);
+                    _addDeltaRange(state, currEnd, newEnd, amtPerSec);
                 }
                 // Ensure that the user receives the updated cycles
-                uint32 currStartCycle = _cycleOf(currStart, cycleSecs);
-                uint32 newStartCycle = _cycleOf(newStart, cycleSecs);
+                uint32 currStartCycle = _cycleOf(currStart);
+                uint32 newStartCycle = _cycleOf(newStart);
                 if (currStartCycle > newStartCycle && state.nextReceivableCycle > newStartCycle) {
                     state.nextReceivableCycle = newStartCycle;
                 }
@@ -610,7 +582,7 @@ abstract contract Drips {
                     currDefaultEnd
                 );
                 int256 amtPerSec = int256(uint256(currRecv.config.amtPerSec()));
-                _addDeltaRange(state, cycleSecs, start, end, -amtPerSec);
+                _addDeltaRange(state, start, end, -amtPerSec);
             } else if (pickNew) {
                 // Create a new drip
                 DripsState storage state = states[newRecv.userId];
@@ -620,9 +592,9 @@ abstract contract Drips {
                     newDefaultEnd
                 );
                 int256 amtPerSec = int256(uint256(newRecv.config.amtPerSec()));
-                _addDeltaRange(state, cycleSecs, start, end, amtPerSec);
+                _addDeltaRange(state, start, end, amtPerSec);
                 // Ensure that the user receives the updated cycles
-                uint32 startCycle = _cycleOf(start, cycleSecs);
+                uint32 startCycle = _cycleOf(start);
                 if (state.nextReceivableCycle == 0 || state.nextReceivableCycle > startCycle) {
                     state.nextReceivableCycle = startCycle;
                 }
@@ -672,38 +644,32 @@ abstract contract Drips {
 
     /// @notice Adds funds received by a user in a given time range
     /// @param state The user state
-    /// @param cycleSecs The cycle length in seconds.
-    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param start The timestamp from which the delta takes effect
     /// @param end The timestamp until which the delta takes effect
     /// @param amtPerSec The dripping rate
     function _addDeltaRange(
         DripsState storage state,
-        uint32 cycleSecs,
         uint32 start,
         uint32 end,
         int256 amtPerSec
     ) private {
         if (start == end) return;
         mapping(uint32 => AmtDelta) storage amtDeltas = state.amtDeltas;
-        _addDelta(amtDeltas, cycleSecs, start, amtPerSec);
-        _addDelta(amtDeltas, cycleSecs, end, -amtPerSec);
+        _addDelta(amtDeltas, start, amtPerSec);
+        _addDelta(amtDeltas, end, -amtPerSec);
     }
 
     /// @notice Adds delta of funds received by a user at a given time
     /// @param amtDeltas The user amount deltas
-    /// @param cycleSecs The cycle length in seconds.
-    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param timestamp The timestamp when the deltas need to be added
     /// @param amtPerSec The dripping rate
     function _addDelta(
         mapping(uint32 => AmtDelta) storage amtDeltas,
-        uint256 cycleSecs,
         uint256 timestamp,
         int256 amtPerSec
     ) private {
         unchecked {
-            AmtDelta storage amtDelta = amtDeltas[_cycleOf(uint32(timestamp), uint32(cycleSecs))];
+            AmtDelta storage amtDelta = amtDeltas[_cycleOf(uint32(timestamp))];
             int256 thisCycleDelta = amtDelta.thisCycle;
             int256 nextCycleDelta = amtDelta.nextCycle;
 
@@ -712,9 +678,10 @@ abstract contract Drips {
             // The next cycle has the rest of the delta applied, so the update is fully completed.
             // These formulas follow the logic from `_drippedAmt`, see it for more details.
             int256 amtPerSecMultiplier = int256(_AMT_PER_SEC_MULTIPLIER);
-            int256 amtPerCycle = (int256(cycleSecs) * amtPerSec) / amtPerSecMultiplier;
+            int256 amtPerCycle = (int256(uint256(_cycleSecs)) * amtPerSec) / amtPerSecMultiplier;
             // The part of `amtPerCycle` which is NOT dripped in this cycle
-            int256 amtNextCycle = (int256(timestamp % cycleSecs) * amtPerSec) / amtPerSecMultiplier;
+            int256 amtNextCycle = (int256(timestamp % _cycleSecs) * amtPerSec) /
+                amtPerSecMultiplier;
             thisCycleDelta += amtPerCycle - amtNextCycle;
             nextCycleDelta += amtNextCycle;
             require(
@@ -757,21 +724,19 @@ abstract contract Drips {
     /// - The amount dripped in a given second is independent from the dripping start and end.
     /// - Dripping over time ranges `A:B` and then `B:C` is equivalent to dripping over `A:C`.
     /// - Different drips existing in the system don't interfere with each other.
-    /// @param cycleSecs The cycle length in seconds.
-    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param amtPerSec The dripping rate
     /// @param start The dripping start time
     /// @param end The dripping end time
     /// @param amt The dripped amount
     function _drippedAmt(
-        uint256 cycleSecs,
         uint256 amtPerSec,
         uint256 start,
         uint256 end
-    ) private pure returns (uint256 amt) {
+    ) private view returns (uint256 amt) {
         // This function is written in Yul because it can be called thousands of times
         // per transaction and it needs to be optimized as much as possible.
         // As of Solidity 0.8.13, rewriting it in unchecked Solidity triples its gas cost.
+        uint256 cycleSecs = _cycleSecs;
         // solhint-disable-next-line no-inline-assembly
         assembly {
             let endedCycles := sub(div(end, cycleSecs), div(start, cycleSecs))
@@ -786,11 +751,10 @@ abstract contract Drips {
 
     /// @notice Calculates the cycle containing the given timestamp.
     /// @param timestamp The timestamp.
-    /// @param cycleSecs The cycle length in seconds.
     /// @return cycle The cycle containing the timestamp.
-    function _cycleOf(uint32 timestamp, uint32 cycleSecs) private pure returns (uint32 cycle) {
+    function _cycleOf(uint32 timestamp) private view returns (uint32 cycle) {
         unchecked {
-            return timestamp / cycleSecs + 1;
+            return timestamp / _cycleSecs + 1;
         }
     }
 
