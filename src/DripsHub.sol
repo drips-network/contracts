@@ -47,16 +47,16 @@ contract DripsHub is Managed, Drips, Splits {
     uint32 public immutable cycleSecs;
     /// @notice Maximum number of drips receivers of a single user.
     /// Limits cost of changes in drips configuration.
-    uint8 public immutable maxDripsReceivers = Drips._MAX_DRIPS_RECEIVERS;
+    uint8 public constant MAX_DRIPS_RECEIVERS = _MAX_DRIPS_RECEIVERS;
     /// @notice The additional decimals for all amtPerSec values.
-    uint8 public immutable amtPerSecExtraDecimals = Drips._AMT_PER_SEC_EXTRA_DECIMALS;
+    uint8 public constant AMT_PER_SEC_EXTRA_DECIMALS = _AMT_PER_SEC_EXTRA_DECIMALS;
     /// @notice The multiplier for all amtPerSec values.
-    uint256 public immutable amtPerSecMultiplier = Drips._AMT_PER_SEC_MULTIPLIER;
+    uint256 public constant AMT_PER_SEC_MULTIPLIER = _AMT_PER_SEC_MULTIPLIER;
     /// @notice Maximum number of splits receivers of a single user.
     /// Limits cost of collecting.
-    uint32 public immutable maxSplitsReceivers = Splits._MAX_SPLITS_RECEIVERS;
+    uint32 public constant MAX_SPLITS_RECEIVERS = _MAX_SPLITS_RECEIVERS;
     /// @notice The total splits weight of a user
-    uint32 public immutable totalSplitsWeight = Splits._TOTAL_SPLITS_WEIGHT;
+    uint32 public constant TOTAL_SPLITS_WEIGHT = _TOTAL_SPLITS_WEIGHT;
     /// @notice The offset of the controlling app ID in the user ID.
     /// In other words the controlling app ID is the higest 32 bits of the user ID.
     uint256 public constant APP_ID_OFFSET = 224;
