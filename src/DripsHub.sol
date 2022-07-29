@@ -58,7 +58,7 @@ contract DripsHub is Managed, Drips, Splits {
     /// In other words the controlling app ID is the higest 32 bits of the user ID.
     uint256 public constant APP_ID_OFFSET = 224;
     /// @notice The ERC-1967 storage slot holding a single `DripsHubStorage` structure.
-    bytes32 private immutable storageSlot = erc1967Slot("eip1967.dripsHub.storage");
+    bytes32 private immutable _storageSlot = erc1967Slot("eip1967.dripsHub.storage");
 
     /// @notice Emitted when an app is registered
     /// @param appId The app ID
@@ -76,8 +76,6 @@ contract DripsHub is Managed, Drips, Splits {
     );
 
     struct DripsHubStorage {
-        /// @notice The drips storage
-        Drips.DripsStorage drips;
         /// @notice The splits storage
         Splits.SplitsStorage splits;
         /// @notice The next app ID that will be used when registering.
@@ -92,7 +90,9 @@ contract DripsHub is Managed, Drips, Splits {
     /// High value makes receiving cheaper by making it process less cycles for a given time range.
     /// Must be higher than 1.
     /// @param reserve_ The address of the ERC-20 reserve which the drips hub will work with
-    constructor(uint32 cycleSecs_, IReserve reserve_) Drips(cycleSecs_) {
+    constructor(uint32 cycleSecs_, IReserve reserve_)
+        Drips(cycleSecs_, erc1967Slot("eip1967.drips.storage"))
+    {
         reserve = reserve_;
     }
 
@@ -165,12 +165,7 @@ contract DripsHub is Managed, Drips, Splits {
     ) public view returns (uint128 collectedAmt, uint128 splitAmt) {
         uint256 assetId = _assetId(erc20);
         // Receivable from cycles
-        (uint128 receivedAmt, ) = Drips._receivableDrips(
-            _dripsHubStorage().drips,
-            userId,
-            assetId,
-            type(uint32).max
-        );
+        (uint128 receivedAmt, ) = Drips._receivableDrips(userId, assetId, type(uint32).max);
         // Collectable independently from cycles
         receivedAmt += Splits._splittable(_dripsHubStorage().splits, userId, assetId);
         // Split when collected
@@ -212,7 +207,7 @@ contract DripsHub is Managed, Drips, Splits {
         view
         returns (uint32 cycles)
     {
-        return Drips._receivableDripsCycles(_dripsHubStorage().drips, userId, _assetId(erc20));
+        return Drips._receivableDripsCycles(userId, _assetId(erc20));
     }
 
     /// @notice Calculate effects of calling `receiveDrips` with the given parameters.
@@ -228,7 +223,7 @@ contract DripsHub is Managed, Drips, Splits {
         IERC20 erc20,
         uint32 maxCycles
     ) public view returns (uint128 receivableAmt, uint32 receivableCycles) {
-        return Drips._receivableDrips(_dripsHubStorage().drips, userId, _assetId(erc20), maxCycles);
+        return Drips._receivableDrips(userId, _assetId(erc20), maxCycles);
     }
 
     /// @notice Receive drips for the user.
@@ -247,12 +242,7 @@ contract DripsHub is Managed, Drips, Splits {
         uint32 maxCycles
     ) public whenNotPaused returns (uint128 receivedAmt, uint32 receivableCycles) {
         uint256 assetId = _assetId(erc20);
-        (receivedAmt, receivableCycles) = Drips._receiveDrips(
-            _dripsHubStorage().drips,
-            userId,
-            assetId,
-            maxCycles
-        );
+        (receivedAmt, receivableCycles) = Drips._receiveDrips(userId, assetId, maxCycles);
         if (receivedAmt > 0) {
             Splits._give(_dripsHubStorage().splits, userId, userId, assetId, receivedAmt);
         }
@@ -337,7 +327,7 @@ contract DripsHub is Managed, Drips, Splits {
             uint32 defaultEnd
         )
     {
-        return Drips._dripsState(_dripsHubStorage().drips, userId, _assetId(erc20));
+        return Drips._dripsState(userId, _assetId(erc20));
     }
 
     /// @notice User drips balance at a given timestamp
@@ -355,14 +345,7 @@ contract DripsHub is Managed, Drips, Splits {
         DripsReceiver[] memory receivers,
         uint32 timestamp
     ) public view returns (uint128 balance) {
-        return
-            Drips._balanceAt(
-                _dripsHubStorage().drips,
-                userId,
-                _assetId(erc20),
-                receivers,
-                timestamp
-            );
+        return Drips._balanceAt(userId, _assetId(erc20), receivers, timestamp);
     }
 
     /// @notice Sets the user's drips configuration.
@@ -387,7 +370,6 @@ contract DripsHub is Managed, Drips, Splits {
         DripsReceiver[] memory newReceivers
     ) public whenNotPaused onlyApp(userId) returns (uint128 newBalance, int128 realBalanceDelta) {
         (newBalance, realBalanceDelta) = Drips._setDrips(
-            _dripsHubStorage().drips,
             userId,
             _assetId(erc20),
             currReceivers,
@@ -451,10 +433,9 @@ contract DripsHub is Managed, Drips, Splits {
     /// @notice Returns the DripsHub storage.
     /// @return storageRef The storage.
     function _dripsHubStorage() internal view returns (DripsHubStorage storage storageRef) {
-        bytes32 slot = storageSlot;
+        bytes32 slot = _storageSlot;
         // solhint-disable-next-line no-inline-assembly
         assembly {
-            // Based on OpenZeppelin's StorageSlot
             storageRef.slot := slot
         }
     }

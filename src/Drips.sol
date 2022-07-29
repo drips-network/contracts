@@ -77,6 +77,8 @@ abstract contract Drips {
     /// gain access to drips received during `T - cycleSecs` to `T - 1`.
     /// Always higher than 1.
     uint32 internal immutable _cycleSecs;
+    /// @notice The storage slot holding a single `DripsStorage` structure.
+    bytes32 private immutable _dripsStorageSlot;
 
     /// @notice Emitted when the drips configuration of a user is updated.
     /// @param userId The user ID.
@@ -115,7 +117,7 @@ abstract contract Drips {
     struct DripsStorage {
         /// @notice User drips states.
         /// The keys are the asset ID and the user ID.
-        mapping(uint256 => mapping(uint256 => DripsState)) dripsStates;
+        mapping(uint256 => mapping(uint256 => DripsState)) states;
     }
 
     struct DripsState {
@@ -149,24 +151,25 @@ abstract contract Drips {
     /// between being taken from the users' drips balances and being receivable by their receivers.
     /// High value makes receiving cheaper by making it process less cycles for a given time range.
     /// Must be higher than 1.
-    constructor(uint32 cycleSecs) {
+    /// @param dripsStorageSlot The storage slot to holding a single `DripsStorage` structure.
+    constructor(uint32 cycleSecs, bytes32 dripsStorageSlot) {
         require(cycleSecs > 1, "Cycle length too low");
         _cycleSecs = cycleSecs;
+        _dripsStorageSlot = dripsStorageSlot;
     }
 
     /// @notice Counts cycles from which drips can be received.
     /// This function can be used to detect that there are
     /// too many cycles to analyze in a single transaction.
-    /// @param s The drips storage
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @return cycles The number of cycles which can be flushed
-    function _receivableDripsCycles(
-        DripsStorage storage s,
-        uint256 userId,
-        uint256 assetId
-    ) internal view returns (uint32 cycles) {
-        uint32 nextReceivableCycle = s.dripsStates[assetId][userId].nextReceivableCycle;
+    function _receivableDripsCycles(uint256 userId, uint256 assetId)
+        internal
+        view
+        returns (uint32 cycles)
+    {
+        uint32 nextReceivableCycle = _dripsStorage().states[assetId][userId].nextReceivableCycle;
         // The currently running cycle is not receivable yet
         uint32 currCycle = _cycleOf(_currTimestamp());
         if (nextReceivableCycle == 0 || nextReceivableCycle > currCycle) return 0;
@@ -174,7 +177,6 @@ abstract contract Drips {
     }
 
     /// @notice Calculate effects of calling `receiveDrips` with the given parameters.
-    /// @param s The drips storage
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param maxCycles The maximum number of received drips cycles.
@@ -183,15 +185,14 @@ abstract contract Drips {
     /// @return receivableAmt The amount which would be received
     /// @return receivableCycles The number of cycles which would still be receivable after the call
     function _receivableDrips(
-        DripsStorage storage s,
         uint256 userId,
         uint256 assetId,
         uint32 maxCycles
     ) internal view returns (uint128 receivableAmt, uint32 receivableCycles) {
-        uint32 allReceivableCycles = _receivableDripsCycles(s, userId, assetId);
+        uint32 allReceivableCycles = _receivableDripsCycles(userId, assetId);
         uint32 receivedCycles = maxCycles < allReceivableCycles ? maxCycles : allReceivableCycles;
         receivableCycles = allReceivableCycles - receivedCycles;
-        DripsState storage state = s.dripsStates[assetId][userId];
+        DripsState storage state = _dripsStorage().states[assetId][userId];
         uint32 receivedCycle = state.nextReceivableCycle;
         int128 cycleAmt = 0;
         for (uint256 i = 0; i < receivedCycles; i++) {
@@ -205,7 +206,6 @@ abstract contract Drips {
     /// @notice Receive drips from unreceived cycles of the user.
     /// Received drips cycles won't need to be analyzed ever again.
     /// Calling this function does not receive but makes the funds ready to be split and received.
-    /// @param s The drips storage
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param maxCycles The maximum number of received drips cycles.
@@ -214,16 +214,15 @@ abstract contract Drips {
     /// @return receivedAmt The received amount
     /// @return receivableCycles The number of cycles which still can be received
     function _receiveDrips(
-        DripsStorage storage s,
         uint256 userId,
         uint256 assetId,
         uint32 maxCycles
     ) internal returns (uint128 receivedAmt, uint32 receivableCycles) {
-        receivableCycles = _receivableDripsCycles(s, userId, assetId);
+        receivableCycles = _receivableDripsCycles(userId, assetId);
         uint32 cycles = maxCycles < receivableCycles ? maxCycles : receivableCycles;
         receivableCycles -= cycles;
         if (cycles > 0) {
-            DripsState storage state = s.dripsStates[assetId][userId];
+            DripsState storage state = _dripsStorage().states[assetId][userId];
             uint32 cycle = state.nextReceivableCycle;
             int128 cycleAmt = 0;
             for (uint256 i = 0; i < cycles; i++) {
@@ -242,17 +241,12 @@ abstract contract Drips {
     }
 
     /// @notice Current user drips state.
-    /// @param s The drips storage
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @return dripsHash The current drips receivers list hash, see `hashDrips`
     /// @return updateTime The time when drips have been configured for the last time
     /// @return balance The balance when drips have been configured for the last time
-    function _dripsState(
-        DripsStorage storage s,
-        uint256 userId,
-        uint256 assetId
-    )
+    function _dripsState(uint256 userId, uint256 assetId)
         internal
         view
         returns (
@@ -262,12 +256,11 @@ abstract contract Drips {
             uint32 defaultEnd
         )
     {
-        DripsState storage state = s.dripsStates[assetId][userId];
+        DripsState storage state = _dripsStorage().states[assetId][userId];
         return (state.dripsHash, state.updateTime, state.balance, state.defaultEnd);
     }
 
     /// @notice User drips balance at a given timestamp
-    /// @param s The drips storage
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param receivers The current drips receivers list
@@ -277,20 +270,18 @@ abstract contract Drips {
     /// that `setDrips` won't be called before `timestamp`.
     /// @return balance The user balance on `timestamp`
     function _balanceAt(
-        DripsStorage storage s,
         uint256 userId,
         uint256 assetId,
         DripsReceiver[] memory receivers,
         uint32 timestamp
     ) internal view returns (uint128 balance) {
-        DripsState storage state = s.dripsStates[assetId][userId];
+        DripsState storage state = _dripsStorage().states[assetId][userId];
         require(timestamp >= state.updateTime, "Timestamp before last drips update");
         require(_hashDrips(receivers) == state.dripsHash, "Invalid current drips list");
         return _balanceAt(state.balance, state.updateTime, state.defaultEnd, receivers, timestamp);
     }
 
     /// @notice Sets the user's drips configuration.
-    /// @param s The drips storage
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param currReceivers The list of the drips receivers set in the last drips update
@@ -303,14 +294,13 @@ abstract contract Drips {
     /// @return newBalance The new drips balance of the user.
     /// @return realBalanceDelta The actually applied drips balance change.
     function _setDrips(
-        DripsStorage storage s,
         uint256 userId,
         uint256 assetId,
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers
     ) internal returns (uint128 newBalance, int128 realBalanceDelta) {
-        DripsState storage state = s.dripsStates[assetId][userId];
+        DripsState storage state = _dripsStorage().states[assetId][userId];
         bytes32 currDripsHash = _hashDrips(currReceivers);
         require(currDripsHash == state.dripsHash, "Invalid current drips list");
         uint32 lastUpdate = state.updateTime;
@@ -331,7 +321,7 @@ abstract contract Drips {
         }
         uint32 newDefaultEnd = _calcDefaultEnd(newBalance, newReceivers);
         _updateReceiverStates(
-            s.dripsStates[assetId],
+            _dripsStorage().states[assetId],
             currReceivers,
             lastUpdate,
             currDefaultEnd,
@@ -506,7 +496,7 @@ abstract contract Drips {
     }
 
     /// @notice Applies the effects of the change of the drips on the receivers' drips states.
-    /// @param states The drips states for a single asset, the key is the user ID
+    /// @param states The drips states for the used asset.
     /// @param currReceivers The list of the drips receivers set in the last drips update
     /// of the user.
     /// If this is the first update, pass an empty array.
@@ -762,5 +752,15 @@ abstract contract Drips {
     /// @return timestamp The current timestamp
     function _currTimestamp() private view returns (uint32 timestamp) {
         return uint32(block.timestamp);
+    }
+
+    /// @notice Returns the Drips storage.
+    /// @return dripsStorage The storage.
+    function _dripsStorage() private view returns (DripsStorage storage dripsStorage) {
+        bytes32 slot = _dripsStorageSlot;
+        // solhint-disable-next-line no-inline-assembly
+        assembly {
+            dripsStorage.slot := slot
+        }
     }
 }
