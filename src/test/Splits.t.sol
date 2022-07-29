@@ -17,6 +17,10 @@ contract SplitsTest is DSTest, Splits {
     uint256 internal receiver3 = 7;
     uint256 internal user = 9;
 
+    constructor() Splits(bytes32(uint256(1000))) {
+        return;
+    }
+
     function splitsReceivers() internal pure returns (SplitsReceiver[] memory list) {
         list = new SplitsReceiver[](0);
     }
@@ -48,11 +52,11 @@ contract SplitsTest is DSTest, Splits {
     {
         currSplits = currSplitsReceivers[userId];
 
-        Splits._assertCurrSplits(s, userId, currSplits);
+        Splits._assertCurrSplits(userId, currSplits);
     }
 
     function setSplitsExternal(uint256 userId, SplitsReceiver[] memory newReceivers) external {
-        Splits._setSplits(s, userId, newReceivers);
+        Splits._setSplits(userId, newReceivers);
     }
 
     function assertSetSplitsReverts(
@@ -61,7 +65,7 @@ contract SplitsTest is DSTest, Splits {
         string memory expectedReason
     ) internal {
         SplitsReceiver[] memory curr = getCurrSplitsReceivers(userId);
-        Splits._assertCurrSplits(s, userId, curr);
+        Splits._assertCurrSplits(userId, curr);
         try this.setSplitsExternal(userId, newReceivers) {
             assertTrue(false, "setSplits hasn't reverted");
         } catch Error(string memory reason) {
@@ -70,11 +74,11 @@ contract SplitsTest is DSTest, Splits {
     }
 
     function assertSplits(uint256 userId, SplitsReceiver[] memory expectedReceivers) internal view {
-        Splits._assertCurrSplits(s, userId, expectedReceivers);
+        Splits._assertCurrSplits(userId, expectedReceivers);
     }
 
     function assertSplittable(uint256 userId, uint256 expected) internal {
-        uint256 actual = Splits._splittable(s, userId, defaultAsset);
+        uint256 actual = Splits._splittable(userId, defaultAsset);
         assertEq(actual, expected, "Invalid splittable");
     }
 
@@ -82,7 +86,7 @@ contract SplitsTest is DSTest, Splits {
         SplitsReceiver[] memory curr = getCurrSplitsReceivers(userId);
         assertSplits(userId, curr);
 
-        Splits._setSplits(s, userId, newReceivers);
+        Splits._setSplits(userId, newReceivers);
 
         setCurrSplitsReceivers(userId, newReceivers);
     }
@@ -100,7 +104,7 @@ contract SplitsTest is DSTest, Splits {
         uint256 assetId,
         SplitsReceiver[] memory currReceivers
     ) external {
-        Splits._split(s, userId, assetId, currReceivers);
+        Splits._split(userId, assetId, currReceivers);
     }
 
     function split(
@@ -110,14 +114,13 @@ contract SplitsTest is DSTest, Splits {
         uint128 expectedSplit
     ) internal {
         (uint128 collectableAmt, uint128 splitAmt) = Splits._split(
-            s,
             userId,
             asset,
             getCurrSplitsReceivers(userId)
         );
 
         assertEq(collectableAmt, expectedCollectable, "Invalid collectable amount");
-        assertEq(Splits._collectable(s, userId, asset), collectableAmt);
+        assertEq(Splits._collectable(userId, asset), collectableAmt);
         assertEq(splitAmt, expectedSplit, "Invalid split amount");
         assertSplittable(userId, 0);
     }
@@ -135,13 +138,13 @@ contract SplitsTest is DSTest, Splits {
         uint256 splitReceiver,
         uint128 amt
     ) public {
-        Splits._give(s, sender, splitReceiver, defaultAsset, amt);
+        Splits._give(sender, splitReceiver, defaultAsset, amt);
         assertSplittable(splitReceiver, amt);
     }
 
     function collect(uint256 userId, uint128 expectedAmt) public returns (uint128 collected) {
-        assertEq(Splits._collectable(s, userId, defaultAsset), expectedAmt);
-        return Splits._collect(s, userId, defaultAsset);
+        assertEq(Splits._collectable(userId, defaultAsset), expectedAmt);
+        return Splits._collect(userId, defaultAsset);
     }
 
     function splitCollect(
@@ -151,7 +154,7 @@ contract SplitsTest is DSTest, Splits {
         uint128 expectedSplit
     ) public returns (uint128 collectedAmt) {
         split(asset, userId, expectedCollectable, expectedSplit);
-        return Splits._collect(s, userId, asset);
+        return Splits._collect(userId, asset);
     }
 
     function splitCollect(
@@ -165,7 +168,7 @@ contract SplitsTest is DSTest, Splits {
     // test cases
     function testSplitable() public {
         uint128 amt = 10;
-        Splits._give(s, 0, user, defaultAsset, amt);
+        Splits._give(0, user, defaultAsset, amt);
         assertSplittable(user, amt);
     }
 
@@ -173,7 +176,7 @@ contract SplitsTest is DSTest, Splits {
         // 60% split
         setSplits(user, splitsReceivers(receiver, (Splits._TOTAL_SPLITS_WEIGHT / 10) * 6));
         uint128 amt = 10;
-        Splits._give(s, 0, user, defaultAsset, amt);
+        Splits._give(0, user, defaultAsset, amt);
         assertSplittable(user, amt);
 
         uint128 expectedCollectable = 4;
@@ -232,7 +235,7 @@ contract SplitsTest is DSTest, Splits {
     function testCanSplitAllWhenCollectedDoesntSplitEvenly() public {
         uint32 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
         // 3 waiting for receiver 1
-        Splits._give(s, user, receiver1, defaultAsset, 3);
+        Splits._give(user, receiver1, defaultAsset, 3);
 
         setSplits(
             receiver1,
@@ -262,7 +265,7 @@ contract SplitsTest is DSTest, Splits {
             user,
             splitsReceivers(receiver1, (totalWeight / 5) * 2, receiver2, totalWeight / 5)
         );
-        Splits._give(s, 0, user, defaultAsset, 9);
+        Splits._give(0, user, defaultAsset, 9);
         // user gets 40% of 9, receiver1 40 % and receiver2 20%
         split(user, 4, 5);
         split(receiver1, 3, 0);
@@ -279,7 +282,6 @@ contract SplitsTest is DSTest, Splits {
         give(receiver1, receiver1, 20);
 
         (uint128 collectableAmt, uint128 splitAmt) = Splits._split(
-            s,
             receiver1,
             defaultAsset,
             getCurrSplitsReceivers(receiver1)
@@ -294,7 +296,6 @@ contract SplitsTest is DSTest, Splits {
 
         // // Splitting 10 which has been split to receiver1 themselves in the previous step
         (collectableAmt, splitAmt) = Splits._split(
-            s,
             receiver1,
             defaultAsset,
             getCurrSplitsReceivers(receiver1)
@@ -310,8 +311,8 @@ contract SplitsTest is DSTest, Splits {
     function testSplitsConfigurationIsCommonBetweenTokens() public {
         uint32 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
         setSplits(user, splitsReceivers(receiver1, totalWeight / 10));
-        Splits._give(s, receiver2, user, defaultAsset, 30);
-        Splits._give(s, receiver2, user, otherAsset, 100);
+        Splits._give(receiver2, user, defaultAsset, 30);
+        Splits._give(receiver2, user, otherAsset, 100);
 
         splitCollect(defaultAsset, user, 27, 3);
         splitCollect(otherAsset, user, 90, 10);

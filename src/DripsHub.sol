@@ -76,8 +76,6 @@ contract DripsHub is Managed, Drips, Splits {
     );
 
     struct DripsHubStorage {
-        /// @notice The splits storage
-        Splits.SplitsStorage splits;
         /// @notice The next app ID that will be used when registering.
         uint32 nextAppId;
         /// @notice App addresses. The key is the app ID, the value is the app address.
@@ -92,6 +90,7 @@ contract DripsHub is Managed, Drips, Splits {
     /// @param reserve_ The address of the ERC-20 reserve which the drips hub will work with
     constructor(uint32 cycleSecs_, IReserve reserve_)
         Drips(cycleSecs_, erc1967Slot("eip1967.drips.storage"))
+        Splits(erc1967Slot("eip1967.splits.storage"))
     {
         reserve = reserve_;
     }
@@ -167,16 +166,11 @@ contract DripsHub is Managed, Drips, Splits {
         // Receivable from cycles
         (uint128 receivedAmt, ) = Drips._receivableDrips(userId, assetId, type(uint32).max);
         // Collectable independently from cycles
-        receivedAmt += Splits._splittable(_dripsHubStorage().splits, userId, assetId);
+        receivedAmt += Splits._splittable(userId, assetId);
         // Split when collected
-        (collectedAmt, splitAmt) = Splits._splitResults(
-            _dripsHubStorage().splits,
-            userId,
-            currReceivers,
-            receivedAmt
-        );
+        (collectedAmt, splitAmt) = Splits._splitResults(userId, currReceivers, receivedAmt);
         // Already split
-        collectedAmt += Splits._collectable(_dripsHubStorage().splits, userId, assetId);
+        collectedAmt += Splits._collectable(userId, assetId);
     }
 
     /// @notice Collects all received funds available for the user
@@ -244,7 +238,7 @@ contract DripsHub is Managed, Drips, Splits {
         uint256 assetId = _assetId(erc20);
         (receivedAmt, receivableCycles) = Drips._receiveDrips(userId, assetId, maxCycles);
         if (receivedAmt > 0) {
-            Splits._give(_dripsHubStorage().splits, userId, userId, assetId, receivedAmt);
+            Splits._give(userId, userId, assetId, receivedAmt);
         }
     }
 
@@ -253,7 +247,7 @@ contract DripsHub is Managed, Drips, Splits {
     /// @param erc20 The used ERC-20 token.
     /// @return amt The amount received but not split yet.
     function splittable(uint256 userId, IERC20 erc20) public view returns (uint128 amt) {
-        return Splits._splittable(_dripsHubStorage().splits, userId, _assetId(erc20));
+        return Splits._splittable(userId, _assetId(erc20));
     }
 
     /// @notice Splits user's received but not split yet funds among receivers.
@@ -268,7 +262,7 @@ contract DripsHub is Managed, Drips, Splits {
         IERC20 erc20,
         SplitsReceiver[] memory currReceivers
     ) public whenNotPaused returns (uint128 collectableAmt, uint128 splitAmt) {
-        return Splits._split(_dripsHubStorage().splits, userId, _assetId(erc20), currReceivers);
+        return Splits._split(userId, _assetId(erc20), currReceivers);
     }
 
     /// @notice Returns user's received funds already split and ready to be collected.
@@ -276,7 +270,7 @@ contract DripsHub is Managed, Drips, Splits {
     /// @param erc20 The used ERC-20 token.
     /// @return amt The collectable amount.
     function collectable(uint256 userId, IERC20 erc20) public view returns (uint128 amt) {
-        return Splits._collectable(_dripsHubStorage().splits, userId, _assetId(erc20));
+        return Splits._collectable(userId, _assetId(erc20));
     }
 
     /// @notice Collects user's received already split funds
@@ -290,7 +284,7 @@ contract DripsHub is Managed, Drips, Splits {
         onlyApp(userId)
         returns (uint128 amt)
     {
-        amt = Splits._collect(_dripsHubStorage().splits, userId, _assetId(erc20));
+        amt = Splits._collect(userId, _assetId(erc20));
         reserve.withdraw(erc20, msg.sender, amt);
     }
 
@@ -307,7 +301,7 @@ contract DripsHub is Managed, Drips, Splits {
         IERC20 erc20,
         uint128 amt
     ) public whenNotPaused onlyApp(userId) {
-        Splits._give(_dripsHubStorage().splits, userId, receiver, _assetId(erc20), amt);
+        Splits._give(userId, receiver, _assetId(erc20), amt);
         reserve.deposit(erc20, msg.sender, amt);
     }
 
@@ -408,14 +402,14 @@ contract DripsHub is Managed, Drips, Splits {
         whenNotPaused
         onlyApp(userId)
     {
-        Splits._setSplits(_dripsHubStorage().splits, userId, receivers);
+        Splits._setSplits(userId, receivers);
     }
 
     /// @notice Current user's splits hash, see `hashSplits`.
     /// @param userId The user ID
     /// @return currSplitsHash The current user's splits hash
     function splitsHash(uint256 userId) public view returns (bytes32 currSplitsHash) {
-        return Splits._splitsHash(_dripsHubStorage().splits, userId);
+        return Splits._splitsHash(userId);
     }
 
     /// @notice Calculates the hash of the list of splits receivers.

@@ -17,6 +17,8 @@ abstract contract Splits {
     uint32 internal constant _MAX_SPLITS_RECEIVERS = 200;
     /// @notice The total splits weight of a user
     uint32 internal constant _TOTAL_SPLITS_WEIGHT = 1_000_000;
+    /// @notice The storage slot holding a single `SplitsStorage` structure.
+    bytes32 private immutable _splitsStorageSlot;
 
     /// @notice Emitted when a user collects funds
     /// @param userId The user ID
@@ -88,16 +90,17 @@ abstract contract Splits {
         uint128 collectable;
     }
 
+    /// @param splitsStorageSlot The storage slot to holding a single `SplitsStorage` structure.
+    constructor(bytes32 splitsStorageSlot) {
+        _splitsStorageSlot = splitsStorageSlot;
+    }
+
     /// @notice Returns user's received but not split yet funds.
     /// @param userId The user ID
     /// @param assetId The used asset ID.
     /// @return amt The amount received but not split yet.
-    function _splittable(
-        SplitsStorage storage s,
-        uint256 userId,
-        uint256 assetId
-    ) internal view returns (uint128 amt) {
-        return s.splitsStates[userId].balances[assetId].splittable;
+    function _splittable(uint256 userId, uint256 assetId) internal view returns (uint128 amt) {
+        return _splitsStorage().splitsStates[userId].balances[assetId].splittable;
     }
 
     /// @notice Calculate results of splitting an amount using the current splits configuration.
@@ -108,12 +111,11 @@ abstract contract Splits {
     /// on top of what was collectable before.
     /// @return splitAmt The amount split to the user's splits receivers
     function _splitResults(
-        SplitsStorage storage s,
         uint256 userId,
         SplitsReceiver[] memory currReceivers,
         uint128 amount
     ) internal view returns (uint128 collectableAmt, uint128 splitAmt) {
-        _assertCurrSplits(s, userId, currReceivers);
+        _assertCurrSplits(userId, currReceivers);
         if (amount == 0) return (0, 0);
         uint32 splitsWeight = 0;
         for (uint256 i = 0; i < currReceivers.length; i++) {
@@ -131,13 +133,12 @@ abstract contract Splits {
     /// on top of what was collectable before.
     /// @return splitAmt The amount split to the user's splits receivers
     function _split(
-        SplitsStorage storage s,
         uint256 userId,
         uint256 assetId,
         SplitsReceiver[] memory currReceivers
     ) internal returns (uint128 collectableAmt, uint128 splitAmt) {
-        _assertCurrSplits(s, userId, currReceivers);
-        mapping(uint256 => SplitsState) storage splitsStates = s.splitsStates;
+        _assertCurrSplits(userId, currReceivers);
+        mapping(uint256 => SplitsState) storage splitsStates = _splitsStorage().splitsStates;
         SplitsBalance storage balance = splitsStates[userId].balances[assetId];
 
         collectableAmt = balance.splittable;
@@ -164,12 +165,8 @@ abstract contract Splits {
     /// @param userId The user ID
     /// @param assetId The used asset ID.
     /// @return amt The collectable amount.
-    function _collectable(
-        SplitsStorage storage s,
-        uint256 userId,
-        uint256 assetId
-    ) internal view returns (uint128 amt) {
-        return s.splitsStates[userId].balances[assetId].collectable;
+    function _collectable(uint256 userId, uint256 assetId) internal view returns (uint128 amt) {
+        return _splitsStorage().splitsStates[userId].balances[assetId].collectable;
     }
 
     /// @notice Collects user's received already split funds
@@ -177,12 +174,8 @@ abstract contract Splits {
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @return amt The collected amount
-    function _collect(
-        SplitsStorage storage s,
-        uint256 userId,
-        uint256 assetId
-    ) internal returns (uint128 amt) {
-        SplitsBalance storage balance = s.splitsStates[userId].balances[assetId];
+    function _collect(uint256 userId, uint256 assetId) internal returns (uint128 amt) {
+        SplitsBalance storage balance = _splitsStorage().splitsStates[userId].balances[assetId];
         amt = balance.collectable;
         balance.collectable = 0;
         emit Collected(userId, assetId, amt);
@@ -196,13 +189,12 @@ abstract contract Splits {
     /// @param assetId The used asset ID
     /// @param amt The given amount
     function _give(
-        SplitsStorage storage s,
         uint256 userId,
         uint256 receiver,
         uint256 assetId,
         uint128 amt
     ) internal {
-        s.splitsStates[receiver].balances[assetId].splittable += amt;
+        _splitsStorage().splitsStates[receiver].balances[assetId].splittable += amt;
         emit Given(userId, receiver, assetId, amt);
     }
 
@@ -212,12 +204,8 @@ abstract contract Splits {
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
     /// Each splits receiver will be getting `weight / _TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the user.
-    function _setSplits(
-        SplitsStorage storage s,
-        uint256 userId,
-        SplitsReceiver[] memory receivers
-    ) internal {
-        SplitsState storage state = s.splitsStates[userId];
+    function _setSplits(uint256 userId, SplitsReceiver[] memory receivers) internal {
+        SplitsState storage state = _splitsStorage().splitsStates[userId];
         bytes32 newSplitsHash = _hashSplits(receivers);
         emit SplitsSet(userId, newSplitsHash);
         if (newSplitsHash != state.splitsHash) {
@@ -253,13 +241,12 @@ abstract contract Splits {
     /// @notice Asserts that the list of splits receivers is the user's currently used one.
     /// @param userId The user ID
     /// @param currReceivers The list of the user's current splits receivers.
-    function _assertCurrSplits(
-        SplitsStorage storage s,
-        uint256 userId,
-        SplitsReceiver[] memory currReceivers
-    ) internal view {
+    function _assertCurrSplits(uint256 userId, SplitsReceiver[] memory currReceivers)
+        internal
+        view
+    {
         require(
-            _hashSplits(currReceivers) == _splitsHash(s, userId),
+            _hashSplits(currReceivers) == _splitsHash(userId),
             "Invalid current splits receivers"
         );
     }
@@ -267,12 +254,8 @@ abstract contract Splits {
     /// @notice Current user's splits hash, see `hashSplits`.
     /// @param userId The user ID
     /// @return currSplitsHash The current user's splits hash
-    function _splitsHash(SplitsStorage storage s, uint256 userId)
-        internal
-        view
-        returns (bytes32 currSplitsHash)
-    {
-        return s.splitsStates[userId].splitsHash;
+    function _splitsHash(uint256 userId) internal view returns (bytes32 currSplitsHash) {
+        return _splitsStorage().splitsStates[userId].splitsHash;
     }
 
     /// @notice Calculates the hash of the list of splits receivers.
@@ -286,5 +269,15 @@ abstract contract Splits {
     {
         if (receivers.length == 0) return bytes32(0);
         return keccak256(abi.encode(receivers));
+    }
+
+    /// @notice Returns the Splits storage.
+    /// @return splitsStorage The storage.
+    function _splitsStorage() private view returns (SplitsStorage storage splitsStorage) {
+        bytes32 slot = _splitsStorageSlot;
+        // solhint-disable-next-line no-inline-assembly
+        assembly {
+            splitsStorage.slot := slot
+        }
     }
 }
