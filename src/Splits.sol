@@ -11,12 +11,18 @@ struct SplitsReceiver {
     uint32 weight;
 }
 
+/// @notice Splits can keep track of at most `type(uint128).max`
+/// which is `2 ^ 128 - 1` units of each asset.
+/// It's up to the caller to guarantee that this limit is never exceeded,
+/// failing to do so may result in a total protocol collapse.
 abstract contract Splits {
     /// @notice Maximum number of splits receivers of a single user.
     /// Limits cost of collecting.
     uint32 internal constant _MAX_SPLITS_RECEIVERS = 200;
     /// @notice The total splits weight of a user
     uint32 internal constant _TOTAL_SPLITS_WEIGHT = 1_000_000;
+    /// @notice The total amount the contract can keep track of each asset.
+    uint256 internal constant _MAX_TOTAL_SPLITS_BALANCE = type(uint128).max;
     /// @notice The storage slot holding a single `SplitsStorage` structure.
     bytes32 private immutable _splitsStorageSlot;
 

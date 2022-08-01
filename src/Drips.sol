@@ -65,6 +65,10 @@ library DripsConfigImpl {
     }
 }
 
+/// @notice Drips can keep track of at most `type(int128).max`
+/// which is `2 ^ 127 - 1` units of each asset.
+/// It's up to the caller to guarantee that this limit is never exceeded,
+/// failing to do so may result in a total protocol collapse.
 abstract contract Drips {
     /// @notice Maximum number of drips receivers of a single user.
     /// Limits cost of changes in drips configuration.
@@ -76,6 +80,8 @@ abstract contract Drips {
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
     /// gain access to drips received during `T - cycleSecs` to `T - 1`.
     /// Always higher than 1.
+    /// @notice The total amount the contract can keep track of each asset.
+    uint256 internal constant _MAX_TOTAL_DRIPS_BALANCE = uint128(type(int128).max);
     uint32 internal immutable _cycleSecs;
     /// @notice The storage slot holding a single `DripsStorage` structure.
     bytes32 private immutable _dripsStorageSlot;
