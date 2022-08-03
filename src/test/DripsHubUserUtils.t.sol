@@ -87,7 +87,10 @@ abstract contract DripsHubUserUtils is DSTest {
         returns (DripsReceiver[] memory list)
     {
         list = new DripsReceiver[](1);
-        list[0] = DripsReceiver(user.userId(), DripsConfigImpl.create(amtPerSec, 0, 0));
+        list[0] = DripsReceiver(
+            user.userId(),
+            DripsConfigImpl.create(uint192(amtPerSec * dripsHub.amtPerSecMultiplier()), 0, 0)
+        );
     }
 
     function dripsReceivers(
@@ -97,8 +100,14 @@ abstract contract DripsHubUserUtils is DSTest {
         uint128 amtPerSec2
     ) internal view returns (DripsReceiver[] memory list) {
         list = new DripsReceiver[](2);
-        list[0] = DripsReceiver(user1.userId(), DripsConfigImpl.create(amtPerSec1, 0, 0));
-        list[1] = DripsReceiver(user2.userId(), DripsConfigImpl.create(amtPerSec2, 0, 0));
+        list[0] = DripsReceiver(
+            user1.userId(),
+            DripsConfigImpl.create(uint192(amtPerSec1 * dripsHub.amtPerSecMultiplier()), 0, 0)
+        );
+        list[1] = DripsReceiver(
+            user2.userId(),
+            DripsConfigImpl.create(uint192(amtPerSec2 * dripsHub.amtPerSecMultiplier()), 0, 0)
+        );
     }
 
     function setDrips(

@@ -47,12 +47,16 @@ contract DripsHub is Managed {
     uint32 public immutable cycleSecs;
     /// @notice Maximum number of drips receivers of a single user.
     /// Limits cost of changes in drips configuration.
-    uint8 public immutable maxDripsReceivers;
+    uint8 public immutable maxDripsReceivers = Drips.MAX_DRIPS_RECEIVERS;
+    /// @notice The additional decimals for all amtPerSec values.
+    uint8 public immutable amtPerSecExtraDecimals = Drips.AMT_PER_SEC_EXTRA_DECIMALS;
+    /// @notice The multiplier for all amtPerSec values.
+    uint256 public immutable amtPerSecMultiplier = Drips.AMT_PER_SEC_MULTIPLIER;
     /// @notice Maximum number of splits receivers of a single user.
     /// Limits cost of collecting.
-    uint32 public immutable maxSplitsReceivers;
+    uint32 public immutable maxSplitsReceivers = Splits.MAX_SPLITS_RECEIVERS;
     /// @notice The total splits weight of a user
-    uint32 public immutable totalSplitsWeight;
+    uint32 public immutable totalSplitsWeight = Splits.TOTAL_SPLITS_WEIGHT;
     /// @notice The offset of the controlling app ID in the user ID.
     /// In other words the controlling app ID is the higest 32 bits of the user ID.
     uint256 public constant APP_ID_OFFSET = 224;
@@ -93,9 +97,6 @@ contract DripsHub is Managed {
     constructor(uint32 _cycleSecs, IReserve _reserve) {
         require(_cycleSecs > 1, "Cycle length too low");
         cycleSecs = _cycleSecs;
-        maxDripsReceivers = Drips.MAX_DRIPS_RECEIVERS;
-        maxSplitsReceivers = Splits.MAX_SPLITS_RECEIVERS;
-        totalSplitsWeight = Splits.TOTAL_SPLITS_WEIGHT;
         reserve = _reserve;
     }
 
@@ -367,6 +368,7 @@ contract DripsHub is Managed {
         return
             Drips.balanceAt(
                 _dripsHubStorage().drips,
+                cycleSecs,
                 userId,
                 _assetId(erc20),
                 receivers,

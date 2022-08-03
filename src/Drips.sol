@@ -13,35 +13,39 @@ struct DripsReceiver {
 /// It's constructed from `amtPerSec`, `start` and `duration` as
 /// `amtPerSec << 64 | start << 32 | duration`.
 /// `amtPerSec` is the amount per second being dripped. Must never be zero.
+/// It must have additional `Drips.AMT_PER_SEC_EXTRA_DECIMALS` decimals and can have fractions.
+/// To achieve that its value must be multiplied by `Drips.AMT_PER_SEC_MULTIPLIER`.
 /// `start` is the timestamp when dripping should start.
 /// If zero, use the timestamp when drips are configured.
 /// `duration` is the duration of dripping.
 /// If zero, drip until balance runs out.
-type DripsConfig is uint192;
+type DripsConfig is uint256;
 
 using DripsConfigImpl for DripsConfig global;
 
 library DripsConfigImpl {
     /// @notice Create a new DripsConfig.
     /// @param _amtPerSec The amount per second being dripped. Must never be zero.
+    /// It must have additional `Drips.AMT_PER_SEC_EXTRA_DECIMALS` decimals and can have fractions.
+    /// To achieve that the passed value must be multiplied by `Drips.AMT_PER_SEC_MULTIPLIER`.
     /// @param _start The timestamp when dripping should start.
     /// If zero, use the timestamp when drips are configured.
     /// @param _duration The duration of dripping.
     /// If zero, drip until balance runs out.
     function create(
-        uint128 _amtPerSec,
+        uint192 _amtPerSec,
         uint32 _start,
         uint32 _duration
     ) internal pure returns (DripsConfig) {
-        uint192 config = _amtPerSec;
+        uint256 config = _amtPerSec;
         config = (config << 32) | _start;
         config = (config << 32) | _duration;
         return DripsConfig.wrap(config);
     }
 
     /// @notice Extracts amtPerSec from a `DripsConfig`
-    function amtPerSec(DripsConfig config) internal pure returns (uint128) {
-        return uint128(DripsConfig.unwrap(config) >> 64);
+    function amtPerSec(DripsConfig config) internal pure returns (uint192) {
+        return uint192(DripsConfig.unwrap(config) >> 64);
     }
 
     /// @notice Extracts start from a `DripsConfig`
@@ -65,6 +69,10 @@ library Drips {
     /// @notice Maximum number of drips receivers of a single user.
     /// Limits cost of changes in drips configuration.
     uint8 internal constant MAX_DRIPS_RECEIVERS = 100;
+    /// @notice The additional decimals for all amtPerSec values.
+    uint8 internal constant AMT_PER_SEC_EXTRA_DECIMALS = 18;
+    /// @notice The multiplier for all amtPerSec values. It's `10 ** AMT_PER_SEC_EXTRA_DECIMALS`.
+    uint256 internal constant AMT_PER_SEC_MULTIPLIER = 1_000_000_000_000_000_000;
 
     /// @notice Emitted when the drips configuration of a user is updated.
     /// @param userId The user ID.
@@ -255,6 +263,8 @@ library Drips {
 
     /// @notice User drips balance at a given timestamp
     /// @param s The drips storage
+    /// @param cycleSecs The cycle length in seconds.
+    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param receivers The current drips receivers list
@@ -265,6 +275,7 @@ library Drips {
     /// @return balance The user balance on `timestamp`
     function balanceAt(
         Storage storage s,
+        uint32 cycleSecs,
         uint256 userId,
         uint256 assetId,
         DripsReceiver[] memory receivers,
@@ -273,7 +284,15 @@ library Drips {
         DripsState storage state = s.dripsStates[assetId][userId];
         require(timestamp >= state.updateTime, "Timestamp before last drips update");
         require(hashDrips(receivers) == state.dripsHash, "Invalid current drips list");
-        return _balanceAt(state.balance, state.updateTime, state.defaultEnd, receivers, timestamp);
+        return
+            _balanceAt(
+                cycleSecs,
+                state.balance,
+                state.updateTime,
+                state.defaultEnd,
+                receivers,
+                timestamp
+            );
     }
 
     /// @notice Sets the user's drips configuration.
@@ -308,6 +327,7 @@ library Drips {
         uint128 lastBalance = state.balance;
         {
             uint128 currBalance = _balanceAt(
+                cycleSecs,
                 lastBalance,
                 lastUpdate,
                 currDefaultEnd,
@@ -319,7 +339,7 @@ library Drips {
             newBalance = uint128(uint136(balance));
             realBalanceDelta = int128(balance - int128(currBalance));
         }
-        uint32 newDefaultEnd = calcDefaultEnd(newBalance, newReceivers);
+        uint32 newDefaultEnd = calcDefaultEnd(cycleSecs, newBalance, newReceivers);
         _updateReceiverStates(
             s.dripsStates[assetId],
             cycleSecs,
@@ -366,22 +386,24 @@ library Drips {
     }
 
     /// @notice Calculates the end time of drips without duration.
+    /// @param cycleSecs The cycle length in seconds.
+    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param balance The balance when drips have started
     /// @param receivers The list of drips receivers.
     /// Must be sorted, deduplicated and without 0 amtPerSecs.
-    /// @return defaultEndTime The end time of drips without duration.
-    function calcDefaultEnd(uint128 balance, DripsReceiver[] memory receivers)
-        internal
-        view
-        returns (uint32 defaultEndTime)
-    {
+    /// @return defaultEnd The end time of drips without duration.
+    function calcDefaultEnd(
+        uint32 cycleSecs,
+        uint128 balance,
+        DripsReceiver[] memory receivers
+    ) internal view returns (uint32 defaultEnd) {
         require(receivers.length <= MAX_DRIPS_RECEIVERS, "Too many drips receivers");
         uint256[] memory defaultEnds = new uint256[](receivers.length);
         uint256 defaultEndsLen = 0;
-        uint168 spent = 0;
+        uint256 spent = 0;
         for (uint256 i = 0; i < receivers.length; i++) {
             DripsReceiver memory receiver = receivers[i];
-            uint128 amtPerSec = receiver.config.amtPerSec();
+            uint192 amtPerSec = receiver.config.amtPerSec();
             require(amtPerSec != 0, "Drips receiver amtPerSec is zero");
             if (i > 0) require(_isOrdered(receivers[i - 1], receiver), "Receivers not sorted");
             // Default drips end doesn't matter here, the end time is ignored when
@@ -390,19 +412,22 @@ library Drips {
             if (receiver.config.duration() == 0) {
                 _addDefaultEnd(defaultEnds, defaultEndsLen++, amtPerSec, start);
             } else {
-                spent += uint160(end - start) * amtPerSec;
+                spent += _drippedAmt(cycleSecs, amtPerSec, start, end);
             }
         }
         require(balance >= spent, "Insufficient balance");
         balance -= uint128(spent);
-        return _calcDefaultEnd(defaultEnds, defaultEndsLen, balance);
+        return _calcDefaultEnd(cycleSecs, defaultEnds, defaultEndsLen, balance);
     }
 
     /// @notice Calculates the end time of drips without duration.
+    /// @param cycleSecs The cycle length in seconds.
+    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param defaultEnds The list of default ends
     /// @param balance The balance when drips have started
     /// @return defaultEnd The end time of drips without duration.
     function _calcDefaultEnd(
+        uint32 cycleSecs,
         uint256[] memory defaultEnds,
         uint256 defaultEndsLen,
         uint128 balance
@@ -411,13 +436,14 @@ library Drips {
             uint32 minEnd = _currTimestamp();
             uint32 maxEnd = type(uint32).max;
             if (defaultEndsLen == 0 || balance == 0) return minEnd;
-            if (_isBalanceEnough(defaultEnds, defaultEndsLen, balance, maxEnd)) return maxEnd;
+            if (_isBalanceEnough(cycleSecs, defaultEnds, defaultEndsLen, balance, maxEnd))
+                return maxEnd;
             uint256 enoughEnd = minEnd;
             uint256 notEnoughEnd = maxEnd;
             while (true) {
                 uint256 end = (enoughEnd + notEnoughEnd) / 2;
                 if (end == enoughEnd) return uint32(end);
-                if (_isBalanceEnough(defaultEnds, defaultEndsLen, balance, end)) {
+                if (_isBalanceEnough(cycleSecs, defaultEnds, defaultEndsLen, balance, end)) {
                     enoughEnd = end;
                 } else {
                     notEnoughEnd = end;
@@ -427,12 +453,15 @@ library Drips {
     }
 
     /// @notice Check if a given balance is enough to cover default drips until the given time.
+    /// @param cycleSecs The cycle length in seconds.
+    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param defaultEnds The list of default ends
     /// @param defaultEndsLen The length of `defaultEnds`
     /// @param balance The balance when drips have started
     /// @param end The time until which the drips are checked to be covered
     /// @return isEnough `true` if the balance is enough, `false` otherwise
     function _isBalanceEnough(
+        uint256 cycleSecs,
         uint256[] memory defaultEnds,
         uint256 defaultEndsLen,
         uint256 balance,
@@ -443,7 +472,7 @@ library Drips {
             for (uint256 i = 0; i < defaultEndsLen; i++) {
                 (uint256 amtPerSec, uint256 start) = _getDefaultEnd(defaultEnds, i);
                 if (end <= start) continue;
-                spent += amtPerSec * (end - start);
+                spent += _drippedAmt(cycleSecs, amtPerSec, start, end);
                 if (spent > balance) return false;
             }
             return true;
@@ -451,6 +480,8 @@ library Drips {
     }
 
     /// @notice Calculates the drips balance at a given timestamp.
+    /// @param cycleSecs The cycle length in seconds.
+    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
     /// @param lastBalance The balance when drips have started
     /// @param lastUpdate The timestamp when drips have started.
     /// @param defaultEnd The end time of drips without duration
@@ -461,6 +492,7 @@ library Drips {
     /// that `setDrips` won't be called before `timestamp`.
     /// @return balance The user balance on `timestamp`
     function _balanceAt(
+        uint32 cycleSecs,
         uint128 lastBalance,
         uint32 lastUpdate,
         uint32 defaultEnd,
@@ -477,7 +509,7 @@ library Drips {
                 startCap: lastUpdate,
                 endCap: timestamp
             });
-            balance -= (end - start) * receiver.config.amtPerSec();
+            balance -= uint128(_drippedAmt(cycleSecs, receiver.config.amtPerSec(), start, end));
         }
     }
 
@@ -666,22 +698,25 @@ library Drips {
     /// @param amtPerSec The dripping rate
     function _addDelta(
         mapping(uint32 => AmtDelta) storage amtDeltas,
-        uint32 cycleSecs,
-        uint32 timestamp,
+        uint256 cycleSecs,
+        uint256 timestamp,
         int256 amtPerSec
     ) private {
         unchecked {
-            AmtDelta storage amtDelta = amtDeltas[_cycleOf(timestamp, cycleSecs)];
+            AmtDelta storage amtDelta = amtDeltas[_cycleOf(uint32(timestamp), uint32(cycleSecs))];
             int256 thisCycleDelta = amtDelta.thisCycle;
             int256 nextCycleDelta = amtDelta.nextCycle;
 
             // In order to set a delta on a specific timestamp it must be introduced in two cycles.
             // The cycle delta is split proportionally based on how much this cycle is affected.
             // The next cycle has the rest of the delta applied, so the update is fully completed.
-            uint32 nextCycleSecs = timestamp % cycleSecs;
-            uint32 thisCycleSecs = cycleSecs - nextCycleSecs;
-            thisCycleDelta += int256(uint256(thisCycleSecs)) * amtPerSec;
-            nextCycleDelta += int256(uint256(nextCycleSecs)) * amtPerSec;
+            // These formulas follow the logic from `_drippedAmt`, see it for more details.
+            int256 amtPerSecMultiplier = int256(AMT_PER_SEC_MULTIPLIER);
+            int256 amtPerCycle = (int256(cycleSecs) * amtPerSec) / amtPerSecMultiplier;
+            // The part of `amtPerCycle` which is NOT dripped in this cycle
+            int256 amtNextCycle = (int256(timestamp % cycleSecs) * amtPerSec) / amtPerSecMultiplier;
+            thisCycleDelta += amtPerCycle - amtNextCycle;
+            nextCycleDelta += amtNextCycle;
             require(
                 int128(thisCycleDelta) == thisCycleDelta &&
                     int128(nextCycleDelta) == nextCycleDelta,
@@ -703,6 +738,50 @@ library Drips {
     {
         if (prev.userId != next.userId) return prev.userId < next.userId;
         return prev.config.lt(next.config);
+    }
+
+    /// @notice Calculates the amount dripped over a time range.
+    /// The amount dripped in the `N`th second of each cycle is:
+    /// `(N + 1) * amtPerSec / AMT_PER_SEC_MULTIPLIER - N * amtPerSec / AMT_PER_SEC_MULTIPLIER`.
+    /// For a range of `N`s from `0` to `M` the sum of the dripped amounts is calculated as:
+    /// `M * amtPerSec / AMT_PER_SEC_MULTIPLIER` assuming that `M <= cycleSecs`.
+    /// For an arbitrary time range across multiple cycles the amount is calculated as the sum of
+    /// the amount dripped in the start cycle, each of the full cycles in between and the end cycle.
+    /// This algorithm has the following properties:
+    /// - During every second full units are dripped, there are no partially dripped units.
+    /// - Undripped fractions are dripped when they add up into full units.
+    /// - Undripped fractions don't add up across cycle end boundaries.
+    /// - Some seconds drip more units and some less.
+    /// - Every `N`th second of each cycle drips the same amount.
+    /// - Every full cycle drips the same amount.
+    /// - The amount dripped in a given second is independent from the dripping start and end.
+    /// - Dripping over time ranges `A:B` and then `B:C` is equivalent to dripping over `A:C`.
+    /// - Different drips existing in the system don't interfere with each other.
+    /// @param cycleSecs The cycle length in seconds.
+    /// Must be the same in all calls working on a single storage instance. Must be higher than 1.
+    /// @param amtPerSec The dripping rate
+    /// @param start The dripping start time
+    /// @param end The dripping end time
+    /// @param amt The dripped amount
+    function _drippedAmt(
+        uint256 cycleSecs,
+        uint256 amtPerSec,
+        uint256 start,
+        uint256 end
+    ) private pure returns (uint256 amt) {
+        // This function is written in Yul because it can be called thousands of times
+        // per transaction and it needs to be optimized as much as possible.
+        // As of Solidity 0.8.13, rewriting it in unchecked Solidity triples its gas cost.
+        // solhint-disable-next-line no-inline-assembly
+        assembly {
+            let endedCycles := sub(div(end, cycleSecs), div(start, cycleSecs))
+            let amtPerCycle := div(mul(cycleSecs, amtPerSec), AMT_PER_SEC_MULTIPLIER)
+            amt := mul(endedCycles, amtPerCycle)
+            let amtEnd := div(mul(mod(end, cycleSecs), amtPerSec), AMT_PER_SEC_MULTIPLIER)
+            amt := add(amt, amtEnd)
+            let amtStart := div(mul(mod(start, cycleSecs), amtPerSec), AMT_PER_SEC_MULTIPLIER)
+            amt := sub(amt, amtStart)
+        }
     }
 
     /// @notice Calculates the cycle containing the given timestamp.

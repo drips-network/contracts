@@ -91,7 +91,15 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         pure
         returns (DripsReceiver[] memory receivers)
     {
-        return recv(userId, amtPerSec, 0, 0);
+        return recv(userId, amtPerSec, 0);
+    }
+
+    function recv(
+        uint256 userId,
+        uint256 amtPerSec,
+        uint256 amtPerSecFrac
+    ) internal pure returns (DripsReceiver[] memory receivers) {
+        return recv(userId, amtPerSec, amtPerSecFrac, 0, 0);
     }
 
     function recv(
@@ -100,11 +108,20 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         uint256 start,
         uint256 duration
     ) internal pure returns (DripsReceiver[] memory receivers) {
+        return recv(userId, amtPerSec, 0, start, duration);
+    }
+
+    function recv(
+        uint256 userId,
+        uint256 amtPerSec,
+        uint256 amtPerSecFrac,
+        uint256 start,
+        uint256 duration
+    ) internal pure returns (DripsReceiver[] memory receivers) {
         receivers = new DripsReceiver[](1);
-        receivers[0] = DripsReceiver(
-            userId,
-            DripsConfigImpl.create(uint128(amtPerSec), uint32(start), uint32(duration))
-        );
+        uint192 amtPerSecFull = uint192((amtPerSec * Drips.AMT_PER_SEC_MULTIPLIER) + amtPerSecFrac);
+        DripsConfig config = DripsConfigImpl.create(amtPerSecFull, uint32(start), uint32(duration));
+        receivers[0] = DripsReceiver(userId, config);
     }
 
     function recv(DripsReceiver[] memory recv1, DripsReceiver[] memory recv2)
@@ -194,7 +211,7 @@ contract DripsTest is DSTest, PseudoRandomUtils {
             if (start + duration < updateTime) duration = 0;
             else if (start < updateTime) duration -= updateTime - start;
 
-            uint256 expectedAmt = duration * r.config.amtPerSec();
+            uint256 expectedAmt = (duration * r.config.amtPerSec()) >> 64;
             (uint128 actualAmt, ) = Drips.receiveDrips(
                 s,
                 cycleSecs,
@@ -269,6 +286,7 @@ contract DripsTest is DSTest, PseudoRandomUtils {
     ) internal {
         uint128 balance = Drips.balanceAt(
             s,
+            cycleSecs,
             userId,
             defaultAsset,
             loadCurrReceivers(defaultAsset, userId),
@@ -295,7 +313,12 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         DripsReceiver[] memory receivers,
         uint256 timestamp
     ) external view {
-        Drips.balanceAt(s, userId, defaultAsset, receivers, uint32(timestamp));
+        Drips.balanceAt(s, cycleSecs, userId, defaultAsset, receivers, uint32(timestamp));
+    }
+
+    function assetDefaultEnd(uint256 userId, uint256 expected) public {
+        (, , , uint32 defaultEnd) = Drips.dripsState(s, userId, defaultAsset);
+        assertEq(defaultEnd, expected, "Invalid default end");
     }
 
     function defaultEndExternal(uint128 balance, DripsReceiver[] memory list)
@@ -303,7 +326,7 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         view
         returns (uint32 end)
     {
-        return Drips.calcDefaultEnd(balance, list);
+        return Drips.calcDefaultEnd(cycleSecs, balance, list);
     }
 
     function changeBalance(
@@ -805,6 +828,157 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         receiveDrips(receiver2, 55);
     }
 
+    function testDrippingFractions() public {
+        uint256 onePerCycle = Drips.AMT_PER_SEC_MULTIPLIER / cycleSecs + 1;
+        setDrips(sender, 0, 2, recv(receiver, 0, onePerCycle));
+        warpToCycleEnd();
+        receiveDrips(receiver, 1);
+        warpToCycleEnd();
+        receiveDrips(receiver, 1);
+        warpToCycleEnd();
+        receiveDrips(receiver, 0);
+    }
+
+    function testDrippingFractionsWithFundsEnoughForHalfCycle() public {
+        assertEq(cycleSecs, 10, "Unexpected cycle length");
+        uint256 onePerCycle = Drips.AMT_PER_SEC_MULTIPLIER / cycleSecs + 1;
+        setDrips(sender, 0, 1, recv(receiver, 0, onePerCycle * 2));
+        // Full units are dripped on cycle timestamps 4 and 9
+        assetDefaultEnd(sender, block.timestamp + 9);
+        warpToCycleEnd();
+        assertBalance(sender, 0);
+        receiveDrips(receiver, 1);
+        warpToCycleEnd();
+        receiveDrips(receiver, 0);
+    }
+
+    function testDrippingFractionsWithFundsEnoughForOneCycle() public {
+        assertEq(cycleSecs, 10, "Unexpected cycle length");
+        uint256 onePerCycle = Drips.AMT_PER_SEC_MULTIPLIER / cycleSecs + 1;
+        setDrips(sender, 0, 2, recv(receiver, 0, onePerCycle * 2));
+        // Full units are dripped on cycle timestamps 4 and 9
+        assetDefaultEnd(sender, block.timestamp + cycleSecs + 4);
+        warpToCycleEnd();
+        assertBalance(sender, 0);
+        receiveDrips(receiver, 2);
+        warpToCycleEnd();
+        receiveDrips(receiver, 0);
+    }
+
+    function testDrippingFractionsWithFundsEnoughForTwoCycles() public {
+        assertEq(cycleSecs, 10, "Unexpected cycle length");
+        uint256 onePerCycle = Drips.AMT_PER_SEC_MULTIPLIER / cycleSecs + 1;
+        setDrips(sender, 0, 4, recv(receiver, 0, onePerCycle * 2));
+        // Full units are dripped on cycle timestamps 4 and 9
+        assetDefaultEnd(sender, block.timestamp + cycleSecs * 2 + 4);
+        warpToCycleEnd();
+        assertBalance(sender, 2);
+        receiveDrips(receiver, 2);
+        warpToCycleEnd();
+        assertBalance(sender, 0);
+        receiveDrips(receiver, 2);
+        warpToCycleEnd();
+        receiveDrips(receiver, 0);
+    }
+
+    function testFractionsAreClearedOnCycleBoundary() public {
+        assertEq(cycleSecs, 10, "Unexpected cycle length");
+        // Rate of 0.25 per second
+        setDrips(sender, 0, 3, recv(receiver, 0, Drips.AMT_PER_SEC_MULTIPLIER / 4 + 1));
+        // Full units are dripped on cycle timestamps 3 and 7
+        assetDefaultEnd(sender, block.timestamp + cycleSecs + 7);
+        warpToCycleEnd();
+        assertBalance(sender, 1);
+        receiveDrips(receiver, 2);
+        warpToCycleEnd();
+        assertBalance(sender, 0);
+        receiveDrips(receiver, 1);
+        warpToCycleEnd();
+        receiveDrips(receiver, 0);
+    }
+
+    function testFractionsAreAppliedOnCycleSecondsWhenTheyAddUpToWholeUnits() public {
+        assertEq(cycleSecs, 10, "Unexpected cycle length");
+        // Rate of 0.25 per second
+        setDrips(sender, 0, 3, recv(receiver, 0, Drips.AMT_PER_SEC_MULTIPLIER / 4 + 1));
+        // Full units are dripped on cycle timestamps 3 and 7
+        assertBalanceAt(sender, 3, block.timestamp + 3);
+        assertBalanceAt(sender, 2, block.timestamp + 4);
+        assertBalanceAt(sender, 2, block.timestamp + 7);
+        assertBalanceAt(sender, 1, block.timestamp + 8);
+        assertBalanceAt(sender, 1, block.timestamp + 13);
+        assertBalanceAt(sender, 0, block.timestamp + 14);
+    }
+
+    function testDripsWithFractionsCanBeSeamlesslyToppedUp() public {
+        assertEq(cycleSecs, 10, "Unexpected cycle length");
+        // Rate of 0.25 per second
+        setDrips(sender, 0, 2, recv(receiver, 0, Drips.AMT_PER_SEC_MULTIPLIER / 4 + 1));
+        // Full units are dripped on cycle timestamps 3 and 7
+        assetDefaultEnd(sender, block.timestamp + cycleSecs + 3);
+        // Top up 2
+        changeBalance(sender, 2, 4);
+        assetDefaultEnd(sender, block.timestamp + cycleSecs * 2 + 3);
+        warpToCycleEnd();
+        assertBalance(sender, 2);
+        receiveDrips(receiver, 2);
+        warpToCycleEnd();
+        assertBalance(sender, 0);
+        receiveDrips(receiver, 2);
+        warpToCycleEnd();
+        receiveDrips(receiver, 0);
+    }
+
+    function testFractionsDoNotCumulateOnSender() public {
+        assertEq(cycleSecs, 10, "Unexpected cycle length");
+        // Rate of 0.25 and 0.33 per second
+        setDrips(
+            sender,
+            0,
+            5,
+            recv(
+                recv(receiver1, 0, Drips.AMT_PER_SEC_MULTIPLIER / 4 + 1),
+                recv(receiver2, 0, (Drips.AMT_PER_SEC_MULTIPLIER / 100 + 1) * 33)
+            )
+        );
+        // Full units are dripped by 0.25 on cycle timestamps 3 and 7, 0.33 on 3, 6 and 9
+        assertBalance(sender, 5);
+        assertBalanceAt(sender, 5, block.timestamp + 3);
+        assertBalanceAt(sender, 3, block.timestamp + 4);
+        assertBalanceAt(sender, 3, block.timestamp + 6);
+        assertBalanceAt(sender, 2, block.timestamp + 7);
+        assertBalanceAt(sender, 1, block.timestamp + 8);
+        assertBalanceAt(sender, 1, block.timestamp + 9);
+        assertBalanceAt(sender, 0, block.timestamp + 10);
+        assetDefaultEnd(sender, block.timestamp + 13);
+        warpToCycleEnd();
+        assertBalance(sender, 0);
+        receiveDrips(receiver1, 2);
+        receiveDrips(receiver2, 3);
+        warpToCycleEnd();
+        assertBalance(sender, 0);
+        receiveDrips(receiver1, 0);
+        receiveDrips(receiver2, 0);
+    }
+
+    function testFractionsDoNotCumulateOnReceiver() public {
+        assertEq(cycleSecs, 10, "Unexpected cycle length");
+        // Rate of 0.25 per second or 2.5 per cycle
+        setDrips(sender1, 0, 3, recv(receiver, 0, Drips.AMT_PER_SEC_MULTIPLIER / 4 + 1));
+        // Rate of 0.66 per second or 6.6 per cycle
+        setDrips(sender2, 0, 7, recv(receiver, 0, (Drips.AMT_PER_SEC_MULTIPLIER / 100 + 1) * 66));
+        warpToCycleEnd();
+        assertBalance(sender1, 1);
+        assertBalance(sender2, 1);
+        receiveDrips(receiver, 8);
+        warpToCycleEnd();
+        assertBalance(sender1, 0);
+        assertBalance(sender2, 0);
+        receiveDrips(receiver, 2);
+        warpToCycleEnd();
+        receiveDrips(receiver, 0);
+    }
+
     function testDefaultEndSmallerThenScheduledDripStart() public {
         setDrips(sender, 0, 120, recv(recv(receiver1, 1), recv(receiver2, 1, 100, 100)));
     }
@@ -1175,7 +1349,7 @@ contract DripsTest is DSTest, PseudoRandomUtils {
         );
 
         warpTo(0);
-        uint32 endtime = Drips.calcDefaultEnd(100, receivers);
+        uint32 endtime = Drips.calcDefaultEnd(cycleSecs, 100, receivers);
         assertEq(endtime, 75);
     }
 
@@ -1187,7 +1361,7 @@ contract DripsTest is DSTest, PseudoRandomUtils {
 
         // in the past
         Hevm(HEVM_ADDRESS).warp(70);
-        uint32 endtime = Drips.calcDefaultEnd(100, receivers);
+        uint32 endtime = Drips.calcDefaultEnd(cycleSecs, 100, receivers);
         assertEq(endtime, 130);
     }
 
@@ -1197,7 +1371,7 @@ contract DripsTest is DSTest, PseudoRandomUtils {
             recv({userId: receiver2, amtPerSec: 1, start: 2, duration: 0})
         );
         warpTo(0);
-        uint32 endtime = Drips.calcDefaultEnd(balance, receivers);
+        uint32 endtime = Drips.calcDefaultEnd(cycleSecs, balance, receivers);
         assertEq(endtime, 3);
     }
 
@@ -1215,7 +1389,7 @@ contract DripsTest is DSTest, PseudoRandomUtils {
             recv({userId: receiver2, amtPerSec: 1, start: 1000, duration: 0})
         );
         warpTo(0);
-        uint32 endtime = Drips.calcDefaultEnd(100, receivers);
+        uint32 endtime = Drips.calcDefaultEnd(cycleSecs, 100, receivers);
         assertEq(endtime, 150);
     }
 }
