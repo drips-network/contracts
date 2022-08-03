@@ -25,7 +25,6 @@ contract PseudoRandomUtils {
 contract DripsTest is Test, PseudoRandomUtils, Drips {
     string internal constant ERROR_NOT_SORTED = "Receivers not sorted";
     string internal constant ERROR_INVALID_DRIPS_LIST = "Invalid current drips list";
-    string internal constant ERROR_BALANCE = "Insufficient balance";
     string internal constant ERROR_TIMESTAMP_EARLY = "Timestamp before last drips update";
     string internal constant ERROR_NOT_ENOUGH_FOR_DEFAULT_DRIPS =
         "Run out of funds before default drips start";
@@ -515,14 +514,14 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         receiveDrips(receiver, 10);
     }
 
-    function testDripsWithStartAndDurationRequireSufficientBalance() public {
-        assertSetDripsReverts(
-            sender,
-            0,
-            1,
-            recv(receiver, 1, block.timestamp + 1, 2),
-            ERROR_BALANCE
-        );
+    function testDripsWithStartAndDurationWithInsufficientBalance() public {
+        setDrips(sender, 0, 1, recv(receiver, 1, block.timestamp + 1, 2));
+        skip(1);
+        assertBalance(sender, 1);
+        skip(1);
+        assertBalance(sender, 0);
+        skipToCycleEnd();
+        receiveDrips(receiver, 1);
     }
 
     function testDripsWithOnlyDuration() public {
@@ -532,8 +531,13 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         receiveDrips(receiver, 10);
     }
 
-    function testDripsWithOnlyDurationRequireSufficientBalance() public {
-        assertSetDripsReverts(sender, 0, 1, recv(receiver, 1, 0, 2), ERROR_BALANCE);
+    function testDripsWithOnlyDurationWithInsufficientBalance() public {
+        setDrips(sender, 0, 1, recv(receiver, 1, 0, 2));
+        assertBalance(sender, 1);
+        skip(1);
+        assertBalance(sender, 0);
+        skipToCycleEnd();
+        receiveDrips(receiver, 1);
     }
 
     function testDripsWithOnlyStart() public {
