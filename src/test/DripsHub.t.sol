@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.15;
 
-import {DSTest} from "ds-test/test.sol";
 import {DripsHubUserUtils} from "./DripsHubUserUtils.t.sol";
 import {AddressAppUser} from "./AddressAppUser.t.sol";
 import {ManagedUser} from "./ManagedUser.t.sol";
@@ -93,7 +92,7 @@ contract DripsHubTest is DripsHubUserUtils {
         uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
         setDrips(user, 0, 10, dripsReceivers(receiver1, 10));
         setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
-        warpToCycleEnd();
+        skipToCycleEnd();
         assertCollectableAll(receiver2, 0);
         // Receiver1 had 1 second paying 10 per second of which 10 is split
         collectAll(receiver1, 0, 10);
@@ -105,7 +104,7 @@ contract DripsHubTest is DripsHubUserUtils {
         uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
         setSplits(user1, splitsReceivers(receiver1, totalWeight));
         setDrips(user2, 0, 5, dripsReceivers(user1, 5));
-        warpToCycleEnd();
+        skipToCycleEnd();
         give(user2, user1, 5);
         setSplits(user1, splitsReceivers(receiver2, totalWeight));
         // Receiver1 had 1 second paying 5 per second and was given 5 of which 10 is split
@@ -121,7 +120,7 @@ contract DripsHubTest is DripsHubUserUtils {
         setDrips(user, 0, 10, dripsReceivers(receiver1, 10));
         setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
         setSplits(receiver2, splitsReceivers(receiver3, totalWeight));
-        warpToCycleEnd();
+        skipToCycleEnd();
         assertCollectableAll(receiver2, 0);
         assertCollectableAll(receiver3, 0);
         // Receiver1 had 1 second paying 10 per second of which 10 is split
@@ -136,7 +135,7 @@ contract DripsHubTest is DripsHubUserUtils {
         uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
         setDrips(user, 0, 10, dripsReceivers(receiver1, 5, receiver2, 5));
         setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
-        warpToCycleEnd();
+        skipToCycleEnd();
         // Receiver2 had 1 second paying 5 per second
         assertCollectableAll(receiver2, 5);
         // Receiver1 had 1 second paying 5 per second
@@ -152,7 +151,7 @@ contract DripsHubTest is DripsHubUserUtils {
             receiver1,
             splitsReceivers(receiver2, totalWeight / 4, receiver3, totalWeight / 2)
         );
-        warpToCycleEnd();
+        skipToCycleEnd();
         assertCollectableAll(receiver2, 0);
         assertCollectableAll(receiver3, 0);
         // Receiver1 had 1 second paying 10 per second, of which 3/4 is split, which is 7
@@ -166,11 +165,11 @@ contract DripsHubTest is DripsHubUserUtils {
     function testReceiveSomeDripsCycles() public {
         // Enough for 3 cycles
         uint128 amt = dripsHub.cycleSecs() * 3;
-        warpToCycleEnd();
+        skipToCycleEnd();
         setDrips(user, 0, amt, dripsReceivers(receiver, 1));
-        warpToCycleEnd();
-        warpToCycleEnd();
-        warpToCycleEnd();
+        skipToCycleEnd();
+        skipToCycleEnd();
+        skipToCycleEnd();
         receiveDrips({
             user: receiver,
             maxCycles: 2,
@@ -185,11 +184,11 @@ contract DripsHubTest is DripsHubUserUtils {
     function testReceiveAllDripsCycles() public {
         // Enough for 3 cycles
         uint128 amt = dripsHub.cycleSecs() * 3;
-        warpToCycleEnd();
+        skipToCycleEnd();
         setDrips(user, 0, amt, dripsReceivers(receiver, 1));
-        warpToCycleEnd();
-        warpToCycleEnd();
-        warpToCycleEnd();
+        skipToCycleEnd();
+        skipToCycleEnd();
+        skipToCycleEnd();
 
         receiveDrips(receiver, dripsHub.cycleSecs() * 3, 3);
 
@@ -208,7 +207,7 @@ contract DripsHubTest is DripsHubUserUtils {
 
         // Drips
         setDrips(user2, 0, 2, dripsReceivers(user1, 2));
-        warpToCycleEnd();
+        skipToCycleEnd();
         receiveDrips(user1, 2, 1);
 
         // Splits
@@ -281,11 +280,11 @@ contract DripsHubTest is DripsHubUserUtils {
             dripsReceivers(receiver1, 4, receiver2, 2)
         );
 
-        warpToCycleEnd();
+        skipToCycleEnd();
         // Covers 2 cycles of dripping
         setDrips(otherErc20, user, 0, 6 * cycleLength, dripsReceivers(receiver1, 3));
 
-        warpToCycleEnd();
+        skipToCycleEnd();
         // receiver1 had 1.5 cycles of 4 per second
         collectAll(defaultErc20, receiver1, 6 * cycleLength);
         // receiver1 had 1.5 cycles of 2 per second
@@ -295,7 +294,7 @@ contract DripsHubTest is DripsHubUserUtils {
         // receiver2 received nothing
         collectAll(otherErc20, receiver2, 0);
 
-        warpToCycleEnd();
+        skipToCycleEnd();
         // receiver1 received nothing
         collectAll(defaultErc20, receiver1, 0);
         // receiver2 received nothing

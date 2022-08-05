@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.15;
 
-import {DSTest} from "ds-test/test.sol";
+import {Test} from "forge-std/Test.sol";
 import {AddressAppUser} from "./AddressAppUser.t.sol";
-import {Hevm} from "./Hevm.t.sol";
 import {SplitsReceiver, DripsConfigImpl, DripsHub, DripsReceiver} from "../DripsHub.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
-abstract contract DripsHubUserUtils is DSTest {
+abstract contract DripsHubUserUtils is Test {
     DripsHub internal dripsHub;
     IERC20 internal defaultErc20;
 
@@ -16,12 +15,8 @@ abstract contract DripsHubUserUtils is DSTest {
     // Keys is user ID
     mapping(uint256 => SplitsReceiver[]) internal currSplitsReceivers;
 
-    function warpToCycleEnd() internal {
-        warpBy(dripsHub.cycleSecs() - (block.timestamp % dripsHub.cycleSecs()));
-    }
-
-    function warpBy(uint256 secs) internal {
-        Hevm(HEVM_ADDRESS).warp(block.timestamp + secs);
+    function skipToCycleEnd() internal {
+        skip(dripsHub.cycleSecs() - (block.timestamp % dripsHub.cycleSecs()));
     }
 
     function calcUserId(uint32 appId, uint224 userIdPart) internal view returns (uint256) {

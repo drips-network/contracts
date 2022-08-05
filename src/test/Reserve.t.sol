@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.15;
-import "ds-test/test.sol";
 
+import {Test} from "forge-std/Test.sol";
 import {IReservePlugin, Reserve} from "../Reserve.sol";
 import {IERC20, ERC20PresetFixedSupply} from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
@@ -79,7 +79,7 @@ contract TestReservePlugin is IReservePlugin {
     }
 }
 
-contract ReserveTest is DSTest {
+contract ReserveTest is Test {
     Reserve public reserve;
     IReservePlugin public noPlugin;
     TestReservePlugin public plugin1;

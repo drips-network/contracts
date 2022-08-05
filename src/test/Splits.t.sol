@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.15;
 
-import {DSTest} from "ds-test/test.sol";
+import {Test} from "forge-std/Test.sol";
 import {Splits, SplitsReceiver} from "../Splits.sol";
 
-contract SplitsTest is DSTest, Splits {
+contract SplitsTest is Test, Splits {
     Splits.SplitsStorage internal s;
     // Keys is user ID
     mapping(uint256 => SplitsReceiver[]) internal currSplitsReceivers;

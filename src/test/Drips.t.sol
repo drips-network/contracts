@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.15;
 
-import {DSTest} from "ds-test/test.sol";
-import {Hevm} from "./Hevm.t.sol";
+import {Test} from "forge-std/Test.sol";
 import {Drips, DripsConfig, DripsConfigImpl, DripsReceiver} from "../Drips.sol";
 
 contract PseudoRandomUtils {
@@ -23,7 +22,7 @@ contract PseudoRandomUtils {
     }
 }
 
-contract DripsTest is DSTest, PseudoRandomUtils, Drips {
+contract DripsTest is Test, PseudoRandomUtils, Drips {
     string internal constant ERROR_NOT_SORTED = "Receivers not sorted";
     string internal constant ERROR_INVALID_DRIPS_LIST = "Invalid current drips list";
     string internal constant ERROR_BALANCE = "Insufficient balance";
@@ -50,19 +49,15 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
     }
 
     function setUp() public {
-        warpToCycleEnd();
+        skipToCycleEnd();
     }
 
-    function warpToCycleEnd() internal {
-        warpBy(cycleSecs - (block.timestamp % cycleSecs));
+    function skipToCycleEnd() internal {
+        skip(cycleSecs - (block.timestamp % cycleSecs));
     }
 
-    function warpBy(uint256 secs) internal {
-        warpTo(block.timestamp + secs);
-    }
-
-    function warpTo(uint256 timestamp) internal {
-        Hevm(HEVM_ADDRESS).warp(timestamp);
+    function skipTo(uint256 timestamp) internal {
+        vm.warp(timestamp);
     }
 
     function loadCurrReceivers(uint256 assetId, uint256 userId)
@@ -476,20 +471,20 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
 
     function testAllowsDrippingToASingleReceiver() public {
         setDrips(sender, 0, 100, recv(receiver, 1));
-        warpBy(15);
+        skip(15);
         // Sender had 15 seconds paying 1 per second
         changeBalance(sender, 85, 0);
-        warpToCycleEnd();
+        skipToCycleEnd();
         // Receiver 1 had 15 seconds paying 1 per second
         receiveDrips(receiver, 15);
     }
 
     function testDripsToTwoReceivers() public {
         setDrips(sender, 0, 100, recv(recv(receiver1, 1), recv(receiver2, 1)));
-        warpBy(14);
+        skip(14);
         // Sender had 14 seconds paying 2 per second
         changeBalance(sender, 72, 0);
-        warpToCycleEnd();
+        skipToCycleEnd();
         // Receiver 1 had 14 seconds paying 1 per second
         receiveDrips(receiver1, 14);
         // Receiver 2 had 14 seconds paying 1 per second
@@ -498,25 +493,25 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
 
     function testDripsFromTwoSendersToASingleReceiver() public {
         setDrips(sender1, 0, 100, recv(receiver, 1));
-        warpBy(2);
+        skip(2);
         setDrips(sender2, 0, 100, recv(receiver, 2));
-        warpBy(15);
+        skip(15);
         // Sender1 had 17 seconds paying 1 per second
         changeBalance(sender1, 83, 0);
         // Sender2 had 15 seconds paying 2 per second
         changeBalance(sender2, 70, 0);
-        warpToCycleEnd();
+        skipToCycleEnd();
         // Receiver had 2 seconds paying 1 per second and 15 seconds paying 3 per second
         receiveDrips(receiver, 47);
     }
 
     function testDripsWithStartAndDuration() public {
         setDrips(sender, 0, 10, recv(receiver, 1, block.timestamp + 5, 10));
-        warpBy(5);
+        skip(5);
         assertBalance(sender, 10);
-        warpBy(10);
+        skip(10);
         assertBalance(sender, 0);
-        warpToCycleEnd();
+        skipToCycleEnd();
         receiveDrips(receiver, 10);
     }
 
@@ -532,8 +527,8 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
 
     function testDripsWithOnlyDuration() public {
         setDrips(sender, 0, 10, recv(receiver, 1, 0, 10));
-        warpBy(10);
-        warpToCycleEnd();
+        skip(10);
+        skipToCycleEnd();
         receiveDrips(receiver, 10);
     }
 
@@ -543,11 +538,11 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
 
     function testDripsWithOnlyStart() public {
         setDrips(sender, 0, 10, recv(receiver, 1, block.timestamp + 5, 0));
-        warpBy(5);
+        skip(5);
         assertBalance(sender, 10);
-        warpBy(10);
+        skip(10);
         assertBalance(sender, 0);
-        warpToCycleEnd();
+        skipToCycleEnd();
         receiveDrips(receiver, 10);
     }
 
@@ -563,9 +558,9 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
                 recv(receiver3, 3, block.timestamp + 3, 0)
             )
         );
-        warpBy(8);
+        skip(8);
         assertBalance(sender, 5);
-        warpToCycleEnd();
+        skipToCycleEnd();
         receiveDrips(receiver1, 3);
         receiveDrips(receiver2, 16);
         receiveDrips(receiver3, 15);
@@ -582,9 +577,9 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
                 recv(receiver, 2, block.timestamp + 10, 9)
             )
         );
-        warpBy(19);
+        skip(19);
         assertBalance(sender, 0);
-        warpToCycleEnd();
+        skipToCycleEnd();
         receiveDrips(receiver, 28);
     }
 
@@ -600,8 +595,8 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
                 recv(receiver4, 4, block.timestamp + 3, 5)
             )
         );
-        warpBy(10);
-        warpToCycleEnd();
+        skip(10);
+        skipToCycleEnd();
         receiveDrips(receiver1, 10);
         receiveDrips(receiver2, 8);
         receiveDrips(receiver3, 24);
@@ -609,27 +604,27 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
     }
 
     function testDripsWithStartInThePast() public {
-        warpBy(5);
+        skip(5);
         setDrips(sender, 0, 3, recv(receiver, 1, block.timestamp - 5, 0));
-        warpBy(3);
+        skip(3);
         assertBalance(sender, 0);
-        warpToCycleEnd();
+        skipToCycleEnd();
         receiveDrips(receiver, 3);
     }
 
     function testDripsWithStartInThePastAndDurationIntoFuture() public {
-        warpBy(5);
+        skip(5);
         setDrips(sender, 0, 3, recv(receiver, 1, block.timestamp - 5, 8));
-        warpBy(3);
+        skip(3);
         assertBalance(sender, 0);
-        warpToCycleEnd();
+        skipToCycleEnd();
         receiveDrips(receiver, 3);
     }
 
     function testDripsWithStartAndDurationInThePast() public {
-        warpBy(5);
+        skip(5);
         setDrips(sender, 0, 0, recv(receiver, 1, block.timestamp - 5, 3));
-        warpToCycleEnd();
+        skipToCycleEnd();
         receiveDrips(receiver, 0);
     }
 
@@ -640,8 +635,8 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
             4,
             recv(recv(receiver1, 1), recv(receiver2, 2, block.timestamp + 5, 0))
         );
-        warpBy(6);
-        warpToCycleEnd();
+        skip(6);
+        skipToCycleEnd();
         receiveDrips(receiver1, 4);
         receiveDrips(receiver2, 0);
     }
@@ -649,9 +644,9 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
     function testDripsWithStartInTheFutureCycleCanBeMovedToAnEarlierOne() public {
         setDrips(sender, 0, 1, recv(receiver, 1, block.timestamp + cycleSecs, 0));
         setDrips(sender, 1, 1, recv(receiver, 1));
-        warpToCycleEnd();
+        skipToCycleEnd();
         receiveDrips(receiver, 1);
-        warpToCycleEnd();
+        skipToCycleEnd();
         receiveDrips(receiver, 0);
     }
 
@@ -665,8 +660,8 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
                 recv(receiver2, 1, block.timestamp + 1, 0)
             )
         );
-        warpBy(3);
-        warpToCycleEnd();
+        skip(3);
+        skipToCycleEnd();
         // Has been receiving 2 per second for 2 seconds
         receiveDrips(receiver1, 4);
         // Has been receiving 1 per second for 3 seconds
@@ -678,53 +673,53 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
     }
 
     function testDoesNotCollectCyclesBeforeFirstDrip() public {
-        warpBy(cycleSecs / 2);
+        skip(cycleSecs / 2);
         // Dripping starts in 2 cycles
         setDrips(sender, 0, 1, recv(receiver, 1, block.timestamp + cycleSecs * 2, 0));
         // The first cycle hasn't been dripping
-        warpToCycleEnd();
+        skipToCycleEnd();
         assertReceivableDripsCycles(receiver, 0);
         assertReceivableDrips(receiver, 0);
         // The second cycle hasn't been dripping
-        warpToCycleEnd();
+        skipToCycleEnd();
         assertReceivableDripsCycles(receiver, 0);
         assertReceivableDrips(receiver, 0);
         // The third cycle has been dripping
-        warpToCycleEnd();
+        skipToCycleEnd();
         assertReceivableDripsCycles(receiver, 1);
         receiveDrips(receiver, 1);
     }
 
     function testAllowsReceivingWhileBeingDrippedTo() public {
         setDrips(sender, 0, cycleSecs + 10, recv(receiver, 1));
-        warpToCycleEnd();
+        skipToCycleEnd();
         // Receiver had cycleSecs seconds paying 1 per second
         receiveDrips(receiver, cycleSecs);
-        warpBy(7);
+        skip(7);
         // Sender had cycleSecs + 7 seconds paying 1 per second
         changeBalance(sender, 3, 0);
-        warpToCycleEnd();
+        skipToCycleEnd();
         // Receiver had 7 seconds paying 1 per second
         receiveDrips(receiver, 7);
     }
 
     function testDripsFundsUntilTheyRunOut() public {
         setDrips(sender, 0, 100, recv(receiver, 9));
-        warpBy(10);
+        skip(10);
         // Sender had 10 seconds paying 9 per second, drips balance is about to run out
         assertBalance(sender, 10);
-        warpBy(1);
+        skip(1);
         // Sender had 11 seconds paying 9 per second, drips balance has run out
         assertBalance(sender, 1);
         // Nothing more will be dripped
-        warpToCycleEnd();
+        skipToCycleEnd();
         changeBalance(sender, 1, 0);
         receiveDrips(receiver, 99);
     }
 
     function testAllowsDripsConfigurationWithOverflowingTotalAmtPerSec() public {
         setDrips(sender, 0, 2, recv(recv(receiver, 1), recv(receiver, type(uint128).max)));
-        warpToCycleEnd();
+        skipToCycleEnd();
         // Sender hasn't sent anything
         changeBalance(sender, 2, 0);
         // Receiver hasnt received anything
@@ -733,30 +728,30 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
 
     function testAllowsToppingUpWhileDripping() public {
         setDrips(sender, 0, 100, recv(receiver, 10));
-        warpBy(6);
+        skip(6);
         // Sender had 6 seconds paying 10 per second
         changeBalance(sender, 40, 60);
-        warpBy(5);
+        skip(5);
         // Sender had 5 seconds paying 10 per second
         changeBalance(sender, 10, 0);
-        warpToCycleEnd();
+        skipToCycleEnd();
         // Receiver had 11 seconds paying 10 per second
         receiveDrips(receiver, 110);
     }
 
     function testAllowsToppingUpAfterFundsRunOut() public {
         setDrips(sender, 0, 100, recv(receiver, 10));
-        warpBy(10);
+        skip(10);
         // Sender had 10 seconds paying 10 per second
         assertBalance(sender, 0);
-        warpToCycleEnd();
+        skipToCycleEnd();
         // Receiver had 10 seconds paying 10 per second
         assertReceivableDrips(receiver, 100);
         changeBalance(sender, 0, 60);
-        warpBy(5);
+        skip(5);
         // Sender had 5 seconds paying 10 per second
         changeBalance(sender, 10, 0);
-        warpToCycleEnd();
+        skipToCycleEnd();
         // Receiver had 15 seconds paying 10 per second
         receiveDrips(receiver, 150);
     }
@@ -764,10 +759,10 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
     function testAllowsDrippingWhichShouldEndAfterMaxTimestamp() public {
         uint128 balance = type(uint32).max + uint128(6);
         setDrips(sender, 0, balance, recv(receiver, 1));
-        warpBy(10);
+        skip(10);
         // Sender had 10 seconds paying 1 per second
         changeBalance(sender, balance - 10, 0);
-        warpToCycleEnd();
+        skipToCycleEnd();
         // Receiver had 10 seconds paying 1 per second
         receiveDrips(receiver, 10);
     }
@@ -778,19 +773,19 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         uint32 maxDuration = maxTimestamp - currTimestamp;
         uint32 duration = maxDuration + 5;
         setDrips(sender, 0, duration, recv(receiver, 1, 0, duration));
-        warpToCycleEnd();
+        skipToCycleEnd();
         receiveDrips(receiver, cycleSecs);
         setDrips(sender, duration - cycleSecs, 0, recv());
     }
 
     function testAllowsChangingReceiversWhileDripping() public {
         setDrips(sender, 0, 100, recv(recv(receiver1, 6), recv(receiver2, 6)));
-        warpBy(3);
+        skip(3);
         setDrips(sender, 64, 64, recv(recv(receiver1, 4), recv(receiver2, 8)));
-        warpBy(4);
+        skip(4);
         // Sender had 7 seconds paying 12 per second
         changeBalance(sender, 16, 0);
-        warpToCycleEnd();
+        skipToCycleEnd();
         // Receiver1 had 3 seconds paying 6 per second and 4 seconds paying 4 per second
         receiveDrips(receiver1, 34);
         // Receiver2 had 3 seconds paying 6 per second and 4 seconds paying 8 per second
@@ -799,14 +794,14 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
 
     function testAllowsRemovingReceiversWhileDripping() public {
         setDrips(sender, 0, 100, recv(recv(receiver1, 5), recv(receiver2, 5)));
-        warpBy(3);
+        skip(3);
         setDrips(sender, 70, 70, recv(receiver2, 10));
-        warpBy(4);
+        skip(4);
         setDrips(sender, 30, 30, recv());
-        warpBy(10);
+        skip(10);
         // Sender had 7 seconds paying 10 per second
         changeBalance(sender, 30, 0);
-        warpToCycleEnd();
+        skipToCycleEnd();
         // Receiver1 had 3 seconds paying 5 per second
         receiveDrips(receiver1, 15);
         // Receiver2 had 3 seconds paying 5 per second and 4 seconds paying 10 per second
@@ -816,11 +811,11 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
     function testDrippingFractions() public {
         uint256 onePerCycle = Drips._AMT_PER_SEC_MULTIPLIER / cycleSecs + 1;
         setDrips(sender, 0, 2, recv(receiver, 0, onePerCycle));
-        warpToCycleEnd();
+        skipToCycleEnd();
         receiveDrips(receiver, 1);
-        warpToCycleEnd();
+        skipToCycleEnd();
         receiveDrips(receiver, 1);
-        warpToCycleEnd();
+        skipToCycleEnd();
         receiveDrips(receiver, 0);
     }
 
@@ -830,10 +825,10 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         setDrips(sender, 0, 1, recv(receiver, 0, onePerCycle * 2));
         // Full units are dripped on cycle timestamps 4 and 9
         assetDefaultEnd(sender, block.timestamp + 9);
-        warpToCycleEnd();
+        skipToCycleEnd();
         assertBalance(sender, 0);
         receiveDrips(receiver, 1);
-        warpToCycleEnd();
+        skipToCycleEnd();
         receiveDrips(receiver, 0);
     }
 
@@ -843,10 +838,10 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         setDrips(sender, 0, 2, recv(receiver, 0, onePerCycle * 2));
         // Full units are dripped on cycle timestamps 4 and 9
         assetDefaultEnd(sender, block.timestamp + cycleSecs + 4);
-        warpToCycleEnd();
+        skipToCycleEnd();
         assertBalance(sender, 0);
         receiveDrips(receiver, 2);
-        warpToCycleEnd();
+        skipToCycleEnd();
         receiveDrips(receiver, 0);
     }
 
@@ -856,13 +851,13 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         setDrips(sender, 0, 4, recv(receiver, 0, onePerCycle * 2));
         // Full units are dripped on cycle timestamps 4 and 9
         assetDefaultEnd(sender, block.timestamp + cycleSecs * 2 + 4);
-        warpToCycleEnd();
+        skipToCycleEnd();
         assertBalance(sender, 2);
         receiveDrips(receiver, 2);
-        warpToCycleEnd();
+        skipToCycleEnd();
         assertBalance(sender, 0);
         receiveDrips(receiver, 2);
-        warpToCycleEnd();
+        skipToCycleEnd();
         receiveDrips(receiver, 0);
     }
 
@@ -872,13 +867,13 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         setDrips(sender, 0, 3, recv(receiver, 0, Drips._AMT_PER_SEC_MULTIPLIER / 4 + 1));
         // Full units are dripped on cycle timestamps 3 and 7
         assetDefaultEnd(sender, block.timestamp + cycleSecs + 7);
-        warpToCycleEnd();
+        skipToCycleEnd();
         assertBalance(sender, 1);
         receiveDrips(receiver, 2);
-        warpToCycleEnd();
+        skipToCycleEnd();
         assertBalance(sender, 0);
         receiveDrips(receiver, 1);
-        warpToCycleEnd();
+        skipToCycleEnd();
         receiveDrips(receiver, 0);
     }
 
@@ -904,13 +899,13 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         // Top up 2
         changeBalance(sender, 2, 4);
         assetDefaultEnd(sender, block.timestamp + cycleSecs * 2 + 3);
-        warpToCycleEnd();
+        skipToCycleEnd();
         assertBalance(sender, 2);
         receiveDrips(receiver, 2);
-        warpToCycleEnd();
+        skipToCycleEnd();
         assertBalance(sender, 0);
         receiveDrips(receiver, 2);
-        warpToCycleEnd();
+        skipToCycleEnd();
         receiveDrips(receiver, 0);
     }
 
@@ -936,11 +931,11 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         assertBalanceAt(sender, 1, block.timestamp + 9);
         assertBalanceAt(sender, 0, block.timestamp + 10);
         assetDefaultEnd(sender, block.timestamp + 13);
-        warpToCycleEnd();
+        skipToCycleEnd();
         assertBalance(sender, 0);
         receiveDrips(receiver1, 2);
         receiveDrips(receiver2, 3);
-        warpToCycleEnd();
+        skipToCycleEnd();
         assertBalance(sender, 0);
         receiveDrips(receiver1, 0);
         receiveDrips(receiver2, 0);
@@ -952,15 +947,15 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         setDrips(sender1, 0, 3, recv(receiver, 0, Drips._AMT_PER_SEC_MULTIPLIER / 4 + 1));
         // Rate of 0.66 per second or 6.6 per cycle
         setDrips(sender2, 0, 7, recv(receiver, 0, (Drips._AMT_PER_SEC_MULTIPLIER / 100 + 1) * 66));
-        warpToCycleEnd();
+        skipToCycleEnd();
         assertBalance(sender1, 1);
         assertBalance(sender2, 1);
         receiveDrips(receiver, 8);
-        warpToCycleEnd();
+        skipToCycleEnd();
         assertBalance(sender1, 0);
         assertBalance(sender2, 0);
         receiveDrips(receiver, 2);
-        warpToCycleEnd();
+        skipToCycleEnd();
         receiveDrips(receiver, 0);
     }
 
@@ -1128,10 +1123,10 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
 
     function testAllowsAnAddressToDripAndReceiveIndependently() public {
         setDrips(sender, 0, 10, recv(sender, 10));
-        warpBy(1);
+        skip(1);
         // Sender had 1 second paying 10 per second
         assertBalance(sender, 0);
-        warpToCycleEnd();
+        skipToCycleEnd();
         // Sender had 1 second paying 10 per second
         receiveDrips(sender, 10);
     }
@@ -1139,7 +1134,7 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
     function testCapsWithdrawalOfMoreThanDripsBalance() public {
         DripsReceiver[] memory receivers = recv(receiver, 1, 0, 10);
         setDrips(sender, 0, 10, receivers);
-        warpBy(4);
+        skip(4);
         // Sender had 4 second paying 1 per second
 
         DripsReceiver[] memory newRecv = recv();
@@ -1154,7 +1149,7 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         assertEq(newBalance, 0, "Invalid balance");
         assertEq(realBalanceDelta, -6, "Invalid real balance delta");
         assertBalance(sender, 0);
-        warpToCycleEnd();
+        skipToCycleEnd();
         // Receiver had 4 seconds paying 1 per second
         receiveDrips(receiver, 4);
     }
@@ -1162,11 +1157,11 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
     function testReceiveNotAllDripsCycles() public {
         // Enough for 3 cycles
         uint128 amt = cycleSecs * 3;
-        warpToCycleEnd();
+        skipToCycleEnd();
         setDrips(sender, 0, amt, recv(receiver, 1));
-        warpToCycleEnd();
-        warpToCycleEnd();
-        warpToCycleEnd();
+        skipToCycleEnd();
+        skipToCycleEnd();
+        skipToCycleEnd();
         receiveDrips({
             userId: receiver,
             maxCycles: 2,
@@ -1180,28 +1175,28 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
 
     function testSenderCanDripToThemselves() public {
         uint128 amt = cycleSecs * 3;
-        warpToCycleEnd();
+        skipToCycleEnd();
         setDrips(sender, 0, amt, recv(recv(sender, 1), recv(receiver, 2)));
-        warpToCycleEnd();
+        skipToCycleEnd();
         receiveDrips(sender, cycleSecs);
         receiveDrips(receiver, cycleSecs * 2);
     }
 
     function testUpdateDefaultStartDrip() public {
-        warpToCycleEnd();
+        skipToCycleEnd();
         uint256 start = 0;
         uint128 amt = 3 * cycleSecs;
         uint32 duration = 3 * cycleSecs;
         uint256 amtPerSec = 1;
         // currRecv.start == 0 && currRecv.duration != 0
         setDrips(sender, 0, amt, recv(receiver, amtPerSec, start, duration));
-        warpToCycleEnd();
+        skipToCycleEnd();
 
-        warpBy(cycleSecs);
+        skip(cycleSecs);
         // remove drips after two cycles, no balance change
         setDrips(sender, 10, 10, recv());
 
-        warpBy(cycleSecs * 5);
+        skip(cycleSecs * 5);
         // only two cycles should be dripped
         receiveDrips(defaultAsset, receiver, 2 * cycleSecs);
     }
@@ -1216,11 +1211,11 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
             recv(recv(receiver1, 4), recv(receiver2, 2))
         );
 
-        warpToCycleEnd();
+        skipToCycleEnd();
         // Covers 2 cycles of dripping
         setDrips(otherAsset, sender, 0, 6 * cycleSecs, recv(receiver1, 3));
 
-        warpToCycleEnd();
+        skipToCycleEnd();
         // receiver1 had 1.5 cycles of 4 per second
         receiveDrips(defaultAsset, receiver1, 6 * cycleSecs);
         // receiver1 had 1.5 cycles of 2 per second
@@ -1230,7 +1225,7 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         // receiver2 received nothing
         receiveDrips(otherAsset, receiver2, 0);
 
-        warpToCycleEnd();
+        skipToCycleEnd();
         // receiver1 received nothing
         receiveDrips(defaultAsset, receiver1, 0);
         // receiver2 received nothing
@@ -1243,33 +1238,33 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
 
     function testBalanceAtReturnsCurrentBalance() public {
         setDrips(defaultAsset, sender, 0, 10, recv(receiver, 1));
-        warpBy(2);
+        skip(2);
         assertBalanceAt(sender, 8, block.timestamp);
     }
 
     function testBalanceAtReturnsFutureBalance() public {
         setDrips(defaultAsset, sender, 0, 10, recv(receiver, 1));
-        warpBy(2);
+        skip(2);
         assertBalanceAt(sender, 6, block.timestamp + 2);
     }
 
     function testBalanceAtReturnsPastBalanceAfterSetDelta() public {
         setDrips(defaultAsset, sender, 0, 10, recv(receiver, 1));
-        warpBy(2);
+        skip(2);
         assertBalanceAt(sender, 10, block.timestamp - 2);
     }
 
     function testBalanceAtRevertsForTimestampBeforeSetDelta() public {
         DripsReceiver[] memory receivers = recv(receiver, 1);
         setDrips(defaultAsset, sender, 0, 10, receivers);
-        warpBy(2);
+        skip(2);
         assertBalanceAtReverts(sender, receivers, block.timestamp - 3, ERROR_TIMESTAMP_EARLY);
     }
 
     function testBalanceAtRevertsForInvalidDripsList() public {
         DripsReceiver[] memory receivers = recv(receiver, 1);
         setDrips(defaultAsset, sender, 0, 10, receivers);
-        warpBy(2);
+        skip(2);
         receivers = recv(receiver, 2);
         assertBalanceAtReverts(sender, receivers, block.timestamp, ERROR_INVALID_DRIPS_LIST);
     }
@@ -1299,8 +1294,8 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         if (defaultEnd > maxAllDripsFinished && defaultEnd != type(uint32).max)
             maxAllDripsFinished = defaultEnd;
 
-        warpBy(maxAllDripsFinished);
-        warpToCycleEnd();
+        skip(maxAllDripsFinished);
+        skipToCycleEnd();
         emit log_named_uint("receiveDrips.time", block.timestamp);
         receiveDrips(receivers, defaultEnd, updateTime);
     }
@@ -1311,7 +1306,7 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
             recv({userId: receiver2, amtPerSec: 1, start: 0, duration: 0})
         );
 
-        warpTo(0);
+        skipTo(0);
         uint32 endtime = Drips._calcDefaultEnd(100, receivers);
         assertEq(endtime, 75);
     }
@@ -1323,7 +1318,7 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
         );
 
         // in the past
-        Hevm(HEVM_ADDRESS).warp(70);
+        skipTo(70);
         uint32 endtime = Drips._calcDefaultEnd(100, receivers);
         assertEq(endtime, 130);
     }
@@ -1333,7 +1328,7 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
             recv({userId: receiver1, amtPerSec: 2, start: 0, duration: 0}),
             recv({userId: receiver2, amtPerSec: 1, start: 2, duration: 0})
         );
-        warpTo(0);
+        skipTo(0);
         uint32 endtime = Drips._calcDefaultEnd(balance, receivers);
         assertEq(endtime, 3);
     }
@@ -1351,7 +1346,7 @@ contract DripsTest is DSTest, PseudoRandomUtils, Drips {
             recv({userId: receiver1, amtPerSec: 1, start: 50, duration: 0}),
             recv({userId: receiver2, amtPerSec: 1, start: 1000, duration: 0})
         );
-        warpTo(0);
+        skipTo(0);
         uint32 endtime = Drips._calcDefaultEnd(100, receivers);
         assertEq(endtime, 150);
     }
