@@ -133,8 +133,8 @@ abstract contract Drips {
         uint32 nextReceivableCycle;
         /// @notice The time when drips have been configured for the last time
         uint32 updateTime;
-        /// @notice The end time of drips without duration
-        uint32 defaultEnd;
+        /// @notice The maximum end time of drips
+        uint32 maxEnd;
         /// @notice The balance when drips have been configured for the last time
         uint128 balance;
         /// @notice The changes of received amounts on specific cycle.
@@ -252,6 +252,7 @@ abstract contract Drips {
     /// @return dripsHash The current drips receivers list hash, see `hashDrips`
     /// @return updateTime The time when drips have been configured for the last time
     /// @return balance The balance when drips have been configured for the last time
+    /// @return maxEnd The current maximum end time of drips
     function _dripsState(uint256 userId, uint256 assetId)
         internal
         view
@@ -259,11 +260,11 @@ abstract contract Drips {
             bytes32 dripsHash,
             uint32 updateTime,
             uint128 balance,
-            uint32 defaultEnd
+            uint32 maxEnd
         )
     {
         DripsState storage state = _dripsStorage().states[assetId][userId];
-        return (state.dripsHash, state.updateTime, state.balance, state.defaultEnd);
+        return (state.dripsHash, state.updateTime, state.balance, state.maxEnd);
     }
 
     /// @notice User drips balance at a given timestamp
@@ -284,7 +285,7 @@ abstract contract Drips {
         DripsState storage state = _dripsStorage().states[assetId][userId];
         require(timestamp >= state.updateTime, "Timestamp before last drips update");
         require(_hashDrips(receivers) == state.dripsHash, "Invalid current drips list");
-        return _balanceAt(state.balance, state.updateTime, state.defaultEnd, receivers, timestamp);
+        return _balanceAt(state.balance, state.updateTime, state.maxEnd, receivers, timestamp);
     }
 
     /// @notice Sets the user's drips configuration.
@@ -310,13 +311,13 @@ abstract contract Drips {
         bytes32 currDripsHash = _hashDrips(currReceivers);
         require(currDripsHash == state.dripsHash, "Invalid current drips list");
         uint32 lastUpdate = state.updateTime;
-        uint32 currDefaultEnd = state.defaultEnd;
+        uint32 currMaxEnd = state.maxEnd;
         uint128 lastBalance = state.balance;
         {
             uint128 currBalance = _balanceAt(
                 lastBalance,
                 lastUpdate,
-                currDefaultEnd,
+                currMaxEnd,
                 currReceivers,
                 _currTimestamp()
             );
@@ -325,17 +326,17 @@ abstract contract Drips {
             newBalance = uint128(uint136(balance));
             realBalanceDelta = int128(balance - int128(currBalance));
         }
-        uint32 newDefaultEnd = _calcDefaultEnd(newBalance, newReceivers);
+        uint32 newMaxEnd = _calcMaxEnd(newBalance, newReceivers);
         _updateReceiverStates(
             _dripsStorage().states[assetId],
             currReceivers,
             lastUpdate,
-            currDefaultEnd,
+            currMaxEnd,
             newReceivers,
-            newDefaultEnd
+            newMaxEnd
         );
         state.updateTime = _currTimestamp();
-        state.defaultEnd = newDefaultEnd;
+        state.maxEnd = newMaxEnd;
         state.balance = newBalance;
         bytes32 newDripsHash = _hashDrips(newReceivers);
         emit DripsSet(userId, assetId, newDripsHash, newBalance);
@@ -348,17 +349,99 @@ abstract contract Drips {
         }
     }
 
-    function _addDefaultEnd(
-        uint256[] memory defaultEnds,
-        uint256 idx,
-        uint192 amtPerSec,
-        uint32 start,
-        uint32 end
-    ) private pure {
-        defaultEnds[idx] = (uint256(amtPerSec) << 64) | (uint256(start) << 32) | end;
+    /// @notice Calculates the maximum end time of drips.
+    /// @param balance The balance when drips have started
+    /// @param receivers The list of drips receivers.
+    /// Must be sorted, deduplicated and without 0 amtPerSecs.
+    /// @return maxEnd The maximum end time of drips
+    function _calcMaxEnd(uint128 balance, DripsReceiver[] memory receivers)
+        internal
+        view
+        returns (uint32 maxEnd)
+    {
+        require(receivers.length <= _MAX_DRIPS_RECEIVERS, "Too many drips receivers");
+        uint256[] memory configs = new uint256[](receivers.length);
+        uint256 configsLen = 0;
+        for (uint256 i = 0; i < receivers.length; i++) {
+            DripsReceiver memory receiver = receivers[i];
+            if (i > 0) require(_isOrdered(receivers[i - 1], receiver), "Receivers not sorted");
+            configsLen = _addConfig(configs, configsLen, receiver);
+        }
+        return _calcMaxEnd(balance, configs, configsLen);
     }
 
-    function _getDefaultEnd(uint256[] memory defaultEnds, uint256 idx)
+    /// @notice Calculates the maximum end time of drips.
+    /// @param balance The balance when drips have started
+    /// @param configs The list of drips configurations
+    /// @param configsLen The length of `configs`
+    /// @return maxEnd The maximum end time of drips
+    function _calcMaxEnd(
+        uint128 balance,
+        uint256[] memory configs,
+        uint256 configsLen
+    ) private view returns (uint32 maxEnd) {
+        unchecked {
+            uint256 enoughEnd = _currTimestamp();
+            if (configsLen == 0 || balance == 0) return uint32(enoughEnd);
+            uint256 notEnoughEnd = type(uint32).max;
+            if (_isBalanceEnough(balance, configs, configsLen, notEnoughEnd))
+                return uint32(notEnoughEnd);
+            while (true) {
+                uint256 end = (enoughEnd + notEnoughEnd) / 2;
+                if (end == enoughEnd) return uint32(end);
+                if (_isBalanceEnough(balance, configs, configsLen, end)) {
+                    enoughEnd = end;
+                } else {
+                    notEnoughEnd = end;
+                }
+            }
+        }
+    }
+
+    /// @notice Check if a given balance is enough to cover drips with the given `maxEnd`.
+    /// @param balance The balance when drips have started
+    /// @param configs The list of drips configurations
+    /// @param configsLen The length of `configs`
+    /// @param maxEnd The maximum end time of drips
+    /// @return isEnough `true` if the balance is enough, `false` otherwise
+    function _isBalanceEnough(
+        uint256 balance,
+        uint256[] memory configs,
+        uint256 configsLen,
+        uint256 maxEnd
+    ) private view returns (bool isEnough) {
+        unchecked {
+            uint256 spent = 0;
+            for (uint256 i = 0; i < configsLen; i++) {
+                (uint256 amtPerSec, uint256 start, uint256 end) = _getConfig(configs, i);
+                if (maxEnd <= start) continue;
+                if (end > maxEnd) end = maxEnd;
+                spent += _drippedAmt(amtPerSec, start, end);
+                if (spent > balance) return false;
+            }
+            return true;
+        }
+    }
+
+    function _addConfig(
+        uint256[] memory configs,
+        uint256 configsLen,
+        DripsReceiver memory receiver
+    ) private view returns (uint256 newConfigsLen) {
+        uint192 amtPerSec = receiver.config.amtPerSec();
+        require(amtPerSec != 0, "Drips receiver amtPerSec is zero");
+        (uint32 start, uint32 end) = _dripsRangeInFuture(
+            receiver,
+            _currTimestamp(),
+            type(uint32).max
+        );
+        if (start == end) return configsLen;
+        // _addConfig(configs, configsLen, amtPerSec, start, end);
+        configs[configsLen] = (uint256(amtPerSec) << 64) | (uint256(start) << 32) | end;
+        return configsLen + 1;
+    }
+
+    function _getConfig(uint256[] memory configs, uint256 idx)
         private
         pure
         returns (
@@ -370,98 +453,15 @@ abstract contract Drips {
         uint256 val;
         // solhint-disable-next-line no-inline-assembly
         assembly ("memory-safe") {
-            val := mload(add(32, add(defaultEnds, shl(5, idx))))
+            val := mload(add(32, add(configs, shl(5, idx))))
         }
         return (val >> 64, uint32(val >> 32), uint32(val));
-    }
-
-    /// @notice Calculates the end time of drips without duration.
-    /// @param balance The balance when drips have started
-    /// @param receivers The list of drips receivers.
-    /// Must be sorted, deduplicated and without 0 amtPerSecs.
-    /// @return defaultEnd The end time of drips without duration.
-    function _calcDefaultEnd(uint128 balance, DripsReceiver[] memory receivers)
-        internal
-        view
-        returns (uint32 defaultEnd)
-    {
-        require(receivers.length <= _MAX_DRIPS_RECEIVERS, "Too many drips receivers");
-        uint256[] memory defaultEnds = new uint256[](receivers.length);
-        uint256 defaultEndsLen = 0;
-        for (uint256 i = 0; i < receivers.length; i++) {
-            DripsReceiver memory receiver = receivers[i];
-            uint192 amtPerSec = receiver.config.amtPerSec();
-            require(amtPerSec != 0, "Drips receiver amtPerSec is zero");
-            if (i > 0) require(_isOrdered(receivers[i - 1], receiver), "Receivers not sorted");
-            (uint32 start, uint32 end) = _dripsRangeInFuture(
-                receiver,
-                _currTimestamp(),
-                type(uint32).max
-            );
-            if (start < end) {
-                _addDefaultEnd(defaultEnds, defaultEndsLen++, amtPerSec, start, end);
-            }
-        }
-        return _calcDefaultEnd(defaultEnds, defaultEndsLen, balance);
-    }
-
-    /// @notice Calculates the end time of drips without duration.
-    /// @param defaultEnds The list of default ends
-    /// @param balance The balance when drips have started
-    /// @return defaultEnd The end time of drips without duration.
-    function _calcDefaultEnd(
-        uint256[] memory defaultEnds,
-        uint256 defaultEndsLen,
-        uint128 balance
-    ) private view returns (uint32 defaultEnd) {
-        unchecked {
-            uint32 minEnd = _currTimestamp();
-            uint32 maxEnd = type(uint32).max;
-            if (defaultEndsLen == 0 || balance == 0) return minEnd;
-            if (_isBalanceEnough(defaultEnds, defaultEndsLen, balance, maxEnd)) return maxEnd;
-            uint256 enoughEnd = minEnd;
-            uint256 notEnoughEnd = maxEnd;
-            while (true) {
-                uint256 end = (enoughEnd + notEnoughEnd) / 2;
-                if (end == enoughEnd) return uint32(end);
-                if (_isBalanceEnough(defaultEnds, defaultEndsLen, balance, end)) {
-                    enoughEnd = end;
-                } else {
-                    notEnoughEnd = end;
-                }
-            }
-        }
-    }
-
-    /// @notice Check if a given balance is enough to cover default drips until the given time.
-    /// @param defaultEnds The list of default ends
-    /// @param defaultEndsLen The length of `defaultEnds`
-    /// @param balance The balance when drips have started
-    /// @param maxEnd The time until which the drips are checked to be covered
-    /// @return isEnough `true` if the balance is enough, `false` otherwise
-    function _isBalanceEnough(
-        uint256[] memory defaultEnds,
-        uint256 defaultEndsLen,
-        uint256 balance,
-        uint256 maxEnd
-    ) private view returns (bool isEnough) {
-        unchecked {
-            uint256 spent = 0;
-            for (uint256 i = 0; i < defaultEndsLen; i++) {
-                (uint256 amtPerSec, uint256 start, uint256 end) = _getDefaultEnd(defaultEnds, i);
-                if (maxEnd <= start) continue;
-                if (maxEnd < end) end = maxEnd;
-                spent += _drippedAmt(amtPerSec, start, end);
-                if (spent > balance) return false;
-            }
-            return true;
-        }
     }
 
     /// @notice Calculates the drips balance at a given timestamp.
     /// @param lastBalance The balance when drips have started
     /// @param lastUpdate The timestamp when drips have started.
-    /// @param defaultEnd The end time of drips without duration
+    /// @param maxEnd The maximum end time of drips
     /// @param receivers The list of drips receivers.
     /// @param timestamp The timestamps for which balance should be calculated.
     /// It can't be lower than `lastUpdate`.
@@ -471,7 +471,7 @@ abstract contract Drips {
     function _balanceAt(
         uint128 lastBalance,
         uint32 lastUpdate,
-        uint32 defaultEnd,
+        uint32 maxEnd,
         DripsReceiver[] memory receivers,
         uint32 timestamp
     ) private view returns (uint128 balance) {
@@ -481,7 +481,7 @@ abstract contract Drips {
             (uint32 start, uint32 end) = _dripsRange({
                 receiver: receiver,
                 updateTime: lastUpdate,
-                defaultEnd: defaultEnd,
+                maxEnd: maxEnd,
                 startCap: lastUpdate,
                 endCap: timestamp
             });
@@ -511,19 +511,17 @@ abstract contract Drips {
     /// If this is the first update, pass an empty array.
     /// @param lastUpdate the last time the sender updated the drips.
     /// If this is the first update, pass zero.
-    /// @param currDefaultEnd Time when drips without duration
-    /// were supposed to end according to the last drips update.
+    /// @param currMaxEnd The maximum end time of drips according to the last drips update.
     /// @param newReceivers  The list of the drips receivers of the user to be set.
     /// Must be sorted, deduplicated and without 0 amtPerSecs.
-    /// @param newDefaultEnd Time when drips without duration
-    /// will end according to the new drips configuration.
+    /// @param newMaxEnd The maximum end time of drips according to the new drips configuration.
     function _updateReceiverStates(
         mapping(uint256 => DripsState) storage states,
         DripsReceiver[] memory currReceivers,
         uint32 lastUpdate,
-        uint32 currDefaultEnd,
+        uint32 currMaxEnd,
         DripsReceiver[] memory newReceivers,
-        uint32 newDefaultEnd
+        uint32 newMaxEnd
     ) private {
         uint256 currIdx = 0;
         uint256 newIdx = 0;
@@ -553,12 +551,12 @@ abstract contract Drips {
                 (uint32 currStart, uint32 currEnd) = _dripsRangeInFuture(
                     currRecv,
                     lastUpdate,
-                    currDefaultEnd
+                    currMaxEnd
                 );
                 (uint32 newStart, uint32 newEnd) = _dripsRangeInFuture(
                     newRecv,
                     _currTimestamp(),
-                    newDefaultEnd
+                    newMaxEnd
                 );
                 {
                     int256 amtPerSec = int256(uint256(currRecv.config.amtPerSec()));
@@ -575,11 +573,7 @@ abstract contract Drips {
             } else if (pickCurr) {
                 // Remove an existing drip
                 DripsState storage state = states[currRecv.userId];
-                (uint32 start, uint32 end) = _dripsRangeInFuture(
-                    currRecv,
-                    lastUpdate,
-                    currDefaultEnd
-                );
+                (uint32 start, uint32 end) = _dripsRangeInFuture(currRecv, lastUpdate, currMaxEnd);
                 int256 amtPerSec = int256(uint256(currRecv.config.amtPerSec()));
                 _addDeltaRange(state, start, end, -amtPerSec);
             } else if (pickNew) {
@@ -588,7 +582,7 @@ abstract contract Drips {
                 (uint32 start, uint32 end) = _dripsRangeInFuture(
                     newRecv,
                     _currTimestamp(),
-                    newDefaultEnd
+                    newMaxEnd
                 );
                 int256 amtPerSec = int256(uint256(newRecv.config.amtPerSec()));
                 _addDeltaRange(state, start, end, amtPerSec);
@@ -608,33 +602,33 @@ abstract contract Drips {
 
     /// @notice Calculates the time range in the future in which a receiver will be dripped to.
     /// @param receiver The drips receiver
-    /// @param defaultEnd The end time of drips without duration
+    /// @param maxEnd The maximum end time of drips
     function _dripsRangeInFuture(
         DripsReceiver memory receiver,
         uint32 updateTime,
-        uint32 defaultEnd
+        uint32 maxEnd
     ) private view returns (uint32 start, uint32 end) {
-        return _dripsRange(receiver, updateTime, defaultEnd, _currTimestamp(), type(uint32).max);
+        return _dripsRange(receiver, updateTime, maxEnd, _currTimestamp(), type(uint32).max);
     }
 
     /// @notice Calculates the time range in which a receiver is to be dripped to.
     /// This range is capped to provide a view on drips through a specific time window.
     /// @param receiver The drips receiver
     /// @param updateTime The time when drips are configured
-    /// @param defaultEnd The end time of drips without duration
+    /// @param maxEnd The maximum end time of drips
     /// @param startCap The timestamp the drips range start should be capped to
     /// @param endCap The timestamp the drips range end should be capped to
     function _dripsRange(
         DripsReceiver memory receiver,
         uint32 updateTime,
-        uint32 defaultEnd,
+        uint32 maxEnd,
         uint32 startCap,
         uint32 endCap
     ) private pure returns (uint32 start, uint32 end_) {
         start = receiver.config.start();
         if (start == 0) start = updateTime;
         uint40 end = uint40(start) + receiver.config.duration();
-        if (end == start || end > defaultEnd) end = defaultEnd;
+        if (end == start || end > maxEnd) end = maxEnd;
         if (start < startCap) start = startCap;
         if (end > endCap) end = endCap;
         if (end < start) end = start;

@@ -323,6 +323,7 @@ contract DripsHub is Managed, Drips, Splits {
     /// @return dripsHash The current drips receivers list hash, see `hashDrips`
     /// @return updateTime The time when drips have been configured for the last time
     /// @return balance The balance when drips have been configured for the last time
+    /// @return maxEnd The current maximum end time of drips
     function dripsState(uint256 userId, IERC20 erc20)
         public
         view
@@ -330,7 +331,7 @@ contract DripsHub is Managed, Drips, Splits {
             bytes32 dripsHash,
             uint32 updateTime,
             uint128 balance,
-            uint32 defaultEnd
+            uint32 maxEnd
         )
     {
         return Drips._dripsState(userId, _assetId(erc20));
