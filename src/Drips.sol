@@ -662,29 +662,18 @@ abstract contract Drips {
         int256 amtPerSec
     ) private {
         unchecked {
-            AmtDelta storage amtDelta = amtDeltas[_cycleOf(uint32(timestamp))];
-            int256 thisCycleDelta = amtDelta.thisCycle;
-            int256 nextCycleDelta = amtDelta.nextCycle;
-
             // In order to set a delta on a specific timestamp it must be introduced in two cycles.
-            // The cycle delta is split proportionally based on how much this cycle is affected.
-            // The next cycle has the rest of the delta applied, so the update is fully completed.
             // These formulas follow the logic from `_drippedAmt`, see it for more details.
             int256 amtPerSecMultiplier = int256(_AMT_PER_SEC_MULTIPLIER);
-            int256 amtPerCycle = (int256(uint256(_cycleSecs)) * amtPerSec) / amtPerSecMultiplier;
-            // The part of `amtPerCycle` which is NOT dripped in this cycle
-            int256 amtNextCycle = (int256(timestamp % _cycleSecs) * amtPerSec) /
-                amtPerSecMultiplier;
-            thisCycleDelta += amtPerCycle - amtNextCycle;
-            nextCycleDelta += amtNextCycle;
-            require(
-                int128(thisCycleDelta) == thisCycleDelta &&
-                    int128(nextCycleDelta) == nextCycleDelta,
-                "AmtDelta underflow or overflow"
-            );
-
-            amtDelta.thisCycle = int128(thisCycleDelta);
-            amtDelta.nextCycle = int128(nextCycleDelta);
+            int256 fullCycle = (int256(uint256(_cycleSecs)) * amtPerSec) / amtPerSecMultiplier;
+            int256 nextCycle = (int256(timestamp % _cycleSecs) * amtPerSec) / amtPerSecMultiplier;
+            AmtDelta storage amtDelta = amtDeltas[_cycleOf(uint32(timestamp))];
+            // Any over- or under-flows are fine, they're guaranteed to be fixed by a matching
+            // under- or over-flow from the other call to `_addDelta` made by `_addDeltaRange`.
+            // This is because the total balance of `Drips` can never exceed `type(int128).max`,
+            // so in the end no amtDelta can have delta higher than `type(int128).max`.
+            amtDelta.thisCycle += int128(fullCycle - nextCycle);
+            amtDelta.nextCycle += int128(nextCycle);
         }
     }
 

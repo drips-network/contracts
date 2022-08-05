@@ -720,6 +720,50 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         receiveDrips(receiver, 0);
     }
 
+    function testAllowsDripsConfigurationWithOverflowingAmtPerCycle() public {
+        // amtPerSec is valid, but amtPerCycle is over 2 times higher than int128.max.
+        // The multiplier is chosen to prevent the amounts from being "clean" binary numbers
+        // which could make the overflowing behavior correct by coincidence.
+        uint128 amtPerSec = (uint128(type(int128).max) / cycleSecs / 1000) * 2345;
+        uint128 amt = amtPerSec * 4;
+        setDrips(sender, 0, amt, recv(receiver, amtPerSec));
+        skipToCycleEnd();
+        receiveDrips(receiver, amt);
+    }
+
+    function testAllowsDripsConfigurationWithOverflowingAmtPerCycleAcrossCycleBoundaries() public {
+        // amtPerSec is valid, but amtPerCycle is over 2 times higher than int128.max.
+        // The multiplier is chosen to prevent the amounts from being "clean" binary numbers
+        // which could make the overflowing behavior correct by coincidence.
+        uint128 amtPerSec = (uint128(type(int128).max) / cycleSecs / 1000) * 2345;
+        // Dripping time in the current and future cycle
+        uint128 secs = 2;
+        uint128 amt = amtPerSec * secs * 2;
+        setDrips(sender, 0, amt, recv(receiver, amtPerSec, block.timestamp + cycleSecs - secs, 0));
+        skipToCycleEnd();
+        assertReceivableDrips(receiver, amt / 2);
+        skipToCycleEnd();
+        receiveDrips(receiver, amt);
+    }
+
+    function testAllowsDripsConfigurationWithOverflowingAmtDeltas() public {
+        // The amounts in the comments are expressed as parts of `type(int128).max`.
+        // AmtPerCycle is 0.812.
+        // The multiplier is chosen to prevent the amounts from being "clean" binary numbers
+        // which could make the overflowing behavior correct by coincidence.
+        uint128 amtPerSec = (uint128(type(int128).max) / cycleSecs / 1000) * 812;
+        uint128 amt = amtPerSec * cycleSecs;
+        // Set amtDeltas to +0.812 for the current cycle and -0.812 for the next.
+        setDrips(sender1, 0, amt, recv(receiver, amtPerSec));
+        // Alter amtDeltas by +0.0812 for the current cycle and -0.0812 for the next one
+        // As an intermediate step when the drips start is applied at the middle of the cycle,
+        // but the end not yet, apply +0.406 for the current cycle and -0.406 for the next one.
+        // It makes amtDeltas reach +1.218 for the current cycle and -1.218 for the next one.
+        setDrips(sender2, 0, amtPerSec, recv(receiver, amtPerSec, cycleSecs / 2, 0));
+        skipToCycleEnd();
+        receiveDrips(receiver, amt + amtPerSec);
+    }
+
     function testAllowsToppingUpWhileDripping() public {
         setDrips(sender, 0, 100, recv(receiver, 10));
         skip(6);
