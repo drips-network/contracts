@@ -321,6 +321,7 @@ contract DripsHub is Managed, Drips, Splits {
     /// @param userId The user ID
     /// @param erc20 The used ERC-20 token
     /// @return dripsHash The current drips receivers list hash, see `hashDrips`
+    /// @return dripsHistoryHash The current drips history hash, see `hashDripsHistory`.
     /// @return updateTime The time when drips have been configured for the last time
     /// @return balance The balance when drips have been configured for the last time
     /// @return maxEnd The current maximum end time of drips
@@ -329,6 +330,7 @@ contract DripsHub is Managed, Drips, Splits {
         view
         returns (
             bytes32 dripsHash,
+            bytes32 dripsHistoryHash,
             uint32 updateTime,
             uint128 balance,
             uint32 maxEnd
@@ -402,6 +404,22 @@ contract DripsHub is Managed, Drips, Splits {
     /// @return dripsHash The hash of the drips configuration
     function hashDrips(DripsReceiver[] memory receivers) public pure returns (bytes32 dripsHash) {
         return Drips._hashDrips(receivers);
+    }
+
+    /// @notice Calculates the hash of the drips history after the drips configuration is updated.
+    /// @param oldDripsHistoryHash The history hash which was valid before the drips were updated.
+    /// The `dripsHistoryHash` of a user before they set drips for the first time is `0`.
+    /// @param dripsHash The hash of the drips receivers being set.
+    /// @param updateTime The timestamp when the drips are updated.
+    /// @param maxEnd The maximum end of the drips being set.
+    /// @return dripsHistoryHash The hash of the updated drips history.
+    function hashDripsHistory(
+        bytes32 oldDripsHistoryHash,
+        bytes32 dripsHash,
+        uint32 updateTime,
+        uint32 maxEnd
+    ) public pure returns (bytes32 dripsHistoryHash) {
+        return Drips._hashDripsHistory(oldDripsHistoryHash, dripsHash, updateTime, maxEnd);
     }
 
     /// @notice Sets user splits configuration.

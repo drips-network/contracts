@@ -208,7 +208,9 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint128 balanceTo,
         DripsReceiver[] memory newReceivers
     ) internal {
+        (, bytes32 oldHistoryHash, , , ) = Drips._dripsState(userId, assetId);
         int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
+
         (uint128 newBalance, int128 realBalanceDelta) = Drips._setDrips(
             userId,
             assetId,
@@ -219,7 +221,18 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
 
         storeCurrReceivers(assetId, userId, newReceivers);
         assertEq(newBalance, balanceTo, "Invalid drips balance");
-        (, uint32 updateTime, uint128 actualBalance, ) = Drips._dripsState(userId, assetId);
+        (
+            bytes32 dripsHash,
+            bytes32 historyHash,
+            uint32 updateTime,
+            uint128 actualBalance,
+            uint32 maxEnd
+        ) = Drips._dripsState(userId, assetId);
+        assertEq(
+            Drips._hashDripsHistory(oldHistoryHash, dripsHash, updateTime, maxEnd),
+            historyHash,
+            "Invalid history hash"
+        );
         assertEq(updateTime, block.timestamp, "Invalid new last update time");
         assertEq(balanceTo, actualBalance, "Invalid drips balance");
         assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
@@ -230,7 +243,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint256 userId,
         DripsReceiver[] memory currReceivers
     ) internal {
-        (bytes32 actual, , , ) = Drips._dripsState(userId, assetId);
+        (bytes32 actual, , , , ) = Drips._dripsState(userId, assetId);
         bytes32 expected = Drips._hashDrips(currReceivers);
         assertEq(actual, expected, "Invalid drips configuration");
     }
@@ -275,7 +288,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function assetMaxEnd(uint256 userId, uint256 expected) public {
-        (, , , uint32 maxEnd) = Drips._dripsState(userId, defaultAsset);
+        (, , , , uint32 maxEnd) = Drips._dripsState(userId, defaultAsset);
         assertEq(maxEnd, expected, "Invalid max end");
     }
 
@@ -1327,7 +1340,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         emit log_named_uint("setDrips.updateTime", block.timestamp);
         setDrips(sender, 0, maxCosts, receivers);
 
-        (, uint32 updateTime, , uint32 maxEnd) = Drips._dripsState(sender, defaultAsset);
+        (, , uint32 updateTime, , uint32 maxEnd) = Drips._dripsState(sender, defaultAsset);
 
         if (maxEnd > maxAllDripsFinished && maxEnd != type(uint32).max)
             maxAllDripsFinished = maxEnd;

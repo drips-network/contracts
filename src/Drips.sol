@@ -90,12 +90,16 @@ abstract contract Drips {
     /// @param userId The user ID.
     /// @param assetId The used asset ID
     /// @param receiversHash The drips receivers list hash
+    /// @param dripsHistoryHash The drips history hash which was valid right before the update.
     /// @param balance The new drips balance. These funds will be dripped to the receivers.
+    /// @param maxEnd The maximum end time of drips
     event DripsSet(
         uint256 indexed userId,
         uint256 indexed assetId,
         bytes32 indexed receiversHash,
-        uint128 balance
+        bytes32 dripsHistoryHash,
+        uint128 balance,
+        uint32 maxEnd
     );
 
     /// @notice Emitted when a user is seen in a drips receivers list.
@@ -127,6 +131,8 @@ abstract contract Drips {
     }
 
     struct DripsState {
+        /// @notice The drips history hash, see `_hashDripsHistory`.
+        bytes32 dripsHistoryHash;
         /// @notice The drips receivers list hash, see `_hashDrips`.
         bytes32 dripsHash;
         /// @notice The next cycle to be received
@@ -293,6 +299,7 @@ abstract contract Drips {
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @return dripsHash The current drips receivers list hash, see `_hashDrips`
+    /// @return dripsHistoryHash The current drips history hash, see `_hashDripsHistory`.
     /// @return updateTime The time when drips have been configured for the last time
     /// @return balance The balance when drips have been configured for the last time
     /// @return maxEnd The current maximum end time of drips
@@ -301,13 +308,20 @@ abstract contract Drips {
         view
         returns (
             bytes32 dripsHash,
+            bytes32 dripsHistoryHash,
             uint32 updateTime,
             uint128 balance,
             uint32 maxEnd
         )
     {
         DripsState storage state = _dripsStorage().states[assetId][userId];
-        return (state.dripsHash, state.updateTime, state.balance, state.maxEnd);
+        return (
+            state.dripsHash,
+            state.dripsHistoryHash,
+            state.updateTime,
+            state.balance,
+            state.maxEnd
+        );
     }
 
     /// @notice User drips balance at a given timestamp
@@ -386,8 +400,8 @@ abstract contract Drips {
         require(currDripsHash == state.dripsHash, "Invalid current drips list");
         uint32 lastUpdate = state.updateTime;
         uint32 currMaxEnd = state.maxEnd;
-        uint128 lastBalance = state.balance;
         {
+            uint128 lastBalance = state.balance;
             uint128 currBalance = _balanceAt(
                 lastBalance,
                 lastUpdate,
@@ -413,7 +427,14 @@ abstract contract Drips {
         state.maxEnd = newMaxEnd;
         state.balance = newBalance;
         bytes32 newDripsHash = _hashDrips(newReceivers);
-        emit DripsSet(userId, assetId, newDripsHash, newBalance);
+        bytes32 dripsHistory = state.dripsHistoryHash;
+        state.dripsHistoryHash = _hashDripsHistory(
+            dripsHistory,
+            newDripsHash,
+            _currTimestamp(),
+            newMaxEnd
+        );
+        emit DripsSet(userId, assetId, newDripsHash, dripsHistory, newBalance, newMaxEnd);
         if (newDripsHash != currDripsHash) {
             state.dripsHash = newDripsHash;
             for (uint256 i = 0; i < newReceivers.length; i++) {
@@ -555,6 +576,22 @@ abstract contract Drips {
     {
         if (receivers.length == 0) return bytes32(0);
         return keccak256(abi.encode(receivers));
+    }
+
+    /// @notice Calculates the hash of the drips history after the drips configuration is updated.
+    /// @param oldDripsHistoryHash The history hash which was valid before the drips were updated.
+    /// The `dripsHistoryHash` of a user before they set drips for the first time is `0`.
+    /// @param dripsHash The hash of the drips receivers being set.
+    /// @param updateTime The timestamp when the drips are updated.
+    /// @param maxEnd The maximum end of the drips being set.
+    /// @return dripsHistoryHash The hash of the updated drips history.
+    function _hashDripsHistory(
+        bytes32 oldDripsHistoryHash,
+        bytes32 dripsHash,
+        uint32 updateTime,
+        uint32 maxEnd
+    ) internal pure returns (bytes32 dripsHistoryHash) {
+        return keccak256(abi.encode(oldDripsHistoryHash, dripsHash, updateTime, maxEnd));
     }
 
     /// @notice Applies the effects of the change of the drips on the receivers' drips states.
