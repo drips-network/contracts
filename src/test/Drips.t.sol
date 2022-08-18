@@ -77,8 +77,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         }
     }
 
-    function recv() internal pure returns (DripsReceiver[] memory list) {
-        list = new DripsReceiver[](0);
+    function recv() internal pure returns (DripsReceiver[] memory) {
+        return new DripsReceiver[](0);
     }
 
     function recv(uint256 userId, uint256 amtPerSec)
@@ -190,35 +190,6 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
             );
         }
         return receivers;
-    }
-
-    function receiveDrips(
-        DripsReceiver[] memory receivers,
-        uint32 maxEnd,
-        uint32 updateTime
-    ) internal {
-        emit log_named_uint("maxEnd:", maxEnd);
-        for (uint256 i = 0; i < receivers.length; i++) {
-            DripsReceiver memory r = receivers[i];
-            uint32 duration = r.config.duration();
-            uint32 start = r.config.start();
-            if (start == 0) start = updateTime;
-            if (duration == 0) duration = maxEnd - start;
-            // drips was in the past, not added
-            if (start + duration < updateTime) duration = 0;
-            else if (start < updateTime) duration -= updateTime - start;
-
-            uint256 expectedAmt = (duration * r.config.amtPerSec()) >> 64;
-            (uint128 actualAmt, ) = Drips._receiveDrips(r.userId, defaultAsset, type(uint32).max);
-            // only log if acutalAmt doesn't match exptectedAmt
-            if (expectedAmt != actualAmt) {
-                emit log_named_uint("userId:", r.userId);
-                emit log_named_uint("start:", r.config.start());
-                emit log_named_uint("duration:", r.config.duration());
-                emit log_named_uint("amtPerSec:", r.config.amtPerSec());
-            }
-            assertEq(actualAmt, expectedAmt);
-        }
     }
 
     function setDrips(
@@ -407,6 +378,35 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         assertEq(receivableCycles, expectedCyclesAfter, "Invalid receivable drips cycles left");
         assertReceivableDripsCycles(userId, expectedCyclesAfter);
         assertReceivableDrips(userId, type(uint32).max, expectedAmtAfter, 0);
+    }
+
+    function receiveDrips(
+        DripsReceiver[] memory receivers,
+        uint32 maxEnd,
+        uint32 updateTime
+    ) internal {
+        emit log_named_uint("maxEnd:", maxEnd);
+        for (uint256 i = 0; i < receivers.length; i++) {
+            DripsReceiver memory r = receivers[i];
+            uint32 duration = r.config.duration();
+            uint32 start = r.config.start();
+            if (start == 0) start = updateTime;
+            if (duration == 0) duration = maxEnd - start;
+            // drips was in the past, not added
+            if (start + duration < updateTime) duration = 0;
+            else if (start < updateTime) duration -= updateTime - start;
+
+            uint256 expectedAmt = (duration * r.config.amtPerSec()) >> 64;
+            (uint128 actualAmt, ) = Drips._receiveDrips(r.userId, defaultAsset, type(uint32).max);
+            // only log if acutalAmt doesn't match exptectedAmt
+            if (expectedAmt != actualAmt) {
+                emit log_named_uint("userId:", r.userId);
+                emit log_named_uint("start:", r.config.start());
+                emit log_named_uint("duration:", r.config.duration());
+                emit log_named_uint("amtPerSec:", r.config.amtPerSec());
+            }
+            assertEq(actualAmt, expectedAmt);
+        }
     }
 
     function assertReceivableDripsCycles(uint256 userId, uint32 expectedCycles) internal {

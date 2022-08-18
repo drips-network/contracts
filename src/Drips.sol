@@ -77,11 +77,11 @@ abstract contract Drips {
     uint8 internal constant _AMT_PER_SEC_EXTRA_DECIMALS = 18;
     /// @notice The multiplier for all amtPerSec values. It's `10 ** _AMT_PER_SEC_EXTRA_DECIMALS`.
     uint256 internal constant _AMT_PER_SEC_MULTIPLIER = 1_000_000_000_000_000_000;
+    /// @notice The total amount the contract can keep track of each asset.
+    uint256 internal constant _MAX_TOTAL_DRIPS_BALANCE = uint128(type(int128).max);
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
     /// gain access to drips received during `T - cycleSecs` to `T - 1`.
     /// Always higher than 1.
-    /// @notice The total amount the contract can keep track of each asset.
-    uint256 internal constant _MAX_TOTAL_DRIPS_BALANCE = uint128(type(int128).max);
     uint32 internal immutable _cycleSecs;
     /// @notice The storage slot holding a single `DripsStorage` structure.
     bytes32 private immutable _dripsStorageSlot;
@@ -108,7 +108,7 @@ abstract contract Drips {
         DripsConfig config
     );
 
-    /// @notice Emitted when drips are received and are ready to be split.
+    /// @notice Emitted when drips are received.
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param amt The received amount.
@@ -127,7 +127,7 @@ abstract contract Drips {
     }
 
     struct DripsState {
-        /// @notice Drips receivers list hash, see `hashDrips`.
+        /// @notice The drips receivers list hash, see `_hashDrips`.
         bytes32 dripsHash;
         /// @notice The next cycle to be received
         uint32 nextReceivableCycle;
@@ -182,7 +182,7 @@ abstract contract Drips {
         return currCycle - nextReceivableCycle;
     }
 
-    /// @notice Calculate effects of calling `receiveDrips` with the given parameters.
+    /// @notice Calculate effects of calling `_receiveDrips` with the given parameters.
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param maxCycles The maximum number of received drips cycles.
@@ -211,7 +211,6 @@ abstract contract Drips {
 
     /// @notice Receive drips from unreceived cycles of the user.
     /// Received drips cycles won't need to be analyzed ever again.
-    /// Calling this function does not receive but makes the funds ready to be split and received.
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param maxCycles The maximum number of received drips cycles.
@@ -249,7 +248,7 @@ abstract contract Drips {
     /// @notice Current user drips state.
     /// @param userId The user ID
     /// @param assetId The used asset ID
-    /// @return dripsHash The current drips receivers list hash, see `hashDrips`
+    /// @return dripsHash The current drips receivers list hash, see `_hashDrips`
     /// @return updateTime The time when drips have been configured for the last time
     /// @return balance The balance when drips have been configured for the last time
     /// @return maxEnd The current maximum end time of drips
@@ -286,6 +285,37 @@ abstract contract Drips {
         require(timestamp >= state.updateTime, "Timestamp before last drips update");
         require(_hashDrips(receivers) == state.dripsHash, "Invalid current drips list");
         return _balanceAt(state.balance, state.updateTime, state.maxEnd, receivers, timestamp);
+    }
+
+    /// @notice Calculates the drips balance at a given timestamp.
+    /// @param lastBalance The balance when drips have started
+    /// @param lastUpdate The timestamp when drips have started.
+    /// @param maxEnd The maximum end time of drips
+    /// @param receivers The list of drips receivers.
+    /// @param timestamp The timestamps for which balance should be calculated.
+    /// It can't be lower than `lastUpdate`.
+    /// If it's bigger than `block.timestamp`, then it's a prediction assuming
+    /// that `setDrips` won't be called before `timestamp`.
+    /// @return balance The user balance on `timestamp`
+    function _balanceAt(
+        uint128 lastBalance,
+        uint32 lastUpdate,
+        uint32 maxEnd,
+        DripsReceiver[] memory receivers,
+        uint32 timestamp
+    ) private view returns (uint128 balance) {
+        balance = lastBalance;
+        for (uint256 i = 0; i < receivers.length; i++) {
+            DripsReceiver memory receiver = receivers[i];
+            (uint32 start, uint32 end) = _dripsRange({
+                receiver: receiver,
+                updateTime: lastUpdate,
+                maxEnd: maxEnd,
+                startCap: lastUpdate,
+                endCap: timestamp
+            });
+            balance -= uint128(_drippedAmt(receiver.config.amtPerSec(), start, end));
+        }
     }
 
     /// @notice Sets the user's drips configuration.
@@ -423,6 +453,11 @@ abstract contract Drips {
         }
     }
 
+    /// @notice Preprocess and add a drips receiver to the list of configurations.
+    /// @param configs The list of drips configurations
+    /// @param configsLen The length of `configs`
+    /// @param receiver The added drips receivers.
+    /// @return newConfigsLen The new length of `configs`
     function _addConfig(
         uint256[] memory configs,
         uint256 configsLen,
@@ -436,11 +471,16 @@ abstract contract Drips {
             type(uint32).max
         );
         if (start == end) return configsLen;
-        // _addConfig(configs, configsLen, amtPerSec, start, end);
         configs[configsLen] = (uint256(amtPerSec) << 64) | (uint256(start) << 32) | end;
         return configsLen + 1;
     }
 
+    /// @notice Load a drips configuration from the list.
+    /// @param configs The list of drips configurations
+    /// @param idx The loaded configuration index. It must be smaller than the `configs` length.
+    /// @return amtPerSec The amount per second being dripped.
+    /// @return start The timestamp when dripping starts.
+    /// @return end The maximum timestamp when dripping ends.
     function _getConfig(uint256[] memory configs, uint256 idx)
         private
         pure
@@ -458,47 +498,16 @@ abstract contract Drips {
         return (val >> 64, uint32(val >> 32), uint32(val));
     }
 
-    /// @notice Calculates the drips balance at a given timestamp.
-    /// @param lastBalance The balance when drips have started
-    /// @param lastUpdate The timestamp when drips have started.
-    /// @param maxEnd The maximum end time of drips
-    /// @param receivers The list of drips receivers.
-    /// @param timestamp The timestamps for which balance should be calculated.
-    /// It can't be lower than `lastUpdate`.
-    /// If it's bigger than `block.timestamp`, then it's a prediction assuming
-    /// that `setDrips` won't be called before `timestamp`.
-    /// @return balance The user balance on `timestamp`
-    function _balanceAt(
-        uint128 lastBalance,
-        uint32 lastUpdate,
-        uint32 maxEnd,
-        DripsReceiver[] memory receivers,
-        uint32 timestamp
-    ) private view returns (uint128 balance) {
-        balance = lastBalance;
-        for (uint256 i = 0; i < receivers.length; i++) {
-            DripsReceiver memory receiver = receivers[i];
-            (uint32 start, uint32 end) = _dripsRange({
-                receiver: receiver,
-                updateTime: lastUpdate,
-                maxEnd: maxEnd,
-                startCap: lastUpdate,
-                endCap: timestamp
-            });
-            balance -= uint128(_drippedAmt(receiver.config.amtPerSec(), start, end));
-        }
-    }
-
     /// @notice Calculates the hash of the drips configuration.
     /// It's used to verify if drips configuration is the previously set one.
     /// @param receivers The list of the drips receivers.
     /// Must be sorted, deduplicated and without 0 amtPerSecs.
     /// If the drips have never been updated, pass an empty array.
-    /// @return dripsConfigurationHash The hash of the drips configuration
+    /// @return dripsHash The hash of the drips configuration
     function _hashDrips(DripsReceiver[] memory receivers)
         internal
         pure
-        returns (bytes32 dripsConfigurationHash)
+        returns (bytes32 dripsHash)
     {
         if (receivers.length == 0) return bytes32(0);
         return keccak256(abi.encode(receivers));

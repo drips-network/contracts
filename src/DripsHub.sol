@@ -399,12 +399,8 @@ contract DripsHub is Managed, Drips, Splits {
     /// @param receivers The list of the drips receivers.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
     /// If the drips have never been updated, pass an empty array.
-    /// @return dripsConfigurationHash The hash of the drips configuration
-    function hashDrips(DripsReceiver[] memory receivers)
-        public
-        pure
-        returns (bytes32 dripsConfigurationHash)
-    {
+    /// @return dripsHash The hash of the drips configuration
+    function hashDrips(DripsReceiver[] memory receivers) public pure returns (bytes32 dripsHash) {
         return Drips._hashDrips(receivers);
     }
 
