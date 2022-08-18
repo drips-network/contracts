@@ -849,6 +849,9 @@ abstract contract Drips {
                 // Ensure that the user receives the updated cycles
                 uint32 currStartCycle = _cycleOf(currStart);
                 uint32 newStartCycle = _cycleOf(newStart);
+                // The `currStartCycle > newStartCycle` check is just an optimization.
+                // If it's false, then `state.nextReceivableCycle > newStartCycle` must be
+                // false too, there's no need to pay for the storage access to check it.
                 if (currStartCycle > newStartCycle && state.nextReceivableCycle > newStartCycle) {
                     state.nextReceivableCycle = newStartCycle;
                 }
