@@ -2,7 +2,7 @@
 pragma solidity ^0.8.15;
 
 import {Test} from "forge-std/Test.sol";
-import {Drips, DripsConfig, DripsConfigImpl, DripsReceiver} from "../Drips.sol";
+import {Drips, DripsConfig, DripsHistory, DripsConfigImpl, DripsReceiver} from "../Drips.sol";
 
 contract PseudoRandomUtils {
     bytes32 private salt;
@@ -26,6 +26,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     string internal constant ERROR_NOT_SORTED = "Receivers not sorted";
     string internal constant ERROR_INVALID_DRIPS_LIST = "Invalid current drips list";
     string internal constant ERROR_TIMESTAMP_EARLY = "Timestamp before last drips update";
+    string internal constant ERROR_HISTORY_INVALID = "Invalid drips history";
+    string internal constant ERROR_HISTORY_UNCLEAR = "Drips history entry with hash and receivers";
 
     uint32 internal cycleSecs;
     // Keys are assetId and userId
@@ -190,6 +192,67 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
             );
         }
         return receivers;
+    }
+
+    function hist() internal pure returns (DripsHistory[] memory) {
+        return new DripsHistory[](0);
+    }
+
+    function hist(
+        DripsReceiver[] memory receivers,
+        uint32 updateTime,
+        uint32 maxEnd
+    ) internal pure returns (DripsHistory[] memory history) {
+        history = new DripsHistory[](1);
+        history[0] = DripsHistory(0, receivers, updateTime, maxEnd);
+    }
+
+    function hist(
+        bytes32 dripsHash,
+        uint32 updateTime,
+        uint32 maxEnd
+    ) internal pure returns (DripsHistory[] memory history) {
+        history = hist(recv(), updateTime, maxEnd);
+        history[0].dripsHash = dripsHash;
+    }
+
+    function hist(uint256 userId) internal returns (DripsHistory[] memory history) {
+        DripsReceiver[] memory receivers = loadCurrReceivers(defaultAsset, userId);
+        (, , uint32 updateTime, , uint32 maxEnd) = Drips._dripsState(userId, defaultAsset);
+        return hist(receivers, updateTime, maxEnd);
+    }
+
+    function histSkip(uint256 userId) internal view returns (DripsHistory[] memory history) {
+        (bytes32 dripsHash, , uint32 updateTime, , uint32 maxEnd) = Drips._dripsState(
+            userId,
+            defaultAsset
+        );
+        return hist(dripsHash, updateTime, maxEnd);
+    }
+
+    function hist(DripsHistory[] memory history, uint256 userId)
+        internal
+        returns (DripsHistory[] memory)
+    {
+        return hist(history, hist(userId));
+    }
+
+    function histSkip(DripsHistory[] memory history, uint256 userId)
+        internal
+        view
+        returns (DripsHistory[] memory)
+    {
+        return hist(history, histSkip(userId));
+    }
+
+    function hist(DripsHistory[] memory history1, DripsHistory[] memory history2)
+        internal
+        pure
+        returns (DripsHistory[] memory history)
+    {
+        history = new DripsHistory[](history1.length + history2.length);
+        for (uint256 i = 0; i < history1.length; i++) history[i] = history1[i];
+        for (uint256 i = 0; i < history2.length; i++) history[history1.length + i] = history2[i];
     }
 
     function setDrips(
@@ -445,6 +508,117 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         );
         assertEq(actualAmt, expectedAmt, "Invalid receivable amount");
         assertEq(actualCycles, expectedCycles, "Invalid receivable drips cycles");
+    }
+
+    function squeezeDrips(
+        uint256 userId,
+        uint256 senderId,
+        DripsHistory[] memory dripsHistory,
+        uint256 expectedAmt,
+        uint256 expectedNextSqueezed
+    ) internal {
+        squeezeDrips(userId, senderId, 0, dripsHistory, expectedAmt, expectedNextSqueezed);
+    }
+
+    function squeezeDrips(
+        uint256 userId,
+        uint256 senderId,
+        bytes32 historyHash,
+        DripsHistory[] memory dripsHistory,
+        uint256 expectedAmt,
+        uint256 expectedNextSqueezed
+    ) internal {
+        uint256 assetId = defaultAsset;
+        (uint128 amtBefore, uint32 nextSqueezedBefore) = Drips._squeezableDrips(
+            userId,
+            assetId,
+            senderId,
+            historyHash,
+            dripsHistory
+        );
+
+        (uint128 amt, uint32 nextSqueezed) = Drips._squeezeDrips(
+            userId,
+            assetId,
+            senderId,
+            historyHash,
+            dripsHistory
+        );
+
+        assertEq(amt, expectedAmt, "Invalid squeezed amount");
+        assertEq(nextSqueezed, expectedNextSqueezed, "Invalid next squeezed");
+        assertEq(amtBefore, amt, "Invalid squeezable amount before squeezing");
+        assertEq(nextSqueezedBefore, nextSqueezed, "Invalid next squeezed before squeezing");
+        (uint128 amtAfter, uint32 nextSqueezedAfter) = Drips._squeezableDrips(
+            userId,
+            assetId,
+            senderId,
+            historyHash,
+            dripsHistory
+        );
+        assertEq(amtAfter, 0, "Squeezable amount after squeezing non-zero");
+        assertEq(nextSqueezedAfter, nextSqueezed, "Invalid next squeezed after squeezing");
+        assertNextSqueezedDrips(userId, assetId, senderId, nextSqueezed);
+    }
+
+    function assertSqueezeDripsReverts(
+        uint256 userId,
+        uint256 senderId,
+        bytes32 historyHash,
+        DripsHistory[] memory dripsHistory,
+        string memory expectedReason
+    ) internal {
+        try this.squeezeDripsExternal(userId, defaultAsset, senderId, historyHash, dripsHistory) {
+            assertTrue(false, "SqueezeDrips hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, expectedReason, "Invalid squeezeDrips revert reason");
+        }
+    }
+
+    function squeezeDripsExternal(
+        uint256 userId,
+        uint256 assetId,
+        uint256 senderId,
+        bytes32 historyHash,
+        DripsHistory[] memory dripsHistory
+    ) external {
+        Drips._squeezeDrips(userId, assetId, senderId, historyHash, dripsHistory);
+    }
+
+    function assertSqueezableDripsReverts(
+        uint256 userId,
+        uint256 senderId,
+        bytes32 historyHash,
+        DripsHistory[] memory dripsHistory,
+        string memory expectedReason
+    ) internal {
+        try
+            this.squeezableDripsExternal(userId, defaultAsset, senderId, historyHash, dripsHistory)
+        {
+            assertTrue(false, "SqueezableDrips hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, expectedReason, "Invalid squeezableDrips revert reason");
+        }
+    }
+
+    function squeezableDripsExternal(
+        uint256 userId,
+        uint256 assetId,
+        uint256 senderId,
+        bytes32 historyHash,
+        DripsHistory[] memory dripsHistory
+    ) external view {
+        Drips._squeezableDrips(userId, assetId, senderId, historyHash, dripsHistory);
+    }
+
+    function assertNextSqueezedDrips(
+        uint256 userId,
+        uint256 assetId,
+        uint256 senderId,
+        uint256 expected
+    ) internal {
+        uint256 actual = Drips._nextSqueezedDrips(userId, assetId, senderId);
+        assertEq(actual, expected, "Invalid next squeezable drips");
     }
 
     function testDripsConfigStoresParameters() public {
@@ -1396,5 +1570,203 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         );
         skipTo(0);
         assertEq(Drips._calcMaxEnd(100, receivers), 150);
+    }
+
+    function testSqueezeDrips() public {
+        uint128 amt = cycleSecs;
+        setDrips(sender, 0, amt, recv(receiver, 1));
+        skip(2);
+        squeezeDrips(receiver, sender, hist(sender), 2, block.timestamp);
+        skipToCycleEnd();
+        receiveDrips(receiver, amt - 2);
+    }
+
+    function testSqueezeDripsRevertsWhenInvalidHistory() public {
+        uint128 amt = cycleSecs;
+        setDrips(sender, 0, amt, recv(receiver, 1));
+        DripsHistory[] memory history = hist(sender);
+        history[0].maxEnd += 1;
+        skip(2);
+        assertSqueezeDripsReverts(receiver, sender, 0, history, ERROR_HISTORY_INVALID);
+    }
+
+    function testSqueezeDripsRevertsWhenHistoryEntryContainsReceiversAndHash() public {
+        uint128 amt = cycleSecs;
+        setDrips(sender, 0, amt, recv(receiver, 1));
+        DripsHistory[] memory history = hist(sender);
+        history[0].dripsHash = Drips._hashDrips(history[0].receivers);
+        skip(2);
+        assertSqueezeDripsReverts(receiver, sender, 0, history, ERROR_HISTORY_UNCLEAR);
+    }
+
+    function testFundsAreNotSqueezeTwice() public {
+        uint128 amt = cycleSecs;
+        setDrips(sender, 0, amt, recv(receiver, 1));
+        DripsHistory[] memory history = hist(sender);
+        skip(1);
+        squeezeDrips(receiver, sender, history, 1, block.timestamp);
+        skip(2);
+        squeezeDrips(receiver, sender, history, 2, block.timestamp);
+        skipToCycleEnd();
+        receiveDrips(receiver, amt - 3);
+    }
+
+    function testFundsFromFinishedCyclesAreNotSqueezed() public {
+        uint128 amt = cycleSecs * 2;
+        setDrips(sender, 0, amt, recv(receiver, 1));
+        skipToCycleEnd();
+        skip(2);
+        squeezeDrips(receiver, sender, hist(sender), 2, block.timestamp);
+        skipToCycleEnd();
+        receiveDrips(receiver, amt - 2);
+    }
+
+    function testHistoryFromFinishedCyclesIsNotSqueezed() public {
+        setDrips(sender, 0, 2, recv(receiver, 1));
+        DripsHistory[] memory history = hist(sender);
+        skipToCycleEnd();
+        setDrips(sender, 0, 6, recv(receiver, 3));
+        history = hist(history, sender);
+        skip(1);
+        squeezeDrips(receiver, sender, history, 3, block.timestamp);
+        skipToCycleEnd();
+        receiveDrips(receiver, 5);
+    }
+
+    function testFundsFromAfterDripsRunOutAreNotSqueezed() public {
+        uint128 amt = 2;
+        setDrips(sender, 0, amt, recv(receiver, 1));
+        skip(3);
+        squeezeDrips(receiver, sender, hist(sender), 2, block.timestamp);
+        skipToCycleEnd();
+        receiveDrips(receiver, 0);
+    }
+
+    function testOnFirstSecondOfCycleNoFundsCanBeSqueezed() public {
+        uint128 amt = cycleSecs * 2;
+        setDrips(sender, 0, amt, recv(receiver, 1));
+        skipToCycleEnd();
+        squeezeDrips(receiver, sender, hist(sender), 0, block.timestamp);
+        skipToCycleEnd();
+        receiveDrips(receiver, amt);
+    }
+
+    function testDripsWithStartAndDurationCanBeSqueezed() public {
+        setDrips(sender, 0, 10, recv(receiver, 1, block.timestamp + 2, 2));
+        skip(5);
+        squeezeDrips(receiver, sender, hist(sender), 2, block.timestamp);
+        skipToCycleEnd();
+        receiveDrips(receiver, 0);
+    }
+
+    function testEmptyHistoryCanBeSqueezed() public {
+        skip(1);
+        squeezeDrips(receiver, sender, hist(), 0, block.timestamp - 1);
+    }
+
+    function testHistoryWithoutTheSqueezingReceiverCanBeSqueezed() public {
+        setDrips(sender, 0, 1, recv(receiver1, 1));
+        DripsHistory[] memory history = hist(sender);
+        skip(1);
+        squeezeDrips(receiver2, sender, history, 0, block.timestamp);
+        skipToCycleEnd();
+        receiveDrips(receiver1, 1);
+    }
+
+    function testSendersCanBeSqueezedIndependently() public {
+        setDrips(sender1, 0, 4, recv(receiver, 2));
+        DripsHistory[] memory history1 = hist(sender1);
+        setDrips(sender2, 0, 6, recv(receiver, 3));
+        DripsHistory[] memory history2 = hist(sender2);
+        skip(1);
+        squeezeDrips(receiver, sender1, history1, 2, block.timestamp);
+        skip(1);
+        squeezeDrips(receiver, sender2, history2, 6, block.timestamp);
+        skipToCycleEnd();
+        receiveDrips(receiver, 2);
+    }
+
+    function testMultipleHistoryEntriesCanBeSqueezed() public {
+        setDrips(sender, 0, 5, recv(receiver, 1));
+        DripsHistory[] memory history = hist(sender);
+        skip(1);
+        setDrips(sender, 4, 4, recv(receiver, 2));
+        history = hist(history, sender);
+        skip(1);
+        squeezeDrips(receiver, sender, history, 3, block.timestamp);
+        skipToCycleEnd();
+        receiveDrips(receiver, 2);
+    }
+
+    function testMiddleHistoryEntryCanBeSkippedWhenSqueezing() public {
+        DripsHistory[] memory history = hist();
+        setDrips(sender, 0, 1, recv(receiver, 1));
+        history = hist(history, sender);
+        skip(1);
+        setDrips(sender, 0, 2, recv(receiver, 2));
+        history = histSkip(history, sender);
+        skip(1);
+        setDrips(sender, 0, 4, recv(receiver, 4));
+        history = hist(history, sender);
+        skip(1);
+        squeezeDrips(receiver, sender, history, 5, block.timestamp);
+        skipToCycleEnd();
+        receiveDrips(receiver, 2);
+    }
+
+    function testFirstAndLastHistoryEntriesCanBeSkippedWhenSqueezing() public {
+        DripsHistory[] memory history = hist();
+        setDrips(sender, 0, 1, recv(receiver, 1));
+        history = histSkip(history, sender);
+        skip(1);
+        setDrips(sender, 0, 2, recv(receiver, 2));
+        history = hist(history, sender);
+        skip(1);
+        setDrips(sender, 0, 4, recv(receiver, 4));
+        history = histSkip(history, sender);
+        skip(1);
+        squeezeDrips(receiver, sender, history, 2, block.timestamp - 1);
+        skipToCycleEnd();
+        receiveDrips(receiver, 5);
+    }
+
+    function testPartOfTheWholeHistoryCanBeSqueezed() public {
+        setDrips(sender, 0, 1, recv(receiver, 1));
+        (, bytes32 historyHash, , , ) = Drips._dripsState(sender, defaultAsset);
+        skip(1);
+        setDrips(sender, 0, 2, recv(receiver, 2));
+        DripsHistory[] memory history = hist(sender);
+        skip(1);
+        squeezeDrips(receiver, sender, historyHash, history, 2, block.timestamp);
+        skipToCycleEnd();
+        receiveDrips(receiver, 1);
+    }
+
+    function testDripsWithCopiesOfTheReceiverCanBeSqueezed() public {
+        setDrips(sender, 0, 6, recv(recv(receiver, 1), recv(receiver, 2)));
+        skip(1);
+        squeezeDrips(receiver, sender, hist(sender), 3, block.timestamp);
+        skipToCycleEnd();
+        receiveDrips(receiver, 3);
+    }
+
+    function testDripsWithManyReceiversCanBeSqueezed() public {
+        setDrips(sender, 0, 14, recv(recv(receiver1, 1), recv(receiver2, 2), recv(receiver3, 4)));
+        skip(1);
+        squeezeDrips(receiver2, sender, hist(sender), 2, block.timestamp);
+        skipToCycleEnd();
+        receiveDrips(receiver1, 2);
+        receiveDrips(receiver2, 2);
+        receiveDrips(receiver3, 8);
+    }
+
+    function testNextSqueezableDripsIsAtLeastCurrentCycleStart() public {
+        skipToCycleEnd();
+        uint256 cycleStart = block.timestamp;
+        assertNextSqueezedDrips(receiver, defaultAsset, sender, cycleStart);
+        skip(cycleSecs - 1);
+        assertNextSqueezedDrips(receiver, defaultAsset, sender, cycleStart);
+        skip(1);
+        assertNextSqueezedDrips(receiver, defaultAsset, sender, block.timestamp);
     }
 }

@@ -9,6 +9,30 @@ struct DripsReceiver {
     DripsConfig config;
 }
 
+/// @notice The sender drips history entry, used when squeezing drips.
+struct DripsHistory {
+    /// @notice Drips receivers list hash, see `_hashDrips`.
+    /// If it's non-zero, `receivers` must be empty.
+    bytes32 dripsHash;
+    /// @notice The drips receivers. If it's non-empty, `dripsHash` must be `0`.
+    /// If it's empty, this history entry will be skipped when squeezing drips
+    /// and `dripsHash` will be used when verifying the drips history validity.
+    /// Skipping a history entry allows cutting gas usage on analysis
+    /// of parts of the drips history which are not worth squeezing.
+    /// Only the last non-skipped history entry affects the `nextSqueezableDrips` timestamp,
+    /// so if a squeezed history list ends with `N` skipped entries, these `N` entries
+    /// still will be squeezable in the following calls to `squeezeDrips`.
+    /// The hash of an empty receivers list is `0`, so when the sender updates
+    /// their receivers list to be empty, the new `DripsHistory` entry will have
+    /// both the `dripsHash` equal to `0` and the `receivers` empty making it always skipped.
+    /// This is fine, because there can't be any funds to squeeze from that entry anyway.
+    DripsReceiver[] receivers;
+    /// @notice The time when drips have been configured
+    uint32 updateTime;
+    /// @notice The maximum end time of drips
+    uint32 maxEnd;
+}
+
 /// @notice Describes a drips configuration.
 /// It's constructed from `amtPerSec`, `start` and `duration` as
 /// `amtPerSec << 64 | start << 32 | duration`.
@@ -124,6 +148,20 @@ abstract contract Drips {
         uint32 receivableCycles
     );
 
+    /// @notice Emitted when drips are squeezed.
+    /// @param userId The squeezing user ID.
+    /// @param assetId The used asset ID.
+    /// @param senderId The ID of the user sending drips which are squeezed.
+    /// @param amt The squeezed amount.
+    /// @param nextSqueezed The next timestamp that can be squeezed.
+    event SqueezedDrips(
+        uint256 indexed userId,
+        uint256 indexed assetId,
+        uint256 indexed senderId,
+        uint128 amt,
+        uint32 nextSqueezed
+    );
+
     struct DripsStorage {
         /// @notice User drips states.
         /// The keys are the asset ID and the user ID.
@@ -133,6 +171,9 @@ abstract contract Drips {
     struct DripsState {
         /// @notice The drips history hash, see `_hashDripsHistory`.
         bytes32 dripsHistoryHash;
+        /// @notice The next timestamp for which the user can squeeze drips from the sender.
+        /// The key is the sender's user ID. See `_nextSqueezedDrips`.
+        mapping(uint256 => uint32) nextSqueezed;
         /// @notice The drips receivers list hash, see `_hashDrips`.
         bytes32 dripsHash;
         /// @notice The next cycle to be received
@@ -293,6 +334,157 @@ abstract contract Drips {
         fromCycle = _dripsStorage().states[assetId][userId].nextReceivableCycle;
         toCycle = _cycleOf(_currTimestamp());
         if (fromCycle == 0 || toCycle < fromCycle) toCycle = fromCycle;
+    }
+
+    /// @notice Receive drips from the currently running cycle from a single sender.
+    /// It doesn't receive drips from the previous, finished cycles, to do that use `_receiveDrips`.
+    /// Squeezed funds won't be received in the next calls to `_squeezeDrips` or `_receiveDrips`.
+    /// Only funds dripped from `_nextSqueezedDrips` to `block.timestamp` can be squeezed.
+    /// @param userId The ID of the user receiving drips to squeeze funds for.
+    /// @param assetId The used asset ID.
+    /// @param senderId The ID of the user sending drips to squeeze funds from.
+    /// @param historyHash The sender's history hash which was valid right before
+    /// they set up the sequence of configurations described by `dripsHistory`.
+    /// @param dripsHistory The sequence of the sender's drips configurations.
+    /// It can start at an arbitrary past configuration, but must describe all the configurations
+    /// which have been used since then including the current one, in the chronological order.
+    /// Only drips described by `dripsHistory` will be squeezed.
+    /// If `dripsHistory` entries have no receivers, they won't be squeezed.
+    /// The next call to `_squeezeDrips` will be able to squeeze only funds which
+    /// have been dripped after the last timestamp squeezed in this call.
+    /// This may cause some funds to be unreceivable until the current cycle ends
+    /// and they can be received using `_receiveDrips`.
+    /// @return amt The squeezed amount.
+    /// @return nextSqueezed The next timestamp that can be squeezed.
+    function _squeezeDrips(
+        uint256 userId,
+        uint256 assetId,
+        uint256 senderId,
+        bytes32 historyHash,
+        DripsHistory[] memory dripsHistory
+    ) internal returns (uint128 amt, uint32 nextSqueezed) {
+        (amt, nextSqueezed) = _squeezableDrips(
+            userId,
+            assetId,
+            senderId,
+            historyHash,
+            dripsHistory
+        );
+        DripsState storage state = _dripsStorage().states[assetId][userId];
+        state.nextSqueezed[senderId] = nextSqueezed;
+        uint32 cycleStart = _currTimestamp() - (_currTimestamp() % _cycleSecs);
+        _addDeltaRange(state, cycleStart, cycleStart + 1, -int256(amt * _AMT_PER_SEC_MULTIPLIER));
+        emit SqueezedDrips(userId, assetId, senderId, amt, nextSqueezed);
+    }
+
+    /// @notice Calculate effects of calling `_squeezeDrips` with the given parameters.
+    /// See its documentation for more details.
+    /// @param userId The ID of the user receiving drips to squeeze funds for.
+    /// @param assetId The used asset ID.
+    /// @param senderId The ID of the user sending drips to squeeze funds from.
+    /// @param historyHash The sender's history hash which was valid right before `dripsHistory`.
+    /// @param dripsHistory The sequence of the sender's drips configurations.
+    /// @return amt The squeezed amount.
+    /// @return nextSqueezed The next timestamp that can be squeezed.
+    function _squeezableDrips(
+        uint256 userId,
+        uint256 assetId,
+        uint256 senderId,
+        bytes32 historyHash,
+        DripsHistory[] memory dripsHistory
+    ) internal view returns (uint128 amt, uint32 nextSqueezed) {
+        bytes32 currHistoryHash = _dripsStorage().states[assetId][senderId].dripsHistoryHash;
+        _verifyDripsHistory(historyHash, dripsHistory, currHistoryHash);
+        uint32 squeezeStart = _nextSqueezedDrips(userId, assetId, senderId);
+        uint32 squeezeEnd = _currTimestamp();
+        nextSqueezed = squeezeStart;
+        uint256 i = dripsHistory.length;
+        while (i > 0 && squeezeStart < squeezeEnd) {
+            DripsHistory memory drips = dripsHistory[--i];
+            if (drips.receivers.length != 0) {
+                amt += _squeezedAmt(userId, drips, squeezeStart, squeezeEnd);
+                if (nextSqueezed < squeezeEnd) nextSqueezed = squeezeEnd;
+            }
+            squeezeEnd = drips.updateTime;
+        }
+    }
+
+    /// @notice Verify a drips history and revert if it's invalid.
+    /// @param historyHash The user's history hash which was valid right before `dripsHistory`.
+    /// @param dripsHistory The sequence of the user's drips configurations.
+    /// @param finalHistoryHash The history hash at the end of `dripsHistory`.
+    function _verifyDripsHistory(
+        bytes32 historyHash,
+        DripsHistory[] memory dripsHistory,
+        bytes32 finalHistoryHash
+    ) private pure {
+        for (uint256 i = 0; i < dripsHistory.length; i++) {
+            DripsHistory memory drips = dripsHistory[i];
+            bytes32 dripsHash = drips.dripsHash;
+            if (drips.receivers.length != 0) {
+                require(dripsHash == 0, "Drips history entry with hash and receivers");
+                dripsHash = _hashDrips(drips.receivers);
+            }
+            historyHash = _hashDripsHistory(historyHash, dripsHash, drips.updateTime, drips.maxEnd);
+        }
+        require(historyHash == finalHistoryHash, "Invalid drips history");
+    }
+
+    /// @notice Calculate the amount squeezable by a user from a single drips history entry.
+    /// @param userId The ID of the user to squeeze drips for.
+    /// @param dripsHistory The squeezed history entry.
+    /// @param squeezeStart The squeezed time range start.
+    /// @param squeezeStart The squeezed time range end.
+    /// @return squeezedAmt The squeezed amount.
+    function _squeezedAmt(
+        uint256 userId,
+        DripsHistory memory dripsHistory,
+        uint32 squeezeStart,
+        uint32 squeezeEnd
+    ) private view returns (uint128 squeezedAmt) {
+        DripsReceiver[] memory receivers = dripsHistory.receivers;
+        // Binary search for the `idx` of the first `userId` receiver being
+        uint256 idx = 0;
+        uint256 idxCap = receivers.length;
+        while (idx < idxCap) {
+            uint256 idxMid = (idx + idxCap) / 2;
+            if (receivers[idxMid].userId < userId) {
+                idx = idxMid + 1;
+            } else {
+                idxCap = idxMid;
+            }
+        }
+        uint32 updateTime = dripsHistory.updateTime;
+        uint32 maxEnd = dripsHistory.maxEnd;
+        uint256 amt = 0;
+        for (; idx < receivers.length; idx++) {
+            DripsReceiver memory receiver = receivers[idx];
+            if (receiver.userId != userId) break;
+            (uint32 start, uint32 end) = _dripsRange(
+                receiver,
+                updateTime,
+                maxEnd,
+                squeezeStart,
+                squeezeEnd
+            );
+            amt += _drippedAmt(receiver.config.amtPerSec(), start, end);
+        }
+        return uint128(amt);
+    }
+
+    /// @notice Get the next timestamp for which the user can squeeze drips from the sender.
+    /// @param userId The ID of the user receiving drips to squeeze funds for.
+    /// @param assetId The used asset ID.
+    /// @param senderId The ID of the user sending drips to squeeze funds from.
+    /// @return nextSqueezed The next timestamp that can be squeezed.
+    function _nextSqueezedDrips(
+        uint256 userId,
+        uint256 assetId,
+        uint256 senderId
+    ) internal view returns (uint32 nextSqueezed) {
+        nextSqueezed = _dripsStorage().states[assetId][userId].nextSqueezed[senderId];
+        uint32 cycleStart = _currTimestamp() - (_currTimestamp() % _cycleSecs);
+        if (nextSqueezed < cycleStart) nextSqueezed = cycleStart;
     }
 
     /// @notice Current user drips state.

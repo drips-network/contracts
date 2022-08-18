@@ -5,7 +5,7 @@ import {DripsHubUserUtils} from "./DripsHubUserUtils.t.sol";
 import {AddressAppUser} from "./AddressAppUser.t.sol";
 import {ManagedUser} from "./ManagedUser.t.sol";
 import {AddressApp} from "../AddressApp.sol";
-import {SplitsReceiver, DripsHub, DripsReceiver} from "../DripsHub.sol";
+import {SplitsReceiver, DripsHub, DripsHistory, DripsReceiver} from "../DripsHub.sol";
 import {Reserve} from "../Reserve.sol";
 import {Proxy} from "../Managed.sol";
 import {IERC20, ERC20PresetFixedSupply} from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
@@ -191,6 +191,67 @@ contract DripsHubTest is DripsHubUserUtils {
         receiveDrips(receiver, dripsHub.cycleSecs() * 3, 3);
 
         collectAll(receiver, amt);
+    }
+
+    function testSqueezeDrips() public {
+        skipToCycleEnd();
+        // Start dripping
+        DripsReceiver[] memory receivers = dripsReceivers(receiver, 1);
+        setDrips(user, 0, 2, receivers);
+
+        // Create history
+        uint32 lastUpdate = uint32(block.timestamp);
+        uint32 maxEnd = lastUpdate + 2;
+        DripsHistory[] memory history = new DripsHistory[](1);
+        history[0] = DripsHistory(0, receivers, lastUpdate, maxEnd);
+
+        // Check squeezableDrips
+        skip(1);
+        (uint128 amt, uint32 nextSqueezed) = dripsHub.squeezableDrips(
+            receiver.userId(),
+            defaultErc20,
+            user.userId(),
+            0,
+            history
+        );
+        assertEq(amt, 1, "Invalid squeezable amt before");
+        assertEq(nextSqueezed, block.timestamp, "Invalid next squeezable before");
+
+        // Check nextSqueezedDrips
+        nextSqueezed = dripsHub.nextSqueezedDrips(receiver.userId(), defaultErc20, user.userId());
+        assertEq(nextSqueezed, block.timestamp - 1, "Invalid next squeezed before");
+
+        // Squeeze
+        (amt, nextSqueezed) = dripsHub.squeezeDrips(
+            receiver.userId(),
+            defaultErc20,
+            user.userId(),
+            0,
+            history
+        );
+        assertEq(amt, 1, "Invalid squeezed amt");
+        assertEq(nextSqueezed, block.timestamp, "Invalid next squeezed");
+
+        // Check squeezableDrips
+        (amt, nextSqueezed) = dripsHub.squeezableDrips(
+            receiver.userId(),
+            defaultErc20,
+            user.userId(),
+            0,
+            history
+        );
+        assertEq(amt, 0, "Invalid squeezable amt after");
+        assertEq(nextSqueezed, block.timestamp, "Invalid next squeezed after");
+
+        // Check nextSqueezedDrips
+        nextSqueezed = dripsHub.nextSqueezedDrips(receiver.userId(), defaultErc20, user.userId());
+        assertEq(nextSqueezed, block.timestamp, "Invalid next squeezed after");
+
+        // Collect the squeezed amount
+        split(receiver, 1, 0);
+        collect(receiver, 1);
+        skipToCycleEnd();
+        collectAll(receiver, 1);
     }
 
     function testFundsGivenFromUserCanBeCollected() public {
@@ -477,6 +538,16 @@ contract DripsHubTest is DripsHubUserUtils {
             assertTrue(false, "ReceiveDrips hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid receiveDrips revert reason");
+        }
+    }
+
+    function testSqueezeDripsCanBePaused() public {
+        admin.pause();
+        DripsHistory[] memory history = new DripsHistory[](0);
+        try dripsHub.squeezeDrips(user.userId(), defaultErc20, receiver.userId(), 0, history) {
+            assertTrue(false, "SqueezeDrips hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, ERROR_PAUSED, "Invalid squeezeDrips revert reason");
         }
     }
 
