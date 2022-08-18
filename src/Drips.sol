@@ -164,24 +164,6 @@ abstract contract Drips {
         _dripsStorageSlot = dripsStorageSlot;
     }
 
-    /// @notice Counts cycles from which drips can be received.
-    /// This function can be used to detect that there are
-    /// too many cycles to analyze in a single transaction.
-    /// @param userId The user ID
-    /// @param assetId The used asset ID
-    /// @return cycles The number of cycles which can be flushed
-    function _receivableDripsCycles(uint256 userId, uint256 assetId)
-        internal
-        view
-        returns (uint32 cycles)
-    {
-        uint32 nextReceivableCycle = _dripsStorage().states[assetId][userId].nextReceivableCycle;
-        // The currently running cycle is not receivable yet
-        uint32 currCycle = _cycleOf(_currTimestamp());
-        if (nextReceivableCycle == 0 || nextReceivableCycle > currCycle) return 0;
-        return currCycle - nextReceivableCycle;
-    }
-
     /// @notice Calculate effects of calling `_receiveDrips` with the given parameters.
     /// @param userId The user ID
     /// @param assetId The used asset ID
@@ -195,18 +177,11 @@ abstract contract Drips {
         uint256 assetId,
         uint32 maxCycles
     ) internal view returns (uint128 receivableAmt, uint32 receivableCycles) {
-        uint32 allReceivableCycles = _receivableDripsCycles(userId, assetId);
-        uint32 receivedCycles = maxCycles < allReceivableCycles ? maxCycles : allReceivableCycles;
-        receivableCycles = allReceivableCycles - receivedCycles;
-        DripsState storage state = _dripsStorage().states[assetId][userId];
-        uint32 receivedCycle = state.nextReceivableCycle;
-        int128 cycleAmt = 0;
-        for (uint256 i = 0; i < receivedCycles; i++) {
-            cycleAmt += state.amtDeltas[receivedCycle].thisCycle;
-            receivableAmt += uint128(cycleAmt);
-            cycleAmt += state.amtDeltas[receivedCycle].nextCycle;
-            receivedCycle++;
-        }
+        (receivableAmt, receivableCycles, , , ) = _receivableDripsVerbose(
+            userId,
+            assetId,
+            maxCycles
+        );
     }
 
     /// @notice Receive drips from unreceived cycles of the user.
@@ -223,26 +198,95 @@ abstract contract Drips {
         uint256 assetId,
         uint32 maxCycles
     ) internal returns (uint128 receivedAmt, uint32 receivableCycles) {
-        receivableCycles = _receivableDripsCycles(userId, assetId);
-        uint32 cycles = maxCycles < receivableCycles ? maxCycles : receivableCycles;
-        receivableCycles -= cycles;
-        if (cycles > 0) {
+        uint32 fromCycle;
+        uint32 toCycle;
+        int128 finalAmtPerCycle;
+        (
+            receivedAmt,
+            receivableCycles,
+            fromCycle,
+            toCycle,
+            finalAmtPerCycle
+        ) = _receivableDripsVerbose(userId, assetId, maxCycles);
+        if (fromCycle != toCycle) {
             DripsState storage state = _dripsStorage().states[assetId][userId];
-            uint32 cycle = state.nextReceivableCycle;
-            int128 cycleAmt = 0;
-            for (uint256 i = 0; i < cycles; i++) {
-                cycleAmt += state.amtDeltas[cycle].thisCycle;
-                receivedAmt += uint128(cycleAmt);
-                cycleAmt += state.amtDeltas[cycle].nextCycle;
-                delete state.amtDeltas[cycle];
-                cycle++;
+            state.nextReceivableCycle = toCycle;
+            mapping(uint32 => AmtDelta) storage amtDeltas = state.amtDeltas;
+            for (uint32 cycle = fromCycle; cycle < toCycle; cycle++) {
+                delete amtDeltas[cycle];
             }
             // The next cycle delta must be relative to the last received cycle, which got zeroed.
             // In other words the next cycle delta must be an absolute value.
-            if (cycleAmt != 0) state.amtDeltas[cycle].thisCycle += cycleAmt;
-            state.nextReceivableCycle = cycle;
+            if (finalAmtPerCycle != 0) amtDeltas[toCycle].thisCycle += finalAmtPerCycle;
         }
         emit ReceivedDrips(userId, assetId, receivedAmt, receivableCycles);
+    }
+
+    /// @notice Receivable drips from unreceived cycles of the user.
+    /// @param userId The user ID
+    /// @param assetId The used asset ID
+    /// @param maxCycles The maximum number of received drips cycles.
+    /// @return receivedAmt The receivable amount
+    /// @return receivableCycles The number of cycles which still will be receivable
+    /// @return fromCycle The cycle from which funds can be received
+    /// @return toCycle The cycle to which funds can be received
+    /// @return amtPerCycle The amount per cycle when `toCycle` starts.
+    function _receivableDripsVerbose(
+        uint256 userId,
+        uint256 assetId,
+        uint32 maxCycles
+    )
+        private
+        view
+        returns (
+            uint128 receivedAmt,
+            uint32 receivableCycles,
+            uint32 fromCycle,
+            uint32 toCycle,
+            int128 amtPerCycle
+        )
+    {
+        (fromCycle, toCycle) = _receivableDripsCyclesRange(userId, assetId);
+        if (toCycle - fromCycle > maxCycles) {
+            receivableCycles = toCycle - fromCycle - maxCycles;
+            toCycle -= receivableCycles;
+        }
+        DripsState storage state = _dripsStorage().states[assetId][userId];
+        for (uint32 cycle = fromCycle; cycle < toCycle; cycle++) {
+            amtPerCycle += state.amtDeltas[cycle].thisCycle;
+            receivedAmt += uint128(amtPerCycle);
+            amtPerCycle += state.amtDeltas[cycle].nextCycle;
+        }
+    }
+
+    /// @notice Counts cycles from which drips can be received.
+    /// This function can be used to detect that there are
+    /// too many cycles to analyze in a single transaction.
+    /// @param userId The user ID
+    /// @param assetId The used asset ID
+    /// @return cycles The number of cycles which can be flushed
+    function _receivableDripsCycles(uint256 userId, uint256 assetId)
+        internal
+        view
+        returns (uint32 cycles)
+    {
+        (uint32 fromCycle, uint32 toCycle) = _receivableDripsCyclesRange(userId, assetId);
+        return toCycle - fromCycle;
+    }
+
+    /// @notice Calculates the cycles range from which drips can be received.
+    /// @param userId The user ID
+    /// @param assetId The used asset ID
+    /// @return fromCycle The cycle from which funds can be received
+    /// @return toCycle The cycle to which funds can be received
+    function _receivableDripsCyclesRange(uint256 userId, uint256 assetId)
+        private
+        view
+        returns (uint32 fromCycle, uint32 toCycle)
+    {
+        fromCycle = _dripsStorage().states[assetId][userId].nextReceivableCycle;
+        toCycle = _cycleOf(_currTimestamp());
+        if (fromCycle == 0 || toCycle < fromCycle) toCycle = fromCycle;
     }
 
     /// @notice Current user drips state.
