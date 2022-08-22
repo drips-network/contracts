@@ -78,7 +78,7 @@ if [ -z "$DRIPS_HUB_LOGIC" ]; then
 fi
 
 if [ -z "$DRIPS_HUB" ]; then
-    create "DripsHub" 'src/Managed.sol:Proxy' "$DRIPS_HUB_LOGIC" "$DRIPS_HUB_ADMIN"
+    create "DripsHub" 'src/Upgradeable.sol:Proxy' "$DRIPS_HUB_LOGIC" "$DRIPS_HUB_ADMIN"
     DRIPS_HUB=$DEPLOYED_ADDR
 fi
 

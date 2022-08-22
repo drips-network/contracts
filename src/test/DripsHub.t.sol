@@ -7,7 +7,7 @@ import {ManagedUser} from "./ManagedUser.t.sol";
 import {AddressApp} from "../AddressApp.sol";
 import {SplitsReceiver, DripsHub, DripsHistory, DripsReceiver} from "../DripsHub.sol";
 import {Reserve} from "../Reserve.sol";
-import {Proxy} from "../Managed.sol";
+import {Proxy} from "../Upgradeable.sol";
 import {IERC20, ERC20PresetFixedSupply} from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
 contract DripsHubTest is DripsHubUserUtils {
