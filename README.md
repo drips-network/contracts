@@ -123,6 +123,15 @@ export CYCLE_SECS="<SECONDS>"
 # OPTIONAL
 # Address of AddressApp to use. If not set, a new instance is deployed for `DRIPS_HUB`.
 export ADDRESS_APP="<ADDRESS>"
+
+# OPTIONAL
+# Address of the AddressApp admin to set. If not set, `GOVERNANCE` is used.
+export ADDRESS_APP_ADMIN="<ADDRESS>"
+
+# OPTIONAL
+# Address of the AddressApp logic contract to use in `ADDRESS_APP` when it's deployed.
+# If not set, a new instance is deployed and a new app ID is registered for `ADDRESS_APP`.
+export ADDRESS_APP_LOGIC="<ADDRESS>"
 ```
 
 Run deployment:

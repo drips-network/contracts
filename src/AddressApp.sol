@@ -2,6 +2,7 @@
 pragma solidity ^0.8.15;
 
 import {DripsHub, DripsReceiver, IERC20, SplitsReceiver} from "./DripsHub.sol";
+import {Upgradeable} from "./Upgradeable.sol";
 import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @notice A DripsHub app implementing address-based user identification.
@@ -11,16 +12,16 @@ import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol"
 /// This app allows calling `collect` for any other address,
 /// e.g. address `0x...A` can call `collect` for address `0x...B` and `0x...B`
 /// will receive a transfer with funds dripped or split to `0x...B`'s user ID.
-contract AddressApp {
+contract AddressApp is Upgradeable {
     using SafeERC20 for IERC20;
 
     DripsHub public immutable dripsHub;
     uint32 public immutable appId;
 
     /// @param _dripsHub The drips hub to use
-    constructor(DripsHub _dripsHub) {
+    constructor(DripsHub _dripsHub, uint32 _appId) {
         dripsHub = _dripsHub;
-        appId = _dripsHub.registerApp(address(this));
+        appId = _appId;
     }
 
     /// @notice Calculates the user ID for an address
