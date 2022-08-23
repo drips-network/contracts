@@ -1,10 +1,12 @@
 {
     "Network":                  "goerli",
     "Deployer address":         "0x341a08926dCa7fa7D135F96E4d76b696e5f6d38d",
-    "Reserve":                  "0x78EeC20c86e5f40Ceb1b651c38072DF528AE6407",
-    "DripsHub":                 "0x4FaAB6032dd0264a8e2671F56fd30F69362f31Ad",
-    "DripsHub logic":           "0xB79663c5E27C1a2c93aeE2a35b273b0255638267",
+    "Reserve":                  "0xe103f6953b2Fd55ebee163183A19cED9343cd0Ea",
+    "DripsHub":                 "0x8dA62FE714e5Cd7681ef25A845B7C5C0b9add089",
+    "DripsHub logic":           "0x6B94233AEdf8Ad4f505088Da81EAc225B691e99C",
     "DripsHub cycle seconds":   "604800",
-    "AddressApp":               "0x76F457CD4F60c0a634781bfdB8c5318050633A08",
-    "Commit hash":              "fd3629eb1290fa094ebf21cb78b76793771dc66d"
+    "AddressApp":               "0xaB09588616214604eBeaE1488eab8533c956b7da",
+    "AddressApp logic":         "0x10fCa1A8f390b611f8437d43A52691566ffC8246",
+    "AddressApp ID":            "0",
+    "Commit hash":              "cd7f4d516fe232664a27f7eea9d4f47b71808c7c"
 }
