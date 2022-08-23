@@ -15,13 +15,11 @@ contract AddressApp {
     using SafeERC20 for IERC20;
 
     DripsHub public immutable dripsHub;
-    address public immutable reserve;
     uint32 public immutable appId;
 
     /// @param _dripsHub The drips hub to use
     constructor(DripsHub _dripsHub) {
         dripsHub = _dripsHub;
-        reserve = address(_dripsHub.reserve());
         appId = _dripsHub.registerApp(address(this));
     }
 
@@ -112,7 +110,9 @@ contract AddressApp {
 
     function _transferFromCaller(IERC20 erc20, uint128 amt) internal {
         erc20.safeTransferFrom(msg.sender, address(this), amt);
-        if (erc20.allowance(address(this), reserve) < amt) {
+        address reserve = address(dripsHub.reserve());
+        // Approval is done only on the first usage of the ERC-20 token in the reserve by the app
+        if (erc20.allowance(address(this), reserve) == 0) {
             erc20.approve(reserve, type(uint256).max);
         }
     }
