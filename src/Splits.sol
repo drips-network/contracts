@@ -39,10 +39,7 @@ abstract contract Splits {
     /// @param assetId The used asset ID
     /// @param amt The amount split to the receiver
     event Split(
-        uint256 indexed userId,
-        uint256 indexed receiver,
-        uint256 indexed assetId,
-        uint128 amt
+        uint256 indexed userId, uint256 indexed receiver, uint256 indexed assetId, uint128 amt
     );
 
     /// @notice Emitted when funds are made collectable after splitting.
@@ -57,10 +54,7 @@ abstract contract Splits {
     /// @param assetId The used asset ID
     /// @param amt The given amount
     event Given(
-        uint256 indexed userId,
-        uint256 indexed receiver,
-        uint256 indexed assetId,
-        uint128 amt
+        uint256 indexed userId, uint256 indexed receiver, uint256 indexed assetId, uint128 amt
     );
 
     /// @notice Emitted when the user's splits are updated.
@@ -116,13 +110,15 @@ abstract contract Splits {
     /// @return collectableAmt The amount made collectable for the user
     /// on top of what was collectable before.
     /// @return splitAmt The amount split to the user's splits receivers
-    function _splitResults(
-        uint256 userId,
-        SplitsReceiver[] memory currReceivers,
-        uint128 amount
-    ) internal view returns (uint128 collectableAmt, uint128 splitAmt) {
+    function _splitResults(uint256 userId, SplitsReceiver[] memory currReceivers, uint128 amount)
+        internal
+        view
+        returns (uint128 collectableAmt, uint128 splitAmt)
+    {
         _assertCurrSplits(userId, currReceivers);
-        if (amount == 0) return (0, 0);
+        if (amount == 0) {
+            return (0, 0);
+        }
         uint32 splitsWeight = 0;
         for (uint256 i = 0; i < currReceivers.length; i++) {
             splitsWeight += currReceivers[i].weight;
@@ -138,25 +134,25 @@ abstract contract Splits {
     /// @return collectableAmt The amount made collectable for the user
     /// on top of what was collectable before.
     /// @return splitAmt The amount split to the user's splits receivers
-    function _split(
-        uint256 userId,
-        uint256 assetId,
-        SplitsReceiver[] memory currReceivers
-    ) internal returns (uint128 collectableAmt, uint128 splitAmt) {
+    function _split(uint256 userId, uint256 assetId, SplitsReceiver[] memory currReceivers)
+        internal
+        returns (uint128 collectableAmt, uint128 splitAmt)
+    {
         _assertCurrSplits(userId, currReceivers);
         mapping(uint256 => SplitsState) storage splitsStates = _splitsStorage().splitsStates;
         SplitsBalance storage balance = splitsStates[userId].balances[assetId];
 
         collectableAmt = balance.splittable;
-        if (collectableAmt == 0) return (0, 0);
+        if (collectableAmt == 0) {
+            return (0, 0);
+        }
 
         balance.splittable = 0;
         uint32 splitsWeight = 0;
         for (uint256 i = 0; i < currReceivers.length; i++) {
             splitsWeight += currReceivers[i].weight;
-            uint128 currSplitAmt = uint128(
-                (uint160(collectableAmt) * splitsWeight) / _TOTAL_SPLITS_WEIGHT - splitAmt
-            );
+            uint128 currSplitAmt =
+                uint128((uint160(collectableAmt) * splitsWeight) / _TOTAL_SPLITS_WEIGHT - splitAmt);
             splitAmt += currSplitAmt;
             uint256 receiver = currReceivers[i].userId;
             splitsStates[receiver].balances[assetId].splittable += currSplitAmt;
@@ -194,12 +190,7 @@ abstract contract Splits {
     /// @param receiver The receiver
     /// @param assetId The used asset ID
     /// @param amt The given amount
-    function _give(
-        uint256 userId,
-        uint256 receiver,
-        uint256 assetId,
-        uint128 amt
-    ) internal {
+    function _give(uint256 userId, uint256 receiver, uint256 assetId, uint128 amt) internal {
         _splitsStorage().splitsStates[receiver].balances[assetId].splittable += amt;
         emit Given(userId, receiver, assetId, amt);
     }
@@ -252,8 +243,7 @@ abstract contract Splits {
         view
     {
         require(
-            _hashSplits(currReceivers) == _splitsHash(userId),
-            "Invalid current splits receivers"
+            _hashSplits(currReceivers) == _splitsHash(userId), "Invalid current splits receivers"
         );
     }
 
@@ -273,7 +263,9 @@ abstract contract Splits {
         pure
         returns (bytes32 receiversHash)
     {
-        if (receivers.length == 0) return bytes32(0);
+        if (receivers.length == 0) {
+            return bytes32(0);
+        }
         return keccak256(abi.encode(receivers));
     }
 

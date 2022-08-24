@@ -37,11 +37,10 @@ contract AddressApp is Upgradeable {
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collectedAmt The collected amount
     /// @return splitAmt The amount split to the user's splits receivers
-    function collectAll(
-        address user,
-        IERC20 erc20,
-        SplitsReceiver[] calldata currReceivers
-    ) public returns (uint128 collectedAmt, uint128 splitAmt) {
+    function collectAll(address user, IERC20 erc20, SplitsReceiver[] calldata currReceivers)
+        public
+        returns (uint128 collectedAmt, uint128 splitAmt)
+    {
         (collectedAmt, splitAmt) = dripsHub.collectAll(calcUserId(user), erc20, currReceivers);
         erc20.safeTransfer(user, collectedAmt);
     }
@@ -61,11 +60,7 @@ contract AddressApp is Upgradeable {
     /// @param receiver The receiver
     /// @param erc20 The token to use
     /// @param amt The given amount
-    function give(
-        uint256 receiver,
-        IERC20 erc20,
-        uint128 amt
-    ) public {
+    function give(uint256 receiver, IERC20 erc20, uint128 amt) public {
         _transferFromCaller(erc20, amt);
         dripsHub.give(calcUserId(msg.sender), receiver, erc20, amt);
     }
@@ -88,16 +83,18 @@ contract AddressApp is Upgradeable {
         DripsReceiver[] calldata currReceivers,
         int128 balanceDelta,
         DripsReceiver[] calldata newReceivers
-    ) public returns (uint128 newBalance, int128 realBalanceDelta) {
-        if (balanceDelta > 0) _transferFromCaller(erc20, uint128(balanceDelta));
-        (newBalance, realBalanceDelta) = dripsHub.setDrips(
-            calcUserId(msg.sender),
-            erc20,
-            currReceivers,
-            balanceDelta,
-            newReceivers
-        );
-        if (realBalanceDelta < 0) erc20.safeTransfer(msg.sender, uint128(-realBalanceDelta));
+    )
+        public
+        returns (uint128 newBalance, int128 realBalanceDelta)
+    {
+        if (balanceDelta > 0) {
+            _transferFromCaller(erc20, uint128(balanceDelta));
+        }
+        (newBalance, realBalanceDelta) =
+            dripsHub.setDrips(calcUserId(msg.sender), erc20, currReceivers, balanceDelta, newReceivers);
+        if (realBalanceDelta < 0) {
+            erc20.safeTransfer(msg.sender, uint128(-realBalanceDelta));
+        }
     }
 
     /// @notice Sets msg.sender's splits configuration.

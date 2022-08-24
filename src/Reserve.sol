@@ -12,11 +12,7 @@ interface IReserve {
     /// @param token The used token.
     /// @param from The address from which funds are deposited.
     /// @param amt The deposited amount.
-    function deposit(
-        IERC20 token,
-        address from,
-        uint256 amt
-    ) external;
+    function deposit(IERC20 token, address from, uint256 amt) external;
 
     /// @notice Withdraws funds from the reserve.
     /// The reserve will transfer `amt` tokens to the `to` address.
@@ -24,11 +20,7 @@ interface IReserve {
     /// @param token The used token.
     /// @param to The address to which funds are withdrawn.
     /// @param amt The withdrawn amount.
-    function withdraw(
-        IERC20 token,
-        address to,
-        uint256 amt
-    ) external;
+    function withdraw(IERC20 token, address to, uint256 amt) external;
 }
 
 /// @notice The reserve plugin interface required by the reserve.
@@ -69,6 +61,7 @@ interface IReservePlugin {
 contract Reserve is IReserve, Ownable {
     using SafeERC20 for IERC20;
     /// @notice The dummy plugin address meaning that no plugin is being used.
+
     IReservePlugin public constant NO_PLUGIN = IReservePlugin(address(0));
 
     /// @notice A set of addresses considered users.
@@ -156,9 +149,13 @@ contract Reserve is IReserve, Ownable {
         IReservePlugin oldPlugin = plugins[token];
         plugins[token] = newPlugin;
         uint256 amt = deposited[token];
-        if (oldPlugin != NO_PLUGIN) oldPlugin.beforeEnd(token, amt);
+        if (oldPlugin != NO_PLUGIN) {
+            oldPlugin.beforeEnd(token, amt);
+        }
         _transfer(token, _pluginAddr(oldPlugin), _pluginAddr(newPlugin), amt);
-        if (newPlugin != NO_PLUGIN) newPlugin.afterStart(token, amt);
+        if (newPlugin != NO_PLUGIN) {
+            newPlugin.afterStart(token, amt);
+        }
         emit PluginSet(msg.sender, token, oldPlugin, newPlugin, amt);
     }
 
@@ -168,16 +165,14 @@ contract Reserve is IReserve, Ownable {
     /// @param token The used token.
     /// @param from The address from which funds are deposited.
     /// @param amt The deposited amount.
-    function deposit(
-        IERC20 token,
-        address from,
-        uint256 amt
-    ) public override onlyUser {
+    function deposit(IERC20 token, address from, uint256 amt) public override onlyUser {
         IReservePlugin plugin = plugins[token];
         require(from != address(plugin) && from != address(this), "Reserve: deposition from self");
         deposited[token] += amt;
         _transfer(token, from, _pluginAddr(plugin), amt);
-        if (plugin != NO_PLUGIN) plugin.afterDeposition(token, amt);
+        if (plugin != NO_PLUGIN) {
+            plugin.afterDeposition(token, amt);
+        }
         emit Deposited(msg.sender, token, from, amt);
     }
 
@@ -188,16 +183,14 @@ contract Reserve is IReserve, Ownable {
     /// @param token The used token.
     /// @param to The address to which funds are withdrawn.
     /// @param amt The withdrawn amount.
-    function withdraw(
-        IERC20 token,
-        address to,
-        uint256 amt
-    ) public override onlyUser {
+    function withdraw(IERC20 token, address to, uint256 amt) public override onlyUser {
         uint256 balance = deposited[token];
         require(balance >= amt, "Reserve: withdrawal over balance");
         deposited[token] = balance - amt;
         IReservePlugin plugin = plugins[token];
-        if (plugin != NO_PLUGIN) plugin.beforeWithdrawal(token, amt);
+        if (plugin != NO_PLUGIN) {
+            plugin.beforeWithdrawal(token, amt);
+        }
         _transfer(token, _pluginAddr(plugin), to, amt);
         emit Withdrawn(msg.sender, token, to, amt);
     }
@@ -214,13 +207,13 @@ contract Reserve is IReserve, Ownable {
     /// Pass `NO_PLUGIN` to withdraw directly from the reserve balance.
     /// @param to The address to which funds are withdrawn.
     /// @param amt The withdrawn amount.
-    function forceWithdraw(
-        IERC20 token,
-        IReservePlugin plugin,
-        address to,
-        uint256 amt
-    ) public onlyOwner {
-        if (plugin != NO_PLUGIN) plugin.beforeWithdrawal(token, amt);
+    function forceWithdraw(IERC20 token, IReservePlugin plugin, address to, uint256 amt)
+        public
+        onlyOwner
+    {
+        if (plugin != NO_PLUGIN) {
+            plugin.beforeWithdrawal(token, amt);
+        }
         _transfer(token, _pluginAddr(plugin), to, amt);
         emit ForceWithdrawn(msg.sender, token, plugin, to, amt);
     }
@@ -255,13 +248,11 @@ contract Reserve is IReserve, Ownable {
         return plugin == NO_PLUGIN ? address(this) : address(plugin);
     }
 
-    function _transfer(
-        IERC20 token,
-        address from,
-        address to,
-        uint256 amt
-    ) internal {
-        if (from == address(this)) token.safeTransfer(to, amt);
-        else token.safeTransferFrom(from, to, amt);
+    function _transfer(IERC20 token, address from, address to, uint256 amt) internal {
+        if (from == address(this)) {
+            token.safeTransfer(to, amt);
+        } else {
+            token.safeTransferFrom(from, to, amt);
+        }
     }
 }

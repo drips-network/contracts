@@ -8,7 +8,10 @@ import {AddressApp} from "../AddressApp.sol";
 import {SplitsReceiver, DripsHub, DripsHistory, DripsReceiver} from "../DripsHub.sol";
 import {Reserve} from "../Reserve.sol";
 import {Proxy} from "../Upgradeable.sol";
-import {IERC20, ERC20PresetFixedSupply} from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
+import {
+    IERC20,
+    ERC20PresetFixedSupply
+} from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
 contract DripsHubTest is DripsHubUserUtils {
     AddressApp private addressApp;
@@ -51,9 +54,15 @@ contract DripsHubTest is DripsHubUserUtils {
         receiver2 = createUser();
         receiver3 = createUser();
         // Sort receivers by address
-        if (receiver1 > receiver2) (receiver1, receiver2) = (receiver2, receiver1);
-        if (receiver2 > receiver3) (receiver2, receiver3) = (receiver3, receiver2);
-        if (receiver1 > receiver2) (receiver1, receiver2) = (receiver2, receiver1);
+        if (receiver1 > receiver2) {
+            (receiver1, receiver2) = (receiver2, receiver1);
+        }
+        if (receiver2 > receiver3) {
+            (receiver2, receiver3) = (receiver3, receiver2);
+        }
+        if (receiver1 > receiver2) {
+            (receiver1, receiver2) = (receiver2, receiver1);
+        }
     }
 
     function createUser() internal returns (AddressAppUser newUser) {
@@ -80,11 +89,7 @@ contract DripsHubTest is DripsHubUserUtils {
         try dripsHub.collectableAll(user.userId(), defaultErc20, splitsReceivers(receiver, 2)) {
             assertTrue(false, "Collectable hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(
-                reason,
-                "Invalid current splits receivers",
-                "Invalid collectable revert reason"
-            );
+            assertEq(reason, "Invalid current splits receivers", "Invalid collectable revert reason");
         }
     }
 
@@ -148,8 +153,7 @@ contract DripsHubTest is DripsHubUserUtils {
         uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
         setDrips(user, 0, 10, dripsReceivers(receiver1, 10));
         setSplits(
-            receiver1,
-            splitsReceivers(receiver2, totalWeight / 4, receiver3, totalWeight / 2)
+            receiver1, splitsReceivers(receiver2, totalWeight / 4, receiver3, totalWeight / 2)
         );
         skipToCycleEnd();
         assertCollectableAll(receiver2, 0);
@@ -209,13 +213,8 @@ contract DripsHubTest is DripsHubUserUtils {
 
         // Check squeezableDrips
         skip(1);
-        (uint128 amt, uint32 nextSqueezed) = dripsHub.squeezableDrips(
-            receiver.userId(),
-            defaultErc20,
-            user.userId(),
-            0,
-            history
-        );
+        (uint128 amt, uint32 nextSqueezed) =
+            dripsHub.squeezableDrips(receiver.userId(), defaultErc20, user.userId(), 0, history);
         assertEq(amt, 1, "Invalid squeezable amt before");
         assertEq(nextSqueezed, block.timestamp, "Invalid next squeezable before");
 
@@ -224,24 +223,14 @@ contract DripsHubTest is DripsHubUserUtils {
         assertEq(nextSqueezed, block.timestamp - 1, "Invalid next squeezed before");
 
         // Squeeze
-        (amt, nextSqueezed) = dripsHub.squeezeDrips(
-            receiver.userId(),
-            defaultErc20,
-            user.userId(),
-            0,
-            history
-        );
+        (amt, nextSqueezed) =
+            dripsHub.squeezeDrips(receiver.userId(), defaultErc20, user.userId(), 0, history);
         assertEq(amt, 1, "Invalid squeezed amt");
         assertEq(nextSqueezed, block.timestamp, "Invalid next squeezed");
 
         // Check squeezableDrips
-        (amt, nextSqueezed) = dripsHub.squeezableDrips(
-            receiver.userId(),
-            defaultErc20,
-            user.userId(),
-            0,
-            history
-        );
+        (amt, nextSqueezed) =
+            dripsHub.squeezableDrips(receiver.userId(), defaultErc20, user.userId(), 0, history);
         assertEq(amt, 0, "Invalid squeezable amt after");
         assertEq(nextSqueezed, block.timestamp, "Invalid next squeezed after");
 
@@ -317,13 +306,9 @@ contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testCollectAllRevertsWhenNotCalledByTheApp() public {
-        try
-            dripsHub.collectAll(
-                calcUserId(dripsHub.nextAppId(), 0),
-                defaultErc20,
-                new SplitsReceiver[](0)
-            )
-        {
+        try dripsHub.collectAll(
+            calcUserId(dripsHub.nextAppId(), 0), defaultErc20, new SplitsReceiver[](0)
+        ) {
             assertTrue(false, "CollectAll hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_NOT_APP, "Invalid collectAll revert reason");
@@ -333,13 +318,7 @@ contract DripsHubTest is DripsHubUserUtils {
     function testDripsInDifferentTokensAreIndependent() public {
         uint32 cycleLength = dripsHub.cycleSecs();
         // Covers 1.5 cycles of dripping
-        setDrips(
-            defaultErc20,
-            user,
-            0,
-            9 * cycleLength,
-            dripsReceivers(receiver1, 4, receiver2, 2)
-        );
+        setDrips(defaultErc20, user, 0, 9 * cycleLength, dripsReceivers(receiver1, 4, receiver2, 2));
 
         skipToCycleEnd();
         // Covers 2 cycles of dripping
@@ -367,15 +346,9 @@ contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testSetDripsRevertsWhenNotCalledByTheApp() public {
-        try
-            dripsHub.setDrips(
-                calcUserId(dripsHub.nextAppId(), 0),
-                defaultErc20,
-                dripsReceivers(),
-                0,
-                dripsReceivers()
-            )
-        {
+        try dripsHub.setDrips(
+            calcUserId(dripsHub.nextAppId(), 0), defaultErc20, dripsReceivers(), 0, dripsReceivers()
+        ) {
             assertTrue(false, "SetDrips hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_NOT_APP, "Invalid setDrips revert reason");
@@ -416,11 +389,8 @@ contract DripsHubTest is DripsHubUserUtils {
         assertCollectableAll(receiver1, 5);
         uint256 balanceBefore = defaultErc20.balanceOf(address(receiver1));
 
-        (uint128 collected, uint128 split) = addressApp.collectAll(
-            address(receiver1),
-            defaultErc20,
-            splitsReceivers()
-        );
+        (uint128 collected, uint128 split) =
+            addressApp.collectAll(address(receiver1), defaultErc20, splitsReceivers());
 
         assertEq(collected, 5, "Invalid collected amount");
         assertEq(split, 0, "Invalid split amount");

@@ -3,7 +3,10 @@ pragma solidity ^0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {IReservePlugin, Reserve} from "../Reserve.sol";
-import {IERC20, ERC20PresetFixedSupply} from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
+import {
+    IERC20,
+    ERC20PresetFixedSupply
+} from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
 contract ReserveUser {
     Reserve public reserve;
@@ -20,28 +23,15 @@ contract ReserveUser {
         reserve.setPlugin(token, plugin);
     }
 
-    function deposit(
-        IERC20 token,
-        address from,
-        uint256 amt
-    ) public {
+    function deposit(IERC20 token, address from, uint256 amt) public {
         reserve.deposit(token, from, amt);
     }
 
-    function withdraw(
-        IERC20 token,
-        address to,
-        uint256 amt
-    ) public {
+    function withdraw(IERC20 token, address to, uint256 amt) public {
         reserve.withdraw(token, to, amt);
     }
 
-    function forceWithdraw(
-        IERC20 token,
-        IReservePlugin plugin,
-        address to,
-        uint256 amt
-    ) public {
+    function forceWithdraw(IERC20 token, IReservePlugin plugin, address to, uint256 amt) public {
         reserve.forceWithdraw(token, plugin, to, amt);
     }
 
@@ -118,21 +108,14 @@ contract ReserveTest is Test {
         otherToken.transfer(address(depositor), 2);
     }
 
-    function setPlugin(
-        ReserveUser reserveUser,
-        IERC20 forToken,
-        IReservePlugin plugin
-    ) public {
+    function setPlugin(ReserveUser reserveUser, IERC20 forToken, IReservePlugin plugin) public {
         reserveUser.setPlugin(forToken, plugin);
         assertEq(address(reserve.plugins(forToken)), address(plugin), "New plugin not set");
     }
 
-    function deposit(
-        ReserveUser reserveUser,
-        IERC20 forToken,
-        ReserveUser from,
-        uint256 amt
-    ) public {
+    function deposit(ReserveUser reserveUser, IERC20 forToken, ReserveUser from, uint256 amt)
+        public
+    {
         uint256 deposited = reserve.deposited(forToken);
         uint256 userBalance = forToken.balanceOf(address(from));
         from.approveReserve(forToken, amt);
@@ -150,7 +133,9 @@ contract ReserveTest is Test {
         ReserveUser from,
         uint256 amt,
         string memory expectedReason
-    ) public {
+    )
+        public
+    {
         from.approveReserve(forToken, amt);
         try reserveUser.deposit(forToken, address(from), amt) {
             assertTrue(false, "Deposit hasn't reverted");
@@ -160,12 +145,9 @@ contract ReserveTest is Test {
         from.approveReserve(forToken, 0);
     }
 
-    function withdraw(
-        ReserveUser reserveUser,
-        IERC20 forToken,
-        ReserveUser to,
-        uint256 amt
-    ) public {
+    function withdraw(ReserveUser reserveUser, IERC20 forToken, ReserveUser to, uint256 amt)
+        public
+    {
         uint256 deposited = reserve.deposited(forToken);
         uint256 userBalance = forToken.balanceOf(address(to));
 
@@ -182,7 +164,9 @@ contract ReserveTest is Test {
         ReserveUser to,
         uint256 amt,
         string memory expectedReason
-    ) public {
+    )
+        public
+    {
         try reserveUser.withdraw(forToken, address(to), amt) {
             assertTrue(false, "Withdraw hasn't reverted");
         } catch Error(string memory reason) {
@@ -196,7 +180,9 @@ contract ReserveTest is Test {
         IReservePlugin plugin,
         ReserveUser to,
         uint256 amt
-    ) public {
+    )
+        public
+    {
         uint256 deposited = reserve.deposited(forToken);
         uint256 reserveBalance = forToken.balanceOf(address(reserve));
         uint256 userBalance = forToken.balanceOf(address(to));
@@ -216,7 +202,9 @@ contract ReserveTest is Test {
         ReserveUser to,
         uint256 amt,
         string memory expectedReason
-    ) public {
+    )
+        public
+    {
         try reserveUser.forceWithdraw(forToken, plugin, address(to), amt) {
             assertTrue(false, "Force withdraw hasn't reverted");
         } catch Error(string memory reason) {
@@ -229,42 +217,34 @@ contract ReserveTest is Test {
         ReserveUser forUser,
         uint256 expected,
         string memory details
-    ) public {
+    )
+        public
+    {
         uint256 actual = forToken.balanceOf(address(forUser));
         assertEq(actual, expected, concat("Invalid user balance ", details));
     }
 
-    function assertDeposited(
-        IERC20 forToken,
-        uint256 expected,
-        string memory details
-    ) public {
+    function assertDeposited(IERC20 forToken, uint256 expected, string memory details) public {
         uint256 actual = reserve.deposited(forToken);
         assertEq(actual, expected, concat("Invalid deposited ", details));
     }
 
-    function assertReserveBalance(
-        IERC20 forToken,
-        uint256 expected,
-        string memory details
-    ) public {
+    function assertReserveBalance(IERC20 forToken, uint256 expected, string memory details)
+        public
+    {
         uint256 actual = forToken.balanceOf(address(reserve));
         assertEq(actual, expected, concat("Invalid reserve ", details));
     }
 
-    function assertPluginDeposited(
-        TestReservePlugin plugin,
-        IERC20 forToken,
-        uint256 expected
-    ) public {
+    function assertPluginDeposited(TestReservePlugin plugin, IERC20 forToken, uint256 expected)
+        public
+    {
         assertEq(plugin.deposited(forToken), expected, "Invalid plugin deposited");
     }
 
-    function assertPluginBalance(
-        TestReservePlugin plugin,
-        IERC20 forToken,
-        uint256 expected
-    ) public {
+    function assertPluginBalance(TestReservePlugin plugin, IERC20 forToken, uint256 expected)
+        public
+    {
         assertEq(forToken.balanceOf(address(plugin)), expected, "Invalid plugin balance");
     }
 
@@ -282,7 +262,9 @@ contract ReserveTest is Test {
         ReserveUser currOwner,
         ReserveUser addedUser,
         string memory expectedReason
-    ) public {
+    )
+        public
+    {
         try currOwner.addUser(address(addedUser)) {
             assertTrue(false, "AddUser hasn't reverted");
         } catch Error(string memory reason) {
@@ -300,7 +282,9 @@ contract ReserveTest is Test {
         ReserveUser currOwner,
         ReserveUser removedUser,
         string memory expectedReason
-    ) public {
+    )
+        public
+    {
         try currOwner.removeUser(address(removedUser)) {
             assertTrue(false, "RemoveUser hasn't reverted");
         } catch Error(string memory reason) {

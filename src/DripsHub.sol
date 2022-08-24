@@ -71,9 +71,7 @@ contract DripsHub is Managed, Drips, Splits {
     /// @param oldAppAddr The old app address
     /// @param newAppAddr The new app address
     event AppAddressUpdated(
-        uint32 indexed appId,
-        address indexed oldAppAddr,
-        address indexed newAppAddr
+        uint32 indexed appId, address indexed oldAppAddr, address indexed newAppAddr
     );
 
     struct DripsHubStorage {
@@ -167,14 +165,14 @@ contract DripsHub is Managed, Drips, Splits {
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collectedAmt The collected amount
     /// @return splitAmt The amount split to the user's splits receivers
-    function collectableAll(
-        uint256 userId,
-        IERC20 erc20,
-        SplitsReceiver[] memory currReceivers
-    ) public view returns (uint128 collectedAmt, uint128 splitAmt) {
+    function collectableAll(uint256 userId, IERC20 erc20, SplitsReceiver[] memory currReceivers)
+        public
+        view
+        returns (uint128 collectedAmt, uint128 splitAmt)
+    {
         uint256 assetId = _assetId(erc20);
         // Receivable from cycles
-        (uint128 receivedAmt, ) = Drips._receivableDrips(userId, assetId, type(uint32).max);
+        (uint128 receivedAmt,) = Drips._receivableDrips(userId, assetId, type(uint32).max);
         // Collectable independently from cycles
         receivedAmt += Splits._splittable(userId, assetId);
         // Split when collected
@@ -190,11 +188,11 @@ contract DripsHub is Managed, Drips, Splits {
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collectedAmt The collected amount
     /// @return splitAmt The amount split to the user's splits receivers
-    function collectAll(
-        uint256 userId,
-        IERC20 erc20,
-        SplitsReceiver[] memory currReceivers
-    ) public whenNotPaused returns (uint128 collectedAmt, uint128 splitAmt) {
+    function collectAll(uint256 userId, IERC20 erc20, SplitsReceiver[] memory currReceivers)
+        public
+        whenNotPaused
+        returns (uint128 collectedAmt, uint128 splitAmt)
+    {
         receiveDrips(userId, erc20, type(uint32).max);
         (, splitAmt) = split(userId, erc20, currReceivers);
         collectedAmt = collect(userId, erc20);
@@ -222,11 +220,11 @@ contract DripsHub is Managed, Drips, Splits {
     /// If too high, receiving may become too expensive to fit in a single transaction.
     /// @return receivableAmt The amount which would be received
     /// @return receivableCycles The number of cycles which would still be receivable after the call
-    function receivableDrips(
-        uint256 userId,
-        IERC20 erc20,
-        uint32 maxCycles
-    ) public view returns (uint128 receivableAmt, uint32 receivableCycles) {
+    function receivableDrips(uint256 userId, IERC20 erc20, uint32 maxCycles)
+        public
+        view
+        returns (uint128 receivableAmt, uint32 receivableCycles)
+    {
         return Drips._receivableDrips(userId, _assetId(erc20), maxCycles);
     }
 
@@ -240,11 +238,11 @@ contract DripsHub is Managed, Drips, Splits {
     /// If too high, receiving may become too expensive to fit in a single transaction.
     /// @return receivedAmt The received amount
     /// @return receivableCycles The number of cycles which still can be received
-    function receiveDrips(
-        uint256 userId,
-        IERC20 erc20,
-        uint32 maxCycles
-    ) public whenNotPaused returns (uint128 receivedAmt, uint32 receivableCycles) {
+    function receiveDrips(uint256 userId, IERC20 erc20, uint32 maxCycles)
+        public
+        whenNotPaused
+        returns (uint128 receivedAmt, uint32 receivableCycles)
+    {
         uint256 assetId = _assetId(erc20);
         (receivedAmt, receivableCycles) = Drips._receiveDrips(userId, assetId, maxCycles);
         if (receivedAmt > 0) {
@@ -278,15 +276,14 @@ contract DripsHub is Managed, Drips, Splits {
         uint256 senderId,
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory
-    ) public whenNotPaused returns (uint128 amt, uint32 nextSqueezed) {
+    )
+        public
+        whenNotPaused
+        returns (uint128 amt, uint32 nextSqueezed)
+    {
         uint256 assetId = _assetId(erc20);
-        (amt, nextSqueezed) = Drips._squeezeDrips(
-            userId,
-            assetId,
-            senderId,
-            historyHash,
-            dripsHistory
-        );
+        (amt, nextSqueezed) =
+            Drips._squeezeDrips(userId, assetId, senderId, historyHash, dripsHistory);
         if (amt > 0) {
             Splits._give(userId, userId, assetId, amt);
         }
@@ -307,7 +304,11 @@ contract DripsHub is Managed, Drips, Splits {
         uint256 senderId,
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory
-    ) public view returns (uint128 amt, uint32 nextSqueezed) {
+    )
+        public
+        view
+        returns (uint128 amt, uint32 nextSqueezed)
+    {
         return Drips._squeezableDrips(userId, _assetId(erc20), senderId, historyHash, dripsHistory);
     }
 
@@ -316,11 +317,11 @@ contract DripsHub is Managed, Drips, Splits {
     /// @param erc20 The used ERC-20 token.
     /// @param senderId The ID of the user sending drips to squeeze funds from.
     /// @return nextSqueezed The next timestamp that can be squeezed.
-    function nextSqueezedDrips(
-        uint256 userId,
-        IERC20 erc20,
-        uint256 senderId
-    ) public view returns (uint32 nextSqueezed) {
+    function nextSqueezedDrips(uint256 userId, IERC20 erc20, uint256 senderId)
+        public
+        view
+        returns (uint32 nextSqueezed)
+    {
         return Drips._nextSqueezedDrips(userId, _assetId(erc20), senderId);
     }
 
@@ -339,11 +340,11 @@ contract DripsHub is Managed, Drips, Splits {
     /// @return collectableAmt The amount made collectable for the user
     /// on top of what was collectable before.
     /// @return splitAmt The amount split to the user's splits receivers
-    function split(
-        uint256 userId,
-        IERC20 erc20,
-        SplitsReceiver[] memory currReceivers
-    ) public whenNotPaused returns (uint128 collectableAmt, uint128 splitAmt) {
+    function split(uint256 userId, IERC20 erc20, SplitsReceiver[] memory currReceivers)
+        public
+        whenNotPaused
+        returns (uint128 collectableAmt, uint128 splitAmt)
+    {
         return Splits._split(userId, _assetId(erc20), currReceivers);
     }
 
@@ -378,12 +379,11 @@ contract DripsHub is Managed, Drips, Splits {
     /// @param receiver The receiver
     /// @param erc20 The used ERC-20 token
     /// @param amt The given amount
-    function give(
-        uint256 userId,
-        uint256 receiver,
-        IERC20 erc20,
-        uint128 amt
-    ) public whenNotPaused onlyApp(userId) {
+    function give(uint256 userId, uint256 receiver, IERC20 erc20, uint128 amt)
+        public
+        whenNotPaused
+        onlyApp(userId)
+    {
         increaseTotalBalance(erc20, amt);
         Splits._give(userId, receiver, _assetId(erc20), amt);
         reserve.deposit(erc20, msg.sender, amt);
@@ -425,7 +425,11 @@ contract DripsHub is Managed, Drips, Splits {
         IERC20 erc20,
         DripsReceiver[] memory receivers,
         uint32 timestamp
-    ) public view returns (uint128 balance) {
+    )
+        public
+        view
+        returns (uint128 balance)
+    {
         return Drips._balanceAt(userId, _assetId(erc20), receivers, timestamp);
     }
 
@@ -449,17 +453,17 @@ contract DripsHub is Managed, Drips, Splits {
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers
-    ) public whenNotPaused onlyApp(userId) returns (uint128 newBalance, int128 realBalanceDelta) {
+    )
+        public
+        whenNotPaused
+        onlyApp(userId)
+        returns (uint128 newBalance, int128 realBalanceDelta)
+    {
         if (balanceDelta > 0) {
             increaseTotalBalance(erc20, uint128(balanceDelta));
         }
-        (newBalance, realBalanceDelta) = Drips._setDrips(
-            userId,
-            _assetId(erc20),
-            currReceivers,
-            balanceDelta,
-            newReceivers
-        );
+        (newBalance, realBalanceDelta) =
+            Drips._setDrips(userId, _assetId(erc20), currReceivers, balanceDelta, newReceivers);
         if (realBalanceDelta > 0) {
             reserve.deposit(erc20, msg.sender, uint128(realBalanceDelta));
         } else if (realBalanceDelta < 0) {
@@ -490,7 +494,11 @@ contract DripsHub is Managed, Drips, Splits {
         bytes32 dripsHash,
         uint32 updateTime,
         uint32 maxEnd
-    ) public pure returns (bytes32 dripsHistoryHash) {
+    )
+        public
+        pure
+        returns (bytes32 dripsHistoryHash)
+    {
         return Drips._hashDripsHistory(oldDripsHistoryHash, dripsHash, updateTime, maxEnd);
     }
 
