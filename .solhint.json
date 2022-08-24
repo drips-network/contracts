@@ -1,8 +1,5 @@
 {
     "extends": "solhint:recommended",
-    "plugins": [
-        "prettier"
-    ],
     "rules": {
         "compiler-version": [
             "error",
@@ -15,7 +12,6 @@
             }
         ],
         "not-rely-on-time": "off",
-        "prettier/prettier": "warn",
         "reason-string": [
             "warn",
             {

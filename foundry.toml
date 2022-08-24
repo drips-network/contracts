@@ -7,3 +7,5 @@ remappings = [
     'forge-std/=lib/forge-std/src/',
     'openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/'
 ]
+[fmt]
+line_length = 100

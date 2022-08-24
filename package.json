@@ -2,19 +2,12 @@
     "name": "radicle-drips-hub",
     "license": "GPL-3.0-only",
     "devDependencies": {
-        "prettier": "^2.7.1",
-        "prettier-plugin-solidity": "1.0.0-dev.23",
-        "solhint": "^3.3.7",
-        "solhint-plugin-prettier": "^0.0.5"
+        "solhint": "^3.3.7"
     },
     "resolutions": {
         "solhint/@solidity-parser/parser": "0.14.2-beta.1"
     },
     "scripts": {
-        "lint": "solhint --max-warnings=0 'src/**/*.sol'",
-        "prettier": "prettier --write 'src/**/*.sol'"
-    },
-    "prettier": {
-        "printWidth": 100
+        "lint": "solhint --max-warnings=0 'src/**/*.sol'"
     }
 }
