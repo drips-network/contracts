@@ -4,13 +4,14 @@ pragma solidity ^0.8.15;
 import {DripsHubUserUtils, ERC20WithPermit} from "./DripsHubUserUtils.t.sol";
 import {AddressAppUser} from "./AddressAppUser.t.sol";
 import {ManagedUser} from "./ManagedUser.t.sol";
-import {AddressApp, IERC20Permit} from "../AddressApp.sol";
+import {AddressApp} from "../AddressApp.sol";
 import {SplitsReceiver, DripsHub, DripsHistory, DripsReceiver} from "../DripsHub.sol";
 import {Reserve} from "../Reserve.sol";
 import {Proxy} from "../Upgradeable.sol";
+import {IERC20Permit} from "../AddressApp.sol";
 import {
-    IERC20,
-    ERC20PresetFixedSupply
+    ERC20PresetFixedSupply,
+    IERC20
 } from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
 contract DripsHubTest is DripsHubUserUtils {

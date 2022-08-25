@@ -4,8 +4,8 @@ pragma solidity ^0.8.15;
 import {Test} from "forge-std/Test.sol";
 import {IReservePlugin, Reserve} from "../Reserve.sol";
 import {
-    IERC20,
-    ERC20PresetFixedSupply
+    ERC20PresetFixedSupply,
+    IERC20
 } from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
 contract ReserveUser {

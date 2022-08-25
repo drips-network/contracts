@@ -2,9 +2,9 @@
 pragma solidity ^0.8.15;
 
 import {Drips, DripsConfig, DripsHistory, DripsConfigImpl, DripsReceiver} from "./Drips.sol";
-import {IReserve} from "./Reserve.sol";
 import {Managed} from "./Managed.sol";
 import {Splits, SplitsReceiver} from "./Splits.sol";
+import {IReserve} from "./Reserve.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
 /// @notice Drips hub contract. Automatically drips and splits funds between users.

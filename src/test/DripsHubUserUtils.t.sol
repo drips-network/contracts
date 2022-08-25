@@ -3,12 +3,13 @@ pragma solidity ^0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {AddressAppUser} from "./AddressAppUser.t.sol";
-import {AddressApp, IERC20Permit} from "../AddressApp.sol";
+import {AddressApp} from "../AddressApp.sol";
 import {SplitsReceiver, DripsConfigImpl, DripsHub, DripsReceiver} from "../DripsHub.sol";
-import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {ERC20PresetFixedSupply} from
     "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 import {ERC20Permit} from "openzeppelin-contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
+import {IERC20Permit} from "../AddressApp.sol";
+import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
 contract ERC20WithPermit is ERC20PresetFixedSupply, ERC20Permit {
     constructor(string memory name, string memory symbol, uint256 initialSupply, address owner)
