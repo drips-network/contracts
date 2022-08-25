@@ -198,7 +198,7 @@ abstract contract Splits {
     /// @notice Sets user splits configuration.
     /// @param userId The user ID
     /// @param receivers The list of the user's splits receivers to be set.
-    /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
+    /// Must be sorted by the splits receivers' id's, deduplicated and without 0 weights.
     /// Each splits receiver will be getting `weight / _TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the user.
     function _setSplits(uint256 userId, SplitsReceiver[] memory receivers) internal {
@@ -214,7 +214,7 @@ abstract contract Splits {
     /// @notice Validates a list of splits receivers and emits events for them
     /// @param receivers The list of splits receivers
     /// @param receiversHash The hash of the list of splits receivers.
-    /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
+    /// Must be sorted by the splits receivers' id's, deduplicated and without 0 weights.
     function _assertSplitsValid(SplitsReceiver[] memory receivers, bytes32 receiversHash) private {
         require(receivers.length <= _MAX_SPLITS_RECEIVERS, "Too many splits receivers");
         uint64 totalWeight = 0;
@@ -256,7 +256,7 @@ abstract contract Splits {
 
     /// @notice Calculates the hash of the list of splits receivers.
     /// @param receivers The list of the splits receivers.
-    /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
+    /// Must be sorted by the splits receivers' id's, deduplicated and without 0 weights.
     /// @return receiversHash The hash of the list of splits receivers.
     function _hashSplits(SplitsReceiver[] memory receivers)
         internal

@@ -505,7 +505,7 @@ contract DripsHub is Managed, Drips, Splits {
     /// @notice Sets user splits configuration.
     /// @param userId The user ID
     /// @param receivers The list of the user's splits receivers to be set.
-    /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
+    /// Must be sorted by the splits receivers' id's, deduplicated and without 0 weights.
     /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the user.
     function setSplits(uint256 userId, SplitsReceiver[] memory receivers)
@@ -525,7 +525,7 @@ contract DripsHub is Managed, Drips, Splits {
 
     /// @notice Calculates the hash of the list of splits receivers.
     /// @param receivers The list of the splits receivers.
-    /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
+    /// Must be sorted by the splits receivers' id's, deduplicated and without 0 weights.
     /// @return receiversHash The hash of the list of splits receivers.
     function hashSplits(SplitsReceiver[] memory receivers)
         public

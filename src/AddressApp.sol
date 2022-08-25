@@ -173,7 +173,7 @@ contract AddressApp is Upgradeable {
     }
     /// @notice Sets msg.sender's splits configuration.
     /// @param receivers The list of the user's splits receivers to be set.
-    /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
+    /// Must be sorted by the splits receivers' id's, deduplicated and without 0 weights.
     /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the user.
 
