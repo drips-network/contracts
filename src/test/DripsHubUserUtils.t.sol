@@ -3,8 +3,19 @@ pragma solidity ^0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {AddressAppUser} from "./AddressAppUser.t.sol";
+import {AddressApp, IERC20Permit} from "../AddressApp.sol";
 import {SplitsReceiver, DripsConfigImpl, DripsHub, DripsReceiver} from "../DripsHub.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
+import {ERC20PresetFixedSupply} from
+    "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
+import {ERC20Permit} from "openzeppelin-contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
+
+contract ERC20WithPermit is ERC20PresetFixedSupply, ERC20Permit {
+    constructor(string memory name, string memory symbol, uint256 initialSupply, address owner)
+        ERC20PresetFixedSupply(name, symbol, initialSupply, owner)
+        ERC20Permit(name)
+    {}
+}
 
 abstract contract DripsHubUserUtils is Test {
     DripsHub internal dripsHub;
@@ -21,6 +32,37 @@ abstract contract DripsHubUserUtils is Test {
 
     function calcUserId(uint32 appId, uint224 userIdPart) internal view returns (uint256) {
         return (uint256(appId) << dripsHub.APP_ID_OFFSET()) | userIdPart;
+    }
+
+    function getSignedMessage(
+        uint256 deadline,
+        IERC20Permit erc20,
+        uint256 amt,
+        uint256 userPriv,
+        address userPub,
+        address spender
+    )
+        internal
+        returns (uint8 v, bytes32 r, bytes32 s)
+    {
+        bytes32 message = keccak256(
+            abi.encodePacked(
+                hex"1901",
+                erc20.DOMAIN_SEPARATOR(),
+                keccak256(
+                    abi.encode(
+                        keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"),
+                        userPub,
+                        spender,
+                        amt,
+                        erc20.nonces(userPub),
+                        deadline
+                    )
+                )
+            )
+        );
+
+        (v, r, s) = vm.sign(userPriv, message);
     }
 
     function loadDrips(AddressAppUser user)
@@ -140,8 +182,33 @@ abstract contract DripsHubUserUtils is Test {
         (,, uint32 updateTime, uint128 actualBalance,) = dripsHub.dripsState(user.userId(), erc20);
         assertEq(updateTime, block.timestamp, "Invalid new last update time");
         assertEq(balanceTo, actualBalance, "Invalid drips balance");
-        assertEq(balanceTo, actualBalance, "Invalid drips balance");
         assertBalance(erc20, user, expectedBalance);
+    }
+
+    function setDripsPermit(
+        AddressApp addressApp,
+        IERC20Permit erc20,
+        uint128 balanceFrom,
+        uint128 balanceTo,
+        address userPub,
+        DripsReceiver[] memory newReceivers,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    )
+        internal
+    {
+        int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
+        uint256 expectedBalance = uint256(int256(erc20.balanceOf(userPub)) - balanceDelta);
+        DripsReceiver[] memory currReceivers = drips[addressApp.calcUserId(userPub)][erc20];
+
+        (uint128 newBalance, int128 realBalanceDelta) = addressApp.setDrips(
+            erc20, currReceivers, balanceDelta, newReceivers, userPub, type(uint256).max, v, r, s
+        );
+
+        assertEq(newBalance, balanceTo, "Invalid drips balance");
+        assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
+        assertEq(erc20.balanceOf(userPub), expectedBalance, "Invalid balance");
     }
 
     function assertDrips(IERC20 erc20, AddressAppUser user, DripsReceiver[] memory currReceivers)
@@ -201,6 +268,27 @@ abstract contract DripsHubUserUtils is Test {
         user.give(receiver.userId(), erc20, amt);
 
         assertBalance(erc20, user, expectedBalance);
+        assertTotalCollectableAll(erc20, receiver, expectedCollectable);
+    }
+
+    function givePermit(
+        AddressApp addressApp,
+        IERC20Permit erc20,
+        address userPub,
+        AddressAppUser receiver,
+        uint128 amt,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    )
+        internal
+    {
+        uint256 expectedBalance = uint256(erc20.balanceOf(userPub) - amt);
+        uint128 expectedCollectable = totalCollectableAll(erc20, receiver) + amt;
+
+        addressApp.give(receiver.userId(), erc20, amt, userPub, type(uint256).max, v, r, s);
+
+        assertEq(erc20.balanceOf(userPub), expectedBalance, "Invalid balance");
         assertTotalCollectableAll(erc20, receiver, expectedCollectable);
     }
 

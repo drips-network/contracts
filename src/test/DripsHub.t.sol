@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.15;
 
-import {DripsHubUserUtils} from "./DripsHubUserUtils.t.sol";
+import {DripsHubUserUtils, ERC20WithPermit} from "./DripsHubUserUtils.t.sol";
 import {AddressAppUser} from "./AddressAppUser.t.sol";
 import {ManagedUser} from "./ManagedUser.t.sol";
-import {AddressApp} from "../AddressApp.sol";
+import {AddressApp, IERC20Permit} from "../AddressApp.sol";
 import {SplitsReceiver, DripsHub, DripsHistory, DripsReceiver} from "../DripsHub.sol";
 import {Reserve} from "../Reserve.sol";
 import {Proxy} from "../Upgradeable.sol";
@@ -17,6 +17,7 @@ contract DripsHubTest is DripsHubUserUtils {
     AddressApp private addressApp;
 
     IERC20 private otherErc20;
+    ERC20WithPermit private erc20WithPermit;
 
     AddressAppUser private user;
     AddressAppUser private receiver;
@@ -28,6 +29,10 @@ contract DripsHubTest is DripsHubUserUtils {
     ManagedUser internal admin;
     ManagedUser internal nonAdmin;
 
+    uint256 private user3Priv =
+        uint256(0xea268570c244b963ccce8d535d1f0fbde4bc1d7bf6b70b9a038b57686a2bc748);
+    address private user3Pub = vm.addr(user3Priv);
+
     string internal constant ERROR_NOT_APP = "Callable only by the app";
     string private constant ERROR_NOT_ADMIN = "Caller is not the admin";
     string private constant ERROR_PAUSED = "Contract paused";
@@ -36,6 +41,8 @@ contract DripsHubTest is DripsHubUserUtils {
     function setUp() public {
         defaultErc20 = new ERC20PresetFixedSupply("test", "test", type(uint136).max, address(this));
         otherErc20 = new ERC20PresetFixedSupply("other", "other", type(uint136).max, address(this));
+        erc20WithPermit =
+            new ERC20WithPermit("erc20Permit", "erc20Permit", type(uint136).max, user3Pub);
         Reserve reserve = new Reserve(address(this));
         DripsHub hubLogic = new DripsHub(10, reserve);
         dripsHub = DripsHub(address(new Proxy(hubLogic, address(this))));
@@ -53,6 +60,7 @@ contract DripsHubTest is DripsHubUserUtils {
         receiver1 = createUser();
         receiver2 = createUser();
         receiver3 = createUser();
+
         // Sort receivers by address
         if (receiver1 > receiver2) {
             (receiver1, receiver2) = (receiver2, receiver1);
@@ -248,6 +256,82 @@ contract DripsHubTest is DripsHubUserUtils {
     function testFundsGivenFromUserCanBeCollected() public {
         give(user, receiver, 10);
         collectAll(receiver, 10);
+    }
+
+    function testFundsGivenWithPermit() public {
+        (uint8 v, bytes32 r, bytes32 s) = getSignedMessage(
+            type(uint256).max,
+            IERC20Permit(address(erc20WithPermit)),
+            2,
+            user3Priv,
+            user3Pub,
+            address(addressApp)
+        );
+
+        givePermit(
+            addressApp, IERC20Permit(address(erc20WithPermit)), user3Pub, receiver, 2, v, r, s
+        );
+    }
+
+    function testSetDripsWithPermit() public {
+        (uint8 v, bytes32 r, bytes32 s) = getSignedMessage(
+            type(uint256).max,
+            IERC20Permit(address(erc20WithPermit)),
+            2,
+            user3Priv,
+            user3Pub,
+            address(addressApp)
+        );
+
+        setDripsPermit(
+            addressApp,
+            IERC20Permit(address(erc20WithPermit)),
+            0,
+            2,
+            user3Pub,
+            dripsReceivers(user1, 2),
+            v,
+            r,
+            s
+        );
+    }
+
+    function testFailFundsGivenWithWrongPermit() public {
+        (uint8 v, bytes32 r, bytes32 s) = getSignedMessage(
+            type(uint256).max,
+            IERC20Permit(address(erc20WithPermit)),
+            1,
+            user3Priv,
+            user3Pub,
+            address(addressApp)
+        );
+
+        givePermit(
+            addressApp, IERC20Permit(address(erc20WithPermit)), user3Pub, receiver, 2, v, r, s
+        );
+    }
+
+    function testFailSetDripsWithWrongPermit() public {
+        (uint8 v, bytes32 r, bytes32 s) = getSignedMessage(
+            type(uint256).max,
+            IERC20Permit(address(erc20WithPermit)),
+            1,
+            user3Priv,
+            user3Pub,
+            address(addressApp)
+        );
+
+        setDripsPermit(
+            addressApp,
+            IERC20Permit(address(erc20WithPermit)),
+            0,
+            2,
+            user3Pub,
+            dripsReceivers(user1, 2),
+            v,
+            r,
+            s
+        );
     }
 
     function testSplitSplitsFundsReceivedFromAllSources() public {
