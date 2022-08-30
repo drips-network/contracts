@@ -96,6 +96,11 @@ Set up environment variables configuring the deployed contracts:
 export GOVERNANCE="<ADDRESS>"
 
 # OPTIONAL
+# Address of Caller to use. If not set, a new instance is deployed.
+# If set to zero, newly deployed Caller-aware contracts don't get support for Caller.
+export CALLER="<ADDRESS>"
+
+# OPTIONAL
 # Address of Reserve to use. If not set, a new instance is deployed.
 export RESERVE="<ADDRESS>"
 

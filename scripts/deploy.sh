@@ -50,6 +50,7 @@ fi
 echo "Etherscan API key:        $ETHERSCAN_API_KEY_PROVIDED"
 echo "Deployment JSON:          $DEPLOYMENT_JSON"
 TO_DEPLOY="to be deployed"
+echo "Caller:                   ${CALLER:-$TO_DEPLOY}"
 echo "Reserve:                  ${RESERVE:-$TO_DEPLOY}"
 echo "Reserve owner:            $RESERVE_OWNER"
 echo "DripsHub:                 ${DRIPS_HUB:-$TO_DEPLOY}"
@@ -69,6 +70,11 @@ then
 fi
 
 # Deploy the contracts
+
+if [ -z "$CALLER" ]; then
+    create "Caller" 'src/Caller.sol:Caller' ""
+    CALLER=$DEPLOYED_ADDR
+fi
 
 if [ -z "$RESERVE" ]; then
     create "Reserve" 'src/Reserve.sol:Reserve' "$DEPLOYER"
@@ -91,7 +97,8 @@ if [ -z "$ADDRESS_APP" ]; then
         ADDRESS_APP_ID=$(cast call "$DRIPS_HUB" 'nextAppId()(uint32)')
         send "Registering AddressApp in DripsHub" \
             "$DRIPS_HUB" 'registerApp(address)(uint32)' "$ADDRESS_APP"
-        create "AddressApp logic" 'src/AddressApp.sol:AddressApp' "$DRIPS_HUB" "$ADDRESS_APP_ID"
+        create "AddressApp logic" 'src/AddressApp.sol:AddressApp' \
+            "$DRIPS_HUB" "$CALLER" "$ADDRESS_APP_ID"
         ADDRESS_APP_LOGIC=$DEPLOYED_ADDR
     fi
     create "AddressApp" 'src/Upgradeable.sol:Proxy' "$ADDRESS_APP_LOGIC" "$ADDRESS_APP_ADMIN"
@@ -136,6 +143,7 @@ tee "$DEPLOYMENT_JSON" <<EOF
 {
     "Network":                  "$NETWORK",
     "Deployer address":         "$DEPLOYER",
+    "Caller":                   "$CALLER",
     "Reserve":                  "$RESERVE",
     "DripsHub":                 "$DRIPS_HUB",
     "DripsHub logic":           "$DRIPS_HUB_LOGIC",

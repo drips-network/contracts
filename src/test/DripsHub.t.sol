@@ -41,7 +41,7 @@ contract DripsHubTest is DripsHubUserUtils {
         dripsHub = DripsHub(address(new Proxy(hubLogic, address(this))));
         reserve.addUser(address(dripsHub));
         uint32 addressAppId = dripsHub.registerApp(address(this));
-        addressApp = new AddressApp(dripsHub, addressAppId);
+        addressApp = new AddressApp(dripsHub, address(0), addressAppId);
         dripsHub.updateAppAddress(addressAppId, address(addressApp));
         admin = new ManagedUser(dripsHub);
         nonAdmin = new ManagedUser(dripsHub);

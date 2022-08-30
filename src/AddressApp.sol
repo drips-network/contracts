@@ -3,6 +3,7 @@ pragma solidity ^0.8.15;
 
 import {DripsHub, DripsReceiver, IERC20, SplitsReceiver} from "./DripsHub.sol";
 import {Upgradeable} from "./Upgradeable.sol";
+import {ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
 import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @notice A DripsHub app implementing address-based user identification.
@@ -12,14 +13,14 @@ import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol"
 /// This app allows calling `collect` for any other address,
 /// e.g. address `0x...A` can call `collect` for address `0x...B` and `0x...B`
 /// will receive a transfer with funds dripped or split to `0x...B`'s user ID.
-contract AddressApp is Upgradeable {
+contract AddressApp is Upgradeable, ERC2771Context {
     using SafeERC20 for IERC20;
 
     DripsHub public immutable dripsHub;
     uint32 public immutable appId;
 
     /// @param _dripsHub The drips hub to use
-    constructor(DripsHub _dripsHub, uint32 _appId) {
+    constructor(DripsHub _dripsHub, address forwarder, uint32 _appId) ERC2771Context(forwarder) {
         dripsHub = _dripsHub;
         appId = _appId;
     }
@@ -54,19 +55,19 @@ contract AddressApp is Upgradeable {
         erc20.safeTransfer(user, amt);
     }
 
-    /// @notice Gives funds from the msg.sender to the receiver.
+    /// @notice Gives funds from the message sender to the receiver.
     /// The receiver can collect them immediately.
-    /// Transfers the funds to be given from the msg.sender's wallet to the drips hub contract.
+    /// Transfers the funds to be given from the message sender's wallet to the drips hub contract.
     /// @param receiver The receiver
     /// @param erc20 The token to use
     /// @param amt The given amount
     function give(uint256 receiver, IERC20 erc20, uint128 amt) public {
         _transferFromCaller(erc20, amt);
-        dripsHub.give(calcUserId(msg.sender), receiver, erc20, amt);
+        dripsHub.give(calcUserId(_msgSender()), receiver, erc20, amt);
     }
 
-    /// @notice Sets the msg.sender's drips configuration.
-    /// Transfers funds between the msg.sender's wallet and the drips hub contract
+    /// @notice Sets the message sender's drips configuration.
+    /// Transfers funds between the message sender's wallet and the drips hub contract
     /// to fulfill the change of the drips balance.
     /// @param erc20 The token to use
     /// @param currReceivers The list of the drips receivers set in the last drips update
@@ -91,24 +92,24 @@ contract AddressApp is Upgradeable {
             _transferFromCaller(erc20, uint128(balanceDelta));
         }
         (newBalance, realBalanceDelta) = dripsHub.setDrips(
-            calcUserId(msg.sender), erc20, currReceivers, balanceDelta, newReceivers
+            calcUserId(_msgSender()), erc20, currReceivers, balanceDelta, newReceivers
         );
         if (realBalanceDelta < 0) {
-            erc20.safeTransfer(msg.sender, uint128(-realBalanceDelta));
+            erc20.safeTransfer(_msgSender(), uint128(-realBalanceDelta));
         }
     }
 
-    /// @notice Sets msg.sender's splits configuration.
+    /// @notice Sets the message sender's splits configuration.
     /// @param receivers The list of the user's splits receivers to be set.
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
     /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the user.
     function setSplits(SplitsReceiver[] calldata receivers) public {
-        dripsHub.setSplits(calcUserId(msg.sender), receivers);
+        dripsHub.setSplits(calcUserId(_msgSender()), receivers);
     }
 
     function _transferFromCaller(IERC20 erc20, uint128 amt) internal {
-        erc20.safeTransferFrom(msg.sender, address(this), amt);
+        erc20.safeTransferFrom(_msgSender(), address(this), amt);
         address reserve = address(dripsHub.reserve());
         // Approval is done only on the first usage of the ERC-20 token in the reserve by the app
         if (erc20.allowance(address(this), reserve) == 0) {
