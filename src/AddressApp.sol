@@ -90,8 +90,9 @@ contract AddressApp is Upgradeable {
         if (balanceDelta > 0) {
             _transferFromCaller(erc20, uint128(balanceDelta));
         }
-        (newBalance, realBalanceDelta) =
-            dripsHub.setDrips(calcUserId(msg.sender), erc20, currReceivers, balanceDelta, newReceivers);
+        (newBalance, realBalanceDelta) = dripsHub.setDrips(
+            calcUserId(msg.sender), erc20, currReceivers, balanceDelta, newReceivers
+        );
         if (realBalanceDelta < 0) {
             erc20.safeTransfer(msg.sender, uint128(-realBalanceDelta));
         }

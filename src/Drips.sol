@@ -501,7 +501,9 @@ abstract contract Drips {
         )
     {
         DripsState storage state = _dripsStorage().states[assetId][userId];
-        return (state.dripsHash, state.dripsHistoryHash, state.updateTime, state.balance, state.maxEnd);
+        return (
+            state.dripsHash, state.dripsHistoryHash, state.updateTime, state.balance, state.maxEnd
+        );
     }
 
     /// @notice User drips balance at a given timestamp
@@ -835,7 +837,10 @@ abstract contract Drips {
             // Limit picking both curr and new to situations when they differ only by time
             if (
                 pickCurr && pickNew
-                    && (currRecv.userId != newRecv.userId || currRecv.config.amtPerSec() != newRecv.config.amtPerSec())
+                    && (
+                        currRecv.userId != newRecv.userId
+                            || currRecv.config.amtPerSec() != newRecv.config.amtPerSec()
+                    )
             ) {
                 pickCurr = _isOrdered(currRecv, newRecv);
                 pickNew = !pickCurr;

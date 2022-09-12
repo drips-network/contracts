@@ -89,7 +89,9 @@ contract DripsHubTest is DripsHubUserUtils {
         try dripsHub.collectableAll(user.userId(), defaultErc20, splitsReceivers(receiver, 2)) {
             assertTrue(false, "Collectable hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, "Invalid current splits receivers", "Invalid collectable revert reason");
+            assertEq(
+                reason, "Invalid current splits receivers", "Invalid collectable revert reason"
+            );
         }
     }
 

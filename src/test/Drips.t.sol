@@ -405,7 +405,11 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         internal
     {
         try this.setDripsExternal(
-            defaultAsset, userId, currReceivers, int128(balanceTo) - int128(balanceFrom), newReceivers
+            defaultAsset,
+            userId,
+            currReceivers,
+            int128(balanceTo) - int128(balanceFrom),
+            newReceivers
         ) {
             assertTrue(false, "Set drips hasn't reverted");
         } catch Error(string memory reason) {
@@ -594,7 +598,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     )
         internal
     {
-        try this.squeezableDripsExternal(userId, defaultAsset, senderId, historyHash, dripsHistory) {
+        try this.squeezableDripsExternal(userId, defaultAsset, senderId, historyHash, dripsHistory)
+        {
             assertTrue(false, "SqueezableDrips hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, expectedReason, "Invalid squeezableDrips revert reason");
@@ -758,7 +763,10 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
             sender,
             0,
             28,
-            recv(recv(receiver, 1, block.timestamp + 5, 10), recv(receiver, 2, block.timestamp + 10, 9))
+            recv(
+                recv(receiver, 1, block.timestamp + 5, 10),
+                recv(receiver, 2, block.timestamp + 10, 9)
+            )
         );
         skip(19);
         assertBalance(sender, 0);
@@ -833,7 +841,10 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
             sender,
             0,
             7,
-            recv(recv(receiver1, 2, block.timestamp + 2, 0), recv(receiver2, 1, block.timestamp + 1, 0))
+            recv(
+                recv(receiver1, 2, block.timestamp + 2, 0),
+                recv(receiver2, 1, block.timestamp + 1, 0)
+            )
         );
         skip(3);
         skipToCycleEnd();
