@@ -225,8 +225,7 @@ contract DripsHubTest is DripsHubUserUtils {
         assertEq(nextSqueezed, block.timestamp - 1, "Invalid next squeezed before");
 
         // Squeeze
-        (amt, nextSqueezed) =
-            dripsHub.squeezeDrips(receiver.userId(), defaultErc20, user.userId(), 0, history);
+        (amt, nextSqueezed) = receiver.squeezeDrips(defaultErc20, user.userId(), 0, history);
         assertEq(amt, 1, "Invalid squeezed amt");
         assertEq(nextSqueezed, block.timestamp, "Invalid next squeezed");
 
@@ -345,6 +344,15 @@ contract DripsHubTest is DripsHubUserUtils {
         collectAll(otherErc20, receiver1, 3 * cycleLength);
         // receiver2 received nothing
         collectAll(otherErc20, receiver2, 0);
+    }
+
+    function testSqueezeDripsRevertsWhenNotCalledByTheApp() public {
+        uint256 userId = calcUserId(dripsHub.nextAppId(), 0);
+        try dripsHub.squeezeDrips(userId, defaultErc20, 1, 0, new DripsHistory[](0)) {
+            assertTrue(false, "SqueezeDrips hasn't reverted");
+        } catch Error(string memory reason) {
+            assertEq(reason, ERROR_NOT_APP, "Invalid squeezeDrips revert reason");
+        }
     }
 
     function testSetDripsRevertsWhenNotCalledByTheApp() public {
@@ -517,8 +525,7 @@ contract DripsHubTest is DripsHubUserUtils {
 
     function testSqueezeDripsCanBePaused() public {
         admin.pause();
-        DripsHistory[] memory history = new DripsHistory[](0);
-        try dripsHub.squeezeDrips(user.userId(), defaultErc20, receiver.userId(), 0, history) {
+        try user.squeezeDrips(defaultErc20, receiver.userId(), 0, new DripsHistory[](0)) {
             assertTrue(false, "SqueezeDrips hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid squeezeDrips revert reason");

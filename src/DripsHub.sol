@@ -279,6 +279,7 @@ contract DripsHub is Managed, Drips, Splits {
     )
         public
         whenNotPaused
+        onlyApp(userId)
         returns (uint128 amt, uint32 nextSqueezed)
     {
         uint256 assetId = _assetId(erc20);

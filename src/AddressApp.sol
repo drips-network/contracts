@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.15;
 
-import {DripsHub, DripsReceiver, IERC20, SplitsReceiver} from "./DripsHub.sol";
+import {DripsHistory, DripsHub, DripsReceiver, IERC20, SplitsReceiver} from "./DripsHub.sol";
 import {Upgradeable} from "./Upgradeable.sol";
 import {ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
 import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
@@ -44,6 +44,39 @@ contract AddressApp is Upgradeable, ERC2771Context {
     {
         (collectedAmt, splitAmt) = dripsHub.collectAll(calcUserId(user), erc20, currReceivers);
         erc20.safeTransfer(user, collectedAmt);
+    }
+
+    /// @notice Receive drips from the currently running cycle from a single sender.
+    /// It doesn't receive drips from the previous, finished cycles, to do that use `receiveDrips`.
+    /// Squeezed funds won't be received in the next calls to `squeezeDrips` or `receiveDrips`.
+    /// Only funds dripped from `nextSqueezedDrips` to `block.timestamp` can be squeezed.
+    /// @param erc20 The used ERC-20 token.
+    /// @param senderId The ID of the user sending drips to squeeze funds from.
+    /// @param historyHash The sender's history hash which was valid right before
+    /// they set up the sequence of configurations described by `dripsHistory`.
+    /// @param dripsHistory The sequence of the sender's drips configurations.
+    /// It can start at an arbitrary past configuration, but must describe all the configurations
+    /// which have been used since then including the current one, in the chronological order.
+    /// Only drips described by `dripsHistory` will be squeezed.
+    /// If `dripsHistory` entries have no receivers, they won't be squeezed.
+    /// The next call to `squeezeDrips` will be able to squeeze only funds which
+    /// have been dripped after the last timestamp squeezed in this call.
+    /// This may cause some funds to be unreceivable until the current cycle ends
+    /// and they can be received using `receiveDrips`.
+    /// @return amt The squeezed amount.
+    /// @return nextSqueezed The next timestamp that can be squeezed.
+    function squeezeDrips(
+        IERC20 erc20,
+        uint256 senderId,
+        bytes32 historyHash,
+        DripsHistory[] memory dripsHistory
+    )
+        public
+        returns (uint128 amt, uint32 nextSqueezed)
+    {
+        return dripsHub.squeezeDrips(
+            calcUserId(_msgSender()), erc20, senderId, historyHash, dripsHistory
+        );
     }
 
     /// @notice Collects the user's received already split funds

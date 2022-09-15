@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.15;
 
-import {DripsHub, DripsReceiver, SplitsReceiver} from "../DripsHub.sol";
+import {DripsHistory, DripsHub, DripsReceiver, SplitsReceiver} from "../DripsHub.sol";
 import {AddressApp} from "../AddressApp.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
@@ -13,6 +13,18 @@ contract AddressAppUser {
     constructor(AddressApp addressApp_) {
         addressApp = addressApp_;
         userId = addressApp_.calcUserId(address(this));
+    }
+
+    function squeezeDrips(
+        IERC20 erc20,
+        uint256 senderId,
+        bytes32 historyHash,
+        DripsHistory[] memory dripsHistory
+    )
+        public
+        returns (uint128 amt, uint32 nextSqueezed)
+    {
+        return addressApp.squeezeDrips(erc20, senderId, historyHash, dripsHistory);
     }
 
     function setDrips(
