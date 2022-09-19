@@ -147,11 +147,7 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
         uint256 deadline,
         bytes32 r,
         bytes32 sv
-    )
-        public
-        payable
-        returns (bytes memory returnData)
-    {
+    ) public payable returns (bytes memory returnData) {
         require(block.timestamp <= deadline, "Execution deadline expired");
         uint256 currNonce = nonce[sender]++;
         bytes32 executeHash = keccak256(

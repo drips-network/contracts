@@ -70,10 +70,7 @@ contract AddressApp is Upgradeable, ERC2771Context {
         uint256 senderId,
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory
-    )
-        public
-        returns (uint128 amt, uint32 nextSqueezed)
-    {
+    ) public returns (uint128 amt, uint32 nextSqueezed) {
         return dripsHub.squeezeDrips(
             calcUserId(_msgSender()), erc20, senderId, historyHash, dripsHistory
         );
@@ -117,10 +114,7 @@ contract AddressApp is Upgradeable, ERC2771Context {
         DripsReceiver[] calldata currReceivers,
         int128 balanceDelta,
         DripsReceiver[] calldata newReceivers
-    )
-        public
-        returns (uint128 newBalance, int128 realBalanceDelta)
-    {
+    ) public returns (uint128 newBalance, int128 realBalanceDelta) {
         if (balanceDelta > 0) {
             _transferFromCaller(erc20, uint128(balanceDelta));
         }

@@ -20,10 +20,7 @@ contract AddressAppUser {
         uint256 senderId,
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory
-    )
-        public
-        returns (uint128 amt, uint32 nextSqueezed)
-    {
+    ) public returns (uint128 amt, uint32 nextSqueezed) {
         return addressApp.squeezeDrips(erc20, senderId, historyHash, dripsHistory);
     }
 
@@ -32,10 +29,7 @@ contract AddressAppUser {
         DripsReceiver[] calldata currReceivers,
         int128 balanceDelta,
         DripsReceiver[] calldata newReceivers
-    )
-        public
-        returns (uint128 newBalance, int128 realBalanceDelta)
-    {
+    ) public returns (uint128 newBalance, int128 realBalanceDelta) {
         if (balanceDelta > 0) {
             erc20.approve(address(addressApp), uint128(balanceDelta));
         }

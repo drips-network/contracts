@@ -133,9 +133,7 @@ contract ReserveTest is Test {
         ReserveUser from,
         uint256 amt,
         string memory expectedReason
-    )
-        public
-    {
+    ) public {
         from.approveReserve(forToken, amt);
         try reserveUser.deposit(forToken, address(from), amt) {
             assertTrue(false, "Deposit hasn't reverted");
@@ -164,9 +162,7 @@ contract ReserveTest is Test {
         ReserveUser to,
         uint256 amt,
         string memory expectedReason
-    )
-        public
-    {
+    ) public {
         try reserveUser.withdraw(forToken, address(to), amt) {
             assertTrue(false, "Withdraw hasn't reverted");
         } catch Error(string memory reason) {
@@ -180,9 +176,7 @@ contract ReserveTest is Test {
         IReservePlugin plugin,
         ReserveUser to,
         uint256 amt
-    )
-        public
-    {
+    ) public {
         uint256 deposited = reserve.deposited(forToken);
         uint256 reserveBalance = forToken.balanceOf(address(reserve));
         uint256 userBalance = forToken.balanceOf(address(to));
@@ -202,9 +196,7 @@ contract ReserveTest is Test {
         ReserveUser to,
         uint256 amt,
         string memory expectedReason
-    )
-        public
-    {
+    ) public {
         try reserveUser.forceWithdraw(forToken, plugin, address(to), amt) {
             assertTrue(false, "Force withdraw hasn't reverted");
         } catch Error(string memory reason) {
@@ -217,9 +209,7 @@ contract ReserveTest is Test {
         ReserveUser forUser,
         uint256 expected,
         string memory details
-    )
-        public
-    {
+    ) public {
         uint256 actual = forToken.balanceOf(address(forUser));
         assertEq(actual, expected, concat("Invalid user balance ", details));
     }
@@ -262,9 +252,7 @@ contract ReserveTest is Test {
         ReserveUser currOwner,
         ReserveUser addedUser,
         string memory expectedReason
-    )
-        public
-    {
+    ) public {
         try currOwner.addUser(address(addedUser)) {
             assertTrue(false, "AddUser hasn't reverted");
         } catch Error(string memory reason) {
@@ -282,9 +270,7 @@ contract ReserveTest is Test {
         ReserveUser currOwner,
         ReserveUser removedUser,
         string memory expectedReason
-    )
-        public
-    {
+    ) public {
         try currOwner.removeUser(address(removedUser)) {
             assertTrue(false, "RemoveUser hasn't reverted");
         } catch Error(string memory reason) {

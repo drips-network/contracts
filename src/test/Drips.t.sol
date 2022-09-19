@@ -71,9 +71,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint256 assetId,
         uint256 userId,
         DripsReceiver[] memory newReceivers
-    )
-        internal
-    {
+    ) internal {
         assertDrips(assetId, userId, newReceivers);
         delete currReceiversStore[assetId][userId];
         for (uint256 i = 0; i < newReceivers.length; i++) {
@@ -115,11 +113,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint256 amtPerSecFrac,
         uint256 start,
         uint256 duration
-    )
-        internal
-        pure
-        returns (DripsReceiver[] memory receivers)
-    {
+    ) internal pure returns (DripsReceiver[] memory receivers) {
         receivers = new DripsReceiver[](1);
         uint192 amtPerSecFull = uint192((amtPerSec * Drips._AMT_PER_SEC_MULTIPLIER) + amtPerSecFrac);
         DripsConfig config = DripsConfigImpl.create(amtPerSecFull, uint32(start), uint32(duration));
@@ -144,11 +138,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         DripsReceiver[] memory recv1,
         DripsReceiver[] memory recv2,
         DripsReceiver[] memory recv3
-    )
-        internal
-        pure
-        returns (DripsReceiver[] memory)
-    {
+    ) internal pure returns (DripsReceiver[] memory) {
         return recv(recv(recv1, recv2), recv3);
     }
 
@@ -157,11 +147,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         DripsReceiver[] memory recv2,
         DripsReceiver[] memory recv3,
         DripsReceiver[] memory recv4
-    )
-        internal
-        pure
-        returns (DripsReceiver[] memory)
-    {
+    ) internal pure returns (DripsReceiver[] memory) {
         return recv(recv(recv1, recv2, recv3), recv4);
     }
 
@@ -170,10 +156,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint128 maxAmtPerSec,
         uint32 maxStart,
         uint32 maxDuration
-    )
-        internal
-        returns (DripsReceiver[] memory)
-    {
+    ) internal returns (DripsReceiver[] memory) {
         uint256 inPercent = 100;
         uint256 probMaxEnd = random(inPercent);
         uint256 probStartNow = random(inPercent);
@@ -189,10 +172,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint32 maxDuration,
         uint256 probMaxEnd,
         uint256 probStartNow
-    )
-        internal
-        returns (DripsReceiver[] memory)
-    {
+    ) internal returns (DripsReceiver[] memory) {
         DripsReceiver[] memory receivers = new DripsReceiver[](amountReceiver);
         for (uint8 i = 0; i < amountReceiver; i++) {
             uint256 amtPerSec = random(maxAmtPerSec) + 1;
@@ -280,9 +260,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint128 balanceFrom,
         uint128 balanceTo,
         DripsReceiver[] memory newReceivers
-    )
-        internal
-    {
+    ) internal {
         setDrips(defaultAsset, user, balanceFrom, balanceTo, newReceivers);
     }
 
@@ -292,9 +270,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint128 balanceFrom,
         uint128 balanceTo,
         DripsReceiver[] memory newReceivers
-    )
-        internal
-    {
+    ) internal {
         (, bytes32 oldHistoryHash,,,) = Drips._dripsState(userId, assetId);
         int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
 
@@ -345,9 +321,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         DripsReceiver[] memory receivers,
         uint256 timestamp,
         string memory expectedReason
-    )
-        internal
-    {
+    ) internal {
         try this.balanceAtExternal(userId, receivers, timestamp) {
             assertTrue(false, "BalanceAt hasn't reverted");
         } catch Error(string memory reason) {
@@ -381,9 +355,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint128 balanceTo,
         DripsReceiver[] memory newReceivers,
         string memory expectedReason
-    )
-        internal
-    {
+    ) internal {
         assertSetDripsReverts(
             userId,
             loadCurrReceivers(defaultAsset, userId),
@@ -401,9 +373,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint128 balanceTo,
         DripsReceiver[] memory newReceivers,
         string memory expectedReason
-    )
-        internal
-    {
+    ) internal {
         try this.setDripsExternal(
             defaultAsset,
             userId,
@@ -423,9 +393,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers
-    )
-        external
-    {
+    ) external {
         Drips._setDrips(userId, assetId, currReceivers, balanceDelta, newReceivers);
     }
 
@@ -445,9 +413,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint32 expectedReceivedCycles,
         uint128 expectedAmtAfter,
         uint32 expectedCyclesAfter
-    )
-        internal
-    {
+    ) internal {
         uint128 expectedTotalAmt = expectedReceivedAmt + expectedAmtAfter;
         uint32 expectedTotalCycles = expectedReceivedCycles + expectedCyclesAfter;
         assertReceivableDripsCycles(userId, expectedTotalCycles);
@@ -512,9 +478,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint32 maxCycles,
         uint128 expectedAmt,
         uint32 expectedCycles
-    )
-        internal
-    {
+    ) internal {
         (uint128 actualAmt, uint32 actualCycles) =
             Drips._receivableDrips(userId, defaultAsset, maxCycles);
         assertEq(actualAmt, expectedAmt, "Invalid receivable amount");
@@ -527,9 +491,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         DripsHistory[] memory dripsHistory,
         uint256 expectedAmt,
         uint256 expectedNextSqueezed
-    )
-        internal
-    {
+    ) internal {
         squeezeDrips(userId, senderId, 0, dripsHistory, expectedAmt, expectedNextSqueezed);
     }
 
@@ -540,9 +502,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         DripsHistory[] memory dripsHistory,
         uint256 expectedAmt,
         uint256 expectedNextSqueezed
-    )
-        internal
-    {
+    ) internal {
         uint256 assetId = defaultAsset;
         (uint128 amtBefore, uint32 nextSqueezedBefore) =
             Drips._squeezableDrips(userId, assetId, senderId, historyHash, dripsHistory);
@@ -567,9 +527,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory,
         string memory expectedReason
-    )
-        internal
-    {
+    ) internal {
         try this.squeezeDripsExternal(userId, defaultAsset, senderId, historyHash, dripsHistory) {
             assertTrue(false, "SqueezeDrips hasn't reverted");
         } catch Error(string memory reason) {
@@ -583,9 +541,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint256 senderId,
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory
-    )
-        external
-    {
+    ) external {
         Drips._squeezeDrips(userId, assetId, senderId, historyHash, dripsHistory);
     }
 
@@ -595,9 +551,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory,
         string memory expectedReason
-    )
-        internal
-    {
+    ) internal {
         try this.squeezableDripsExternal(userId, defaultAsset, senderId, historyHash, dripsHistory)
         {
             assertTrue(false, "SqueezableDrips hasn't reverted");
@@ -612,10 +566,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint256 senderId,
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory
-    )
-        external
-        view
-    {
+    ) external view {
         Drips._squeezableDrips(userId, assetId, senderId, historyHash, dripsHistory);
     }
 
@@ -624,9 +575,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint256 assetId,
         uint256 senderId,
         uint256 expected
-    )
-        internal
-    {
+    ) internal {
         uint256 actual = Drips._nextSqueezedDrips(userId, assetId, senderId);
         assertEq(actual, expected, "Invalid next squeezable drips");
     }

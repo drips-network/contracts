@@ -62,9 +62,7 @@ contract SplitsTest is Test, Splits {
         uint256 userId,
         SplitsReceiver[] memory newReceivers,
         string memory expectedReason
-    )
-        internal
-    {
+    ) internal {
         SplitsReceiver[] memory curr = getCurrSplitsReceivers(userId);
         Splits._assertCurrSplits(userId, curr);
         try this.setSplitsExternal(userId, newReceivers) {
@@ -116,9 +114,7 @@ contract SplitsTest is Test, Splits {
         uint256 userId,
         uint128 expectedCollectable,
         uint128 expectedSplit
-    )
-        internal
-    {
+    ) internal {
         (uint128 collectableAmt, uint128 splitAmt) =
             Splits._split(userId, asset, getCurrSplitsReceivers(userId));
 
@@ -147,10 +143,7 @@ contract SplitsTest is Test, Splits {
         uint256 userId,
         uint128 expectedCollectable,
         uint128 expectedSplit
-    )
-        public
-        returns (uint128 collectedAmt)
-    {
+    ) public returns (uint128 collectedAmt) {
         split(asset, userId, expectedCollectable, expectedSplit);
         return Splits._collect(userId, asset);
     }

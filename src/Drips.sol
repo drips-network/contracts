@@ -347,10 +347,7 @@ abstract contract Drips {
         uint256 senderId,
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory
-    )
-        internal
-        returns (uint128 amt, uint32 nextSqueezed)
-    {
+    ) internal returns (uint128 amt, uint32 nextSqueezed) {
         (amt, nextSqueezed) = _squeezableDrips(userId, assetId, senderId, historyHash, dripsHistory);
         DripsState storage state = _dripsStorage().states[assetId][userId];
         state.nextSqueezed[senderId] = nextSqueezed;
@@ -374,11 +371,7 @@ abstract contract Drips {
         uint256 senderId,
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory
-    )
-        internal
-        view
-        returns (uint128 amt, uint32 nextSqueezed)
-    {
+    ) internal view returns (uint128 amt, uint32 nextSqueezed) {
         bytes32 currHistoryHash = _dripsStorage().states[assetId][senderId].dripsHistoryHash;
         _verifyDripsHistory(historyHash, dripsHistory, currHistoryHash);
         uint32 squeezeStart = _nextSqueezedDrips(userId, assetId, senderId);
@@ -405,10 +398,7 @@ abstract contract Drips {
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory,
         bytes32 finalHistoryHash
-    )
-        private
-        pure
-    {
+    ) private pure {
         for (uint256 i = 0; i < dripsHistory.length; i++) {
             DripsHistory memory drips = dripsHistory[i];
             bytes32 dripsHash = drips.dripsHash;
@@ -432,11 +422,7 @@ abstract contract Drips {
         DripsHistory memory dripsHistory,
         uint32 squeezeStart,
         uint32 squeezeEnd
-    )
-        private
-        view
-        returns (uint128 squeezedAmt)
-    {
+    ) private view returns (uint128 squeezedAmt) {
         DripsReceiver[] memory receivers = dripsHistory.receivers;
         // Binary search for the `idx` of the first `userId` receiver being
         uint256 idx = 0;
@@ -520,11 +506,7 @@ abstract contract Drips {
         uint256 assetId,
         DripsReceiver[] memory receivers,
         uint32 timestamp
-    )
-        internal
-        view
-        returns (uint128 balance)
-    {
+    ) internal view returns (uint128 balance) {
         DripsState storage state = _dripsStorage().states[assetId][userId];
         require(timestamp >= state.updateTime, "Timestamp before last drips update");
         require(_hashDrips(receivers) == state.dripsHash, "Invalid current drips list");
@@ -547,11 +529,7 @@ abstract contract Drips {
         uint32 maxEnd,
         DripsReceiver[] memory receivers,
         uint32 timestamp
-    )
-        private
-        view
-        returns (uint128 balance)
-    {
+    ) private view returns (uint128 balance) {
         balance = lastBalance;
         for (uint256 i = 0; i < receivers.length; i++) {
             DripsReceiver memory receiver = receivers[i];
@@ -584,10 +562,7 @@ abstract contract Drips {
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers
-    )
-        internal
-        returns (uint128 newBalance, int128 realBalanceDelta)
-    {
+    ) internal returns (uint128 newBalance, int128 realBalanceDelta) {
         DripsState storage state = _dripsStorage().states[assetId][userId];
         bytes32 currDripsHash = _hashDrips(currReceivers);
         require(currDripsHash == state.dripsHash, "Invalid current drips list");
@@ -697,11 +672,7 @@ abstract contract Drips {
         uint256[] memory configs,
         uint256 configsLen,
         uint256 maxEnd
-    )
-        private
-        view
-        returns (bool isEnough)
-    {
+    ) private view returns (bool isEnough) {
         unchecked {
             uint256 spent = 0;
             for (uint256 i = 0; i < configsLen; i++) {
@@ -790,11 +761,7 @@ abstract contract Drips {
         bytes32 dripsHash,
         uint32 updateTime,
         uint32 maxEnd
-    )
-        internal
-        pure
-        returns (bytes32 dripsHistoryHash)
-    {
+    ) internal pure returns (bytes32 dripsHistoryHash) {
         return keccak256(abi.encode(oldDripsHistoryHash, dripsHash, updateTime, maxEnd));
     }
 
@@ -816,9 +783,7 @@ abstract contract Drips {
         uint32 currMaxEnd,
         DripsReceiver[] memory newReceivers,
         uint32 newMaxEnd
-    )
-        private
-    {
+    ) private {
         uint256 currIdx = 0;
         uint256 newIdx = 0;
         while (true) {
@@ -923,11 +888,7 @@ abstract contract Drips {
         uint32 maxEnd,
         uint32 startCap,
         uint32 endCap
-    )
-        private
-        pure
-        returns (uint32 start, uint32 end_)
-    {
+    ) private pure returns (uint32 start, uint32 end_) {
         start = receiver.config.start();
         if (start == 0) {
             start = updateTime;
@@ -972,9 +933,7 @@ abstract contract Drips {
         mapping(uint32 => AmtDelta) storage amtDeltas,
         uint256 timestamp,
         int256 amtPerSec
-    )
-        private
-    {
+    ) private {
         unchecked {
             // In order to set a delta on a specific timestamp it must be introduced in two cycles.
             // These formulas follow the logic from `_drippedAmt`, see it for more details.

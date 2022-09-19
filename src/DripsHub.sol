@@ -276,12 +276,7 @@ contract DripsHub is Managed, Drips, Splits {
         uint256 senderId,
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory
-    )
-        public
-        whenNotPaused
-        onlyApp(userId)
-        returns (uint128 amt, uint32 nextSqueezed)
-    {
+    ) public whenNotPaused onlyApp(userId) returns (uint128 amt, uint32 nextSqueezed) {
         uint256 assetId = _assetId(erc20);
         (amt, nextSqueezed) =
             Drips._squeezeDrips(userId, assetId, senderId, historyHash, dripsHistory);
@@ -305,11 +300,7 @@ contract DripsHub is Managed, Drips, Splits {
         uint256 senderId,
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory
-    )
-        public
-        view
-        returns (uint128 amt, uint32 nextSqueezed)
-    {
+    ) public view returns (uint128 amt, uint32 nextSqueezed) {
         return Drips._squeezableDrips(userId, _assetId(erc20), senderId, historyHash, dripsHistory);
     }
 
@@ -426,11 +417,7 @@ contract DripsHub is Managed, Drips, Splits {
         IERC20 erc20,
         DripsReceiver[] memory receivers,
         uint32 timestamp
-    )
-        public
-        view
-        returns (uint128 balance)
-    {
+    ) public view returns (uint128 balance) {
         return Drips._balanceAt(userId, _assetId(erc20), receivers, timestamp);
     }
 
@@ -454,12 +441,7 @@ contract DripsHub is Managed, Drips, Splits {
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers
-    )
-        public
-        whenNotPaused
-        onlyApp(userId)
-        returns (uint128 newBalance, int128 realBalanceDelta)
-    {
+    ) public whenNotPaused onlyApp(userId) returns (uint128 newBalance, int128 realBalanceDelta) {
         if (balanceDelta > 0) {
             increaseTotalBalance(erc20, uint128(balanceDelta));
         }
@@ -495,11 +477,7 @@ contract DripsHub is Managed, Drips, Splits {
         bytes32 dripsHash,
         uint32 updateTime,
         uint32 maxEnd
-    )
-        public
-        pure
-        returns (bytes32 dripsHistoryHash)
-    {
+    ) public pure returns (bytes32 dripsHistoryHash) {
         return Drips._hashDripsHistory(oldDripsHistoryHash, dripsHash, updateTime, maxEnd);
     }
 

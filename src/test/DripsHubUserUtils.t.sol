@@ -91,11 +91,7 @@ abstract contract DripsHubUserUtils is Test {
         uint128 amtPerSec1,
         AddressAppUser user2,
         uint128 amtPerSec2
-    )
-        internal
-        view
-        returns (DripsReceiver[] memory list)
-    {
+    ) internal view returns (DripsReceiver[] memory list) {
         list = new DripsReceiver[](2);
         list[0] = DripsReceiver(
             user1.userId(),
@@ -112,9 +108,7 @@ abstract contract DripsHubUserUtils is Test {
         uint128 balanceFrom,
         uint128 balanceTo,
         DripsReceiver[] memory newReceivers
-    )
-        internal
-    {
+    ) internal {
         setDrips(defaultErc20, user, balanceFrom, balanceTo, newReceivers);
     }
 
@@ -124,9 +118,7 @@ abstract contract DripsHubUserUtils is Test {
         uint128 balanceFrom,
         uint128 balanceTo,
         DripsReceiver[] memory newReceivers
-    )
-        internal
-    {
+    ) internal {
         int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
         uint256 expectedBalance = uint256(int256(erc20.balanceOf(address(user))) - balanceDelta);
         DripsReceiver[] memory currReceivers = loadDrips(erc20, user);
@@ -167,9 +159,7 @@ abstract contract DripsHubUserUtils is Test {
         AddressAppUser user,
         DripsReceiver[] memory newReceivers,
         string memory expectedReason
-    )
-        internal
-    {
+    ) internal {
         assertSetDripsReverts(user, loadDrips(user), 0, newReceivers, expectedReason);
     }
 
@@ -179,9 +169,7 @@ abstract contract DripsHubUserUtils is Test {
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers,
         string memory expectedReason
-    )
-        internal
-    {
+    ) internal {
         try user.setDrips(defaultErc20, currReceivers, balanceDelta, newReceivers) {
             assertTrue(false, "Set drips hasn't reverted");
         } catch Error(string memory reason) {
@@ -210,9 +198,7 @@ abstract contract DripsHubUserUtils is Test {
         AddressAppUser receiver,
         uint128 amt,
         string memory expectedReason
-    )
-        internal
-    {
+    ) internal {
         try user.give(receiver.userId(), defaultErc20, amt) {
             assertTrue(false, "Give hasn't reverted");
         } catch Error(string memory reason) {
@@ -238,11 +224,7 @@ abstract contract DripsHubUserUtils is Test {
         uint32 weight1,
         AddressAppUser user2,
         uint32 weight2
-    )
-        internal
-        view
-        returns (SplitsReceiver[] memory list)
-    {
+    ) internal view returns (SplitsReceiver[] memory list) {
         list = new SplitsReceiver[](2);
         list[0] = SplitsReceiver(user1.userId(), weight1);
         list[1] = SplitsReceiver(user2.userId(), weight2);
@@ -262,9 +244,7 @@ abstract contract DripsHubUserUtils is Test {
         AddressAppUser user,
         SplitsReceiver[] memory newReceivers,
         string memory expectedReason
-    )
-        internal
-    {
+    ) internal {
         SplitsReceiver[] memory curr = getCurrSplitsReceivers(user);
         assertSplits(user, curr);
         try user.setSplits(newReceivers) {
@@ -301,9 +281,7 @@ abstract contract DripsHubUserUtils is Test {
         AddressAppUser user,
         uint128 expectedCollected,
         uint128 expectedSplit
-    )
-        internal
-    {
+    ) internal {
         assertCollectableAll(erc20, user, expectedCollected, expectedSplit);
         uint256 expectedBalance = erc20.balanceOf(address(user)) + expectedCollected;
 
@@ -328,9 +306,7 @@ abstract contract DripsHubUserUtils is Test {
         AddressAppUser user,
         uint128 expectedCollected,
         uint128 expectedSplit
-    )
-        internal
-    {
+    ) internal {
         assertCollectableAll(defaultErc20, user, expectedCollected, expectedSplit);
     }
 
@@ -339,9 +315,7 @@ abstract contract DripsHubUserUtils is Test {
         AddressAppUser user,
         uint128 expectedCollected,
         uint128 expectedSplit
-    )
-        internal
-    {
+    ) internal {
         (uint128 actualCollected, uint128 actualSplit) =
             dripsHub.collectableAll(user.userId(), erc20, getCurrSplitsReceivers(user));
         assertEq(actualCollected, expectedCollected, "Invalid collected");
@@ -359,9 +333,7 @@ abstract contract DripsHubUserUtils is Test {
         IERC20 erc20,
         AddressAppUser user,
         uint128 expectedCollectable
-    )
-        internal
-    {
+    ) internal {
         uint128 actualCollectable = totalCollectableAll(erc20, user);
         assertEq(actualCollectable, expectedCollectable, "Invalid total collectable");
     }
@@ -370,9 +342,7 @@ abstract contract DripsHubUserUtils is Test {
         AddressAppUser user,
         uint128 expectedReceivedAmt,
         uint32 expectedReceivedCycles
-    )
-        internal
-    {
+    ) internal {
         receiveDrips(user, type(uint32).max, expectedReceivedAmt, expectedReceivedCycles, 0, 0);
     }
 
@@ -383,9 +353,7 @@ abstract contract DripsHubUserUtils is Test {
         uint32 expectedReceivedCycles,
         uint128 expectedAmtAfter,
         uint32 expectedCyclesAfter
-    )
-        internal
-    {
+    ) internal {
         uint128 expectedTotalAmt = expectedReceivedAmt + expectedAmtAfter;
         uint32 expectedTotalCycles = expectedReceivedCycles + expectedCyclesAfter;
         assertReceivableDripsCycles(user, expectedTotalCycles);
@@ -411,9 +379,7 @@ abstract contract DripsHubUserUtils is Test {
         uint32 maxCycles,
         uint128 expectedAmt,
         uint32 expectedCycles
-    )
-        internal
-    {
+    ) internal {
         (uint128 actualAmt, uint32 actualCycles) =
             dripsHub.receivableDrips(user.userId(), defaultErc20, maxCycles);
         assertEq(actualAmt, expectedAmt, "Invalid receivable amount");
