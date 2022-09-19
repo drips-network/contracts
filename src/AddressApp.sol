@@ -32,20 +32,6 @@ contract AddressApp is Upgradeable, ERC2771Context {
         return (uint256(appId) << 224) | uint160(userAddr);
     }
 
-    /// @notice Collects all received funds available for the user
-    /// and transfers them out of the drips hub contract to that user.
-    /// @param erc20 The token to use
-    /// @param currReceivers The list of the user's current splits receivers.
-    /// @return collectedAmt The collected amount
-    /// @return splitAmt The amount split to the user's splits receivers
-    function collectAll(address user, IERC20 erc20, SplitsReceiver[] calldata currReceivers)
-        public
-        returns (uint128 collectedAmt, uint128 splitAmt)
-    {
-        (collectedAmt, splitAmt) = dripsHub.collectAll(calcUserId(user), erc20, currReceivers);
-        erc20.safeTransfer(user, collectedAmt);
-    }
-
     /// @notice Receive drips from the currently running cycle from a single sender.
     /// It doesn't receive drips from the previous, finished cycles, to do that use `receiveDrips`.
     /// Squeezed funds won't be received in the next calls to `squeezeDrips` or `receiveDrips`.

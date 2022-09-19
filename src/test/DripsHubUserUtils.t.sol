@@ -185,12 +185,12 @@ abstract contract DripsHubUserUtils is Test {
         internal
     {
         uint256 expectedBalance = uint256(erc20.balanceOf(address(user)) - amt);
-        uint128 expectedCollectable = totalCollectableAll(erc20, receiver) + amt;
+        uint128 expectedSplittable = splittable(receiver, erc20) + amt;
 
         user.give(receiver.userId(), erc20, amt);
 
         assertBalance(erc20, user, expectedBalance);
-        assertTotalCollectableAll(erc20, receiver, expectedCollectable);
+        assertSplittable(receiver, erc20, expectedSplittable);
     }
 
     function assertGiveReverts(
@@ -282,60 +282,15 @@ abstract contract DripsHubUserUtils is Test {
         uint128 expectedCollected,
         uint128 expectedSplit
     ) internal {
-        assertCollectableAll(erc20, user, expectedCollected, expectedSplit);
-        uint256 expectedBalance = erc20.balanceOf(address(user)) + expectedCollected;
+        (uint128 receivable,) = dripsHub.receivableDrips(user.userId(), erc20, type(uint32).max);
+        (uint128 received, uint32 receivableCycles) =
+            dripsHub.receiveDrips(user.userId(), erc20, type(uint32).max);
+        assertEq(received, receivable, "Invalid received amount");
+        assertEq(receivableCycles, 0, "Non-zero receivable cycles");
 
-        (uint128 collectedAmt, uint128 splitAmt) =
-            user.collectAll(address(user), erc20, getCurrSplitsReceivers(user));
+        split(user, erc20, expectedCollected - collectable(user, erc20), expectedSplit);
 
-        assertEq(collectedAmt, expectedCollected, "Invalid collected amount");
-        assertEq(splitAmt, expectedSplit, "Invalid split amount");
-        assertCollectableAll(erc20, user, 0);
-        assertBalance(erc20, user, expectedBalance);
-    }
-
-    function assertCollectableAll(AddressAppUser user, uint128 expected) internal {
-        assertCollectableAll(defaultErc20, user, expected, 0);
-    }
-
-    function assertCollectableAll(IERC20 erc20, AddressAppUser user, uint128 expected) internal {
-        assertCollectableAll(erc20, user, expected, 0);
-    }
-
-    function assertCollectableAll(
-        AddressAppUser user,
-        uint128 expectedCollected,
-        uint128 expectedSplit
-    ) internal {
-        assertCollectableAll(defaultErc20, user, expectedCollected, expectedSplit);
-    }
-
-    function assertCollectableAll(
-        IERC20 erc20,
-        AddressAppUser user,
-        uint128 expectedCollected,
-        uint128 expectedSplit
-    ) internal {
-        (uint128 actualCollected, uint128 actualSplit) =
-            dripsHub.collectableAll(user.userId(), erc20, getCurrSplitsReceivers(user));
-        assertEq(actualCollected, expectedCollected, "Invalid collected");
-        assertEq(actualSplit, expectedSplit, "Invalid split");
-    }
-
-    function totalCollectableAll(IERC20 erc20, AddressAppUser user) internal returns (uint128) {
-        SplitsReceiver[] memory splits = getCurrSplitsReceivers(user);
-        (uint128 collectableAmt, uint128 splittableAmt) =
-            dripsHub.collectableAll(user.userId(), erc20, splits);
-        return collectableAmt + splittableAmt;
-    }
-
-    function assertTotalCollectableAll(
-        IERC20 erc20,
-        AddressAppUser user,
-        uint128 expectedCollectable
-    ) internal {
-        uint128 actualCollectable = totalCollectableAll(erc20, user);
-        assertEq(actualCollectable, expectedCollectable, "Invalid total collectable");
+        collect(user, erc20, expectedCollected);
     }
 
     function receiveDrips(
@@ -389,21 +344,34 @@ abstract contract DripsHubUserUtils is Test {
     function split(AddressAppUser user, uint128 expectedCollectable, uint128 expectedSplit)
         internal
     {
-        assertSplittable(user, expectedCollectable + expectedSplit);
-        uint128 collectableBefore = collectable(user);
+        split(user, defaultErc20, expectedCollectable, expectedSplit);
+    }
+
+    function split(
+        AddressAppUser user,
+        IERC20 erc20,
+        uint128 expectedCollectable,
+        uint128 expectedSplit
+    ) internal {
+        assertSplittable(user, erc20, expectedCollectable + expectedSplit);
         assertSplitResults(user, expectedCollectable + expectedSplit, expectedCollectable);
+        uint128 collectableBefore = collectable(user, erc20);
 
         (uint128 collectableAmt, uint128 splitAmt) =
-            dripsHub.split(user.userId(), defaultErc20, getCurrSplitsReceivers(user));
+            dripsHub.split(user.userId(), erc20, getCurrSplitsReceivers(user));
 
         assertEq(collectableAmt, expectedCollectable, "Invalid collectable amount");
         assertEq(splitAmt, expectedSplit, "Invalid split amount");
-        assertSplittable(user, 0);
-        assertCollectable(user, collectableBefore + expectedCollectable);
+        assertSplittable(user, erc20, 0);
+        assertCollectable(user, erc20, collectableBefore + expectedCollectable);
     }
 
-    function assertSplittable(AddressAppUser user, uint256 expected) internal {
-        uint256 actual = dripsHub.splittable(user.userId(), defaultErc20);
+    function splittable(AddressAppUser user, IERC20 erc20) internal view returns (uint128 amt) {
+        return dripsHub.splittable(user.userId(), erc20);
+    }
+
+    function assertSplittable(AddressAppUser user, IERC20 erc20, uint256 expected) internal {
+        uint128 actual = splittable(user, erc20);
         assertEq(actual, expected, "Invalid splittable");
     }
 
@@ -414,22 +382,34 @@ abstract contract DripsHubUserUtils is Test {
     }
 
     function collect(AddressAppUser user, uint128 expectedAmt) internal {
-        assertCollectable(user, expectedAmt);
-        uint256 balanceBefore = defaultErc20.balanceOf(address(user));
+        collect(user, defaultErc20, expectedAmt);
+    }
 
-        uint128 actualAmt = user.collect(address(user), defaultErc20);
+    function collect(AddressAppUser user, IERC20 erc20, uint128 expectedAmt) internal {
+        assertCollectable(user, erc20, expectedAmt);
+        uint256 balanceBefore = erc20.balanceOf(address(user));
+
+        uint128 actualAmt = user.collect(address(user), erc20);
 
         assertEq(actualAmt, expectedAmt, "Invalid collected amount");
-        assertCollectable(user, 0);
-        assertBalance(user, balanceBefore + expectedAmt);
+        assertCollectable(user, erc20, 0);
+        assertBalance(erc20, user, balanceBefore + expectedAmt);
     }
 
     function collectable(AddressAppUser user) internal view returns (uint128 amt) {
-        return dripsHub.collectable(user.userId(), defaultErc20);
+        return collectable(user, defaultErc20);
+    }
+
+    function collectable(AddressAppUser user, IERC20 erc20) internal view returns (uint128 amt) {
+        return dripsHub.collectable(user.userId(), erc20);
     }
 
     function assertCollectable(AddressAppUser user, uint256 expected) internal {
-        assertEq(collectable(user), expected, "Invalid collectable");
+        assertCollectable(user, defaultErc20, expected);
+    }
+
+    function assertCollectable(AddressAppUser user, IERC20 erc20, uint256 expected) internal {
+        assertEq(collectable(user, erc20), expected, "Invalid collectable");
     }
 
     function assertTotalBalance(uint256 expected) internal {

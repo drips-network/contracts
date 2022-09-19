@@ -45,13 +45,6 @@ contract AddressAppUser {
         addressApp.setSplits(receivers);
     }
 
-    function collectAll(address user, IERC20 erc20, SplitsReceiver[] calldata currReceivers)
-        public
-        returns (uint128 collected, uint128 splitAmt)
-    {
-        return addressApp.collectAll(user, erc20, currReceivers);
-    }
-
     function collect(address user, IERC20 erc20) public returns (uint128 amt) {
         return addressApp.collect(user, erc20);
     }

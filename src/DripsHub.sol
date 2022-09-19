@@ -159,46 +159,6 @@ contract DripsHub is Managed, Drips, Splits {
         return _dripsHubStorage().totalBalances[erc20];
     }
 
-    /// @notice Returns amount of received funds available for collection for a user.
-    /// @param userId The user ID
-    /// @param erc20 The used ERC-20 token
-    /// @param currReceivers The list of the user's current splits receivers.
-    /// @return collectedAmt The collected amount
-    /// @return splitAmt The amount split to the user's splits receivers
-    function collectableAll(uint256 userId, IERC20 erc20, SplitsReceiver[] memory currReceivers)
-        public
-        view
-        returns (uint128 collectedAmt, uint128 splitAmt)
-    {
-        uint256 assetId = _assetId(erc20);
-        // Receivable from cycles
-        (uint128 receivedAmt,) = Drips._receivableDrips(userId, assetId, type(uint32).max);
-        // Collectable independently from cycles
-        receivedAmt += Splits._splittable(userId, assetId);
-        // Split when collected
-        collectedAmt = Splits._splitResults(userId, currReceivers, receivedAmt);
-        splitAmt = receivedAmt - collectedAmt;
-        // Already split
-        collectedAmt += Splits._collectable(userId, assetId);
-    }
-
-    /// @notice Collects all received funds available for the user
-    /// and transfers them out of the drips hub contract to msg.sender.
-    /// @param userId The user ID
-    /// @param erc20 The used ERC-20 token
-    /// @param currReceivers The list of the user's current splits receivers.
-    /// @return collectedAmt The collected amount
-    /// @return splitAmt The amount split to the user's splits receivers
-    function collectAll(uint256 userId, IERC20 erc20, SplitsReceiver[] memory currReceivers)
-        public
-        whenNotPaused
-        returns (uint128 collectedAmt, uint128 splitAmt)
-    {
-        receiveDrips(userId, erc20, type(uint32).max);
-        (, splitAmt) = split(userId, erc20, currReceivers);
-        collectedAmt = collect(userId, erc20);
-    }
-
     /// @notice Counts cycles from which drips can be collected.
     /// This function can be used to detect that there are
     /// too many cycles to analyze in a single transaction.

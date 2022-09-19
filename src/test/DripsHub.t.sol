@@ -72,39 +72,9 @@ contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testDoesNotRequireReceiverToBeInitialized() public {
-        collectAll(receiver, 0);
-    }
-
-    function testCollectAllRevertsIfInvalidCurrSplitsReceivers() public {
-        setSplits(user, splitsReceivers(receiver, 1));
-        try user.collectAll(address(user), defaultErc20, splitsReceivers(receiver, 2)) {
-            assertTrue(false, "Collect hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, "Invalid current splits receivers", "Invalid collect revert reason");
-        }
-    }
-
-    function testCollectableAllRevertsIfInvalidCurrSplitsReceivers() public {
-        setSplits(user, splitsReceivers(receiver, 1));
-        try dripsHub.collectableAll(user.userId(), defaultErc20, splitsReceivers(receiver, 2)) {
-            assertTrue(false, "Collectable hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(
-                reason, "Invalid current splits receivers", "Invalid collectable revert reason"
-            );
-        }
-    }
-
-    function testCollectAllSplits() public {
-        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
-        setDrips(user, 0, 10, dripsReceivers(receiver1, 10));
-        setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
-        skipToCycleEnd();
-        assertCollectableAll(receiver2, 0);
-        // Receiver1 had 1 second paying 10 per second of which 10 is split
-        collectAll(receiver1, 0, 10);
-        // Receiver2 got 10 split from receiver1
-        collectAll(receiver2, 10);
+        receiveDrips(receiver, 0, 0);
+        split(receiver, 0, 0);
+        collect(receiver, 0);
     }
 
     function testUncollectedFundsAreSplitUsingCurrentConfig() public {
@@ -117,55 +87,9 @@ contract DripsHubTest is DripsHubUserUtils {
         // Receiver1 had 1 second paying 5 per second and was given 5 of which 10 is split
         collectAll(user1, 0, 10);
         // Receiver1 wasn't a splits receiver when user1 was collecting
-        assertCollectableAll(receiver1, 0);
+        collectAll(receiver1, 0);
         // Receiver2 was a splits receiver when user1 was collecting
         collectAll(receiver2, 10);
-    }
-
-    function testCollectAllSplitsFundsFromSplits() public {
-        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
-        setDrips(user, 0, 10, dripsReceivers(receiver1, 10));
-        setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
-        setSplits(receiver2, splitsReceivers(receiver3, totalWeight));
-        skipToCycleEnd();
-        assertCollectableAll(receiver2, 0);
-        assertCollectableAll(receiver3, 0);
-        // Receiver1 had 1 second paying 10 per second of which 10 is split
-        collectAll(receiver1, 0, 10);
-        // Receiver2 got 10 split from receiver1 of which 10 is split
-        collectAll(receiver2, 0, 10);
-        // Receiver3 got 10 split from receiver2
-        collectAll(receiver3, 10);
-    }
-
-    function testCollectAllMixesDripsAndSplits() public {
-        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
-        setDrips(user, 0, 10, dripsReceivers(receiver1, 5, receiver2, 5));
-        setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
-        skipToCycleEnd();
-        // Receiver2 had 1 second paying 5 per second
-        assertCollectableAll(receiver2, 5);
-        // Receiver1 had 1 second paying 5 per second
-        collectAll(receiver1, 0, 5);
-        // Receiver2 had 1 second paying 5 per second and got 5 split from receiver1
-        collectAll(receiver2, 10);
-    }
-
-    function testCollectAllSplitsFundsBetweenReceiverAndSplits() public {
-        uint32 totalWeight = dripsHub.TOTAL_SPLITS_WEIGHT();
-        setDrips(user, 0, 10, dripsReceivers(receiver1, 10));
-        setSplits(
-            receiver1, splitsReceivers(receiver2, totalWeight / 4, receiver3, totalWeight / 2)
-        );
-        skipToCycleEnd();
-        assertCollectableAll(receiver2, 0);
-        assertCollectableAll(receiver3, 0);
-        // Receiver1 had 1 second paying 10 per second, of which 3/4 is split, which is 7
-        collectAll(receiver1, 3, 7);
-        // Receiver2 got 1/3 of 7 split from receiver1, which is 2
-        collectAll(receiver2, 2);
-        // Receiver3 got 2/3 of 7 split from receiver1, which is 5
-        collectAll(receiver3, 5);
     }
 
     function testReceiveSomeDripsCycles() public {
@@ -306,16 +230,6 @@ contract DripsHubTest is DripsHubUserUtils {
         }
     }
 
-    function testCollectAllRevertsWhenNotCalledByTheApp() public {
-        try dripsHub.collectAll(
-            calcUserId(dripsHub.nextAppId(), 0), defaultErc20, new SplitsReceiver[](0)
-        ) {
-            assertTrue(false, "CollectAll hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_APP, "Invalid collectAll revert reason");
-        }
-    }
-
     function testDripsInDifferentTokensAreIndependent() public {
         uint32 cycleLength = dripsHub.cycleSecs();
         // Covers 1.5 cycles of dripping
@@ -391,20 +305,6 @@ contract DripsHubTest is DripsHubUserUtils {
 
         assertEq(collected, 5, "Invalid collected amount");
         assertCollectable(receiver1, 0);
-        assertBalance(receiver1, balanceBefore + 5);
-    }
-
-    function testAnyoneCanCollectAllForAnyoneUsingAddressApp() public {
-        give(user, receiver1, 5);
-        assertCollectableAll(receiver1, 5);
-        uint256 balanceBefore = defaultErc20.balanceOf(address(receiver1));
-
-        (uint128 collected, uint128 split) =
-            addressApp.collectAll(address(receiver1), defaultErc20, splitsReceivers());
-
-        assertEq(collected, 5, "Invalid collected amount");
-        assertEq(split, 0, "Invalid split amount");
-        assertCollectableAll(receiver1, 0);
         assertBalance(receiver1, balanceBefore + 5);
     }
 
@@ -502,15 +402,6 @@ contract DripsHubTest is DripsHubUserUtils {
             assertTrue(false, "Unpause hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_NOT_ADMIN, "Invalid unpause revert reason");
-        }
-    }
-
-    function testCollectAllCanBePaused() public {
-        admin.pause();
-        try user.collectAll(address(user), defaultErc20, splitsReceivers()) {
-            assertTrue(false, "Collect hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_PAUSED, "Invalid collect revert reason");
         }
     }
 
