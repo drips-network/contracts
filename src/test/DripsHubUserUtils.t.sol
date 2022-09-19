@@ -391,6 +391,7 @@ abstract contract DripsHubUserUtils is Test {
     {
         assertSplittable(user, expectedCollectable + expectedSplit);
         uint128 collectableBefore = collectable(user);
+        assertSplitResults(user, expectedCollectable + expectedSplit, expectedCollectable);
 
         (uint128 collectableAmt, uint128 splitAmt) =
             dripsHub.split(user.userId(), defaultErc20, getCurrSplitsReceivers(user));
@@ -404,6 +405,12 @@ abstract contract DripsHubUserUtils is Test {
     function assertSplittable(AddressAppUser user, uint256 expected) internal {
         uint256 actual = dripsHub.splittable(user.userId(), defaultErc20);
         assertEq(actual, expected, "Invalid splittable");
+    }
+
+    function assertSplitResults(AddressAppUser user, uint256 amt, uint256 expected) internal {
+        uint128 actual =
+            dripsHub.splitResults(user.userId(), getCurrSplitsReceivers(user), uint128(amt));
+        assertEq(actual, expected, "Invalid split results");
     }
 
     function collect(AddressAppUser user, uint128 expectedAmt) internal {

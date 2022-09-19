@@ -176,7 +176,8 @@ contract DripsHub is Managed, Drips, Splits {
         // Collectable independently from cycles
         receivedAmt += Splits._splittable(userId, assetId);
         // Split when collected
-        (collectedAmt, splitAmt) = Splits._splitResults(userId, currReceivers, receivedAmt);
+        collectedAmt = Splits._splitResults(userId, currReceivers, receivedAmt);
+        splitAmt = receivedAmt - collectedAmt;
         // Already split
         collectedAmt += Splits._collectable(userId, assetId);
     }
@@ -323,6 +324,19 @@ contract DripsHub is Managed, Drips, Splits {
     /// @return amt The amount received but not split yet.
     function splittable(uint256 userId, IERC20 erc20) public view returns (uint128 amt) {
         return Splits._splittable(userId, _assetId(erc20));
+    }
+
+    /// @notice Calculate results of splitting an amount using the current splits configuration.
+    /// @param userId The user ID
+    /// @param currReceivers The list of the user's current splits receivers.
+    /// @param amount The amount being split.
+    /// @return collectableAmt The part of the `amount` left for collection after splitting.
+    function splitResults(uint256 userId, SplitsReceiver[] memory currReceivers, uint128 amount)
+        public
+        view
+        returns (uint128 collectableAmt)
+    {
+        return Splits._splitResults(userId, currReceivers, amount);
     }
 
     /// @notice Splits user's received but not split yet funds among receivers.
