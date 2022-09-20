@@ -2,9 +2,9 @@
 pragma solidity ^0.8.15;
 
 import {DripsHubUserUtils} from "./DripsHubUserUtils.t.sol";
-import {AddressAppUser} from "./AddressAppUser.t.sol";
+import {AddressDriverUser} from "./AddressDriverUser.t.sol";
 import {ManagedUser} from "./ManagedUser.t.sol";
-import {AddressApp} from "../AddressApp.sol";
+import {AddressDriver} from "../AddressDriver.sol";
 import {SplitsReceiver, DripsHub, DripsHistory, DripsReceiver} from "../DripsHub.sol";
 import {Reserve} from "../Reserve.sol";
 import {Proxy} from "../Upgradeable.sol";
@@ -14,21 +14,21 @@ import {
 } from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
 contract DripsHubTest is DripsHubUserUtils {
-    AddressApp private addressApp;
+    AddressDriver private addressDriver;
 
     IERC20 private otherErc20;
 
-    AddressAppUser private user;
-    AddressAppUser private receiver;
-    AddressAppUser private user1;
-    AddressAppUser private receiver1;
-    AddressAppUser private user2;
-    AddressAppUser private receiver2;
-    AddressAppUser private receiver3;
+    AddressDriverUser private user;
+    AddressDriverUser private receiver;
+    AddressDriverUser private user1;
+    AddressDriverUser private receiver1;
+    AddressDriverUser private user2;
+    AddressDriverUser private receiver2;
+    AddressDriverUser private receiver3;
     ManagedUser internal admin;
     ManagedUser internal nonAdmin;
 
-    string internal constant ERROR_NOT_APP = "Callable only by the app";
+    string internal constant ERROR_NOT_DRIVER = "Callable only by the driver";
     string private constant ERROR_NOT_ADMIN = "Caller is not the admin";
     string private constant ERROR_PAUSED = "Contract paused";
     string private constant ERROR_BALANCE_TOO_HIGH = "Total balance too high";
@@ -40,9 +40,9 @@ contract DripsHubTest is DripsHubUserUtils {
         DripsHub hubLogic = new DripsHub(10, reserve);
         dripsHub = DripsHub(address(new Proxy(hubLogic, address(this))));
         reserve.addUser(address(dripsHub));
-        uint32 addressAppId = dripsHub.registerApp(address(this));
-        addressApp = new AddressApp(dripsHub, address(0), addressAppId);
-        dripsHub.updateAppAddress(addressAppId, address(addressApp));
+        uint32 addressDriverId = dripsHub.registerDriver(address(this));
+        addressDriver = new AddressDriver(dripsHub, address(0), addressDriverId);
+        dripsHub.updateDriverAddress(addressDriverId, address(addressDriver));
         admin = new ManagedUser(dripsHub);
         nonAdmin = new ManagedUser(dripsHub);
         dripsHub.changeAdmin(address(admin));
@@ -65,8 +65,8 @@ contract DripsHubTest is DripsHubUserUtils {
         }
     }
 
-    function createUser() internal returns (AddressAppUser newUser) {
-        newUser = new AddressAppUser(addressApp);
+    function createUser() internal returns (AddressDriverUser newUser) {
+        newUser = new AddressDriverUser(addressDriver);
         defaultErc20.transfer(address(newUser), defaultErc20.totalSupply() / 100);
         otherErc20.transfer(address(newUser), otherErc20.totalSupply() / 100);
     }
@@ -223,37 +223,37 @@ contract DripsHubTest is DripsHubUserUtils {
         collect(user1, 6);
     }
 
-    function testRegisterApp() public {
-        address appAddr = address(0x1234);
-        uint32 appId = dripsHub.nextAppId();
-        assertEq(address(0), dripsHub.appAddress(appId), "Invalid nonexistent app address");
-        assertEq(appId, dripsHub.registerApp(appAddr), "Invalid assigned app ID");
-        assertEq(appAddr, dripsHub.appAddress(appId), "Invalid app address");
-        assertEq(appId + 1, dripsHub.nextAppId(), "Invalid next app ID");
+    function testRegisterDriver() public {
+        address driverAddr = address(0x1234);
+        uint32 driverId = dripsHub.nextDriverId();
+        assertEq(address(0), dripsHub.driverAddress(driverId), "Invalid unused driver address");
+        assertEq(driverId, dripsHub.registerDriver(driverAddr), "Invalid assigned driver ID");
+        assertEq(driverAddr, dripsHub.driverAddress(driverId), "Invalid driver address");
+        assertEq(driverId + 1, dripsHub.nextDriverId(), "Invalid next driver ID");
     }
 
-    function testUpdateAppAddress() public {
-        uint32 appId = dripsHub.registerApp(address(this));
-        assertEq(address(this), dripsHub.appAddress(appId), "Invalid app address before");
-        address newAppAddr = address(0x1234);
-        dripsHub.updateAppAddress(appId, newAppAddr);
-        assertEq(newAppAddr, dripsHub.appAddress(appId), "Invalid app address after");
+    function testUpdateDriverAddress() public {
+        uint32 driverId = dripsHub.registerDriver(address(this));
+        assertEq(address(this), dripsHub.driverAddress(driverId), "Invalid driver address before");
+        address newDriverAddr = address(0x1234);
+        dripsHub.updateDriverAddress(driverId, newDriverAddr);
+        assertEq(newDriverAddr, dripsHub.driverAddress(driverId), "Invalid driver address after");
     }
 
-    function testUpdateAppAddressRevertsWhenNotCalledByTheApp() public {
-        uint32 appId = dripsHub.registerApp(address(0x1234));
-        try dripsHub.updateAppAddress(appId, address(0x5678)) {
-            assertTrue(false, "UpdateAppAddress hasn't reverted");
+    function testUpdateDriverAddressRevertsWhenNotCalledByTheDriver() public {
+        uint32 driverId = dripsHub.registerDriver(address(0x1234));
+        try dripsHub.updateDriverAddress(driverId, address(0x5678)) {
+            assertTrue(false, "UpdateDriverAddress hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_APP, "Invalid collect revert reason");
+            assertEq(reason, ERROR_NOT_DRIVER, "Invalid collect revert reason");
         }
     }
 
-    function testCollectRevertsWhenNotCalledByTheApp() public {
-        try dripsHub.collect(calcUserId(dripsHub.nextAppId(), 0), defaultErc20) {
+    function testCollectRevertsWhenNotCalledByTheDriver() public {
+        try dripsHub.collect(calcUserId(dripsHub.nextDriverId(), 0), defaultErc20) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_APP, "Invalid collect revert reason");
+            assertEq(reason, ERROR_NOT_DRIVER, "Invalid collect revert reason");
         }
     }
 
@@ -287,38 +287,42 @@ contract DripsHubTest is DripsHubUserUtils {
         collectAll(otherErc20, receiver2, 0);
     }
 
-    function testSqueezeDripsRevertsWhenNotCalledByTheApp() public {
-        uint256 userId = calcUserId(dripsHub.nextAppId(), 0);
+    function testSqueezeDripsRevertsWhenNotCalledByTheDriver() public {
+        uint256 userId = calcUserId(dripsHub.nextDriverId(), 0);
         try dripsHub.squeezeDrips(userId, defaultErc20, 1, 0, new DripsHistory[](0)) {
             assertTrue(false, "SqueezeDrips hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_APP, "Invalid squeezeDrips revert reason");
+            assertEq(reason, ERROR_NOT_DRIVER, "Invalid squeezeDrips revert reason");
         }
     }
 
-    function testSetDripsRevertsWhenNotCalledByTheApp() public {
+    function testSetDripsRevertsWhenNotCalledByTheDriver() public {
         try dripsHub.setDrips(
-            calcUserId(dripsHub.nextAppId(), 0), defaultErc20, dripsReceivers(), 0, dripsReceivers()
+            calcUserId(dripsHub.nextDriverId(), 0),
+            defaultErc20,
+            dripsReceivers(),
+            0,
+            dripsReceivers()
         ) {
             assertTrue(false, "SetDrips hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_APP, "Invalid setDrips revert reason");
+            assertEq(reason, ERROR_NOT_DRIVER, "Invalid setDrips revert reason");
         }
     }
 
-    function testGiveRevertsWhenNotCalledByTheApp() public {
-        try dripsHub.give(calcUserId(dripsHub.nextAppId(), 0), 0, defaultErc20, 1) {
+    function testGiveRevertsWhenNotCalledByTheDriver() public {
+        try dripsHub.give(calcUserId(dripsHub.nextDriverId(), 0), 0, defaultErc20, 1) {
             assertTrue(false, "Give hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_APP, "Invalid give revert reason");
+            assertEq(reason, ERROR_NOT_DRIVER, "Invalid give revert reason");
         }
     }
 
-    function testSetSplitsRevertsWhenNotCalledByTheApp() public {
-        try dripsHub.setSplits(calcUserId(dripsHub.nextAppId(), 0), splitsReceivers()) {
+    function testSetSplitsRevertsWhenNotCalledByTheDriver() public {
+        try dripsHub.setSplits(calcUserId(dripsHub.nextDriverId(), 0), splitsReceivers()) {
             assertTrue(false, "SetSplits hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_APP, "Invalid setSplits revert reason");
+            assertEq(reason, ERROR_NOT_DRIVER, "Invalid setSplits revert reason");
         }
     }
 
@@ -482,22 +486,22 @@ contract DripsHubTest is DripsHubUserUtils {
         }
     }
 
-    function testRegisterAppCanBePaused() public {
+    function testRegisterDriverCanBePaused() public {
         admin.pause();
-        try dripsHub.registerApp(address(0x1234)) {
-            assertTrue(false, "RegisterApp hasn't reverted");
+        try dripsHub.registerDriver(address(0x1234)) {
+            assertTrue(false, "RegisterDriver hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, ERROR_PAUSED, "Invalid registerApp revert reason");
+            assertEq(reason, ERROR_PAUSED, "Invalid registerDriver revert reason");
         }
     }
 
-    function testUpdateAppAddressCanBePaused() public {
-        uint32 appId = dripsHub.registerApp(address(this));
+    function testUpdateDriverAddressCanBePaused() public {
+        uint32 driverId = dripsHub.registerDriver(address(this));
         admin.pause();
-        try dripsHub.updateAppAddress(appId, address(0x1234)) {
-            assertTrue(false, "UpdateAppAddress hasn't reverted");
+        try dripsHub.updateDriverAddress(driverId, address(0x1234)) {
+            assertTrue(false, "UpdateDriverAddress hasn't reverted");
         } catch Error(string memory reason) {
-            assertEq(reason, ERROR_PAUSED, "Invalid updateAppAddress revert reason");
+            assertEq(reason, ERROR_PAUSED, "Invalid updateDriverAddress revert reason");
         }
     }
 }

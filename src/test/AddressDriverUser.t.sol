@@ -3,16 +3,16 @@
 pragma solidity ^0.8.15;
 
 import {DripsHistory, DripsHub, DripsReceiver, SplitsReceiver} from "../DripsHub.sol";
-import {AddressApp} from "../AddressApp.sol";
+import {AddressDriver} from "../AddressDriver.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
-contract AddressAppUser {
-    AddressApp private immutable addressApp;
+contract AddressDriverUser {
+    AddressDriver private immutable addressDriver;
     uint256 public immutable userId;
 
-    constructor(AddressApp addressApp_) {
-        addressApp = addressApp_;
-        userId = addressApp_.calcUserId(address(this));
+    constructor(AddressDriver addressDriver_) {
+        addressDriver = addressDriver_;
+        userId = addressDriver_.calcUserId(address(this));
     }
 
     function squeezeDrips(
@@ -21,7 +21,7 @@ contract AddressAppUser {
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory
     ) public returns (uint128 amt, uint32 nextSqueezed) {
-        return addressApp.squeezeDrips(erc20, senderId, historyHash, dripsHistory);
+        return addressDriver.squeezeDrips(erc20, senderId, historyHash, dripsHistory);
     }
 
     function setDrips(
@@ -32,21 +32,21 @@ contract AddressAppUser {
         address transferTo
     ) public returns (uint128 newBalance, int128 realBalanceDelta) {
         if (balanceDelta > 0) {
-            erc20.approve(address(addressApp), uint128(balanceDelta));
+            erc20.approve(address(addressDriver), uint128(balanceDelta));
         }
-        return addressApp.setDrips(erc20, currReceivers, balanceDelta, newReceivers, transferTo);
+        return addressDriver.setDrips(erc20, currReceivers, balanceDelta, newReceivers, transferTo);
     }
 
     function give(uint256 receiver, IERC20 erc20, uint128 amt) public {
-        erc20.approve(address(addressApp), amt);
-        addressApp.give(receiver, erc20, amt);
+        erc20.approve(address(addressDriver), amt);
+        addressDriver.give(receiver, erc20, amt);
     }
 
     function setSplits(SplitsReceiver[] calldata receivers) public {
-        addressApp.setSplits(receivers);
+        addressDriver.setSplits(receivers);
     }
 
     function collect(IERC20 erc20, address transferTo) public returns (uint128 amt) {
-        return addressApp.collect(erc20, transferTo);
+        return addressDriver.collect(erc20, transferTo);
     }
 }

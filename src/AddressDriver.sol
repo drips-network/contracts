@@ -6,26 +6,28 @@ import {Upgradeable} from "./Upgradeable.sol";
 import {ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
 import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
-/// @notice A DripsHub app implementing address-based user identification.
-/// Each address can use `AddressApp` to control a user ID equal to that address.
-/// No registration is required, an `AddressApp`-based user ID for each address is know upfront.
-contract AddressApp is Upgradeable, ERC2771Context {
+/// @notice A DripsHub driver implementing address-based user identification.
+/// Each address can use `AddressDriver` to control a user ID equal to that address.
+/// No registration is required, an `AddressDriver`-based user ID for each address is know upfront.
+contract AddressDriver is Upgradeable, ERC2771Context {
     using SafeERC20 for IERC20;
 
     DripsHub public immutable dripsHub;
-    uint32 public immutable appId;
+    uint32 public immutable driverId;
 
     /// @param _dripsHub The drips hub to use
-    constructor(DripsHub _dripsHub, address forwarder, uint32 _appId) ERC2771Context(forwarder) {
+    constructor(DripsHub _dripsHub, address forwarder, uint32 _driverId)
+        ERC2771Context(forwarder)
+    {
         dripsHub = _dripsHub;
-        appId = _appId;
+        driverId = _driverId;
     }
 
     /// @notice Calculates the user ID for an address
     /// @param userAddr The user address
     /// @return userId The user ID
     function calcUserId(address userAddr) public view returns (uint256 userId) {
-        return (uint256(appId) << 224) | uint160(userAddr);
+        return (uint256(driverId) << 224) | uint160(userAddr);
     }
 
     /// @notice Calculates the user ID for the message sender
@@ -126,7 +128,7 @@ contract AddressApp is Upgradeable, ERC2771Context {
     function _transferFromCaller(IERC20 erc20, uint128 amt) internal {
         erc20.safeTransferFrom(_msgSender(), address(this), amt);
         address reserve = address(dripsHub.reserve());
-        // Approval is done only on the first usage of the ERC-20 token in the reserve by the app
+        // Approval is done only on the first usage of the ERC-20 token in the reserve by the driver
         if (erc20.allowance(address(this), reserve) == 0) {
             erc20.approve(reserve, type(uint256).max);
         }

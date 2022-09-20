@@ -53,32 +53,32 @@ contract DripsHub is Managed, Drips, Splits {
     uint32 public constant MAX_SPLITS_RECEIVERS = _MAX_SPLITS_RECEIVERS;
     /// @notice The total splits weight of a user
     uint32 public constant TOTAL_SPLITS_WEIGHT = _TOTAL_SPLITS_WEIGHT;
-    /// @notice The offset of the controlling app ID in the user ID.
-    /// In other words the controlling app ID is the higest 32 bits of the user ID.
-    uint256 public constant APP_ID_OFFSET = 224;
+    /// @notice The offset of the controlling driver ID in the user ID.
+    /// In other words the controlling driver ID is the higest 32 bits of the user ID.
+    uint256 public constant DRIVER_ID_OFFSET = 224;
     /// @notice The total amount the contract can store of each token.
     uint256 public constant MAX_TOTAL_BALANCE = _MAX_TOTAL_DRIPS_BALANCE;
     /// @notice The ERC-1967 storage slot holding a single `DripsHubStorage` structure.
     bytes32 private immutable _storageSlot = erc1967Slot("eip1967.dripsHub.storage");
 
-    /// @notice Emitted when an app is registered
-    /// @param appId The app ID
-    /// @param appAddr The app address
-    event AppRegistered(uint32 indexed appId, address indexed appAddr);
+    /// @notice Emitted when a driver is registered
+    /// @param driverId The driver ID
+    /// @param driverAddr The driver address
+    event DriverRegistered(uint32 indexed driverId, address indexed driverAddr);
 
-    /// @notice Emitted when an app address is updated
-    /// @param appId The app ID
-    /// @param oldAppAddr The old app address
-    /// @param newAppAddr The new app address
-    event AppAddressUpdated(
-        uint32 indexed appId, address indexed oldAppAddr, address indexed newAppAddr
+    /// @notice Emitted when a driver address is updated
+    /// @param driverId The driver ID
+    /// @param oldDriverAddr The old driver address
+    /// @param newDriverAddr The new driver address
+    event DriverAddressUpdated(
+        uint32 indexed driverId, address indexed oldDriverAddr, address indexed newDriverAddr
     );
 
     struct DripsHubStorage {
-        /// @notice The next app ID that will be used when registering.
-        uint32 nextAppId;
-        /// @notice App addresses. The key is the app ID, the value is the app address.
-        mapping(uint32 => address) appAddrs;
+        /// @notice The next driver ID that will be used when registering.
+        uint32 nextDriverId;
+        /// @notice Driver addresses. The key is the driver ID, the value is the driver address.
+        mapping(uint32 => address) driverAddresses;
         /// @notice The total amount currently stored in DripsHub of each token.
         mapping(IERC20 => uint256) totalBalances;
     }
@@ -96,51 +96,52 @@ contract DripsHub is Managed, Drips, Splits {
         reserve = reserve_;
     }
 
-    /// @notice A modifier making functions callable only by the app controlling the user ID.
+    /// @notice A modifier making functions callable only by the driver controlling the user ID.
     /// @param userId The user ID.
-    modifier onlyApp(uint256 userId) {
-        uint32 appId = uint32(userId >> APP_ID_OFFSET);
-        _assertCallerIsApp(appId);
+    modifier onlyDriver(uint256 userId) {
+        uint32 driverId = uint32(userId >> DRIVER_ID_OFFSET);
+        _assertCallerIsDriver(driverId);
         _;
     }
 
-    function _assertCallerIsApp(uint32 appId) internal view {
-        require(appAddress(appId) == msg.sender, "Callable only by the app");
+    function _assertCallerIsDriver(uint32 driverId) internal view {
+        require(driverAddress(driverId) == msg.sender, "Callable only by the driver");
     }
 
-    /// @notice Registers an app.
-    /// The app is assigned a unique ID and a range of user IDs it can control.
-    /// That range consists of all 2^224 user IDs with highest 32 bits equal to the app ID.
-    /// Multiple apps can have the same address, it can then control all of them.
-    /// @return appId The registered app ID.
-    function registerApp(address appAddr) public whenNotPaused returns (uint32 appId) {
+    /// @notice Registers a driver.
+    /// The driver is assigned a unique ID and a range of user IDs it can control.
+    /// That range consists of all 2^224 user IDs with highest 32 bits equal to the driver ID.
+    /// Multiple drivers can have the same address, that address can then control all of them.
+    /// @param driverAddr The address of the driver.
+    /// @return driverId The registered driver ID.
+    function registerDriver(address driverAddr) public whenNotPaused returns (uint32 driverId) {
         DripsHubStorage storage dripsHubStorage = _dripsHubStorage();
-        appId = dripsHubStorage.nextAppId++;
-        dripsHubStorage.appAddrs[appId] = appAddr;
-        emit AppRegistered(appId, appAddr);
+        driverId = dripsHubStorage.nextDriverId++;
+        dripsHubStorage.driverAddresses[driverId] = driverAddr;
+        emit DriverRegistered(driverId, driverAddr);
     }
 
-    /// @notice Returns the app address.
-    /// @param appId The app ID to look up.
-    /// @return appAddr The address of the app.
-    /// If the app hasn't been registered yet, returns address 0.
-    function appAddress(uint32 appId) public view returns (address appAddr) {
-        return _dripsHubStorage().appAddrs[appId];
+    /// @notice Returns the driver address.
+    /// @param driverId The driver ID to look up.
+    /// @return driverAddr The address of the driver.
+    /// If the driver hasn't been registered yet, returns address 0.
+    function driverAddress(uint32 driverId) public view returns (address driverAddr) {
+        return _dripsHubStorage().driverAddresses[driverId];
     }
 
-    /// @notice Updates the app address. Must be called from the current app address.
-    /// @param appId The app ID.
-    /// @param newAppAddr The new address of the app.
-    function updateAppAddress(uint32 appId, address newAppAddr) public whenNotPaused {
-        _assertCallerIsApp(appId);
-        _dripsHubStorage().appAddrs[appId] = newAppAddr;
-        emit AppAddressUpdated(appId, msg.sender, newAppAddr);
+    /// @notice Updates the driver address. Must be called from the current driver address.
+    /// @param driverId The driver ID.
+    /// @param newDriverAddr The new address of the driver.
+    function updateDriverAddress(uint32 driverId, address newDriverAddr) public whenNotPaused {
+        _assertCallerIsDriver(driverId);
+        _dripsHubStorage().driverAddresses[driverId] = newDriverAddr;
+        emit DriverAddressUpdated(driverId, msg.sender, newDriverAddr);
     }
 
-    /// @notice Returns the app ID which will be assigned for the next registered app.
-    /// @return appId The next app ID.
-    function nextAppId() public view returns (uint32 appId) {
-        return _dripsHubStorage().nextAppId;
+    /// @notice Returns the driver ID which will be assigned for the next registered driver.
+    /// @return driverId The next driver ID.
+    function nextDriverId() public view returns (uint32 driverId) {
+        return _dripsHubStorage().nextDriverId;
     }
 
     /// @notice Returns the cycle length in seconds.
@@ -237,7 +238,7 @@ contract DripsHub is Managed, Drips, Splits {
         uint256 senderId,
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory
-    ) public whenNotPaused onlyApp(userId) returns (uint128 amt, uint32 nextSqueezed) {
+    ) public whenNotPaused onlyDriver(userId) returns (uint128 amt, uint32 nextSqueezed) {
         uint256 assetId = _assetId(erc20);
         (amt, nextSqueezed) =
             Drips._squeezeDrips(userId, assetId, senderId, historyHash, dripsHistory);
@@ -330,7 +331,7 @@ contract DripsHub is Managed, Drips, Splits {
     function collect(uint256 userId, IERC20 erc20)
         public
         whenNotPaused
-        onlyApp(userId)
+        onlyDriver(userId)
         returns (uint128 amt)
     {
         amt = Splits._collect(userId, _assetId(erc20));
@@ -348,7 +349,7 @@ contract DripsHub is Managed, Drips, Splits {
     function give(uint256 userId, uint256 receiver, IERC20 erc20, uint128 amt)
         public
         whenNotPaused
-        onlyApp(userId)
+        onlyDriver(userId)
     {
         increaseTotalBalance(erc20, amt);
         Splits._give(userId, receiver, _assetId(erc20), amt);
@@ -415,7 +416,12 @@ contract DripsHub is Managed, Drips, Splits {
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers
-    ) public whenNotPaused onlyApp(userId) returns (uint128 newBalance, int128 realBalanceDelta) {
+    )
+        public
+        whenNotPaused
+        onlyDriver(userId)
+        returns (uint128 newBalance, int128 realBalanceDelta)
+    {
         if (balanceDelta > 0) {
             increaseTotalBalance(erc20, uint128(balanceDelta));
         }
@@ -464,7 +470,7 @@ contract DripsHub is Managed, Drips, Splits {
     function setSplits(uint256 userId, SplitsReceiver[] memory receivers)
         public
         whenNotPaused
-        onlyApp(userId)
+        onlyDriver(userId)
     {
         Splits._setSplits(userId, receivers);
     }
