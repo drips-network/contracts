@@ -170,6 +170,33 @@ contract DripsHubTest is DripsHubUserUtils {
         collectAll(receiver, 1);
     }
 
+    function testCollectTransfersFundsToTheProvidedAddress() public {
+        uint128 amt = 10;
+        address transferTo = address(1234);
+        give(defaultErc20, user, receiver, amt);
+        split(receiver, defaultErc20, 10, 0);
+
+        uint128 collected = receiver.collect(defaultErc20, transferTo);
+
+        assertEq(collected, amt, "Invalid collected");
+        assertCollectable(receiver, defaultErc20, 0);
+        assertEq(defaultErc20.balanceOf(transferTo), amt, "Invalid balance");
+    }
+
+    function testSetDripsDecreasingBalanceTransfersFundsToTheProvidedAddress() public {
+        int128 amt = 10;
+        DripsReceiver[] memory receivers = dripsReceivers();
+        user.setDrips(defaultErc20, receivers, amt, receivers, address(user));
+        address transferTo = address(1234);
+
+        (uint128 newBalance, int128 realBalanceDelta) =
+            user.setDrips(defaultErc20, receivers, -amt, receivers, transferTo);
+
+        assertEq(newBalance, 0, "Invalid drips balance");
+        assertEq(realBalanceDelta, -amt, "Invalid balance delta");
+        assertEq(defaultErc20.balanceOf(transferTo), uint128(amt), "Invalid balance");
+    }
+
     function testFundsGivenFromUserCanBeCollected() public {
         give(user, receiver, 10);
         collectAll(receiver, 10);
@@ -421,7 +448,7 @@ contract DripsHubTest is DripsHubUserUtils {
 
     function testCollectCanBePaused() public {
         admin.pause();
-        try user.collect(defaultErc20) {
+        try user.collect(defaultErc20, address(user)) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid collect revert reason");
@@ -430,7 +457,7 @@ contract DripsHubTest is DripsHubUserUtils {
 
     function testSetDripsCanBePaused() public {
         admin.pause();
-        try user.setDrips(defaultErc20, dripsReceivers(), 1, dripsReceivers()) {
+        try user.setDrips(defaultErc20, dripsReceivers(), 1, dripsReceivers(), address(user)) {
             assertTrue(false, "SetDrips hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid setDrips revert reason");

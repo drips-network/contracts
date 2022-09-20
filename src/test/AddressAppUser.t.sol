@@ -28,12 +28,13 @@ contract AddressAppUser {
         IERC20 erc20,
         DripsReceiver[] calldata currReceivers,
         int128 balanceDelta,
-        DripsReceiver[] calldata newReceivers
+        DripsReceiver[] calldata newReceivers,
+        address transferTo
     ) public returns (uint128 newBalance, int128 realBalanceDelta) {
         if (balanceDelta > 0) {
             erc20.approve(address(addressApp), uint128(balanceDelta));
         }
-        return addressApp.setDrips(erc20, currReceivers, balanceDelta, newReceivers);
+        return addressApp.setDrips(erc20, currReceivers, balanceDelta, newReceivers, transferTo);
     }
 
     function give(uint256 receiver, IERC20 erc20, uint128 amt) public {
@@ -45,7 +46,7 @@ contract AddressAppUser {
         addressApp.setSplits(receivers);
     }
 
-    function collect(IERC20 erc20) public returns (uint128 amt) {
-        return addressApp.collect(erc20);
+    function collect(IERC20 erc20, address transferTo) public returns (uint128 amt) {
+        return addressApp.collect(erc20, transferTo);
     }
 }

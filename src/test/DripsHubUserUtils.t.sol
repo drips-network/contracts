@@ -124,7 +124,7 @@ abstract contract DripsHubUserUtils is Test {
         DripsReceiver[] memory currReceivers = loadDrips(erc20, user);
 
         (uint128 newBalance, int128 realBalanceDelta) =
-            user.setDrips(erc20, currReceivers, balanceDelta, newReceivers);
+            user.setDrips(erc20, currReceivers, balanceDelta, newReceivers, address(user));
 
         storeDrips(erc20, user, newReceivers);
         assertEq(newBalance, balanceTo, "Invalid drips balance");
@@ -170,7 +170,7 @@ abstract contract DripsHubUserUtils is Test {
         DripsReceiver[] memory newReceivers,
         string memory expectedReason
     ) internal {
-        try user.setDrips(defaultErc20, currReceivers, balanceDelta, newReceivers) {
+        try user.setDrips(defaultErc20, currReceivers, balanceDelta, newReceivers, address(user)) {
             assertTrue(false, "Set drips hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, expectedReason, "Invalid set drips revert reason");
@@ -389,7 +389,7 @@ abstract contract DripsHubUserUtils is Test {
         assertCollectable(user, erc20, expectedAmt);
         uint256 balanceBefore = erc20.balanceOf(address(user));
 
-        uint128 actualAmt = user.collect(erc20);
+        uint128 actualAmt = user.collect(erc20, address(user));
 
         assertEq(actualAmt, expectedAmt, "Invalid collected amount");
         assertCollectable(user, erc20, 0);

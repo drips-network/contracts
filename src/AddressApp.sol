@@ -63,12 +63,13 @@ contract AddressApp is Upgradeable, ERC2771Context {
     }
 
     /// @notice Collects the user's received already split funds
-    /// and transfers them out of the drips hub contract to that user.
+    /// and transfers them out of the drips hub contract.
     /// @param erc20 The token to use
+    /// @param transferTo The address to send collected funds to
     /// @return amt The collected amount
-    function collect(IERC20 erc20) public returns (uint128 amt) {
+    function collect(IERC20 erc20, address transferTo) public returns (uint128 amt) {
         amt = dripsHub.collect(callerUserId(), erc20);
-        erc20.safeTransfer(_msgSender(), amt);
+        erc20.safeTransfer(transferTo, amt);
     }
 
     /// @notice Gives funds from the message sender to the receiver.
@@ -93,13 +94,15 @@ contract AddressApp is Upgradeable, ERC2771Context {
     /// Positive to add funds to the drips balance, negative to remove them.
     /// @param newReceivers The list of the drips receivers of the sender to be set.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
+    /// @param transferTo The address to send funds to in case of decreasing balance
     /// @return newBalance The new drips balance of the sender.
     /// @return realBalanceDelta The actually applied drips balance change.
     function setDrips(
         IERC20 erc20,
         DripsReceiver[] calldata currReceivers,
         int128 balanceDelta,
-        DripsReceiver[] calldata newReceivers
+        DripsReceiver[] calldata newReceivers,
+        address transferTo
     ) public returns (uint128 newBalance, int128 realBalanceDelta) {
         if (balanceDelta > 0) {
             _transferFromCaller(erc20, uint128(balanceDelta));
@@ -107,7 +110,7 @@ contract AddressApp is Upgradeable, ERC2771Context {
         (newBalance, realBalanceDelta) =
             dripsHub.setDrips(callerUserId(), erc20, currReceivers, balanceDelta, newReceivers);
         if (realBalanceDelta < 0) {
-            erc20.safeTransfer(_msgSender(), uint128(-realBalanceDelta));
+            erc20.safeTransfer(transferTo, uint128(-realBalanceDelta));
         }
     }
 
