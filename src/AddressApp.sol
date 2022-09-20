@@ -9,10 +9,6 @@ import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol"
 /// @notice A DripsHub app implementing address-based user identification.
 /// Each address can use `AddressApp` to control a user ID equal to that address.
 /// No registration is required, an `AddressApp`-based user ID for each address is know upfront.
-///
-/// This app allows calling `collect` for any other address,
-/// e.g. address `0x...A` can call `collect` for address `0x...B` and `0x...B`
-/// will receive a transfer with funds dripped or split to `0x...B`'s user ID.
 contract AddressApp is Upgradeable, ERC2771Context {
     using SafeERC20 for IERC20;
 
@@ -30,6 +26,12 @@ contract AddressApp is Upgradeable, ERC2771Context {
     /// @return userId The user ID
     function calcUserId(address userAddr) public view returns (uint256 userId) {
         return (uint256(appId) << 224) | uint160(userAddr);
+    }
+
+    /// @notice Calculates the user ID for the message sender
+    /// @return userId The user ID
+    function callerUserId() internal view returns (uint256 userId) {
+        return calcUserId(_msgSender());
     }
 
     /// @notice Receive drips from the currently running cycle from a single sender.
@@ -57,18 +59,16 @@ contract AddressApp is Upgradeable, ERC2771Context {
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory
     ) public returns (uint128 amt, uint32 nextSqueezed) {
-        return dripsHub.squeezeDrips(
-            calcUserId(_msgSender()), erc20, senderId, historyHash, dripsHistory
-        );
+        return dripsHub.squeezeDrips(callerUserId(), erc20, senderId, historyHash, dripsHistory);
     }
 
     /// @notice Collects the user's received already split funds
     /// and transfers them out of the drips hub contract to that user.
     /// @param erc20 The token to use
     /// @return amt The collected amount
-    function collect(address user, IERC20 erc20) public returns (uint128 amt) {
-        amt = dripsHub.collect(calcUserId(user), erc20);
-        erc20.safeTransfer(user, amt);
+    function collect(IERC20 erc20) public returns (uint128 amt) {
+        amt = dripsHub.collect(callerUserId(), erc20);
+        erc20.safeTransfer(_msgSender(), amt);
     }
 
     /// @notice Gives funds from the message sender to the receiver.
@@ -79,7 +79,7 @@ contract AddressApp is Upgradeable, ERC2771Context {
     /// @param amt The given amount
     function give(uint256 receiver, IERC20 erc20, uint128 amt) public {
         _transferFromCaller(erc20, amt);
-        dripsHub.give(calcUserId(_msgSender()), receiver, erc20, amt);
+        dripsHub.give(callerUserId(), receiver, erc20, amt);
     }
 
     /// @notice Sets the message sender's drips configuration.
@@ -104,9 +104,8 @@ contract AddressApp is Upgradeable, ERC2771Context {
         if (balanceDelta > 0) {
             _transferFromCaller(erc20, uint128(balanceDelta));
         }
-        (newBalance, realBalanceDelta) = dripsHub.setDrips(
-            calcUserId(_msgSender()), erc20, currReceivers, balanceDelta, newReceivers
-        );
+        (newBalance, realBalanceDelta) =
+            dripsHub.setDrips(callerUserId(), erc20, currReceivers, balanceDelta, newReceivers);
         if (realBalanceDelta < 0) {
             erc20.safeTransfer(_msgSender(), uint128(-realBalanceDelta));
         }
@@ -118,7 +117,7 @@ contract AddressApp is Upgradeable, ERC2771Context {
     /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the user.
     function setSplits(SplitsReceiver[] calldata receivers) public {
-        dripsHub.setSplits(calcUserId(_msgSender()), receivers);
+        dripsHub.setSplits(callerUserId(), receivers);
     }
 
     function _transferFromCaller(IERC20 erc20, uint128 amt) internal {

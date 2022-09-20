@@ -389,7 +389,7 @@ abstract contract DripsHubUserUtils is Test {
         assertCollectable(user, erc20, expectedAmt);
         uint256 balanceBefore = erc20.balanceOf(address(user));
 
-        uint128 actualAmt = user.collect(address(user), erc20);
+        uint128 actualAmt = user.collect(erc20);
 
         assertEq(actualAmt, expectedAmt, "Invalid collected amount");
         assertCollectable(user, erc20, 0);

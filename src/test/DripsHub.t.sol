@@ -295,19 +295,6 @@ contract DripsHubTest is DripsHubUserUtils {
         }
     }
 
-    function testAnyoneCanCollectForAnyoneUsingAddressApp() public {
-        give(user, receiver1, 5);
-        split(receiver1, 5, 0);
-        assertCollectable(receiver1, 5);
-        uint256 balanceBefore = defaultErc20.balanceOf(address(receiver1));
-
-        uint128 collected = addressApp.collect(address(receiver1), defaultErc20);
-
-        assertEq(collected, 5, "Invalid collected amount");
-        assertCollectable(receiver1, 0);
-        assertBalance(receiver1, balanceBefore + 5);
-    }
-
     function testSetDripsLimitsTotalBalance() public {
         uint128 maxBalance = uint128(dripsHub.MAX_TOTAL_BALANCE());
         assertTotalBalance(0);
@@ -434,7 +421,7 @@ contract DripsHubTest is DripsHubUserUtils {
 
     function testCollectCanBePaused() public {
         admin.pause();
-        try user.collect(address(user), defaultErc20) {
+        try user.collect(defaultErc20) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid collect revert reason");

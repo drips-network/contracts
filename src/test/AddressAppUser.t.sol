@@ -45,7 +45,7 @@ contract AddressAppUser {
         addressApp.setSplits(receivers);
     }
 
-    function collect(address user, IERC20 erc20) public returns (uint128 amt) {
-        return addressApp.collect(user, erc20);
+    function collect(IERC20 erc20) public returns (uint128 amt) {
+        return addressApp.collect(erc20);
     }
 }
