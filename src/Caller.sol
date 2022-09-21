@@ -164,11 +164,13 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     /// The caller will be set as the message sender of all the calls as per ERC-2771.
     /// Reverts if any of the calls reverts or any of the called addresses is not a smart contract.
     /// @param calls The calls to perform.
-    function callBatched(Call[] memory calls) public payable {
+    /// @return returnData The data returned by each of the calls.
+    function callBatched(Call[] memory calls) public payable returns (bytes[] memory returnData) {
+        returnData = new bytes[](calls.length);
         address sender = _msgSender();
         for (uint256 i = 0; i < calls.length; i++) {
             Call memory call = calls[i];
-            _call(sender, call.to, call.data, call.value);
+            returnData[i] = _call(sender, call.to, call.data, call.value);
         }
     }
 

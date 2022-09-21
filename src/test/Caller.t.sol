@@ -164,8 +164,10 @@ contract CallerTest is Test {
             value: value2
         });
 
-        caller.callBatched{value: value1 + value2}(calls);
+        bytes[] memory returned = caller.callBatched{value: value1 + value2}(calls);
 
+        assertEq(abi.decode(returned[0], (uint256)), input1 + 1, "Invalid returned value 1");
+        assertEq(abi.decode(returned[1], (uint256)), input2 + 1, "Invalid returned value 2");
         target.verify(address(this), input1, value1);
         targetOtherForwarder.verify(address(caller), input2, value2);
     }
