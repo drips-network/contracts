@@ -1,12 +1,13 @@
 {
     "Network":                  "goerli",
     "Deployer address":         "0x341a08926dCa7fa7D135F96E4d76b696e5f6d38d",
-    "Reserve":                  "0xe103f6953b2Fd55ebee163183A19cED9343cd0Ea",
-    "DripsHub":                 "0x8dA62FE714e5Cd7681ef25A845B7C5C0b9add089",
-    "DripsHub logic":           "0x6B94233AEdf8Ad4f505088Da81EAc225B691e99C",
+    "Caller":                   "0x3f836D71b5aA23972f6E796cfD67CAD5e6a7f026",
+    "Reserve":                  "0xb89c0849Ff7c279E195FA7576B532344Ca1d6083",
+    "DripsHub":                 "0x31b3905F6774D7Aa4E95a49784C53dD67ACC02cd",
+    "DripsHub logic":           "0x68CFD1803E7dDDb7432348644E9441b8105172D2",
     "DripsHub cycle seconds":   "604800",
-    "AddressApp":               "0xaB09588616214604eBeaE1488eab8533c956b7da",
-    "AddressApp logic":         "0x10fCa1A8f390b611f8437d43A52691566ffC8246",
-    "AddressApp ID":            "0",
-    "Commit hash":              "cd7f4d516fe232664a27f7eea9d4f47b71808c7c"
+    "AddressDriver":            "0x0749Ed6EB9De41F7bF77426d3128580E449744e1",
+    "AddressDriver logic":      "0x9176b535C947bB9fDa7b003F8061B665fE8baCa5",
+    "AddressDriver ID":         "0",
+    "Commit hash":              "5992956f2c70db9cb5135c9aea0252d5041e83e8"
 }
