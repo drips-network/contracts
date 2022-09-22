@@ -29,7 +29,7 @@ DEPLOYER=$(cast wallet address $WALLET_ARGS | cut -d " " -f 2)
 GOVERNANCE=${GOVERNANCE:-$DEPLOYER}
 RESERVE_OWNER=$(cast --to-checksum-address "${RESERVE_OWNER:-$GOVERNANCE}")
 DRIPS_HUB_ADMIN=$(cast --to-checksum-address "${DRIPS_HUB_ADMIN:-$GOVERNANCE}")
-ADDRESS_APP_ADMIN=$(cast --to-checksum-address "${ADDRESS_APP_ADMIN:-$GOVERNANCE}")
+ADDRESS_DRIVER_ADMIN=$(cast --to-checksum-address "${ADDRESS_DRIVER_ADMIN:-$GOVERNANCE}")
 CYCLE_SECS=${CYCLE_SECS:-$(( 7 * 24 * 60 * 60 ))} # 1 week
 if [ -n "$ETHERSCAN_API_KEY" ]; then
     VERIFY="--verify"
@@ -57,9 +57,9 @@ echo "DripsHub:                 ${DRIPS_HUB:-$TO_DEPLOY}"
 echo "DripsHub admin:           $DRIPS_HUB_ADMIN"
 echo "DripsHub logic:           ${DRIPS_HUB_LOGIC:-$TO_DEPLOY}"
 echo "DripsHub cycle seconds:   $CYCLE_SECS"
-echo "AddressApp:               ${ADDRESS_APP:-$TO_DEPLOY}"
-echo "AddressApp admin:         $ADDRESS_APP_ADMIN"
-echo "AddressApp logic:         ${ADDRESS_APP_LOGIC:-$TO_DEPLOY}"
+echo "AddressDriver:            ${ADDRESS_DRIVER:-$TO_DEPLOY}"
+echo "AddressDriver admin:      $ADDRESS_DRIVER_ADMIN"
+echo "AddressDriver logic:      ${ADDRESS_DRIVER_LOGIC:-$TO_DEPLOY}"
 echo
 
 read -p "Proceed with deployment? [y/n] " -n 1 -r
@@ -86,33 +86,35 @@ if [ -z "$DRIPS_HUB" ]; then
         create "DripsHub logic" 'src/DripsHub.sol:DripsHub' "$CYCLE_SECS" "$RESERVE"
         DRIPS_HUB_LOGIC=$DEPLOYED_ADDR
     fi
+    echo "DRIPS_HUB_LOGIC '$DRIPS_HUB_LOGIC'"
+    echo "DRIPS_HUB_ADMIN '$DRIPS_HUB_ADMIN'"
     create "DripsHub" 'src/Upgradeable.sol:Proxy' "$DRIPS_HUB_LOGIC" "$DRIPS_HUB_ADMIN"
     DRIPS_HUB=$DEPLOYED_ADDR
 fi
 
-if [ -z "$ADDRESS_APP" ]; then
-    if [ -z "$ADDRESS_APP_LOGIC" ]; then
+if [ -z "$ADDRESS_DRIVER" ]; then
+    if [ -z "$ADDRESS_DRIVER_LOGIC" ]; then
         NONCE=$(($(cast nonce $DEPLOYER) + 2))
-        ADDRESS_APP=$(cast compute-address $DEPLOYER --nonce $NONCE | cut -d " " -f 3)
-        ADDRESS_APP_ID=$(cast call "$DRIPS_HUB" 'nextAppId()(uint32)')
-        send "Registering AddressApp in DripsHub" \
-            "$DRIPS_HUB" 'registerApp(address)(uint32)' "$ADDRESS_APP"
-        create "AddressApp logic" 'src/AddressApp.sol:AddressApp' \
-            "$DRIPS_HUB" "$CALLER" "$ADDRESS_APP_ID"
-        ADDRESS_APP_LOGIC=$DEPLOYED_ADDR
+        ADDRESS_DRIVER=$(cast compute-address $DEPLOYER --nonce $NONCE | cut -d " " -f 3)
+        ADDRESS_DRIVER_ID=$(cast call "$DRIPS_HUB" 'nextDriverId()(uint32)')
+        send "Registering AddressDriver in DripsHub" \
+            "$DRIPS_HUB" 'registerDriver(address)(uint32)' "$ADDRESS_DRIVER"
+        create "AddressDriver logic" 'src/AddressDriver.sol:AddressDriver' \
+            "$DRIPS_HUB" "$CALLER" "$ADDRESS_DRIVER_ID"
+        ADDRESS_DRIVER_LOGIC=$DEPLOYED_ADDR
     fi
-    create "AddressApp" 'src/Upgradeable.sol:Proxy' "$ADDRESS_APP_LOGIC" "$ADDRESS_APP_ADMIN"
-    ADDRESS_APP=$DEPLOYED_ADDR
+    create "AddressDriver" 'src/Upgradeable.sol:Proxy' "$ADDRESS_DRIVER_LOGIC" "$ADDRESS_DRIVER_ADMIN"
+    ADDRESS_DRIVER=$DEPLOYED_ADDR
 fi
-ADDRESS_APP_ID=$(cast call "$ADDRESS_APP" 'appId()(uint32)')
-ADDRESS_APP_ID_ADDR=$(cast call "$DRIPS_HUB" 'appAddress(uint32)(address)' "$ADDRESS_APP_ID")
-if [ $(cast --to-checksum-address "$ADDRESS_APP") != "$ADDRESS_APP_ID_ADDR" ]; then
+ADDRESS_DRIVER_ID=$(cast call "$ADDRESS_DRIVER" 'driverId()(uint32)')
+ADDRESS_DRIVER_ID_ADDR=$(cast call "$DRIPS_HUB" 'driverAddress(uint32)(address)' "$ADDRESS_DRIVER_ID")
+if [ $(cast --to-checksum-address "$ADDRESS_DRIVER") != "$ADDRESS_DRIVER_ID_ADDR" ]; then
     echo
-    echo "AddressApp not registered as an app in DripsHub"
+    echo "AddressDriver not registered as a driver in DripsHub"
     echo "DripsHub address: $DRIPS_HUB"
-    echo "AddressApp ID: $ADDRESS_APP_ID"
-    echo "AddressApp address: $ADDRESS_APP"
-    echo "App address registered under the AddressApp ID: $ADDRESS_APP_ID_ADDR"
+    echo "AddressDriver ID: $ADDRESS_DRIVER_ID"
+    echo "AddressDriver address: $ADDRESS_DRIVER"
+    echo "Driver address registered under the AddressDriver ID: $ADDRESS_DRIVER_ID_ADDR"
     exit 2
 fi
 
@@ -148,9 +150,9 @@ tee "$DEPLOYMENT_JSON" <<EOF
     "DripsHub":                 "$DRIPS_HUB",
     "DripsHub logic":           "$DRIPS_HUB_LOGIC",
     "DripsHub cycle seconds":   "$CYCLE_SECS",
-    "AddressApp":               "$ADDRESS_APP",
-    "AddressApp logic":         "$ADDRESS_APP_LOGIC",
-    "AddressApp ID":            "$ADDRESS_APP_ID",
+    "AddressDriver":            "$ADDRESS_DRIVER",
+    "AddressDriver logic":      "$ADDRESS_DRIVER_LOGIC",
+    "AddressDriver ID":         "$ADDRESS_DRIVER_ID",
     "Commit hash":              "$(git rev-parse HEAD)"
 }
 EOF
