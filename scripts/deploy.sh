@@ -30,6 +30,7 @@ GOVERNANCE=${GOVERNANCE:-$DEPLOYER}
 RESERVE_OWNER=$(cast --to-checksum-address "${RESERVE_OWNER:-$GOVERNANCE}")
 DRIPS_HUB_ADMIN=$(cast --to-checksum-address "${DRIPS_HUB_ADMIN:-$GOVERNANCE}")
 ADDRESS_DRIVER_ADMIN=$(cast --to-checksum-address "${ADDRESS_DRIVER_ADMIN:-$GOVERNANCE}")
+NFT_DRIVER_ADMIN=$(cast --to-checksum-address "${NFT_DRIVER_ADMIN:-$GOVERNANCE}")
 CYCLE_SECS=${CYCLE_SECS:-$(( 7 * 24 * 60 * 60 ))} # 1 week
 if [ -n "$ETHERSCAN_API_KEY" ]; then
     VERIFY="--verify"
@@ -60,6 +61,9 @@ echo "DripsHub cycle seconds:   $CYCLE_SECS"
 echo "AddressDriver:            ${ADDRESS_DRIVER:-$TO_DEPLOY}"
 echo "AddressDriver admin:      $ADDRESS_DRIVER_ADMIN"
 echo "AddressDriver logic:      ${ADDRESS_DRIVER_LOGIC:-$TO_DEPLOY}"
+echo "NFTDriver:                ${NFT_DRIVER:-$TO_DEPLOY}"
+echo "NFTDriver admin:          $NFT_DRIVER_ADMIN"
+echo "NFTDriver logic:          ${NFT_DRIVER_LOGIC:-$TO_DEPLOY}"
 echo
 
 read -p "Proceed with deployment? [y/n] " -n 1 -r
@@ -118,6 +122,32 @@ if [ $(cast --to-checksum-address "$ADDRESS_DRIVER") != "$ADDRESS_DRIVER_ID_ADDR
     exit 2
 fi
 
+if [ -z "$NFT_DRIVER" ]; then
+    if [ -z "$NFT_DRIVER_LOGIC" ]; then
+        NONCE=$(($(cast nonce $DEPLOYER) + 2))
+        NFT_DRIVER=$(cast compute-address $DEPLOYER --nonce $NONCE | cut -d " " -f 3)
+        NFT_DRIVER_ID=$(cast call "$DRIPS_HUB" 'nextDriverId()(uint32)')
+        send "Registering NFTDriver in DripsHub" \
+            "$DRIPS_HUB" 'registerDriver(address)(uint32)' "$NFT_DRIVER"
+        create "NFTDriver logic" 'src/NFTDriver.sol:NFTDriver' \
+            "$DRIPS_HUB" "$CALLER" "$NFT_DRIVER_ID"
+        NFT_DRIVER_LOGIC=$DEPLOYED_ADDR
+    fi
+    create "NFTDriver" 'src/Upgradeable.sol:Proxy' "$NFT_DRIVER_LOGIC" "$NFT_DRIVER_ADMIN"
+    NFT_DRIVER=$DEPLOYED_ADDR
+fi
+NFT_DRIVER_ID=$(cast call "$NFT_DRIVER" 'driverId()(uint32)')
+NFT_DRIVER_ID_ADDR=$(cast call "$DRIPS_HUB" 'driverAddress(uint32)(address)' "$NFT_DRIVER_ID")
+if [ $(cast --to-checksum-address "$NFT_DRIVER") != "$NFT_DRIVER_ID_ADDR" ]; then
+    echo
+    echo "NFTDriver not registered as a driver in DripsHub"
+    echo "DripsHub address: $DRIPS_HUB"
+    echo "NFTDriver ID: $NFT_DRIVER_ID"
+    echo "NFTDriver address: $NFT_DRIVER"
+    echo "Driver address registered under the NFTDriver ID: $NFT_DRIVER_ID_ADDR"
+    exit 2
+fi
+
 # Configuring the contracts
 if [ $(cast call "$RESERVE" 'isUser(address)(bool)' "$DRIPS_HUB") = "false" ]; then
     send "Adding DripsHub as a Reserve user" \
@@ -153,6 +183,9 @@ tee "$DEPLOYMENT_JSON" <<EOF
     "AddressDriver":            "$ADDRESS_DRIVER",
     "AddressDriver logic":      "$ADDRESS_DRIVER_LOGIC",
     "AddressDriver ID":         "$ADDRESS_DRIVER_ID",
+    "NFTDriver":                "$NFT_DRIVER",
+    "NFTDriver logic":          "$NFT_DRIVER_LOGIC",
+    "NFTDriver ID":             "$NFT_DRIVER_ID",
     "Commit hash":              "$(git rev-parse HEAD)"
 }
 EOF

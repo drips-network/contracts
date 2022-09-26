@@ -137,6 +137,19 @@ export ADDRESS_DRIVER_ADMIN="<ADDRESS>"
 # Address of the AddressDriver logic contract to use in `ADDRESS_DRIVER` when it's deployed.
 # If not set, a new instance is deployed and a new app ID is registered for `ADDRESS_DRIVER`.
 export ADDRESS_DRIVER_LOGIC="<ADDRESS>"
+
+# OPTIONAL
+# Address of NFTDriver to use. If not set, a new instance is deployed for `DRIPS_HUB`.
+export NFT_DRIVER="<ADDRESS>"
+
+# OPTIONAL
+# Address of the NFTDriver admin to set. If not set, `GOVERNANCE` is used.
+export NFT_DRIVER_ADMIN="<ADDRESS>"
+
+# OPTIONAL
+# Address of the NFTDriver logic contract to use in `NFT_DRIVER` when it's deployed.
+# If not set, a new instance is deployed and a new app ID is registered for `NFT_DRIVER`.
+export NFT_DRIVER_LOGIC="<ADDRESS>"
 ```
 
 Run deployment:
