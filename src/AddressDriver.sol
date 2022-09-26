@@ -12,10 +12,14 @@ import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol"
 contract AddressDriver is Upgradeable, ERC2771Context {
     using SafeERC20 for IERC20;
 
+    /// @notice The DripsHub address used by this driver.
     DripsHub public immutable dripsHub;
+    /// @notice The driver ID which this driver uses when calling DripsHub.
     uint32 public immutable driverId;
 
-    /// @param _dripsHub The drips hub to use
+    /// @param _dripsHub The drips hub to use.
+    /// @param forwarder The ERC-2771 forwarder to trust. May be the zero address.
+    /// @param _driverId The driver ID to use when calling DripsHub.
     constructor(DripsHub _dripsHub, address forwarder, uint32 _driverId)
         ERC2771Context(forwarder)
     {
@@ -59,7 +63,7 @@ contract AddressDriver is Upgradeable, ERC2771Context {
         IERC20 erc20,
         uint256 senderId,
         bytes32 historyHash,
-        DripsHistory[] memory dripsHistory
+        DripsHistory[] calldata dripsHistory
     ) public returns (uint128 amt, uint32 nextSqueezed) {
         return dripsHub.squeezeDrips(callerUserId(), erc20, senderId, historyHash, dripsHistory);
     }
