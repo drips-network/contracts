@@ -3,7 +3,6 @@ pragma solidity ^0.8.15;
 
 import {DripsHubUserUtils} from "./DripsHubUserUtils.t.sol";
 import {AddressDriverUser} from "./AddressDriverUser.t.sol";
-import {ManagedUser} from "./ManagedUser.t.sol";
 import {AddressDriver} from "../AddressDriver.sol";
 import {SplitsReceiver, DripsHub, DripsHistory, DripsReceiver} from "../DripsHub.sol";
 import {Reserve} from "../Reserve.sol";
@@ -25,8 +24,7 @@ contract DripsHubTest is DripsHubUserUtils {
     AddressDriverUser private user2;
     AddressDriverUser private receiver2;
     AddressDriverUser private receiver3;
-    ManagedUser internal admin;
-    ManagedUser internal nonAdmin;
+    address internal admin;
 
     string internal constant ERROR_NOT_DRIVER = "Callable only by the driver";
     string private constant ERROR_NOT_ADMIN = "Caller is not the admin";
@@ -43,9 +41,8 @@ contract DripsHubTest is DripsHubUserUtils {
         uint32 addressDriverId = dripsHub.registerDriver(address(this));
         addressDriver = new AddressDriver(dripsHub, address(0), addressDriverId);
         dripsHub.updateDriverAddress(addressDriverId, address(addressDriver));
-        admin = new ManagedUser(dripsHub);
-        nonAdmin = new ManagedUser(dripsHub);
-        dripsHub.changeAdmin(address(admin));
+        admin = address(1);
+        dripsHub.changeAdmin(admin);
         user = createUser();
         user1 = createUser();
         user2 = createUser();
@@ -69,6 +66,11 @@ contract DripsHubTest is DripsHubUserUtils {
         newUser = new AddressDriverUser(addressDriver);
         defaultErc20.transfer(address(newUser), defaultErc20.totalSupply() / 100);
         otherErc20.transfer(address(newUser), otherErc20.totalSupply() / 100);
+    }
+
+    function pauseDripsHub() internal {
+        vm.prank(admin);
+        dripsHub.pause();
     }
 
     function testDoesNotRequireReceiverToBeInitialized() public {
@@ -353,13 +355,15 @@ contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testAdminCanBeChanged() public {
-        assertEq(dripsHub.admin(), address(admin));
-        admin.changeAdmin(address(nonAdmin));
-        assertEq(dripsHub.admin(), address(nonAdmin));
+        assertEq(dripsHub.admin(), admin);
+        address newAdmin = address(1234);
+        vm.prank(admin);
+        dripsHub.changeAdmin(newAdmin);
+        assertEq(dripsHub.admin(), newAdmin);
     }
 
     function testOnlyAdminCanChangeAdmin() public {
-        try nonAdmin.changeAdmin(address(0x1234)) {
+        try dripsHub.changeAdmin(address(1234)) {
             assertTrue(false, "ChangeAdmin hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_NOT_ADMIN, "Invalid changeAdmin revert reason");
@@ -369,12 +373,15 @@ contract DripsHubTest is DripsHubUserUtils {
     function testContractCanBeUpgraded() public {
         uint32 newCycleLength = dripsHub.cycleSecs() + 1;
         DripsHub newLogic = new DripsHub(newCycleLength, dripsHub.reserve());
-        admin.upgradeTo(address(newLogic));
+        vm.prank(admin);
+        dripsHub.upgradeTo(address(newLogic));
         assertEq(dripsHub.cycleSecs(), newCycleLength, "Invalid new cycle length");
     }
 
     function testOnlyAdminCanUpgradeContract() public {
-        try nonAdmin.upgradeTo(address(0)) {
+        uint32 newCycleLength = dripsHub.cycleSecs() + 1;
+        DripsHub newLogic = new DripsHub(newCycleLength, dripsHub.reserve());
+        try dripsHub.upgradeTo(address(newLogic)) {
             assertTrue(false, "ChangeAdmin hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_NOT_ADMIN, "Invalid changeAdmin revert reason");
@@ -383,15 +390,18 @@ contract DripsHubTest is DripsHubUserUtils {
 
     function testContractCanBePausedAndUnpaused() public {
         assertTrue(!dripsHub.paused(), "Initially paused");
-        admin.pause();
+        vm.prank(admin);
+        dripsHub.pause();
         assertTrue(dripsHub.paused(), "Pausing failed");
-        admin.unpause();
+        vm.prank(admin);
+        dripsHub.unpause();
         assertTrue(!dripsHub.paused(), "Unpausing failed");
     }
 
     function testOnlyUnpausedContractCanBePaused() public {
-        admin.pause();
-        try admin.pause() {
+        pauseDripsHub();
+        vm.prank(admin);
+        try dripsHub.pause() {
             assertTrue(false, "Pause hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_PAUSED, "Invalid pause revert reason");
@@ -399,7 +409,8 @@ contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testOnlyPausedContractCanBeUnpaused() public {
-        try admin.unpause() {
+        vm.prank(admin);
+        try dripsHub.unpause() {
             assertTrue(false, "Unpause hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, "Contract not paused", "Invalid unpause revert reason");
@@ -407,7 +418,7 @@ contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testOnlyAdminCanPause() public {
-        try nonAdmin.pause() {
+        try dripsHub.pause() {
             assertTrue(false, "Pause hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_NOT_ADMIN, "Invalid pause revert reason");
@@ -415,8 +426,8 @@ contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testOnlyAdminCanUnpause() public {
-        admin.pause();
-        try nonAdmin.unpause() {
+        pauseDripsHub();
+        try dripsHub.unpause() {
             assertTrue(false, "Unpause hasn't reverted");
         } catch Error(string memory reason) {
             assertEq(reason, ERROR_NOT_ADMIN, "Invalid unpause revert reason");
@@ -424,7 +435,7 @@ contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testReceiveDripsCanBePaused() public {
-        admin.pause();
+        pauseDripsHub();
         try dripsHub.receiveDrips(user.userId(), defaultErc20, 1) {
             assertTrue(false, "ReceiveDrips hasn't reverted");
         } catch Error(string memory reason) {
@@ -433,7 +444,7 @@ contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testSqueezeDripsCanBePaused() public {
-        admin.pause();
+        pauseDripsHub();
         try user.squeezeDrips(defaultErc20, receiver.userId(), 0, new DripsHistory[](0)) {
             assertTrue(false, "SqueezeDrips hasn't reverted");
         } catch Error(string memory reason) {
@@ -442,7 +453,7 @@ contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testSplitCanBePaused() public {
-        admin.pause();
+        pauseDripsHub();
         try dripsHub.split(user.userId(), defaultErc20, splitsReceivers()) {
             assertTrue(false, "Split hasn't reverted");
         } catch Error(string memory reason) {
@@ -451,7 +462,7 @@ contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testCollectCanBePaused() public {
-        admin.pause();
+        pauseDripsHub();
         try user.collect(defaultErc20, address(user)) {
             assertTrue(false, "Collect hasn't reverted");
         } catch Error(string memory reason) {
@@ -460,7 +471,7 @@ contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testSetDripsCanBePaused() public {
-        admin.pause();
+        pauseDripsHub();
         try user.setDrips(defaultErc20, dripsReceivers(), 1, dripsReceivers(), address(user)) {
             assertTrue(false, "SetDrips hasn't reverted");
         } catch Error(string memory reason) {
@@ -469,7 +480,7 @@ contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testGiveCanBePaused() public {
-        admin.pause();
+        pauseDripsHub();
         try user.give(0, defaultErc20, 1) {
             assertTrue(false, "Give hasn't reverted");
         } catch Error(string memory reason) {
@@ -478,7 +489,7 @@ contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testSetSplitsCanBePaused() public {
-        admin.pause();
+        pauseDripsHub();
         try user.setSplits(splitsReceivers()) {
             assertTrue(false, "SetSplits hasn't reverted");
         } catch Error(string memory reason) {
@@ -487,7 +498,7 @@ contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testRegisterDriverCanBePaused() public {
-        admin.pause();
+        pauseDripsHub();
         try dripsHub.registerDriver(address(0x1234)) {
             assertTrue(false, "RegisterDriver hasn't reverted");
         } catch Error(string memory reason) {
@@ -497,7 +508,7 @@ contract DripsHubTest is DripsHubUserUtils {
 
     function testUpdateDriverAddressCanBePaused() public {
         uint32 driverId = dripsHub.registerDriver(address(this));
-        admin.pause();
+        pauseDripsHub();
         try dripsHub.updateDriverAddress(driverId, address(0x1234)) {
             assertTrue(false, "UpdateDriverAddress hasn't reverted");
         } catch Error(string memory reason) {
