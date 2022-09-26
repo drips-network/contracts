@@ -8,6 +8,11 @@ import {ECDSA} from "openzeppelin-contracts/utils/cryptography/ECDSA.sol";
 import {Call, Caller} from "../Caller.sol";
 
 contract CallerTest is Test {
+    bytes internal constant ERROR_ZERO_INPUT = "Input is zero";
+    bytes internal constant ERROR_DEADLINE = "Execution deadline expired";
+    bytes internal constant ERROR_SIGNATURE = "Invalid signature";
+    bytes internal constant ERROR_UNAUTHORIZED = "Not authorized";
+
     string internal constant DOMAIN_TYPE_NAME =
         "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)";
     bytes32 internal immutable domainTypeHash = keccak256(bytes(DOMAIN_TYPE_NAME));
@@ -55,11 +60,8 @@ contract CallerTest is Test {
         skip(1);
         (bytes32 r, bytes32 sv) = signCall(senderKey, target, data, 0, 0, deadline);
 
-        try caller.callSigned(sender, address(target), data, deadline, r, sv) {
-            assertTrue(false, "CallSigned hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, "Execution deadline expired", "Invalid callSigned revert reason");
-        }
+        vm.expectRevert(ERROR_DEADLINE);
+        caller.callSigned(sender, address(target), data, deadline, r, sv);
     }
 
     function testCallSignedRejectsInvalidNonce() public {
@@ -69,11 +71,8 @@ contract CallerTest is Test {
         caller.callSigned(sender, address(target), data, deadline, r, sv);
         assertEq(caller.nonce(sender), 1, "Invalid nonce after a signed call");
 
-        try caller.callSigned(sender, address(target), data, deadline, r, sv) {
-            assertTrue(false, "CallSigned hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, "Invalid signature", "Invalid callSigned revert reason");
-        }
+        vm.expectRevert(ERROR_SIGNATURE);
+        caller.callSigned(sender, address(target), data, deadline, r, sv);
     }
 
     function testCallSignedRejectsInvalidSigner() public {
@@ -81,11 +80,8 @@ contract CallerTest is Test {
         uint256 deadline = block.timestamp;
         (bytes32 r, bytes32 sv) = signCall(senderKey + 1, target, data, 0, 0, deadline);
 
-        try caller.callSigned(sender, address(target), data, deadline, r, sv) {
-            assertTrue(false, "CallSigned hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, "Invalid signature", "Invalid callSigned revert reason");
-        }
+        vm.expectRevert(ERROR_SIGNATURE);
+        caller.callSigned(sender, address(target), data, deadline, r, sv);
     }
 
     function testCallSignedBubblesErrors() public {
@@ -94,11 +90,8 @@ contract CallerTest is Test {
         uint256 deadline = block.timestamp;
         (bytes32 r, bytes32 sv) = signCall(senderKey, target, data, 0, 0, deadline);
 
-        try caller.callSigned(sender, address(target), data, deadline, r, sv) {
-            assertTrue(false, "CallSigned hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, "Input is zero", "Invalid callSigned revert reason");
-        }
+        vm.expectRevert(ERROR_ZERO_INPUT);
+        caller.callSigned(sender, address(target), data, deadline, r, sv);
     }
 
     function testCallAs() public {
@@ -116,11 +109,8 @@ contract CallerTest is Test {
     function testCallAsRejectsWhenNotAuthorized() public {
         bytes memory data = abi.encodeWithSelector(target.run.selector, 1);
 
-        try caller.callAs(sender, address(target), data) {
-            assertTrue(false, "CallAs hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, "Not authorized", "Invalid callAs revert reason");
-        }
+        vm.expectRevert(ERROR_UNAUTHORIZED);
+        caller.callAs(sender, address(target), data);
     }
 
     function testCallAsRejectsWhenUnauthorized() public {
@@ -128,11 +118,8 @@ contract CallerTest is Test {
         authorize(sender, address(this));
         unauthorize(sender, address(this));
 
-        try caller.callAs(sender, address(target), data) {
-            assertTrue(false, "CallAs hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, "Not authorized", "Invalid callAs revert reason");
-        }
+        vm.expectRevert(ERROR_UNAUTHORIZED);
+        caller.callAs(sender, address(target), data);
     }
 
     function testCallAsBubblesErrors() public {
@@ -140,11 +127,8 @@ contract CallerTest is Test {
         bytes memory data = abi.encodeWithSelector(target.run.selector, 0);
         authorize(sender, address(this));
 
-        try caller.callAs(sender, address(target), data) {
-            assertTrue(false, "CallAs hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, "Input is zero", "Invalid callAs revert reason");
-        }
+        vm.expectRevert(ERROR_ZERO_INPUT);
+        caller.callAs(sender, address(target), data);
     }
 
     function testCallBatched() public {
@@ -186,11 +170,8 @@ contract CallerTest is Test {
             value: 0
         });
 
-        try caller.callBatched(calls) {
-            assertTrue(false, "CallBatched hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, "Input is zero", "Invalid callBatched revert reason");
-        }
+        vm.expectRevert(ERROR_ZERO_INPUT);
+        caller.callBatched(calls);
 
         // The effects of the first call are reverted
         target.verify(address(0), 0, 0);

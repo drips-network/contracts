@@ -26,10 +26,10 @@ contract DripsHubTest is DripsHubUserUtils {
     AddressDriverUser private receiver3;
     address internal admin;
 
-    string internal constant ERROR_NOT_DRIVER = "Callable only by the driver";
-    string private constant ERROR_NOT_ADMIN = "Caller is not the admin";
-    string private constant ERROR_PAUSED = "Contract paused";
-    string private constant ERROR_BALANCE_TOO_HIGH = "Total balance too high";
+    bytes internal constant ERROR_NOT_DRIVER = "Callable only by the driver";
+    bytes internal constant ERROR_NOT_ADMIN = "Caller is not the admin";
+    bytes internal constant ERROR_PAUSED = "Contract paused";
+    bytes internal constant ERROR_BALANCE_TOO_HIGH = "Total balance too high";
 
     function setUp() public {
         defaultErc20 = new ERC20PresetFixedSupply("test", "test", type(uint136).max, address(this));
@@ -243,20 +243,15 @@ contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testUpdateDriverAddressRevertsWhenNotCalledByTheDriver() public {
-        uint32 driverId = dripsHub.registerDriver(address(0x1234));
-        try dripsHub.updateDriverAddress(driverId, address(0x5678)) {
-            assertTrue(false, "UpdateDriverAddress hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_DRIVER, "Invalid collect revert reason");
-        }
+        uint32 driverId = dripsHub.registerDriver(address(1234));
+        vm.expectRevert(ERROR_NOT_DRIVER);
+        dripsHub.updateDriverAddress(driverId, address(5678));
     }
 
     function testCollectRevertsWhenNotCalledByTheDriver() public {
-        try dripsHub.collect(calcUserId(dripsHub.nextDriverId(), 0), defaultErc20) {
-            assertTrue(false, "Collect hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_DRIVER, "Invalid collect revert reason");
-        }
+        uint256 userId = calcUserId(dripsHub.nextDriverId(), 0);
+        vm.expectRevert(ERROR_NOT_DRIVER);
+        dripsHub.collect(userId, defaultErc20);
     }
 
     function testDripsInDifferentTokensAreIndependent() public {
@@ -291,41 +286,26 @@ contract DripsHubTest is DripsHubUserUtils {
 
     function testSqueezeDripsRevertsWhenNotCalledByTheDriver() public {
         uint256 userId = calcUserId(dripsHub.nextDriverId(), 0);
-        try dripsHub.squeezeDrips(userId, defaultErc20, 1, 0, new DripsHistory[](0)) {
-            assertTrue(false, "SqueezeDrips hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_DRIVER, "Invalid squeezeDrips revert reason");
-        }
+        vm.expectRevert(ERROR_NOT_DRIVER);
+        dripsHub.squeezeDrips(userId, defaultErc20, 1, 0, new DripsHistory[](0));
     }
 
     function testSetDripsRevertsWhenNotCalledByTheDriver() public {
-        try dripsHub.setDrips(
-            calcUserId(dripsHub.nextDriverId(), 0),
-            defaultErc20,
-            dripsReceivers(),
-            0,
-            dripsReceivers()
-        ) {
-            assertTrue(false, "SetDrips hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_DRIVER, "Invalid setDrips revert reason");
-        }
+        uint256 userId = calcUserId(dripsHub.nextDriverId(), 0);
+        vm.expectRevert(ERROR_NOT_DRIVER);
+        dripsHub.setDrips(userId, defaultErc20, dripsReceivers(), 0, dripsReceivers());
     }
 
     function testGiveRevertsWhenNotCalledByTheDriver() public {
-        try dripsHub.give(calcUserId(dripsHub.nextDriverId(), 0), 0, defaultErc20, 1) {
-            assertTrue(false, "Give hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_DRIVER, "Invalid give revert reason");
-        }
+        uint256 userId = calcUserId(dripsHub.nextDriverId(), 0);
+        vm.expectRevert(ERROR_NOT_DRIVER);
+        dripsHub.give(userId, 0, defaultErc20, 1);
     }
 
     function testSetSplitsRevertsWhenNotCalledByTheDriver() public {
-        try dripsHub.setSplits(calcUserId(dripsHub.nextDriverId(), 0), splitsReceivers()) {
-            assertTrue(false, "SetSplits hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_DRIVER, "Invalid setSplits revert reason");
-        }
+        uint256 userId = calcUserId(dripsHub.nextDriverId(), 0);
+        vm.expectRevert(ERROR_NOT_DRIVER);
+        dripsHub.setSplits(userId, splitsReceivers());
     }
 
     function testSetDripsLimitsTotalBalance() public {
@@ -363,11 +343,8 @@ contract DripsHubTest is DripsHubUserUtils {
     }
 
     function testOnlyAdminCanChangeAdmin() public {
-        try dripsHub.changeAdmin(address(1234)) {
-            assertTrue(false, "ChangeAdmin hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_ADMIN, "Invalid changeAdmin revert reason");
-        }
+        vm.expectRevert(ERROR_NOT_ADMIN);
+        dripsHub.changeAdmin(address(1234));
     }
 
     function testContractCanBeUpgraded() public {
@@ -381,11 +358,8 @@ contract DripsHubTest is DripsHubUserUtils {
     function testOnlyAdminCanUpgradeContract() public {
         uint32 newCycleLength = dripsHub.cycleSecs() + 1;
         DripsHub newLogic = new DripsHub(newCycleLength, dripsHub.reserve());
-        try dripsHub.upgradeTo(address(newLogic)) {
-            assertTrue(false, "ChangeAdmin hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_ADMIN, "Invalid changeAdmin revert reason");
-        }
+        vm.expectRevert(ERROR_NOT_ADMIN);
+        dripsHub.upgradeTo(address(newLogic));
     }
 
     function testContractCanBePausedAndUnpaused() public {
@@ -401,118 +375,82 @@ contract DripsHubTest is DripsHubUserUtils {
     function testOnlyUnpausedContractCanBePaused() public {
         pauseDripsHub();
         vm.prank(admin);
-        try dripsHub.pause() {
-            assertTrue(false, "Pause hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_PAUSED, "Invalid pause revert reason");
-        }
+        vm.expectRevert(ERROR_PAUSED);
+        dripsHub.pause();
     }
 
     function testOnlyPausedContractCanBeUnpaused() public {
         vm.prank(admin);
-        try dripsHub.unpause() {
-            assertTrue(false, "Unpause hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, "Contract not paused", "Invalid unpause revert reason");
-        }
+        vm.expectRevert("Contract not paused");
+        dripsHub.unpause();
     }
 
     function testOnlyAdminCanPause() public {
-        try dripsHub.pause() {
-            assertTrue(false, "Pause hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_ADMIN, "Invalid pause revert reason");
-        }
+        vm.expectRevert(ERROR_NOT_ADMIN);
+        dripsHub.pause();
     }
 
     function testOnlyAdminCanUnpause() public {
         pauseDripsHub();
-        try dripsHub.unpause() {
-            assertTrue(false, "Unpause hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_ADMIN, "Invalid unpause revert reason");
-        }
+        vm.expectRevert(ERROR_NOT_ADMIN);
+        dripsHub.unpause();
     }
 
     function testReceiveDripsCanBePaused() public {
         pauseDripsHub();
-        try dripsHub.receiveDrips(user.userId(), defaultErc20, 1) {
-            assertTrue(false, "ReceiveDrips hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_PAUSED, "Invalid receiveDrips revert reason");
-        }
+        uint256 userId = user.userId();
+        vm.expectRevert(ERROR_PAUSED);
+        dripsHub.receiveDrips(userId, defaultErc20, 1);
     }
 
     function testSqueezeDripsCanBePaused() public {
         pauseDripsHub();
-        try user.squeezeDrips(defaultErc20, receiver.userId(), 0, new DripsHistory[](0)) {
-            assertTrue(false, "SqueezeDrips hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_PAUSED, "Invalid squeezeDrips revert reason");
-        }
+        uint256 userId = user.userId();
+        vm.expectRevert(ERROR_PAUSED);
+        user.squeezeDrips(defaultErc20, userId, 0, new DripsHistory[](0));
     }
 
     function testSplitCanBePaused() public {
         pauseDripsHub();
-        try dripsHub.split(user.userId(), defaultErc20, splitsReceivers()) {
-            assertTrue(false, "Split hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_PAUSED, "Invalid split revert reason");
-        }
+        uint256 userId = user.userId();
+        vm.expectRevert(ERROR_PAUSED);
+        dripsHub.split(userId, defaultErc20, splitsReceivers());
     }
 
     function testCollectCanBePaused() public {
         pauseDripsHub();
-        try user.collect(defaultErc20, address(user)) {
-            assertTrue(false, "Collect hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_PAUSED, "Invalid collect revert reason");
-        }
+        vm.expectRevert(ERROR_PAUSED);
+        user.collect(defaultErc20, address(user));
     }
 
     function testSetDripsCanBePaused() public {
         pauseDripsHub();
-        try user.setDrips(defaultErc20, dripsReceivers(), 1, dripsReceivers(), address(user)) {
-            assertTrue(false, "SetDrips hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_PAUSED, "Invalid setDrips revert reason");
-        }
+        vm.expectRevert(ERROR_PAUSED);
+        user.setDrips(defaultErc20, dripsReceivers(), 1, dripsReceivers(), address(user));
     }
 
     function testGiveCanBePaused() public {
         pauseDripsHub();
-        try user.give(0, defaultErc20, 1) {
-            assertTrue(false, "Give hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_PAUSED, "Invalid give revert reason");
-        }
+        vm.expectRevert(ERROR_PAUSED);
+        user.give(0, defaultErc20, 1);
     }
 
     function testSetSplitsCanBePaused() public {
         pauseDripsHub();
-        try user.setSplits(splitsReceivers()) {
-            assertTrue(false, "SetSplits hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_PAUSED, "Invalid setSplits revert reason");
-        }
+        vm.expectRevert(ERROR_PAUSED);
+        user.setSplits(splitsReceivers());
     }
 
     function testRegisterDriverCanBePaused() public {
         pauseDripsHub();
-        try dripsHub.registerDriver(address(0x1234)) {
-            assertTrue(false, "RegisterDriver hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_PAUSED, "Invalid registerDriver revert reason");
-        }
+        vm.expectRevert(ERROR_PAUSED);
+        dripsHub.registerDriver(address(0x1234));
     }
 
     function testUpdateDriverAddressCanBePaused() public {
         uint32 driverId = dripsHub.registerDriver(address(this));
         pauseDripsHub();
-        try dripsHub.updateDriverAddress(driverId, address(0x1234)) {
-            assertTrue(false, "UpdateDriverAddress hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_PAUSED, "Invalid updateDriverAddress revert reason");
-        }
+        vm.expectRevert(ERROR_PAUSED);
+        dripsHub.updateDriverAddress(driverId, address(0x1234));
     }
 }

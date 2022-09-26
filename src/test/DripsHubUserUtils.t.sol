@@ -160,7 +160,7 @@ abstract contract DripsHubUserUtils is Test {
     function assertSetReceiversReverts(
         AddressDriverUser user,
         DripsReceiver[] memory newReceivers,
-        string memory expectedReason
+        bytes memory expectedReason
     ) internal {
         assertSetDripsReverts(user, loadDrips(user), 0, newReceivers, expectedReason);
     }
@@ -170,13 +170,10 @@ abstract contract DripsHubUserUtils is Test {
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers,
-        string memory expectedReason
+        bytes memory expectedReason
     ) internal {
-        try user.setDrips(defaultErc20, currReceivers, balanceDelta, newReceivers, address(user)) {
-            assertTrue(false, "Set drips hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, expectedReason, "Invalid set drips revert reason");
-        }
+        vm.expectRevert(expectedReason);
+        user.setDrips(defaultErc20, currReceivers, balanceDelta, newReceivers, address(user));
     }
 
     function give(AddressDriverUser user, AddressDriverUser receiver, uint128 amt) internal {
@@ -199,13 +196,11 @@ abstract contract DripsHubUserUtils is Test {
         AddressDriverUser user,
         AddressDriverUser receiver,
         uint128 amt,
-        string memory expectedReason
+        bytes memory expectedReason
     ) internal {
-        try user.give(receiver.userId(), defaultErc20, amt) {
-            assertTrue(false, "Give hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, expectedReason, "Invalid give revert reason");
-        }
+        uint256 userId = receiver.userId();
+        vm.expectRevert(expectedReason);
+        user.give(userId, defaultErc20, amt);
     }
 
     function splitsReceivers() internal pure returns (SplitsReceiver[] memory list) {
@@ -245,15 +240,12 @@ abstract contract DripsHubUserUtils is Test {
     function assertSetSplitsReverts(
         AddressDriverUser user,
         SplitsReceiver[] memory newReceivers,
-        string memory expectedReason
+        bytes memory expectedReason
     ) internal {
         SplitsReceiver[] memory curr = getCurrSplitsReceivers(user);
         assertSplits(user, curr);
-        try user.setSplits(newReceivers) {
-            assertTrue(false, "setSplits hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, expectedReason, "Invalid setSplits revert reason");
-        }
+        vm.expectRevert(expectedReason);
+        user.setSplits(newReceivers);
     }
 
     function assertSplits(AddressDriverUser user, SplitsReceiver[] memory expectedReceivers)

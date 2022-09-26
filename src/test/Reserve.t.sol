@@ -81,10 +81,10 @@ contract ReserveTest is Test {
     IERC20 public token;
     IERC20 public otherToken;
 
-    string public constant ERROR_NOT_USER = "Reserve: caller is not the user";
-    string public constant ERROR_NOT_OWNER = "Ownable: caller is not the owner";
-    string public constant ERROR_DEPOSIT_SELF = "Reserve: deposition from self";
-    string public constant ERROR_WITHDRAWAL_BALANCE = "Reserve: withdrawal over balance";
+    bytes public constant ERROR_NOT_USER = "Reserve: caller is not the user";
+    bytes public constant ERROR_NOT_OWNER = "Ownable: caller is not the owner";
+    bytes public constant ERROR_DEPOSIT_SELF = "Reserve: deposition from self";
+    bytes public constant ERROR_WITHDRAWAL_BALANCE = "Reserve: withdrawal over balance";
 
     function setUp() public {
         user = new ReserveUser();
@@ -132,14 +132,11 @@ contract ReserveTest is Test {
         IERC20 forToken,
         ReserveUser from,
         uint256 amt,
-        string memory expectedReason
+        bytes memory expectedReason
     ) public {
         from.approveReserve(forToken, amt);
-        try reserveUser.deposit(forToken, address(from), amt) {
-            assertTrue(false, "Deposit hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, expectedReason, "Invalid deposit revert reason");
-        }
+        vm.expectRevert(expectedReason);
+        reserveUser.deposit(forToken, address(from), amt);
         from.approveReserve(forToken, 0);
     }
 
@@ -161,13 +158,10 @@ contract ReserveTest is Test {
         IERC20 forToken,
         ReserveUser to,
         uint256 amt,
-        string memory expectedReason
+        bytes memory expectedReason
     ) public {
-        try reserveUser.withdraw(forToken, address(to), amt) {
-            assertTrue(false, "Withdraw hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, expectedReason, "Invalid withdrawal revert reason");
-        }
+        vm.expectRevert(expectedReason);
+        reserveUser.withdraw(forToken, address(to), amt);
     }
 
     function forceWithdraw(
@@ -195,13 +189,10 @@ contract ReserveTest is Test {
         IReservePlugin plugin,
         ReserveUser to,
         uint256 amt,
-        string memory expectedReason
+        bytes memory expectedReason
     ) public {
-        try reserveUser.forceWithdraw(forToken, plugin, address(to), amt) {
-            assertTrue(false, "Force withdraw hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, expectedReason, "Invalid force withdrawal revert reason");
-        }
+        vm.expectRevert(expectedReason);
+        reserveUser.forceWithdraw(forToken, plugin, address(to), amt);
     }
 
     function assertUserBalance(
@@ -251,13 +242,10 @@ contract ReserveTest is Test {
     function assertAddUserReverts(
         ReserveUser currOwner,
         ReserveUser addedUser,
-        string memory expectedReason
+        bytes memory expectedReason
     ) public {
-        try currOwner.addUser(address(addedUser)) {
-            assertTrue(false, "AddUser hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, expectedReason, "Invalid addUser revert reason");
-        }
+        vm.expectRevert(expectedReason);
+        currOwner.addUser(address(addedUser));
     }
 
     function removeUser(ReserveUser currOwner, ReserveUser removedUser) public {
@@ -269,13 +257,10 @@ contract ReserveTest is Test {
     function assertRemoveUserReverts(
         ReserveUser currOwner,
         ReserveUser removedUser,
-        string memory expectedReason
+        bytes memory expectedReason
     ) public {
-        try currOwner.removeUser(address(removedUser)) {
-            assertTrue(false, "RemoveUser hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, expectedReason, "Invalid removeUser revert reason");
-        }
+        vm.expectRevert(expectedReason);
+        currOwner.removeUser(address(removedUser));
     }
 
     function testPluginCanBeSet() public {
@@ -328,11 +313,8 @@ contract ReserveTest is Test {
     }
 
     function testRejectsNotOwnerSettingDrips() public {
-        try user.setPlugin(token, plugin1) {
-            assertTrue(false, "SetPlugin hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_OWNER, "Invalid setPlugin revert reason");
-        }
+        vm.expectRevert(ERROR_NOT_OWNER);
+        user.setPlugin(token, plugin1);
     }
 
     function testUserDepositsAndWithdraws() public {
@@ -342,21 +324,15 @@ contract ReserveTest is Test {
 
     function testDepositFromReserveReverts() public {
         token.transfer(address(reserve), 1);
-        try user.deposit(token, address(reserve), 1) {
-            assertTrue(false, "Deposit hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_DEPOSIT_SELF, "Invalid deposit revert reason");
-        }
+        vm.expectRevert(ERROR_DEPOSIT_SELF);
+        user.deposit(token, address(reserve), 1);
     }
 
     function testDepositFromPluginReverts() public {
         setPlugin(owner, token, plugin1);
         token.transfer(address(plugin1), 1);
-        try user.deposit(token, address(plugin1), 1) {
-            assertTrue(false, "Deposit hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_DEPOSIT_SELF, "Invalid deposit revert reason");
-        }
+        vm.expectRevert(ERROR_DEPOSIT_SELF);
+        user.deposit(token, address(plugin1), 1);
     }
 
     function testRejectsWithdrawalOverBalance() public {
@@ -406,11 +382,8 @@ contract ReserveTest is Test {
     }
 
     function testRejectNotOwnerForceSettingDeposited() public {
-        try user.setDeposited(token, 2) {
-            assertTrue(false, "SetDeposited hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, ERROR_NOT_OWNER, "Invalid setDeposited revert reason");
-        }
+        vm.expectRevert(ERROR_NOT_OWNER);
+        user.setDeposited(token, 2);
     }
 
     function testForceWithdraw() public {

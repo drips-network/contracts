@@ -61,15 +61,12 @@ contract SplitsTest is Test, Splits {
     function assertSetSplitsReverts(
         uint256 userId,
         SplitsReceiver[] memory newReceivers,
-        string memory expectedReason
+        bytes memory expectedReason
     ) internal {
         SplitsReceiver[] memory curr = getCurrSplitsReceivers(userId);
         Splits._assertCurrSplits(userId, curr);
-        try this.setSplitsExternal(userId, newReceivers) {
-            assertTrue(false, "setSplits hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, expectedReason, "Invalid setSplits revert reason");
-        }
+        vm.expectRevert(expectedReason);
+        this.setSplitsExternal(userId, newReceivers);
     }
 
     function assertSplits(uint256 userId, SplitsReceiver[] memory expectedReceivers)
@@ -233,11 +230,8 @@ contract SplitsTest is Test, Splits {
 
     function testSplitRevertsIfInvalidCurrSplitsReceivers() public {
         setSplits(user, splitsReceivers(receiver, 1));
-        try this.splitExternal(user, defaultAsset, splitsReceivers(receiver, 2)) {
-            assertTrue(false, "Split hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, "Invalid current splits receivers", "Invalid split revert reason");
-        }
+        vm.expectRevert("Invalid current splits receivers");
+        this.splitExternal(user, defaultAsset, splitsReceivers(receiver, 2));
     }
 
     function testSplittingSplitsAllFundsEvenWhenTheyDontDivideEvenly() public {

@@ -23,11 +23,11 @@ contract PseudoRandomUtils {
 }
 
 contract DripsTest is Test, PseudoRandomUtils, Drips {
-    string internal constant ERROR_NOT_SORTED = "Receivers not sorted";
-    string internal constant ERROR_INVALID_DRIPS_LIST = "Invalid current drips list";
-    string internal constant ERROR_TIMESTAMP_EARLY = "Timestamp before last drips update";
-    string internal constant ERROR_HISTORY_INVALID = "Invalid drips history";
-    string internal constant ERROR_HISTORY_UNCLEAR = "Drips history entry with hash and receivers";
+    bytes internal constant ERROR_NOT_SORTED = "Receivers not sorted";
+    bytes internal constant ERROR_INVALID_DRIPS_LIST = "Invalid current drips list";
+    bytes internal constant ERROR_TIMESTAMP_EARLY = "Timestamp before last drips update";
+    bytes internal constant ERROR_HISTORY_INVALID = "Invalid drips history";
+    bytes internal constant ERROR_HISTORY_UNCLEAR = "Drips history entry with hash and receivers";
 
     uint32 internal cycleSecs;
     // Keys are assetId and userId
@@ -320,13 +320,10 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint256 userId,
         DripsReceiver[] memory receivers,
         uint256 timestamp,
-        string memory expectedReason
+        bytes memory expectedReason
     ) internal {
-        try this.balanceAtExternal(userId, receivers, timestamp) {
-            assertTrue(false, "BalanceAt hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, expectedReason, "Invalid balanceAt revert reason");
-        }
+        vm.expectRevert(expectedReason);
+        this.balanceAtExternal(userId, receivers, timestamp);
     }
 
     function balanceAtExternal(uint256 userId, DripsReceiver[] memory receivers, uint256 timestamp)
@@ -354,7 +351,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint128 balanceFrom,
         uint128 balanceTo,
         DripsReceiver[] memory newReceivers,
-        string memory expectedReason
+        bytes memory expectedReason
     ) internal {
         assertSetDripsReverts(
             userId,
@@ -372,19 +369,11 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint128 balanceFrom,
         uint128 balanceTo,
         DripsReceiver[] memory newReceivers,
-        string memory expectedReason
+        bytes memory expectedReason
     ) internal {
-        try this.setDripsExternal(
-            defaultAsset,
-            userId,
-            currReceivers,
-            int128(balanceTo) - int128(balanceFrom),
-            newReceivers
-        ) {
-            assertTrue(false, "Set drips hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, expectedReason, "Invalid set drips revert reason");
-        }
+        vm.expectRevert(expectedReason);
+        int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
+        this.setDripsExternal(defaultAsset, userId, currReceivers, balanceDelta, newReceivers);
     }
 
     function setDripsExternal(
@@ -526,13 +515,10 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint256 senderId,
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory,
-        string memory expectedReason
+        bytes memory expectedReason
     ) internal {
-        try this.squeezeDripsExternal(userId, defaultAsset, senderId, historyHash, dripsHistory) {
-            assertTrue(false, "SqueezeDrips hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, expectedReason, "Invalid squeezeDrips revert reason");
-        }
+        vm.expectRevert(expectedReason);
+        this.squeezeDripsExternal(userId, defaultAsset, senderId, historyHash, dripsHistory);
     }
 
     function squeezeDripsExternal(
@@ -550,14 +536,10 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint256 senderId,
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory,
-        string memory expectedReason
+        bytes memory expectedReason
     ) internal {
-        try this.squeezableDripsExternal(userId, defaultAsset, senderId, historyHash, dripsHistory)
-        {
-            assertTrue(false, "SqueezableDrips hasn't reverted");
-        } catch Error(string memory reason) {
-            assertEq(reason, expectedReason, "Invalid squeezableDrips revert reason");
-        }
+        vm.expectRevert(expectedReason);
+        this.squeezableDripsExternal(userId, defaultAsset, senderId, historyHash, dripsHistory);
     }
 
     function squeezableDripsExternal(
