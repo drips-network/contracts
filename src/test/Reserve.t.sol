@@ -8,46 +8,6 @@ import {
     ERC20PresetFixedSupply
 } from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
-contract ReserveUser {
-    Reserve public reserve;
-
-    function setReserve(Reserve reserve_) public {
-        reserve = reserve_;
-    }
-
-    function approveReserve(IERC20 token, uint256 amt) public {
-        token.approve(address(reserve), amt);
-    }
-
-    function setPlugin(IERC20 token, IReservePlugin plugin) public {
-        reserve.setPlugin(token, plugin);
-    }
-
-    function deposit(IERC20 token, address from, uint256 amt) public {
-        reserve.deposit(token, from, amt);
-    }
-
-    function withdraw(IERC20 token, address to, uint256 amt) public {
-        reserve.withdraw(token, to, amt);
-    }
-
-    function forceWithdraw(IERC20 token, IReservePlugin plugin, address to, uint256 amt) public {
-        reserve.forceWithdraw(token, plugin, to, amt);
-    }
-
-    function setDeposited(IERC20 token, uint256 amt) public {
-        reserve.setDeposited(token, amt);
-    }
-
-    function addUser(address user) public {
-        reserve.addUser(user);
-    }
-
-    function removeUser(address user) public {
-        reserve.removeUser(user);
-    }
-}
-
 contract TestReservePlugin is IReservePlugin {
     mapping(IERC20 => uint256) public deposited;
 
@@ -74,10 +34,10 @@ contract ReserveTest is Test {
     IReservePlugin public noPlugin;
     TestReservePlugin public plugin1;
     TestReservePlugin public plugin2;
-    ReserveUser public user;
-    ReserveUser public nonUser;
-    ReserveUser public owner;
-    ReserveUser public depositor;
+    address public user;
+    address public nonUser;
+    address public owner;
+    address public depositor;
     IERC20 public token;
     IERC20 public otherToken;
 
@@ -87,40 +47,42 @@ contract ReserveTest is Test {
     bytes public constant ERROR_WITHDRAWAL_BALANCE = "Reserve: withdrawal over balance";
 
     function setUp() public {
-        user = new ReserveUser();
-        nonUser = new ReserveUser();
-        owner = new ReserveUser();
-        depositor = new ReserveUser();
-        reserve = new Reserve(address(owner));
+        user = address(1);
+        nonUser = address(2);
+        owner = address(3);
+        depositor = address(4);
+        reserve = new Reserve(owner);
         noPlugin = reserve.NO_PLUGIN();
         plugin1 = new TestReservePlugin();
         plugin2 = new TestReservePlugin();
 
-        owner.setReserve(reserve);
-        user.setReserve(reserve);
-        nonUser.setReserve(reserve);
-        depositor.setReserve(reserve);
-        owner.addUser(address(user));
+        vm.prank(owner);
+        reserve.addUser(user);
 
         token = new ERC20PresetFixedSupply("token", "token", 30, address(this));
         otherToken = new ERC20PresetFixedSupply("otherToken", "otherToken", 30, address(this));
-        token.transfer(address(depositor), 10);
-        otherToken.transfer(address(depositor), 2);
+        token.transfer(depositor, 10);
+        otherToken.transfer(depositor, 2);
     }
 
-    function setPlugin(ReserveUser reserveUser, IERC20 forToken, IReservePlugin plugin) public {
-        reserveUser.setPlugin(forToken, plugin);
+    function approveReserve(address approver, IERC20 forToken, uint256 amt) public {
+        vm.prank(approver);
+        forToken.approve(address(reserve), amt);
+    }
+
+    function setPlugin(address reserveUser, IERC20 forToken, IReservePlugin plugin) public {
+        vm.prank(reserveUser);
+        reserve.setPlugin(forToken, plugin);
         assertEq(address(reserve.plugins(forToken)), address(plugin), "New plugin not set");
     }
 
-    function deposit(ReserveUser reserveUser, IERC20 forToken, ReserveUser from, uint256 amt)
-        public
-    {
+    function deposit(address reserveUser, IERC20 forToken, address from, uint256 amt) public {
         uint256 deposited = reserve.deposited(forToken);
-        uint256 userBalance = forToken.balanceOf(address(from));
-        from.approveReserve(forToken, amt);
+        uint256 userBalance = forToken.balanceOf(from);
+        approveReserve(from, forToken, amt);
 
-        reserveUser.deposit(forToken, address(from), amt);
+        vm.prank(reserveUser);
+        reserve.deposit(forToken, from, amt);
 
         string memory details = "after deposit";
         assertUserBalance(forToken, from, userBalance - amt, details);
@@ -128,25 +90,25 @@ contract ReserveTest is Test {
     }
 
     function assertDepositReverts(
-        ReserveUser reserveUser,
+        address reserveUser,
         IERC20 forToken,
-        ReserveUser from,
+        address from,
         uint256 amt,
         bytes memory expectedReason
     ) public {
-        from.approveReserve(forToken, amt);
+        approveReserve(from, forToken, amt);
         vm.expectRevert(expectedReason);
-        reserveUser.deposit(forToken, address(from), amt);
-        from.approveReserve(forToken, 0);
+        vm.prank(reserveUser);
+        reserve.deposit(forToken, from, amt);
+        approveReserve(from, forToken, 0);
     }
 
-    function withdraw(ReserveUser reserveUser, IERC20 forToken, ReserveUser to, uint256 amt)
-        public
-    {
+    function withdraw(address reserveUser, IERC20 forToken, address to, uint256 amt) public {
         uint256 deposited = reserve.deposited(forToken);
-        uint256 userBalance = forToken.balanceOf(address(to));
+        uint256 userBalance = forToken.balanceOf(to);
 
-        reserveUser.withdraw(forToken, address(to), amt);
+        vm.prank(reserveUser);
+        reserve.withdraw(forToken, to, amt);
 
         string memory details = "after withdrawal";
         assertUserBalance(forToken, to, userBalance + amt, details);
@@ -154,28 +116,30 @@ contract ReserveTest is Test {
     }
 
     function assertWithdrawReverts(
-        ReserveUser reserveUser,
+        address reserveUser,
         IERC20 forToken,
-        ReserveUser to,
+        address to,
         uint256 amt,
         bytes memory expectedReason
     ) public {
+        vm.prank(reserveUser);
         vm.expectRevert(expectedReason);
-        reserveUser.withdraw(forToken, address(to), amt);
+        reserve.withdraw(forToken, to, amt);
     }
 
     function forceWithdraw(
-        ReserveUser reserveUser,
+        address reserveUser,
         IERC20 forToken,
         IReservePlugin plugin,
-        ReserveUser to,
+        address to,
         uint256 amt
     ) public {
         uint256 deposited = reserve.deposited(forToken);
         uint256 reserveBalance = forToken.balanceOf(address(reserve));
-        uint256 userBalance = forToken.balanceOf(address(to));
+        uint256 userBalance = forToken.balanceOf(to);
 
-        reserveUser.forceWithdraw(forToken, plugin, address(to), amt);
+        vm.prank(reserveUser);
+        reserve.forceWithdraw(forToken, plugin, to, amt);
 
         string memory details = "after force withdrawal";
         assertUserBalance(forToken, to, userBalance + amt, details);
@@ -184,24 +148,25 @@ contract ReserveTest is Test {
     }
 
     function assertForceWithdrawReverts(
-        ReserveUser reserveUser,
+        address reserveUser,
         IERC20 forToken,
         IReservePlugin plugin,
-        ReserveUser to,
+        address to,
         uint256 amt,
         bytes memory expectedReason
     ) public {
+        vm.prank(reserveUser);
         vm.expectRevert(expectedReason);
-        reserveUser.forceWithdraw(forToken, plugin, address(to), amt);
+        reserve.forceWithdraw(forToken, plugin, to, amt);
     }
 
     function assertUserBalance(
         IERC20 forToken,
-        ReserveUser forUser,
+        address forUser,
         uint256 expected,
         string memory details
     ) public {
-        uint256 actual = forToken.balanceOf(address(forUser));
+        uint256 actual = forToken.balanceOf(forUser);
         assertEq(actual, expected, concat("Invalid user balance ", details));
     }
 
@@ -233,34 +198,34 @@ contract ReserveTest is Test {
         return string(bytes.concat(bytes(str1), bytes(str2)));
     }
 
-    function addUser(ReserveUser currOwner, ReserveUser addedUser) public {
-        address userAddr = address(addedUser);
-        currOwner.addUser(userAddr);
-        assertTrue(reserve.isUser(userAddr), "User not added");
+    function addUser(address currOwner, address addedUser) public {
+        vm.prank(currOwner);
+        reserve.addUser(addedUser);
+        assertTrue(reserve.isUser(addedUser), "User not added");
     }
 
-    function assertAddUserReverts(
-        ReserveUser currOwner,
-        ReserveUser addedUser,
-        bytes memory expectedReason
-    ) public {
+    function assertAddUserReverts(address currOwner, address addedUser, bytes memory expectedReason)
+        public
+    {
         vm.expectRevert(expectedReason);
-        currOwner.addUser(address(addedUser));
+        vm.prank(currOwner);
+        reserve.addUser(addedUser);
     }
 
-    function removeUser(ReserveUser currOwner, ReserveUser removedUser) public {
-        address userAddr = address(removedUser);
-        currOwner.removeUser(userAddr);
-        assertTrue(!reserve.isUser(userAddr), "User not removed");
+    function removeUser(address currOwner, address removedUser) public {
+        vm.prank(currOwner);
+        reserve.removeUser(removedUser);
+        assertTrue(!reserve.isUser(removedUser), "User not removed");
     }
 
     function assertRemoveUserReverts(
-        ReserveUser currOwner,
-        ReserveUser removedUser,
+        address currOwner,
+        address removedUser,
         bytes memory expectedReason
     ) public {
+        vm.prank(currOwner);
         vm.expectRevert(expectedReason);
-        currOwner.removeUser(address(removedUser));
+        reserve.removeUser(removedUser);
     }
 
     function testPluginCanBeSet() public {
@@ -313,8 +278,9 @@ contract ReserveTest is Test {
     }
 
     function testRejectsNotOwnerSettingDrips() public {
+        vm.prank(user);
         vm.expectRevert(ERROR_NOT_OWNER);
-        user.setPlugin(token, plugin1);
+        reserve.setPlugin(token, plugin1);
     }
 
     function testUserDepositsAndWithdraws() public {
@@ -324,15 +290,17 @@ contract ReserveTest is Test {
 
     function testDepositFromReserveReverts() public {
         token.transfer(address(reserve), 1);
+        vm.prank(user);
         vm.expectRevert(ERROR_DEPOSIT_SELF);
-        user.deposit(token, address(reserve), 1);
+        reserve.deposit(token, address(reserve), 1);
     }
 
     function testDepositFromPluginReverts() public {
         setPlugin(owner, token, plugin1);
         token.transfer(address(plugin1), 1);
+        vm.prank(user);
         vm.expectRevert(ERROR_DEPOSIT_SELF);
-        user.deposit(token, address(plugin1), 1);
+        reserve.deposit(token, address(plugin1), 1);
     }
 
     function testRejectsWithdrawalOverBalance() public {
@@ -376,14 +344,16 @@ contract ReserveTest is Test {
 
     function testSetDeposited() public {
         deposit(user, token, depositor, 2);
-        owner.setDeposited(token, 3);
+        vm.prank(owner);
+        reserve.setDeposited(token, 3);
         assertDeposited(token, 3, "after setting deposited");
         assertReserveBalance(token, 2, "after setting deposited");
     }
 
     function testRejectNotOwnerForceSettingDeposited() public {
+        vm.prank(user);
         vm.expectRevert(ERROR_NOT_OWNER);
-        user.setDeposited(token, 2);
+        reserve.setDeposited(token, 2);
     }
 
     function testForceWithdraw() public {
@@ -399,7 +369,8 @@ contract ReserveTest is Test {
         assertPluginBalance(plugin1, token, 3);
         address beneficiary = address(0x1234);
 
-        owner.forceWithdraw(token, plugin1, beneficiary, 2);
+        vm.prank(owner);
+        reserve.forceWithdraw(token, plugin1, beneficiary, 2);
 
         assertEq(token.balanceOf(beneficiary), 2, "Invalid beneficiary balance");
         assertDeposited(token, 3, "after force withdrawal");
@@ -414,7 +385,8 @@ contract ReserveTest is Test {
         assertPluginBalance(plugin1, token, 3);
         address beneficiary = address(0x1234);
 
-        owner.forceWithdraw(token, plugin1, beneficiary, 2);
+        vm.prank(owner);
+        reserve.forceWithdraw(token, plugin1, beneficiary, 2);
 
         assertEq(token.balanceOf(beneficiary), 2, "Invalid beneficiary balance");
         assertPluginDeposited(plugin1, token, 1);
@@ -434,7 +406,7 @@ contract ReserveTest is Test {
     }
 
     function testTokensDontMix() public {
-        uint256 tokenBalance = token.balanceOf(address(depositor));
+        uint256 tokenBalance = token.balanceOf(depositor);
 
         deposit(user, token, depositor, 1);
 
