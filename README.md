@@ -150,6 +150,19 @@ export NFT_DRIVER_ADMIN="<ADDRESS>"
 # Address of the NFTDriver logic contract to use in `NFT_DRIVER` when it's deployed.
 # If not set, a new instance is deployed and a new app ID is registered for `NFT_DRIVER`.
 export NFT_DRIVER_LOGIC="<ADDRESS>"
+
+# OPTIONAL
+# Address of ImmutableSplitsDriver to use. If not set, a new instance is deployed for `DRIPS_HUB`.
+export SPLITS_DRIVER="<ADDRESS>"
+
+# OPTIONAL
+# Address of the ImmutableSplitsDriver admin to set. If not set, `GOVERNANCE` is used.
+export SPLITS_DRIVER_ADMIN="<ADDRESS>"
+
+# OPTIONAL
+# Address of the ImmutableSplitsDriver logic contract to use in `SPLITS_DRIVER` when it's deployed.
+# If not set, a new instance is deployed and a new app ID is registered for `SPLITS_DRIVER`.
+export SPLITS_DRIVER_LOGIC="<ADDRESS>"
 ```
 
 Run deployment:

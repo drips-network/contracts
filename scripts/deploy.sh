@@ -22,6 +22,20 @@ send() {
     cast send $WALLET_ARGS "$2" "$3" "${@:4}"
 }
 
+assertIsDriver() {
+    local DRIVER_ID=$(cast call "$2" 'driverId()(uint32)')
+    local DRIVER_ID_ADDR=$(cast call "$DRIPS_HUB" 'driverAddress(uint32)(address)' "$DRIVER_ID")
+    if [ $(cast --to-checksum-address "$2") != "$DRIVER_ID_ADDR" ]; then
+        echo
+        echo "$1 not registered as a driver in DripsHub"
+        echo "DripsHub address: $DRIPS_HUB"
+        echo "$1 ID: $DRIVER_ID"
+        echo "$1 address: $DRIVER"
+        echo "Driver address registered under ID $DRIVER_ID: $DRIVER_ID_ADDR"
+        exit 2
+    fi
+}
+
 # Set up the defaults
 NETWORK=$(cast chain)
 DEPLOYMENT_JSON=${DEPLOYMENT_JSON:-./deployment_$NETWORK.json}
@@ -31,6 +45,7 @@ RESERVE_OWNER=$(cast --to-checksum-address "${RESERVE_OWNER:-$GOVERNANCE}")
 DRIPS_HUB_ADMIN=$(cast --to-checksum-address "${DRIPS_HUB_ADMIN:-$GOVERNANCE}")
 ADDRESS_DRIVER_ADMIN=$(cast --to-checksum-address "${ADDRESS_DRIVER_ADMIN:-$GOVERNANCE}")
 NFT_DRIVER_ADMIN=$(cast --to-checksum-address "${NFT_DRIVER_ADMIN:-$GOVERNANCE}")
+SPLITS_DRIVER_ADMIN=$(cast --to-checksum-address "${SPLITS_DRIVER_ADMIN:-$GOVERNANCE}")
 CYCLE_SECS=${CYCLE_SECS:-$(( 7 * 24 * 60 * 60 ))} # 1 week
 if [ -n "$ETHERSCAN_API_KEY" ]; then
     VERIFY="--verify"
@@ -40,30 +55,33 @@ fi
 
 # Print the configuration
 print_title "Deployment Config"
-echo "Network:                  $NETWORK"
-echo "Deployer address:         $DEPLOYER"
-echo "Gas price:                ${ETH_GAS_PRICE:-use the default}"
+echo "Network:                      $NETWORK"
+echo "Deployer address:             $DEPLOYER"
+echo "Gas price:                    ${ETH_GAS_PRICE:-use the default}"
 if [ -n "$ETHERSCAN_API_KEY" ]; then
     ETHERSCAN_API_KEY_PROVIDED="provided"
 else
     ETHERSCAN_API_KEY_PROVIDED="not provided, contracts won't be verified on etherscan"
 fi
-echo "Etherscan API key:        $ETHERSCAN_API_KEY_PROVIDED"
-echo "Deployment JSON:          $DEPLOYMENT_JSON"
+echo "Etherscan API key:            $ETHERSCAN_API_KEY_PROVIDED"
+echo "Deployment JSON:              $DEPLOYMENT_JSON"
 TO_DEPLOY="to be deployed"
-echo "Caller:                   ${CALLER:-$TO_DEPLOY}"
-echo "Reserve:                  ${RESERVE:-$TO_DEPLOY}"
-echo "Reserve owner:            $RESERVE_OWNER"
-echo "DripsHub:                 ${DRIPS_HUB:-$TO_DEPLOY}"
-echo "DripsHub admin:           $DRIPS_HUB_ADMIN"
-echo "DripsHub logic:           ${DRIPS_HUB_LOGIC:-$TO_DEPLOY}"
-echo "DripsHub cycle seconds:   $CYCLE_SECS"
-echo "AddressDriver:            ${ADDRESS_DRIVER:-$TO_DEPLOY}"
-echo "AddressDriver admin:      $ADDRESS_DRIVER_ADMIN"
-echo "AddressDriver logic:      ${ADDRESS_DRIVER_LOGIC:-$TO_DEPLOY}"
-echo "NFTDriver:                ${NFT_DRIVER:-$TO_DEPLOY}"
-echo "NFTDriver admin:          $NFT_DRIVER_ADMIN"
-echo "NFTDriver logic:          ${NFT_DRIVER_LOGIC:-$TO_DEPLOY}"
+echo "Caller:                       ${CALLER:-$TO_DEPLOY}"
+echo "Reserve:                      ${RESERVE:-$TO_DEPLOY}"
+echo "Reserve owner:                $RESERVE_OWNER"
+echo "DripsHub:                     ${DRIPS_HUB:-$TO_DEPLOY}"
+echo "DripsHub admin:               $DRIPS_HUB_ADMIN"
+echo "DripsHub logic:               ${DRIPS_HUB_LOGIC:-$TO_DEPLOY}"
+echo "DripsHub cycle seconds:       $CYCLE_SECS"
+echo "AddressDriver:                ${ADDRESS_DRIVER:-$TO_DEPLOY}"
+echo "AddressDriver admin:          $ADDRESS_DRIVER_ADMIN"
+echo "AddressDriver logic:          ${ADDRESS_DRIVER_LOGIC:-$TO_DEPLOY}"
+echo "NFTDriver:                    ${NFT_DRIVER:-$TO_DEPLOY}"
+echo "NFTDriver admin:              $NFT_DRIVER_ADMIN"
+echo "NFTDriver logic:              ${NFT_DRIVER_LOGIC:-$TO_DEPLOY}"
+echo "ImmutableSplitsDriver:        ${SPLITS_DRIVER:-$TO_DEPLOY}"
+echo "ImmutableSplitsDriver admin:  $SPLITS_DRIVER_ADMIN"
+echo "ImmutableSplitsDriver logic:  ${SPLITS_DRIVER_LOGIC:-$TO_DEPLOY}"
 echo
 
 read -p "Proceed with deployment? [y/n] " -n 1 -r
@@ -110,17 +128,7 @@ if [ -z "$ADDRESS_DRIVER" ]; then
     create "AddressDriver" 'src/Upgradeable.sol:Proxy' "$ADDRESS_DRIVER_LOGIC" "$ADDRESS_DRIVER_ADMIN"
     ADDRESS_DRIVER=$DEPLOYED_ADDR
 fi
-ADDRESS_DRIVER_ID=$(cast call "$ADDRESS_DRIVER" 'driverId()(uint32)')
-ADDRESS_DRIVER_ID_ADDR=$(cast call "$DRIPS_HUB" 'driverAddress(uint32)(address)' "$ADDRESS_DRIVER_ID")
-if [ $(cast --to-checksum-address "$ADDRESS_DRIVER") != "$ADDRESS_DRIVER_ID_ADDR" ]; then
-    echo
-    echo "AddressDriver not registered as a driver in DripsHub"
-    echo "DripsHub address: $DRIPS_HUB"
-    echo "AddressDriver ID: $ADDRESS_DRIVER_ID"
-    echo "AddressDriver address: $ADDRESS_DRIVER"
-    echo "Driver address registered under the AddressDriver ID: $ADDRESS_DRIVER_ID_ADDR"
-    exit 2
-fi
+assertIsDriver "AddressDriver" "$ADDRESS_DRIVER"
 
 if [ -z "$NFT_DRIVER" ]; then
     if [ -z "$NFT_DRIVER_LOGIC" ]; then
@@ -136,17 +144,24 @@ if [ -z "$NFT_DRIVER" ]; then
     create "NFTDriver" 'src/Upgradeable.sol:Proxy' "$NFT_DRIVER_LOGIC" "$NFT_DRIVER_ADMIN"
     NFT_DRIVER=$DEPLOYED_ADDR
 fi
-NFT_DRIVER_ID=$(cast call "$NFT_DRIVER" 'driverId()(uint32)')
-NFT_DRIVER_ID_ADDR=$(cast call "$DRIPS_HUB" 'driverAddress(uint32)(address)' "$NFT_DRIVER_ID")
-if [ $(cast --to-checksum-address "$NFT_DRIVER") != "$NFT_DRIVER_ID_ADDR" ]; then
-    echo
-    echo "NFTDriver not registered as a driver in DripsHub"
-    echo "DripsHub address: $DRIPS_HUB"
-    echo "NFTDriver ID: $NFT_DRIVER_ID"
-    echo "NFTDriver address: $NFT_DRIVER"
-    echo "Driver address registered under the NFTDriver ID: $NFT_DRIVER_ID_ADDR"
-    exit 2
+assertIsDriver "NFTDriver" "$NFT_DRIVER"
+
+if [ -z "$SPLITS_DRIVER" ]; then
+    if [ -z "$SPLITS_DRIVER_LOGIC" ]; then
+        NONCE=$(($(cast nonce $DEPLOYER) + 2))
+        SPLITS_DRIVER=$(cast compute-address $DEPLOYER --nonce $NONCE | cut -d " " -f 3)
+        SPLITS_DRIVER_ID=$(cast call "$DRIPS_HUB" 'nextDriverId()(uint32)')
+        send "Registering ImmutableSplitsDriver in DripsHub" \
+            "$DRIPS_HUB" 'registerDriver(address)(uint32)' "$SPLITS_DRIVER"
+        create "ImmutableSplitsDriver logic" 'src/ImmutableSplitsDriver.sol:ImmutableSplitsDriver' \
+            "$DRIPS_HUB" "$SPLITS_DRIVER_ID"
+        SPLITS_DRIVER_LOGIC=$DEPLOYED_ADDR
+    fi
+    create "ImmutableSplitsDriver" 'src/Upgradeable.sol:Proxy' \
+        "$SPLITS_DRIVER_LOGIC" "$SPLITS_DRIVER_ADMIN"
+    SPLITS_DRIVER=$DEPLOYED_ADDR
 fi
+assertIsDriver "ImmutableSplitsDriver" "$SPLITS_DRIVER"
 
 # Configuring the contracts
 if [ $(cast call "$RESERVE" 'isUser(address)(bool)' "$DRIPS_HUB") = "false" ]; then
@@ -173,19 +188,22 @@ echo "Reserve owner:    $(cast call "$RESERVE" 'owner()(address)')"
 print_title "Deployment JSON: $DEPLOYMENT_JSON"
 tee "$DEPLOYMENT_JSON" <<EOF
 {
-    "Network":                  "$NETWORK",
-    "Deployer address":         "$DEPLOYER",
-    "Caller":                   "$CALLER",
-    "Reserve":                  "$RESERVE",
-    "DripsHub":                 "$DRIPS_HUB",
-    "DripsHub logic":           "$DRIPS_HUB_LOGIC",
-    "DripsHub cycle seconds":   "$CYCLE_SECS",
-    "AddressDriver":            "$ADDRESS_DRIVER",
-    "AddressDriver logic":      "$ADDRESS_DRIVER_LOGIC",
-    "AddressDriver ID":         "$ADDRESS_DRIVER_ID",
-    "NFTDriver":                "$NFT_DRIVER",
-    "NFTDriver logic":          "$NFT_DRIVER_LOGIC",
-    "NFTDriver ID":             "$NFT_DRIVER_ID",
-    "Commit hash":              "$(git rev-parse HEAD)"
+    "Network":                      "$NETWORK",
+    "Deployer address":             "$DEPLOYER",
+    "Caller":                       "$CALLER",
+    "Reserve":                      "$RESERVE",
+    "DripsHub":                     "$DRIPS_HUB",
+    "DripsHub logic":               "$DRIPS_HUB_LOGIC",
+    "DripsHub cycle seconds":       "$CYCLE_SECS",
+    "AddressDriver":                "$ADDRESS_DRIVER",
+    "AddressDriver logic":          "$ADDRESS_DRIVER_LOGIC",
+    "AddressDriver ID":             "$ADDRESS_DRIVER_ID",
+    "NFTDriver":                    "$NFT_DRIVER",
+    "NFTDriver logic":              "$NFT_DRIVER_LOGIC",
+    "NFTDriver ID":                 "$NFT_DRIVER_ID",
+    "ImmutableSplitsDriver":        "$SPLITS_DRIVER",
+    "ImmutableSplitsDriver logic":  "$SPLITS_DRIVER_LOGIC",
+    "ImmutableSplitsDriver ID":     "$SPLITS_DRIVER_ID",
+    "Commit hash":                  "$(git rev-parse HEAD)"
 }
 EOF
