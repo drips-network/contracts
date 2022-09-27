@@ -86,6 +86,19 @@ contract AddressDriverTest is Test {
         assertEq(erc20.balanceOf(address(this)), balance + amt, "Invalid balance");
     }
 
+    function testCollectTransfersFundsToTheProvidedAddress() public {
+        uint128 amt = 5;
+        vm.prank(user);
+        driver.give(thisId, erc20, amt);
+        dripsHub.split(thisId, erc20, new SplitsReceiver[](0));
+        address transferTo = address(1234);
+
+        uint128 collected = driver.collect(erc20, transferTo);
+
+        assertEq(collected, amt, "Invalid collected");
+        assertEq(erc20.balanceOf(transferTo), amt, "Invalid balance");
+    }
+
     function testGive() public {
         uint128 amt = 5;
         uint256 balance = erc20.balanceOf(address(this));
@@ -123,6 +136,20 @@ contract AddressDriverTest is Test {
         assertEq(erc20.balanceOf(address(user)), balance + amt, "Invalid balance after withdrawal");
         assertEq(newBalance, 0, "Invalid drips balance after withdrawal");
         assertEq(realBalanceDelta, -int128(amt), "Invalid drips balance delta after withdrawal");
+    }
+
+    function testSetDripsDecreasingBalanceTransfersFundsToTheProvidedAddress() public {
+        uint128 amt = 5;
+        DripsReceiver[] memory receivers = new DripsReceiver[](0);
+        driver.setDrips(erc20, receivers, int128(amt), receivers, address(this));
+        address transferTo = address(1234);
+
+        (uint128 newBalance, int128 realBalanceDelta) =
+            driver.setDrips(erc20, receivers, -int128(amt), receivers, transferTo);
+
+        assertEq(erc20.balanceOf(transferTo), amt, "Invalid balance");
+        assertEq(newBalance, 0, "Invalid drips balance");
+        assertEq(realBalanceDelta, -int128(amt), "Invalid drips balance delta");
     }
 
     function testSetSplits() public {
