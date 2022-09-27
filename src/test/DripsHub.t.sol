@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.15;
 
-import {AddressDriverUser} from "./AddressDriverUser.t.sol";
-import {AddressDriver} from "../AddressDriver.sol";
 import {
     SplitsReceiver, DripsConfigImpl, DripsHub, DripsHistory, DripsReceiver
 } from "../DripsHub.sol";
@@ -24,16 +22,16 @@ contract DripsHubTest is Test {
     // Keys is user ID
     mapping(uint256 => SplitsReceiver[]) internal currSplitsReceivers;
 
-    AddressDriver internal addressDriver;
-
-    AddressDriverUser internal user;
-    AddressDriverUser internal receiver;
-    AddressDriverUser internal user1;
-    AddressDriverUser internal receiver1;
-    AddressDriverUser internal user2;
-    AddressDriverUser internal receiver2;
-    AddressDriverUser internal receiver3;
+    address internal driver;
     address internal admin;
+
+    uint256 internal user;
+    uint256 internal receiver;
+    uint256 internal user1;
+    uint256 internal receiver1;
+    uint256 internal user2;
+    uint256 internal receiver2;
+    uint256 internal receiver3;
 
     bytes internal constant ERROR_NOT_DRIVER = "Callable only by the driver";
     bytes internal constant ERROR_NOT_ADMIN = "Caller is not the admin";
@@ -41,96 +39,77 @@ contract DripsHubTest is Test {
     bytes internal constant ERROR_BALANCE_TOO_HIGH = "Total balance too high";
 
     function setUp() public {
-        defaultErc20 = new ERC20PresetFixedSupply("test", "test", type(uint136).max, address(this));
-        otherErc20 = new ERC20PresetFixedSupply("other", "other", type(uint136).max, address(this));
+        driver = address(1);
+        admin = address(2);
+
+        defaultErc20 = new ERC20PresetFixedSupply("test", "test", type(uint136).max, driver);
+        otherErc20 = new ERC20PresetFixedSupply("other", "other", type(uint136).max, driver);
         Reserve reserve = new Reserve(address(this));
         DripsHub hubLogic = new DripsHub(10, reserve);
-        dripsHub = DripsHub(address(new Proxy(hubLogic, address(this))));
+        dripsHub = DripsHub(address(new Proxy(hubLogic, admin)));
         reserve.addUser(address(dripsHub));
-        uint32 addressDriverId = dripsHub.registerDriver(address(this));
-        addressDriver = new AddressDriver(dripsHub, address(0), addressDriverId);
-        dripsHub.updateDriverAddress(addressDriverId, address(addressDriver));
-        admin = address(1);
-        dripsHub.changeAdmin(admin);
-        user = createUser();
-        user1 = createUser();
-        user2 = createUser();
-        receiver = createUser();
-        receiver1 = createUser();
-        receiver2 = createUser();
-        receiver3 = createUser();
-        // Sort receivers by address
-        if (receiver1 > receiver2) {
-            (receiver1, receiver2) = (receiver2, receiver1);
-        }
-        if (receiver2 > receiver3) {
-            (receiver2, receiver3) = (receiver3, receiver2);
-        }
-        if (receiver1 > receiver2) {
-            (receiver1, receiver2) = (receiver2, receiver1);
-        }
-    }
 
-    function createUser() internal returns (AddressDriverUser newUser) {
-        newUser = new AddressDriverUser(addressDriver);
-        defaultErc20.transfer(address(newUser), defaultErc20.totalSupply() / 100);
-        otherErc20.transfer(address(newUser), otherErc20.totalSupply() / 100);
+        uint32 driverId = dripsHub.registerDriver(driver);
+        uint256 baseUserId = driverId << 224;
+        user = baseUserId + 1;
+        user1 = baseUserId + 2;
+        user2 = baseUserId + 3;
+        receiver = baseUserId + 4;
+        receiver1 = baseUserId + 5;
+        receiver2 = baseUserId + 6;
+        receiver3 = baseUserId + 7;
+
+        vm.prank(driver);
+        defaultErc20.approve(address(reserve), UINT256_MAX);
+        vm.prank(driver);
+        otherErc20.approve(address(reserve), UINT256_MAX);
     }
 
     function skipToCycleEnd() internal {
         skip(dripsHub.cycleSecs() - (block.timestamp % dripsHub.cycleSecs()));
     }
 
-    function calcUserId(uint32 driverId, uint224 userIdPart) internal view returns (uint256) {
-        return (uint256(driverId) << dripsHub.DRIVER_ID_OFFSET()) | userIdPart;
-    }
-
-    function loadDrips(AddressDriverUser forUser)
-        internal
-        returns (DripsReceiver[] memory currReceivers)
-    {
+    function loadDrips(uint256 forUser) internal returns (DripsReceiver[] memory currReceivers) {
         return loadDrips(defaultErc20, forUser);
     }
 
-    function loadDrips(IERC20 erc20, AddressDriverUser forUser)
+    function loadDrips(IERC20 erc20, uint256 forUser)
         internal
         returns (DripsReceiver[] memory currReceivers)
     {
-        currReceivers = drips[forUser.userId()][erc20];
+        currReceivers = drips[forUser][erc20];
         assertDrips(erc20, forUser, currReceivers);
     }
 
-    function storeDrips(AddressDriverUser forUser, DripsReceiver[] memory newReceivers) internal {
+    function storeDrips(uint256 forUser, DripsReceiver[] memory newReceivers) internal {
         storeDrips(defaultErc20, forUser, newReceivers);
     }
 
-    function storeDrips(
-        IERC20 erc20,
-        AddressDriverUser forUser,
-        DripsReceiver[] memory newReceivers
-    ) internal {
+    function storeDrips(IERC20 erc20, uint256 forUser, DripsReceiver[] memory newReceivers)
+        internal
+    {
         assertDrips(erc20, forUser, newReceivers);
-        delete drips[forUser.userId()][erc20];
+        delete drips[forUser][erc20];
         for (uint256 i = 0; i < newReceivers.length; i++) {
-            drips[forUser.userId()][erc20].push(newReceivers[i]);
+            drips[forUser][erc20].push(newReceivers[i]);
         }
     }
 
-    function getCurrSplitsReceivers(AddressDriverUser forUser)
+    function getCurrSplitsReceivers(uint256 forUser)
         internal
         returns (SplitsReceiver[] memory currSplits)
     {
-        currSplits = currSplitsReceivers[forUser.userId()];
+        currSplits = currSplitsReceivers[forUser];
         assertSplits(forUser, currSplits);
     }
 
-    function setCurrSplitsReceivers(AddressDriverUser forUser, SplitsReceiver[] memory newReceivers)
+    function setCurrSplitsReceivers(uint256 forUser, SplitsReceiver[] memory newReceivers)
         internal
     {
         assertSplits(forUser, newReceivers);
-        delete currSplitsReceivers[forUser.userId()];
+        delete currSplitsReceivers[forUser];
         for (uint256 i = 0; i < newReceivers.length; i++) {
-            currSplitsReceivers[forUser.userId()].push(newReceivers[i]);
+            currSplitsReceivers[forUser].push(newReceivers[i]);
         }
     }
 
@@ -138,37 +117,37 @@ contract DripsHubTest is Test {
         list = new DripsReceiver[](0);
     }
 
-    function dripsReceivers(AddressDriverUser dripsReceiver, uint128 amtPerSec)
+    function dripsReceivers(uint256 dripsReceiver, uint128 amtPerSec)
         internal
         view
         returns (DripsReceiver[] memory list)
     {
         list = new DripsReceiver[](1);
         list[0] = DripsReceiver(
-            dripsReceiver.userId(),
+            dripsReceiver,
             DripsConfigImpl.create(uint192(amtPerSec * dripsHub.AMT_PER_SEC_MULTIPLIER()), 0, 0)
         );
     }
 
     function dripsReceivers(
-        AddressDriverUser dripsReceiver1,
+        uint256 dripsReceiver1,
         uint128 amtPerSec1,
-        AddressDriverUser dripsReceiver2,
+        uint256 dripsReceiver2,
         uint128 amtPerSec2
     ) internal view returns (DripsReceiver[] memory list) {
         list = new DripsReceiver[](2);
         list[0] = DripsReceiver(
-            dripsReceiver1.userId(),
+            dripsReceiver1,
             DripsConfigImpl.create(uint192(amtPerSec1 * dripsHub.AMT_PER_SEC_MULTIPLIER()), 0, 0)
         );
         list[1] = DripsReceiver(
-            dripsReceiver2.userId(),
+            dripsReceiver2,
             DripsConfigImpl.create(uint192(amtPerSec2 * dripsHub.AMT_PER_SEC_MULTIPLIER()), 0, 0)
         );
     }
 
     function setDrips(
-        AddressDriverUser forUser,
+        uint256 forUser,
         uint128 balanceFrom,
         uint128 balanceTo,
         DripsReceiver[] memory newReceivers
@@ -178,54 +157,49 @@ contract DripsHubTest is Test {
 
     function setDrips(
         IERC20 erc20,
-        AddressDriverUser forUser,
+        uint256 forUser,
         uint128 balanceFrom,
         uint128 balanceTo,
         DripsReceiver[] memory newReceivers
     ) internal {
         int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
-        uint256 expectedBalance = uint256(int256(erc20.balanceOf(address(forUser))) - balanceDelta);
+        uint256 balanceBefore = balance(erc20);
         DripsReceiver[] memory currReceivers = loadDrips(erc20, forUser);
 
+        vm.prank(driver);
         (uint128 newBalance, int128 realBalanceDelta) =
-            forUser.setDrips(erc20, currReceivers, balanceDelta, newReceivers, address(forUser));
+            dripsHub.setDrips(forUser, erc20, currReceivers, balanceDelta, newReceivers);
 
         storeDrips(erc20, forUser, newReceivers);
         assertEq(newBalance, balanceTo, "Invalid drips balance");
         assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
-        (,, uint32 updateTime, uint128 actualBalance,) =
-            dripsHub.dripsState(forUser.userId(), erc20);
+        (,, uint32 updateTime, uint128 actualBalance,) = dripsHub.dripsState(forUser, erc20);
         assertEq(updateTime, block.timestamp, "Invalid new last update time");
         assertEq(balanceTo, actualBalance, "Invalid drips balance");
         assertEq(balanceTo, actualBalance, "Invalid drips balance");
-        assertBalance(erc20, forUser, expectedBalance);
+        assertBalance(erc20, uint256(int256(balanceBefore) - balanceDelta));
     }
 
-    function assertDrips(
-        IERC20 erc20,
-        AddressDriverUser forUser,
-        DripsReceiver[] memory currReceivers
-    ) internal {
-        (bytes32 actual,,,,) = dripsHub.dripsState(forUser.userId(), erc20);
+    function assertDrips(IERC20 erc20, uint256 forUser, DripsReceiver[] memory currReceivers)
+        internal
+    {
+        (bytes32 actual,,,,) = dripsHub.dripsState(forUser, erc20);
         bytes32 expected = dripsHub.hashDrips(currReceivers);
         assertEq(actual, expected, "Invalid drips configuration");
     }
 
-    function assertDripsBalance(AddressDriverUser forUser, uint128 expected) internal {
-        uint128 balance = dripsHub.balanceAt(
-            forUser.userId(), defaultErc20, loadDrips(forUser), uint32(block.timestamp)
-        );
-        assertEq(balance, expected, "Invaild drips balance");
+    function assertDripsBalance(uint256 forUser, uint128 expected) internal {
+        uint128 actual =
+            dripsHub.balanceAt(forUser, defaultErc20, loadDrips(forUser), uint32(block.timestamp));
+        assertEq(actual, expected, "Invaild drips balance");
     }
 
-    function changeBalance(AddressDriverUser forUser, uint128 balanceFrom, uint128 balanceTo)
-        internal
-    {
+    function changeBalance(uint256 forUser, uint128 balanceFrom, uint128 balanceTo) internal {
         setDrips(forUser, balanceFrom, balanceTo, loadDrips(forUser));
     }
 
     function assertSetReceiversReverts(
-        AddressDriverUser forUser,
+        uint256 forUser,
         DripsReceiver[] memory newReceivers,
         bytes memory expectedReason
     ) internal {
@@ -233,105 +207,105 @@ contract DripsHubTest is Test {
     }
 
     function assertSetDripsReverts(
-        AddressDriverUser forUser,
+        uint256 forUser,
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers,
         bytes memory expectedReason
     ) internal {
+        vm.prank(driver);
         vm.expectRevert(expectedReason);
-        forUser.setDrips(defaultErc20, currReceivers, balanceDelta, newReceivers, address(forUser));
+        dripsHub.setDrips(forUser, defaultErc20, currReceivers, balanceDelta, newReceivers);
     }
 
-    function give(AddressDriverUser fromUser, AddressDriverUser toUser, uint128 amt) internal {
+    function give(uint256 fromUser, uint256 toUser, uint128 amt) internal {
         give(defaultErc20, fromUser, toUser, amt);
     }
 
-    function give(IERC20 erc20, AddressDriverUser fromUser, AddressDriverUser toUser, uint128 amt)
-        internal
-    {
-        uint256 expectedBalance = uint256(erc20.balanceOf(address(fromUser)) - amt);
+    function give(IERC20 erc20, uint256 fromUser, uint256 toUser, uint128 amt) internal {
+        uint256 balanceBefore = balance(erc20);
         uint128 expectedSplittable = splittable(toUser, erc20) + amt;
 
-        fromUser.give(toUser.userId(), erc20, amt);
+        vm.prank(driver);
+        dripsHub.give(fromUser, toUser, erc20, amt);
 
-        assertBalance(erc20, fromUser, expectedBalance);
+        assertBalance(erc20, balanceBefore - amt);
         assertSplittable(toUser, erc20, expectedSplittable);
     }
 
     function assertGiveReverts(
-        AddressDriverUser fromUser,
-        AddressDriverUser toUser,
+        uint256 fromUser,
+        uint256 toUser,
         uint128 amt,
         bytes memory expectedReason
     ) internal {
-        uint256 userId = toUser.userId();
+        vm.prank(driver);
         vm.expectRevert(expectedReason);
-        fromUser.give(userId, defaultErc20, amt);
+        dripsHub.give(fromUser, toUser, defaultErc20, amt);
     }
 
     function splitsReceivers() internal pure returns (SplitsReceiver[] memory list) {
         list = new SplitsReceiver[](0);
     }
 
-    function splitsReceivers(AddressDriverUser splitsReceiver, uint32 weight)
+    function splitsReceivers(uint256 splitsReceiver, uint32 weight)
         internal
-        view
+        pure
         returns (SplitsReceiver[] memory list)
     {
         list = new SplitsReceiver[](1);
-        list[0] = SplitsReceiver(splitsReceiver.userId(), weight);
+        list[0] = SplitsReceiver(splitsReceiver, weight);
     }
 
     function splitsReceivers(
-        AddressDriverUser splitsReceiver1,
+        uint256 splitsReceiver1,
         uint32 weight1,
-        AddressDriverUser splitsReceiver2,
+        uint256 splitsReceiver2,
         uint32 weight2
-    ) internal view returns (SplitsReceiver[] memory list) {
+    ) internal pure returns (SplitsReceiver[] memory list) {
         list = new SplitsReceiver[](2);
-        list[0] = SplitsReceiver(splitsReceiver1.userId(), weight1);
-        list[1] = SplitsReceiver(splitsReceiver2.userId(), weight2);
+        list[0] = SplitsReceiver(splitsReceiver1, weight1);
+        list[1] = SplitsReceiver(splitsReceiver2, weight2);
     }
 
-    function setSplits(AddressDriverUser forUser, SplitsReceiver[] memory newReceivers) internal {
+    function setSplits(uint256 forUser, SplitsReceiver[] memory newReceivers) internal {
         SplitsReceiver[] memory curr = getCurrSplitsReceivers(forUser);
         assertSplits(forUser, curr);
 
-        forUser.setSplits(newReceivers);
+        vm.prank(driver);
+        dripsHub.setSplits(forUser, newReceivers);
 
         setCurrSplitsReceivers(forUser, newReceivers);
         assertSplits(forUser, newReceivers);
     }
 
     function assertSetSplitsReverts(
-        AddressDriverUser forUser,
+        uint256 forUser,
         SplitsReceiver[] memory newReceivers,
         bytes memory expectedReason
     ) internal {
         SplitsReceiver[] memory curr = getCurrSplitsReceivers(forUser);
         assertSplits(forUser, curr);
+        vm.prank(driver);
         vm.expectRevert(expectedReason);
-        forUser.setSplits(newReceivers);
+        dripsHub.setSplits(forUser, newReceivers);
     }
 
-    function assertSplits(AddressDriverUser forUser, SplitsReceiver[] memory expectedReceivers)
-        internal
-    {
-        bytes32 actual = dripsHub.splitsHash(forUser.userId());
+    function assertSplits(uint256 forUser, SplitsReceiver[] memory expectedReceivers) internal {
+        bytes32 actual = dripsHub.splitsHash(forUser);
         bytes32 expected = dripsHub.hashSplits(expectedReceivers);
         assertEq(actual, expected, "Invalid splits hash");
     }
 
-    function collectAll(AddressDriverUser forUser, uint128 expectedAmt) internal {
+    function collectAll(uint256 forUser, uint128 expectedAmt) internal {
         collectAll(defaultErc20, forUser, expectedAmt, 0);
     }
 
-    function collectAll(IERC20 erc20, AddressDriverUser forUser, uint128 expectedAmt) internal {
+    function collectAll(IERC20 erc20, uint256 forUser, uint128 expectedAmt) internal {
         collectAll(erc20, forUser, expectedAmt, 0);
     }
 
-    function collectAll(AddressDriverUser forUser, uint128 expectedCollected, uint128 expectedSplit)
+    function collectAll(uint256 forUser, uint128 expectedCollected, uint128 expectedSplit)
         internal
     {
         collectAll(defaultErc20, forUser, expectedCollected, expectedSplit);
@@ -339,13 +313,13 @@ contract DripsHubTest is Test {
 
     function collectAll(
         IERC20 erc20,
-        AddressDriverUser forUser,
+        uint256 forUser,
         uint128 expectedCollected,
         uint128 expectedSplit
     ) internal {
-        (uint128 receivable,) = dripsHub.receivableDrips(forUser.userId(), erc20, type(uint32).max);
+        (uint128 receivable,) = dripsHub.receivableDrips(forUser, erc20, type(uint32).max);
         (uint128 received, uint32 receivableCycles) =
-            dripsHub.receiveDrips(forUser.userId(), erc20, type(uint32).max);
+            dripsHub.receiveDrips(forUser, erc20, type(uint32).max);
         assertEq(received, receivable, "Invalid received amount");
         assertEq(receivableCycles, 0, "Non-zero receivable cycles");
 
@@ -355,7 +329,7 @@ contract DripsHubTest is Test {
     }
 
     function receiveDrips(
-        AddressDriverUser forUser,
+        uint256 forUser,
         uint128 expectedReceivedAmt,
         uint32 expectedReceivedCycles
     ) internal {
@@ -363,7 +337,7 @@ contract DripsHubTest is Test {
     }
 
     function receiveDrips(
-        AddressDriverUser forUser,
+        uint256 forUser,
         uint32 maxCycles,
         uint128 expectedReceivedAmt,
         uint32 expectedReceivedCycles,
@@ -377,7 +351,7 @@ contract DripsHubTest is Test {
         assertReceivableDrips(forUser, maxCycles, expectedReceivedAmt, expectedCyclesAfter);
 
         (uint128 receivedAmt, uint32 receivableCycles) =
-            dripsHub.receiveDrips(forUser.userId(), defaultErc20, maxCycles);
+            dripsHub.receiveDrips(forUser, defaultErc20, maxCycles);
 
         assertEq(receivedAmt, expectedReceivedAmt, "Invalid amount received from drips");
         assertEq(receivableCycles, expectedCyclesAfter, "Invalid receivable drips cycles left");
@@ -385,33 +359,29 @@ contract DripsHubTest is Test {
         assertReceivableDrips(forUser, type(uint32).max, expectedAmtAfter, 0);
     }
 
-    function assertReceivableDripsCycles(AddressDriverUser forUser, uint32 expectedCycles)
-        internal
-    {
-        uint32 actualCycles = dripsHub.receivableDripsCycles(forUser.userId(), defaultErc20);
+    function assertReceivableDripsCycles(uint256 forUser, uint32 expectedCycles) internal {
+        uint32 actualCycles = dripsHub.receivableDripsCycles(forUser, defaultErc20);
         assertEq(actualCycles, expectedCycles, "Invalid total receivable drips cycles");
     }
 
     function assertReceivableDrips(
-        AddressDriverUser forUser,
+        uint256 forUser,
         uint32 maxCycles,
         uint128 expectedAmt,
         uint32 expectedCycles
     ) internal {
         (uint128 actualAmt, uint32 actualCycles) =
-            dripsHub.receivableDrips(forUser.userId(), defaultErc20, maxCycles);
+            dripsHub.receivableDrips(forUser, defaultErc20, maxCycles);
         assertEq(actualAmt, expectedAmt, "Invalid receivable amount");
         assertEq(actualCycles, expectedCycles, "Invalid receivable drips cycles");
     }
 
-    function split(AddressDriverUser forUser, uint128 expectedCollectable, uint128 expectedSplit)
-        internal
-    {
+    function split(uint256 forUser, uint128 expectedCollectable, uint128 expectedSplit) internal {
         split(forUser, defaultErc20, expectedCollectable, expectedSplit);
     }
 
     function split(
-        AddressDriverUser forUser,
+        uint256 forUser,
         IERC20 erc20,
         uint128 expectedCollectable,
         uint128 expectedSplit
@@ -421,7 +391,7 @@ contract DripsHubTest is Test {
         uint128 collectableBefore = collectable(forUser, erc20);
 
         (uint128 collectableAmt, uint128 splitAmt) =
-            dripsHub.split(forUser.userId(), erc20, getCurrSplitsReceivers(forUser));
+            dripsHub.split(forUser, erc20, getCurrSplitsReceivers(forUser));
 
         assertEq(collectableAmt, expectedCollectable, "Invalid collectable amount");
         assertEq(splitAmt, expectedSplit, "Invalid split amount");
@@ -429,61 +399,50 @@ contract DripsHubTest is Test {
         assertCollectable(forUser, erc20, collectableBefore + expectedCollectable);
     }
 
-    function splittable(AddressDriverUser forUser, IERC20 erc20)
-        internal
-        view
-        returns (uint128 amt)
-    {
-        return dripsHub.splittable(forUser.userId(), erc20);
+    function splittable(uint256 forUser, IERC20 erc20) internal view returns (uint128 amt) {
+        return dripsHub.splittable(forUser, erc20);
     }
 
-    function assertSplittable(AddressDriverUser forUser, IERC20 erc20, uint256 expected) internal {
+    function assertSplittable(uint256 forUser, IERC20 erc20, uint256 expected) internal {
         uint128 actual = splittable(forUser, erc20);
         assertEq(actual, expected, "Invalid splittable");
     }
 
-    function assertSplitResults(AddressDriverUser forUser, uint256 amt, uint256 expected)
-        internal
-    {
+    function assertSplitResults(uint256 forUser, uint256 amt, uint256 expected) internal {
         uint128 actual =
-            dripsHub.splitResults(forUser.userId(), getCurrSplitsReceivers(forUser), uint128(amt));
+            dripsHub.splitResults(forUser, getCurrSplitsReceivers(forUser), uint128(amt));
         assertEq(actual, expected, "Invalid split results");
     }
 
-    function collect(AddressDriverUser forUser, uint128 expectedAmt) internal {
+    function collect(uint256 forUser, uint128 expectedAmt) internal {
         collect(forUser, defaultErc20, expectedAmt);
     }
 
-    function collect(AddressDriverUser forUser, IERC20 erc20, uint128 expectedAmt) internal {
+    function collect(uint256 forUser, IERC20 erc20, uint128 expectedAmt) internal {
         assertCollectable(forUser, erc20, expectedAmt);
-        uint256 balanceBefore = erc20.balanceOf(address(forUser));
+        uint256 balanceBefore = balance(erc20);
 
-        uint128 actualAmt = forUser.collect(erc20, address(forUser));
+        vm.prank(driver);
+        uint128 actualAmt = dripsHub.collect(forUser, erc20);
 
         assertEq(actualAmt, expectedAmt, "Invalid collected amount");
         assertCollectable(forUser, erc20, 0);
-        assertBalance(erc20, forUser, balanceBefore + expectedAmt);
+        assertBalance(erc20, balanceBefore + expectedAmt);
     }
 
-    function collectable(AddressDriverUser forUser) internal view returns (uint128 amt) {
+    function collectable(uint256 forUser) internal view returns (uint128 amt) {
         return collectable(forUser, defaultErc20);
     }
 
-    function collectable(AddressDriverUser forUser, IERC20 erc20)
-        internal
-        view
-        returns (uint128 amt)
-    {
-        return dripsHub.collectable(forUser.userId(), erc20);
+    function collectable(uint256 forUser, IERC20 erc20) internal view returns (uint128 amt) {
+        return dripsHub.collectable(forUser, erc20);
     }
 
-    function assertCollectable(AddressDriverUser forUser, uint256 expected) internal {
+    function assertCollectable(uint256 forUser, uint256 expected) internal {
         assertCollectable(forUser, defaultErc20, expected);
     }
 
-    function assertCollectable(AddressDriverUser forUser, IERC20 erc20, uint256 expected)
-        internal
-    {
+    function assertCollectable(uint256 forUser, IERC20 erc20, uint256 expected) internal {
         assertEq(collectable(forUser, erc20), expected, "Invalid collectable");
     }
 
@@ -491,12 +450,20 @@ contract DripsHubTest is Test {
         assertEq(dripsHub.totalBalance(defaultErc20), expected, "Invalid total balance");
     }
 
-    function assertBalance(AddressDriverUser forUser, uint256 expected) internal {
-        assertBalance(defaultErc20, forUser, expected);
+    function balance() internal view returns (uint256) {
+        return balance(defaultErc20);
     }
 
-    function assertBalance(IERC20 erc20, AddressDriverUser forUser, uint256 expected) internal {
-        assertEq(erc20.balanceOf(address(forUser)), expected, "Invalid balance");
+    function balance(IERC20 erc20) internal view returns (uint256) {
+        return erc20.balanceOf(driver);
+    }
+
+    function assertBalance(uint256 expected) internal {
+        assertBalance(defaultErc20, expected);
+    }
+
+    function assertBalance(IERC20 erc20, uint256 expected) internal {
+        assertEq(erc20.balanceOf(driver), expected, "Invalid balance");
     }
 
     function pauseDripsHub() internal {
@@ -573,27 +540,27 @@ contract DripsHubTest is Test {
         // Check squeezableDrips
         skip(1);
         (uint128 amt, uint32 nextSqueezed) =
-            dripsHub.squeezableDrips(receiver.userId(), defaultErc20, user.userId(), 0, history);
+            dripsHub.squeezableDrips(receiver, defaultErc20, user, 0, history);
         assertEq(amt, 1, "Invalid squeezable amt before");
         assertEq(nextSqueezed, block.timestamp, "Invalid next squeezable before");
 
         // Check nextSqueezedDrips
-        nextSqueezed = dripsHub.nextSqueezedDrips(receiver.userId(), defaultErc20, user.userId());
+        nextSqueezed = dripsHub.nextSqueezedDrips(receiver, defaultErc20, user);
         assertEq(nextSqueezed, block.timestamp - 1, "Invalid next squeezed before");
 
         // Squeeze
-        (amt, nextSqueezed) = receiver.squeezeDrips(defaultErc20, user.userId(), 0, history);
+        vm.prank(driver);
+        (amt, nextSqueezed) = dripsHub.squeezeDrips(receiver, defaultErc20, user, 0, history);
         assertEq(amt, 1, "Invalid squeezed amt");
         assertEq(nextSqueezed, block.timestamp, "Invalid next squeezed");
 
         // Check squeezableDrips
-        (amt, nextSqueezed) =
-            dripsHub.squeezableDrips(receiver.userId(), defaultErc20, user.userId(), 0, history);
+        (amt, nextSqueezed) = dripsHub.squeezableDrips(receiver, defaultErc20, user, 0, history);
         assertEq(amt, 0, "Invalid squeezable amt after");
         assertEq(nextSqueezed, block.timestamp, "Invalid next squeezed after");
 
         // Check nextSqueezedDrips
-        nextSqueezed = dripsHub.nextSqueezedDrips(receiver.userId(), defaultErc20, user.userId());
+        nextSqueezed = dripsHub.nextSqueezedDrips(receiver, defaultErc20, user);
         assertEq(nextSqueezed, block.timestamp, "Invalid next squeezed after");
 
         // Collect the squeezed amount
@@ -653,9 +620,8 @@ contract DripsHubTest is Test {
     }
 
     function testCollectRevertsWhenNotCalledByTheDriver() public {
-        uint256 userId = calcUserId(dripsHub.nextDriverId(), 0);
         vm.expectRevert(ERROR_NOT_DRIVER);
-        dripsHub.collect(userId, defaultErc20);
+        dripsHub.collect(user, defaultErc20);
     }
 
     function testDripsInDifferentTokensAreIndependent() public {
@@ -689,27 +655,23 @@ contract DripsHubTest is Test {
     }
 
     function testSqueezeDripsRevertsWhenNotCalledByTheDriver() public {
-        uint256 userId = calcUserId(dripsHub.nextDriverId(), 0);
         vm.expectRevert(ERROR_NOT_DRIVER);
-        dripsHub.squeezeDrips(userId, defaultErc20, 1, 0, new DripsHistory[](0));
+        dripsHub.squeezeDrips(user, defaultErc20, 1, 0, new DripsHistory[](0));
     }
 
     function testSetDripsRevertsWhenNotCalledByTheDriver() public {
-        uint256 userId = calcUserId(dripsHub.nextDriverId(), 0);
         vm.expectRevert(ERROR_NOT_DRIVER);
-        dripsHub.setDrips(userId, defaultErc20, dripsReceivers(), 0, dripsReceivers());
+        dripsHub.setDrips(user, defaultErc20, dripsReceivers(), 0, dripsReceivers());
     }
 
     function testGiveRevertsWhenNotCalledByTheDriver() public {
-        uint256 userId = calcUserId(dripsHub.nextDriverId(), 0);
         vm.expectRevert(ERROR_NOT_DRIVER);
-        dripsHub.give(userId, 0, defaultErc20, 1);
+        dripsHub.give(user, 0, defaultErc20, 1);
     }
 
     function testSetSplitsRevertsWhenNotCalledByTheDriver() public {
-        uint256 userId = calcUserId(dripsHub.nextDriverId(), 0);
         vm.expectRevert(ERROR_NOT_DRIVER);
-        dripsHub.setSplits(userId, splitsReceivers());
+        dripsHub.setSplits(user, splitsReceivers());
     }
 
     function testSetDripsLimitsTotalBalance() public {
@@ -802,47 +764,52 @@ contract DripsHubTest is Test {
 
     function testReceiveDripsCanBePaused() public {
         pauseDripsHub();
-        uint256 userId = user.userId();
+        uint256 userId = user;
         vm.expectRevert(ERROR_PAUSED);
         dripsHub.receiveDrips(userId, defaultErc20, 1);
     }
 
     function testSqueezeDripsCanBePaused() public {
         pauseDripsHub();
-        uint256 userId = user.userId();
+        uint256 userId = user;
         vm.expectRevert(ERROR_PAUSED);
-        user.squeezeDrips(defaultErc20, userId, 0, new DripsHistory[](0));
+        vm.prank(driver);
+        dripsHub.squeezeDrips(user, defaultErc20, userId, 0, new DripsHistory[](0));
     }
 
     function testSplitCanBePaused() public {
         pauseDripsHub();
-        uint256 userId = user.userId();
+        uint256 userId = user;
         vm.expectRevert(ERROR_PAUSED);
         dripsHub.split(userId, defaultErc20, splitsReceivers());
     }
 
     function testCollectCanBePaused() public {
         pauseDripsHub();
+        vm.prank(driver);
         vm.expectRevert(ERROR_PAUSED);
-        user.collect(defaultErc20, address(user));
+        dripsHub.collect(user, defaultErc20);
     }
 
     function testSetDripsCanBePaused() public {
         pauseDripsHub();
+        vm.prank(driver);
         vm.expectRevert(ERROR_PAUSED);
-        user.setDrips(defaultErc20, dripsReceivers(), 1, dripsReceivers(), address(user));
+        dripsHub.setDrips(user, defaultErc20, dripsReceivers(), 1, dripsReceivers());
     }
 
     function testGiveCanBePaused() public {
         pauseDripsHub();
+        vm.prank(driver);
         vm.expectRevert(ERROR_PAUSED);
-        user.give(0, defaultErc20, 1);
+        dripsHub.give(user, 0, defaultErc20, 1);
     }
 
     function testSetSplitsCanBePaused() public {
         pauseDripsHub();
+        vm.prank(driver);
         vm.expectRevert(ERROR_PAUSED);
-        user.setSplits(splitsReceivers());
+        dripsHub.setSplits(user, splitsReceivers());
     }
 
     function testRegisterDriverCanBePaused() public {
