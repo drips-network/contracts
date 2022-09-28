@@ -32,8 +32,10 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     uint32 internal cycleSecs;
     // Keys are assetId and userId
     mapping(uint256 => mapping(uint256 => DripsReceiver[])) internal currReceiversStore;
-    uint256 internal defaultAsset = 1;
-    uint256 internal otherAsset = 2;
+    uint256 internal defaultAssetId = 1;
+    uint256 internal otherAssetId = 2;
+    // The asset ID used in all helper functions
+    uint256 internal assetId = defaultAssetId;
     uint256 internal sender = 1;
     uint256 internal sender1 = 2;
     uint256 internal sender2 = 3;
@@ -59,20 +61,16 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         vm.warp(timestamp);
     }
 
-    function loadCurrReceivers(uint256 assetId, uint256 userId)
+    function loadCurrReceivers(uint256 userId)
         internal
         returns (DripsReceiver[] memory currReceivers)
     {
         currReceivers = currReceiversStore[assetId][userId];
-        assertDrips(assetId, userId, currReceivers);
+        assertDrips(userId, currReceivers);
     }
 
-    function storeCurrReceivers(
-        uint256 assetId,
-        uint256 userId,
-        DripsReceiver[] memory newReceivers
-    ) internal {
-        assertDrips(assetId, userId, newReceivers);
+    function storeCurrReceivers(uint256 userId, DripsReceiver[] memory newReceivers) internal {
+        assertDrips(userId, newReceivers);
         delete currReceiversStore[assetId][userId];
         for (uint256 i = 0; i < newReceivers.length; i++) {
             currReceiversStore[assetId][userId].push(newReceivers[i]);
@@ -215,14 +213,13 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function hist(uint256 userId) internal returns (DripsHistory[] memory history) {
-        DripsReceiver[] memory receivers = loadCurrReceivers(defaultAsset, userId);
-        (,, uint32 updateTime,, uint32 maxEnd) = Drips._dripsState(userId, defaultAsset);
+        DripsReceiver[] memory receivers = loadCurrReceivers(userId);
+        (,, uint32 updateTime,, uint32 maxEnd) = Drips._dripsState(userId, assetId);
         return hist(receivers, updateTime, maxEnd);
     }
 
     function histSkip(uint256 userId) internal view returns (DripsHistory[] memory history) {
-        (bytes32 dripsHash,, uint32 updateTime,, uint32 maxEnd) =
-            Drips._dripsState(userId, defaultAsset);
+        (bytes32 dripsHash,, uint32 updateTime,, uint32 maxEnd) = Drips._dripsState(userId, assetId);
         return hist(dripsHash, updateTime, maxEnd);
     }
 
@@ -256,16 +253,6 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function setDrips(
-        uint256 user,
-        uint128 balanceFrom,
-        uint128 balanceTo,
-        DripsReceiver[] memory newReceivers
-    ) internal {
-        setDrips(defaultAsset, user, balanceFrom, balanceTo, newReceivers);
-    }
-
-    function setDrips(
-        uint256 assetId,
         uint256 userId,
         uint128 balanceFrom,
         uint128 balanceTo,
@@ -274,11 +261,10 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         (, bytes32 oldHistoryHash,,,) = Drips._dripsState(userId, assetId);
         int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
 
-        (uint128 newBalance, int128 realBalanceDelta) = Drips._setDrips(
-            userId, assetId, loadCurrReceivers(assetId, userId), balanceDelta, newReceivers
-        );
+        (uint128 newBalance, int128 realBalanceDelta) =
+            Drips._setDrips(userId, assetId, loadCurrReceivers(userId), balanceDelta, newReceivers);
 
-        storeCurrReceivers(assetId, userId, newReceivers);
+        storeCurrReceivers(userId, newReceivers);
         assertEq(newBalance, balanceTo, "Invalid drips balance");
         (
             bytes32 dripsHash,
@@ -297,9 +283,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
     }
 
-    function assertDrips(uint256 assetId, uint256 userId, DripsReceiver[] memory currReceivers)
-        internal
-    {
+    function assertDrips(uint256 userId, DripsReceiver[] memory currReceivers) internal {
         (bytes32 actual,,,,) = Drips._dripsState(userId, assetId);
         bytes32 expected = Drips._hashDrips(currReceivers);
         assertEq(actual, expected, "Invalid drips configuration");
@@ -310,9 +294,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function assertBalanceAt(uint256 userId, uint128 expected, uint256 timestamp) internal {
-        uint128 balance = Drips._balanceAt(
-            userId, defaultAsset, loadCurrReceivers(defaultAsset, userId), uint32(timestamp)
-        );
+        uint128 balance =
+            Drips._balanceAt(userId, assetId, loadCurrReceivers(userId), uint32(timestamp));
         assertEq(balance, expected, "Invaild drips balance");
     }
 
@@ -330,18 +313,18 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         external
         view
     {
-        Drips._balanceAt(userId, defaultAsset, receivers, uint32(timestamp));
+        Drips._balanceAt(userId, assetId, receivers, uint32(timestamp));
     }
 
     function assetMaxEnd(uint256 userId, uint256 expected) public {
-        (,,,, uint32 maxEnd) = Drips._dripsState(userId, defaultAsset);
+        (,,,, uint32 maxEnd) = Drips._dripsState(userId, assetId);
         assertEq(maxEnd, expected, "Invalid max end");
     }
 
     function changeBalance(uint256 userId, uint128 balanceFrom, uint128 balanceTo) internal {
         DripsReceiver[] memory receivers = recv();
         if (balanceTo != 0) {
-            receivers = loadCurrReceivers(defaultAsset, userId);
+            receivers = loadCurrReceivers(userId);
         }
         setDrips(userId, balanceFrom, balanceTo, receivers);
     }
@@ -354,12 +337,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         bytes memory expectedReason
     ) internal {
         assertSetDripsReverts(
-            userId,
-            loadCurrReceivers(defaultAsset, userId),
-            balanceFrom,
-            balanceTo,
-            newReceivers,
-            expectedReason
+            userId, loadCurrReceivers(userId), balanceFrom, balanceTo, newReceivers, expectedReason
         );
     }
 
@@ -373,11 +351,10 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     ) internal {
         vm.expectRevert(expectedReason);
         int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
-        this.setDripsExternal(defaultAsset, userId, currReceivers, balanceDelta, newReceivers);
+        this.setDripsExternal(userId, currReceivers, balanceDelta, newReceivers);
     }
 
     function setDripsExternal(
-        uint256 assetId,
         uint256 userId,
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
@@ -387,10 +364,6 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function receiveDrips(uint256 userId, uint128 expectedAmt) internal {
-        receiveDrips(defaultAsset, userId, expectedAmt);
-    }
-
-    function receiveDrips(uint256 assetId, uint256 userId, uint128 expectedAmt) internal {
         (uint128 actualAmt,) = Drips._receiveDrips(userId, assetId, type(uint32).max);
         assertEq(actualAmt, expectedAmt, "Invalid amount received from drips");
     }
@@ -410,7 +383,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         assertReceivableDrips(userId, maxCycles, expectedReceivedAmt, expectedCyclesAfter);
 
         (uint128 receivedAmt, uint32 receivableCycles) =
-            Drips._receiveDrips(userId, defaultAsset, maxCycles);
+            Drips._receiveDrips(userId, assetId, maxCycles);
 
         assertEq(receivedAmt, expectedReceivedAmt, "Invalid amount received from drips");
         assertEq(receivableCycles, expectedCyclesAfter, "Invalid receivable drips cycles left");
@@ -440,7 +413,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
             }
 
             uint256 expectedAmt = (duration * r.config.amtPerSec()) >> 64;
-            (uint128 actualAmt,) = Drips._receiveDrips(r.userId, defaultAsset, type(uint32).max);
+            (uint128 actualAmt,) = Drips._receiveDrips(r.userId, assetId, type(uint32).max);
             // only log if acutalAmt doesn't match exptectedAmt
             if (expectedAmt != actualAmt) {
                 emit log_named_uint("userId:", r.userId);
@@ -453,12 +426,12 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function assertReceivableDripsCycles(uint256 userId, uint32 expectedCycles) internal {
-        uint32 actualCycles = Drips._receivableDripsCycles(userId, defaultAsset);
+        uint32 actualCycles = Drips._receivableDripsCycles(userId, assetId);
         assertEq(actualCycles, expectedCycles, "Invalid total receivable drips cycles");
     }
 
     function assertReceivableDrips(uint256 userId, uint128 expectedAmt) internal {
-        (uint128 actualAmt,) = Drips._receivableDrips(userId, defaultAsset, type(uint32).max);
+        (uint128 actualAmt,) = Drips._receivableDrips(userId, assetId, type(uint32).max);
         assertEq(actualAmt, expectedAmt, "Invalid receivable amount");
     }
 
@@ -469,7 +442,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint32 expectedCycles
     ) internal {
         (uint128 actualAmt, uint32 actualCycles) =
-            Drips._receivableDrips(userId, defaultAsset, maxCycles);
+            Drips._receivableDrips(userId, assetId, maxCycles);
         assertEq(actualAmt, expectedAmt, "Invalid receivable amount");
         assertEq(actualCycles, expectedCycles, "Invalid receivable drips cycles");
     }
@@ -492,7 +465,6 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint256 expectedAmt,
         uint256 expectedNextSqueezed
     ) internal {
-        uint256 assetId = defaultAsset;
         (uint128 amtBefore, uint32 nextSqueezedBefore) =
             Drips._squeezableDrips(userId, assetId, senderId, historyHash, dripsHistory);
 
@@ -507,7 +479,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
             Drips._squeezableDrips(userId, assetId, senderId, historyHash, dripsHistory);
         assertEq(amtAfter, 0, "Squeezable amount after squeezing non-zero");
         assertEq(nextSqueezedAfter, nextSqueezed, "Invalid next squeezed after squeezing");
-        assertNextSqueezedDrips(userId, assetId, senderId, nextSqueezed);
+        assertNextSqueezedDrips(userId, senderId, nextSqueezed);
     }
 
     function assertSqueezeDripsReverts(
@@ -518,12 +490,11 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         bytes memory expectedReason
     ) internal {
         vm.expectRevert(expectedReason);
-        this.squeezeDripsExternal(userId, defaultAsset, senderId, historyHash, dripsHistory);
+        this.squeezeDripsExternal(userId, senderId, historyHash, dripsHistory);
     }
 
     function squeezeDripsExternal(
         uint256 userId,
-        uint256 assetId,
         uint256 senderId,
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory
@@ -539,12 +510,11 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         bytes memory expectedReason
     ) internal {
         vm.expectRevert(expectedReason);
-        this.squeezableDripsExternal(userId, defaultAsset, senderId, historyHash, dripsHistory);
+        this.squeezableDripsExternal(userId, senderId, historyHash, dripsHistory);
     }
 
     function squeezableDripsExternal(
         uint256 userId,
-        uint256 assetId,
         uint256 senderId,
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory
@@ -552,12 +522,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         Drips._squeezableDrips(userId, assetId, senderId, historyHash, dripsHistory);
     }
 
-    function assertNextSqueezedDrips(
-        uint256 userId,
-        uint256 assetId,
-        uint256 senderId,
-        uint256 expected
-    ) internal {
+    function assertNextSqueezedDrips(uint256 userId, uint256 senderId, uint256 expected) internal {
         uint256 actual = Drips._nextSqueezedDrips(userId, assetId, senderId);
         assertEq(actual, expected, "Invalid next squeezable drips");
     }
@@ -1147,7 +1112,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint256 gas = gasleft();
         Drips._setDrips(
             sender,
-            defaultAsset,
+            assetId,
             new DripsReceiver[](0),
             int128(int160((countMax * countMax))),
             receivers
@@ -1169,7 +1134,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint128 amt = (type(uint32).max - uint32(block.timestamp)) * uint128(countMax) - 1;
 
         uint256 gas = gasleft();
-        Drips._setDrips(sender, defaultAsset, new DripsReceiver[](0), int128(amt), receivers);
+        Drips._setDrips(sender, assetId, new DripsReceiver[](0), int128(amt), receivers);
         gas -= gasleft();
         emit log_named_uint("GAS USED", gas);
     }
@@ -1184,7 +1149,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint256 gas = gasleft();
         Drips._setDrips(
             sender,
-            defaultAsset,
+            assetId,
             new DripsReceiver[](0),
             int128(int160((countMax * countMax))),
             receivers
@@ -1206,7 +1171,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint128 amt = (type(uint32).max - uint32(block.timestamp)) * uint128(countMax) - 1;
 
         uint256 gas = gasleft();
-        Drips._setDrips(sender, defaultAsset, new DripsReceiver[](0), int128(amt), receivers);
+        Drips._setDrips(sender, assetId, new DripsReceiver[](0), int128(amt), receivers);
         gas -= gasleft();
         emit log_named_uint("GAS USED", gas);
     }
@@ -1214,7 +1179,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     function testBenchSetDrips1() public {
         DripsReceiver[] memory receivers = recv(1, 1, 1000, 0);
         uint256 gas = gasleft();
-        Drips._setDrips(sender, defaultAsset, new DripsReceiver[](0), 1, receivers);
+        Drips._setDrips(sender, assetId, new DripsReceiver[](0), 1, receivers);
         gas -= gasleft();
         emit log_named_uint("GAS USED", gas);
     }
@@ -1276,8 +1241,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
 
         DripsReceiver[] memory newRecv = recv();
         (uint128 newBalance, int128 realBalanceDelta) =
-            Drips._setDrips(sender, defaultAsset, receivers, type(int128).min, newRecv);
-        storeCurrReceivers(defaultAsset, sender, newRecv);
+            Drips._setDrips(sender, assetId, receivers, type(int128).min, newRecv);
+        storeCurrReceivers(sender, newRecv);
         assertEq(newBalance, 0, "Invalid balance");
         assertEq(realBalanceDelta, -6, "Invalid real balance delta");
         assertBalance(sender, 0);
@@ -1330,68 +1295,76 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
 
         skip(cycleSecs * 5);
         // only two cycles should be dripped
-        receiveDrips(defaultAsset, receiver, 2 * cycleSecs);
+        receiveDrips(receiver, 2 * cycleSecs);
     }
 
     function testDripsOfDifferentAssetsAreIndependent() public {
         // Covers 1.5 cycles of dripping
-        setDrips(
-            defaultAsset, sender, 0, 9 * cycleSecs, recv(recv(receiver1, 4), recv(receiver2, 2))
-        );
+        assetId = defaultAssetId;
+        setDrips(sender, 0, 9 * cycleSecs, recv(recv(receiver1, 4), recv(receiver2, 2)));
 
         skipToCycleEnd();
         // Covers 2 cycles of dripping
-        setDrips(otherAsset, sender, 0, 6 * cycleSecs, recv(receiver1, 3));
+        assetId = otherAssetId;
+        setDrips(sender, 0, 6 * cycleSecs, recv(receiver1, 3));
 
         skipToCycleEnd();
         // receiver1 had 1.5 cycles of 4 per second
-        receiveDrips(defaultAsset, receiver1, 6 * cycleSecs);
+        assetId = defaultAssetId;
+        receiveDrips(receiver1, 6 * cycleSecs);
         // receiver1 had 1.5 cycles of 2 per second
-        receiveDrips(defaultAsset, receiver2, 3 * cycleSecs);
+        assetId = defaultAssetId;
+        receiveDrips(receiver2, 3 * cycleSecs);
         // receiver1 had 1 cycle of 3 per second
-        receiveDrips(otherAsset, receiver1, 3 * cycleSecs);
+        assetId = otherAssetId;
+        receiveDrips(receiver1, 3 * cycleSecs);
         // receiver2 received nothing
-        receiveDrips(otherAsset, receiver2, 0);
+        assetId = otherAssetId;
+        receiveDrips(receiver2, 0);
 
         skipToCycleEnd();
         // receiver1 received nothing
-        receiveDrips(defaultAsset, receiver1, 0);
+        assetId = defaultAssetId;
+        receiveDrips(receiver1, 0);
         // receiver2 received nothing
-        receiveDrips(defaultAsset, receiver2, 0);
+        assetId = defaultAssetId;
+        receiveDrips(receiver2, 0);
         // receiver1 had 1 cycle of 3 per second
-        receiveDrips(otherAsset, receiver1, 3 * cycleSecs);
+        assetId = otherAssetId;
+        receiveDrips(receiver1, 3 * cycleSecs);
         // receiver2 received nothing
-        receiveDrips(otherAsset, receiver2, 0);
+        assetId = otherAssetId;
+        receiveDrips(receiver2, 0);
     }
 
     function testBalanceAtReturnsCurrentBalance() public {
-        setDrips(defaultAsset, sender, 0, 10, recv(receiver, 1));
+        setDrips(sender, 0, 10, recv(receiver, 1));
         skip(2);
         assertBalanceAt(sender, 8, block.timestamp);
     }
 
     function testBalanceAtReturnsFutureBalance() public {
-        setDrips(defaultAsset, sender, 0, 10, recv(receiver, 1));
+        setDrips(sender, 0, 10, recv(receiver, 1));
         skip(2);
         assertBalanceAt(sender, 6, block.timestamp + 2);
     }
 
     function testBalanceAtReturnsPastBalanceAfterSetDelta() public {
-        setDrips(defaultAsset, sender, 0, 10, recv(receiver, 1));
+        setDrips(sender, 0, 10, recv(receiver, 1));
         skip(2);
         assertBalanceAt(sender, 10, block.timestamp - 2);
     }
 
     function testBalanceAtRevertsForTimestampBeforeSetDelta() public {
         DripsReceiver[] memory receivers = recv(receiver, 1);
-        setDrips(defaultAsset, sender, 0, 10, receivers);
+        setDrips(sender, 0, 10, receivers);
         skip(2);
         assertBalanceAtReverts(sender, receivers, block.timestamp - 3, ERROR_TIMESTAMP_EARLY);
     }
 
     function testBalanceAtRevertsForInvalidDripsList() public {
         DripsReceiver[] memory receivers = recv(receiver, 1);
-        setDrips(defaultAsset, sender, 0, 10, receivers);
+        setDrips(sender, 0, 10, receivers);
         skip(2);
         receivers = recv(receiver, 2);
         assertBalanceAtReverts(sender, receivers, block.timestamp, ERROR_INVALID_DRIPS_LIST);
@@ -1413,7 +1386,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         emit log_named_uint("setDrips.updateTime", block.timestamp);
         setDrips(sender, 0, maxCosts, receivers);
 
-        (,, uint32 updateTime,, uint32 maxEnd) = Drips._dripsState(sender, defaultAsset);
+        (,, uint32 updateTime,, uint32 maxEnd) = Drips._dripsState(sender, assetId);
 
         if (maxEnd > maxAllDripsFinished && maxEnd != type(uint32).max) {
             maxAllDripsFinished = maxEnd;
@@ -1632,7 +1605,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
 
     function testPartOfTheWholeHistoryCanBeSqueezed() public {
         setDrips(sender, 0, 1, recv(receiver, 1));
-        (, bytes32 historyHash,,,) = Drips._dripsState(sender, defaultAsset);
+        (, bytes32 historyHash,,,) = Drips._dripsState(sender, assetId);
         skip(1);
         setDrips(sender, 0, 2, recv(receiver, 2));
         DripsHistory[] memory history = hist(sender);
@@ -1663,10 +1636,10 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     function testNextSqueezableDripsIsAtLeastCurrentCycleStart() public {
         skipToCycleEnd();
         uint256 cycleStart = block.timestamp;
-        assertNextSqueezedDrips(receiver, defaultAsset, sender, cycleStart);
+        assertNextSqueezedDrips(receiver, sender, cycleStart);
         skip(cycleSecs - 1);
-        assertNextSqueezedDrips(receiver, defaultAsset, sender, cycleStart);
+        assertNextSqueezedDrips(receiver, sender, cycleStart);
         skip(1);
-        assertNextSqueezedDrips(receiver, defaultAsset, sender, block.timestamp);
+        assertNextSqueezedDrips(receiver, sender, block.timestamp);
     }
 }
