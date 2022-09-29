@@ -74,6 +74,14 @@ contract DripsHub is Managed, Drips, Splits {
         uint32 indexed driverId, address indexed oldDriverAddr, address indexed newDriverAddr
     );
 
+    /// @notice Emitted by the user to broadcast metadata.
+    /// The key and the value are not standardized by the protocol, it's up to the user
+    /// to establish and follow conventions to ensure compatibility with the consumers.
+    /// @param userId The ID of the user emitting metadata
+    /// @param key The metadata key
+    /// @param value The metadata value
+    event UserMetadata(uint256 indexed userId, uint256 indexed key, bytes value);
+
     struct DripsHubStorage {
         /// @notice The next driver ID that will be used when registering.
         uint32 nextDriverId;
@@ -492,6 +500,19 @@ contract DripsHub is Managed, Drips, Splits {
         returns (bytes32 receiversHash)
     {
         return Splits._hashSplits(receivers);
+    }
+
+    /// @notice Emits user metadata.
+    /// The key and the value are not standardized by the protocol, it's up to the user
+    /// to establish and follow conventions to ensure compatibility with the consumers.
+    /// @param key The metadata key
+    /// @param value The metadata value
+    function emitUserMetadata(uint256 userId, uint256 key, bytes calldata value)
+        public
+        whenNotPaused
+        onlyDriver(userId)
+    {
+        emit UserMetadata(userId, key, value);
     }
 
     /// @notice Returns the DripsHub storage.

@@ -163,6 +163,10 @@ contract AddressDriverTest is Test {
         assertEq(actual, expected, "Invalid splits hash");
     }
 
+    function testEmitUserMetadata() public {
+        driver.emitUserMetadata(1, "value");
+    }
+
     function testForwarderIsTrusted() public {
         vm.prank(user);
         caller.authorize(address(this));

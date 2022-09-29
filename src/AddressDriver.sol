@@ -129,6 +129,15 @@ contract AddressDriver is Upgradeable, ERC2771Context {
         dripsHub.setSplits(callerUserId(), receivers);
     }
 
+    /// @notice Emits the message sender's metadata.
+    /// The key and the value are not standardized by the protocol, it's up to the user
+    /// to establish and follow conventions to ensure compatibility with the consumers.
+    /// @param key The metadata key
+    /// @param value The metadata value
+    function emitUserMetadata(uint256 key, bytes calldata value) public {
+        dripsHub.emitUserMetadata(callerUserId(), key, value);
+    }
+
     function _transferFromCaller(IERC20 erc20, uint128 amt) internal {
         erc20.safeTransferFrom(_msgSender(), address(this), amt);
         address reserve = address(dripsHub.reserve());

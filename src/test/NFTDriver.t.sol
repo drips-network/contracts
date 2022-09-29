@@ -233,6 +233,15 @@ contract NFTDriverTest is Test {
         driver.setSplits(tokenIdUser, new SplitsReceiver[](0));
     }
 
+    function testEmitUserMetadata() public {
+        driver.emitUserMetadata(tokenId, 1, "value");
+    }
+
+    function testEmitUserMetadataRevertsWhenNotTokenHolder() public {
+        vm.expectRevert(ERROR_NOT_OWNER);
+        driver.emitUserMetadata(tokenIdUser, 1, "value");
+    }
+
     function testForwarderIsTrustedInErc721Calls() public {
         vm.prank(user);
         caller.authorize(address(this));

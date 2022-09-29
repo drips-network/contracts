@@ -528,6 +528,11 @@ contract DripsHubTest is Test {
         collect(user1, 6);
     }
 
+    function testEmitUserMetadata() public {
+        vm.prank(driver);
+        dripsHub.emitUserMetadata(user, 1, "value");
+    }
+
     function testRegisterDriver() public {
         address driverAddr = address(0x1234);
         uint32 driverId = dripsHub.nextDriverId();
@@ -614,6 +619,11 @@ contract DripsHubTest is Test {
     function testSetSplitsRevertsWhenNotCalledByTheDriver() public {
         vm.expectRevert(ERROR_NOT_DRIVER);
         dripsHub.setSplits(user, splitsReceivers());
+    }
+
+    function testEmitUserMetadataRevertsWhenNotCalledByTheDriver() public {
+        vm.expectRevert(ERROR_NOT_DRIVER);
+        dripsHub.emitUserMetadata(user, 1, "value");
     }
 
     function testSetDripsLimitsTotalBalance() public {
@@ -752,6 +762,13 @@ contract DripsHubTest is Test {
         vm.prank(driver);
         vm.expectRevert(ERROR_PAUSED);
         dripsHub.setSplits(user, splitsReceivers());
+    }
+
+    function testEmitUserMetadataCanBePaused() public {
+        pauseDripsHub();
+        vm.prank(driver);
+        vm.expectRevert(ERROR_PAUSED);
+        dripsHub.emitUserMetadata(user, 1, "value");
     }
 
     function testRegisterDriverCanBePaused() public {

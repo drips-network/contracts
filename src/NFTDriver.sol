@@ -189,6 +189,21 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Upgradeable {
         dripsHub.setSplits(tokenId, receivers);
     }
 
+    /// @notice Emits the user's metadata.
+    /// The key and the value are not standardized by the protocol, it's up to the user
+    /// to establish and follow conventions to ensure compatibility with the consumers.
+    /// @param tokenId The ID of the token representing the emitting user ID.
+    /// The caller must be the owner of the token or be approved to use it.
+    /// The token ID is equal to the user ID controlled by it.
+    /// @param key The metadata key
+    /// @param value The metadata value
+    function emitUserMetadata(uint256 tokenId, uint256 key, bytes calldata value)
+        public
+        onlyHolder(tokenId)
+    {
+        dripsHub.emitUserMetadata(tokenId, key, value);
+    }
+
     function _transferFromCaller(IERC20 erc20, uint128 amt) internal {
         erc20.safeTransferFrom(_msgSender(), address(this), amt);
         address reserve = address(dripsHub.reserve());

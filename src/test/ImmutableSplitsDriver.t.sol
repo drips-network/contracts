@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.15;
 
-import {ImmutableSplitsDriver} from "../ImmutableSplitsDriver.sol";
+import {ImmutableSplitsDriver, UserMetadata} from "../ImmutableSplitsDriver.sol";
 import {DripsHub, SplitsReceiver} from "../DripsHub.sol";
 import {Reserve} from "../Reserve.sol";
 import {Proxy} from "../Upgradeable.sol";
@@ -33,8 +33,10 @@ contract ImmutableSplitsDriverTest is Test {
         receivers[0] = SplitsReceiver({userId: 1, weight: totalSplitsWeight - 1});
         receivers[1] = SplitsReceiver({userId: 2, weight: 1});
         uint256 nextUserId = driver.nextUserId();
+        UserMetadata[] memory metadata = new UserMetadata[](1);
+        metadata[0] = UserMetadata(1, "value");
 
-        uint256 userId = driver.createSplits(receivers);
+        uint256 userId = driver.createSplits(receivers, metadata);
 
         assertEq(userId, nextUserId, "Invalid user ID");
         assertEq(driver.nextUserId(), userId + 1, "Invalid next user ID");
@@ -49,6 +51,6 @@ contract ImmutableSplitsDriverTest is Test {
         receivers[1] = SplitsReceiver({userId: 2, weight: 1});
 
         vm.expectRevert("Invalid total receivers weight");
-        driver.createSplits(receivers);
+        driver.createSplits(receivers, new UserMetadata[](0));
     }
 }

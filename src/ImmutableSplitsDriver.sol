@@ -9,6 +9,12 @@ import {
     ERC721Burnable
 } from "openzeppelin-contracts/token/ERC721/extensions/ERC721Burnable.sol";
 
+/// @notice The user metadata.
+struct UserMetadata {
+    uint256 key;
+    bytes value;
+}
+
 /// @notice A DripsHub driver implementing immutable splits configurations.
 /// Anybody can create a new user ID and configure its splits configuration,
 /// but nobody can update its configuration afterwards, it's immutable.
@@ -36,16 +42,23 @@ contract ImmutableSplitsDriver is Upgradeable {
         return (uint256(driverId) << 224) + StorageSlot.getUint256Slot(_counterSlot).value;
     }
 
-    /// @notice Creates a new user ID and configures its splits configuration.
+    /// @notice Creates a new user ID, configures its splits configuration and emits its metadata.
     /// The configuration is immutable and nobody can control the user ID after its creation.
+    /// Calling this function is the only way and the only chance to emit metadata for that user.
     /// @param receivers The list of the user's splits receivers to be set.
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
     /// Each splits receiver will be getting `weight / totalSplitsWeight`
     /// share of the funds collected by the user.
     /// The sum of the receivers' weights must be equal to `totalSplitsWeight`,
     /// or in other words the configuration must be splitting 100% of received funds.
+    /// @param metadata The list of user metadata to emit for the created user.
+    /// The key and the value are not standardized by the protocol, it's up to the user
+    /// to establish and follow conventions to ensure compatibility with the consumers.
     /// @return userId The new user ID with `receivers` configured.
-    function createSplits(SplitsReceiver[] calldata receivers) public returns (uint256 userId) {
+    function createSplits(SplitsReceiver[] calldata receivers, UserMetadata[] calldata metadata)
+        public
+        returns (uint256 userId)
+    {
         userId = nextUserId();
         StorageSlot.getUint256Slot(_counterSlot).value++;
         uint256 weightSum = 0;
@@ -54,5 +67,9 @@ contract ImmutableSplitsDriver is Upgradeable {
         }
         require(weightSum == totalSplitsWeight, "Invalid total receivers weight");
         dripsHub.setSplits(userId, receivers);
+        for (uint256 i = 0; i < metadata.length; i++) {
+            UserMetadata calldata data = metadata[i];
+            dripsHub.emitUserMetadata(userId, data.key, data.value);
+        }
     }
 }
