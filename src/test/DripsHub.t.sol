@@ -468,6 +468,10 @@ contract DripsHubTest is Test {
         uint32 maxEnd = lastUpdate + 2;
         DripsHistory[] memory history = new DripsHistory[](1);
         history[0] = DripsHistory(0, receivers, lastUpdate, maxEnd);
+        bytes32 actualHistoryHash =
+            dripsHub.hashDripsHistory(bytes32(0), dripsHub.hashDrips(receivers), lastUpdate, maxEnd);
+        (, bytes32 expectedHistoryHash,,,) = dripsHub.dripsState(user, erc20);
+        assertEq(actualHistoryHash, expectedHistoryHash, "Invalid history hash");
 
         // Check squeezableDrips
         skip(1);
@@ -531,6 +535,13 @@ contract DripsHubTest is Test {
     function testEmitUserMetadata() public {
         vm.prank(driver);
         dripsHub.emitUserMetadata(user, 1, "value");
+    }
+
+    function testBalanceAt() public {
+        DripsReceiver[] memory receivers = dripsReceivers(receiver, 1);
+        setDrips(user, 0, 2, receivers);
+        uint256 balance = dripsHub.balanceAt(user, erc20, receivers, uint32(block.timestamp + 1));
+        assertEq(balance, 1, "Invalid balance");
     }
 
     function testRegisterDriver() public {
