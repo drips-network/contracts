@@ -122,7 +122,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Upgradeable {
         erc20.safeTransfer(transferTo, amt);
     }
 
-    /// @notice Gives funds from the message sender to the receiver.
+    /// @notice Gives funds from the user to the receiver.
     /// The receiver can collect them immediately.
     /// Transfers the funds to be given from the message sender's wallet to the drips hub contract.
     /// @param tokenId The ID of the token representing the giving user ID.
@@ -139,7 +139,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Upgradeable {
         dripsHub.give(tokenId, receiver, erc20, amt);
     }
 
-    /// @notice Sets the message sender's drips configuration.
+    /// @notice Sets the user's drips configuration.
     /// Transfers funds between the message sender's wallet and the drips hub contract
     /// to fulfill the change of the drips balance.
     /// @param tokenId The ID of the token representing the configured user ID.
@@ -174,7 +174,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Upgradeable {
         }
     }
 
-    /// @notice Sets the message sender's splits configuration.
+    /// @notice Sets the user's splits configuration.
     /// @param tokenId The ID of the token representing the configured user ID.
     /// The caller must be the owner of the token or be approved to use it.
     /// The token ID is equal to the user ID controlled by it.

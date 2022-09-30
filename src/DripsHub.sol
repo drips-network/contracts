@@ -335,7 +335,7 @@ contract DripsHub is Managed, Drips, Splits {
         returns (uint128 amt)
     {
         amt = Splits._collect(userId, _assetId(erc20));
-        decreaseTotalBalance(erc20, amt);
+        _decreaseTotalBalance(erc20, amt);
         reserve.withdraw(erc20, msg.sender, amt);
     }
 
@@ -351,7 +351,7 @@ contract DripsHub is Managed, Drips, Splits {
         whenNotPaused
         onlyDriver(userId)
     {
-        increaseTotalBalance(erc20, amt);
+        _increaseTotalBalance(erc20, amt);
         Splits._give(userId, receiver, _assetId(erc20), amt);
         reserve.deposit(erc20, msg.sender, amt);
     }
@@ -423,14 +423,14 @@ contract DripsHub is Managed, Drips, Splits {
         returns (uint128 newBalance, int128 realBalanceDelta)
     {
         if (balanceDelta > 0) {
-            increaseTotalBalance(erc20, uint128(balanceDelta));
+            _increaseTotalBalance(erc20, uint128(balanceDelta));
         }
         (newBalance, realBalanceDelta) =
             Drips._setDrips(userId, _assetId(erc20), currReceivers, balanceDelta, newReceivers);
         if (realBalanceDelta > 0) {
             reserve.deposit(erc20, msg.sender, uint128(realBalanceDelta));
         } else if (realBalanceDelta < 0) {
-            decreaseTotalBalance(erc20, uint128(-realBalanceDelta));
+            _decreaseTotalBalance(erc20, uint128(-realBalanceDelta));
             reserve.withdraw(erc20, msg.sender, uint128(-realBalanceDelta));
         }
     }
@@ -504,13 +504,13 @@ contract DripsHub is Managed, Drips, Splits {
         }
     }
 
-    function increaseTotalBalance(IERC20 erc20, uint128 amt) internal {
+    function _increaseTotalBalance(IERC20 erc20, uint128 amt) internal {
         mapping(IERC20 => uint256) storage totalBalances = _dripsHubStorage().totalBalances;
         require(totalBalances[erc20] + amt <= MAX_TOTAL_BALANCE, "Total balance too high");
         totalBalances[erc20] += amt;
     }
 
-    function decreaseTotalBalance(IERC20 erc20, uint128 amt) internal {
+    function _decreaseTotalBalance(IERC20 erc20, uint128 amt) internal {
         _dripsHubStorage().totalBalances[erc20] -= amt;
     }
 
