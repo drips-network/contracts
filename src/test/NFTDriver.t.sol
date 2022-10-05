@@ -94,35 +94,6 @@ contract NFTDriverTest is Test {
         assertEq(driver.ownerOf(newTokenId), user, "Invalid token owner");
     }
 
-    function testSqueezeDrips() public {
-        uint128 amt = 5;
-        DripsReceiver[] memory receivers = new DripsReceiver[](1);
-        receivers[0] = DripsReceiver(tokenId2, DripsConfigImpl.create(amt * 10 ** 18, 0, 0));
-        driver.setDrips(
-            tokenId1, erc20, new DripsReceiver[](0), int128(amt), receivers, address(this)
-        );
-        DripsHistory[] memory history = new DripsHistory[](1);
-        history[0] = DripsHistory({
-            dripsHash: 0,
-            receivers: receivers,
-            updateTime: uint32(block.timestamp),
-            maxEnd: uint32(block.timestamp + 1)
-        });
-        skip(1);
-
-        (uint128 squeezedAmt, uint32 nextSqueezed) =
-            driver.squeezeDrips(tokenId2, erc20, tokenId1, 0, history);
-
-        assertEq(squeezedAmt, amt, "Invalid squeezed amount");
-        assertEq(nextSqueezed, block.timestamp, "Invalid next squeezed");
-        assertEq(dripsHub.splittable(tokenId2, erc20), amt, "Invalid splittable amount");
-    }
-
-    function testSqueezeDripsRevertsWhenNotTokenHolder() public {
-        vm.expectRevert(ERROR_NOT_OWNER);
-        driver.squeezeDrips(tokenIdUser, erc20, tokenId, 0, new DripsHistory[](0));
-    }
-
     function testCollect() public {
         uint128 amt = 5;
         driver.give(tokenId1, tokenId2, erc20, amt);

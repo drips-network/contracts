@@ -51,28 +51,6 @@ contract AddressDriverTest is Test {
         erc20.approve(address(driver), type(uint256).max);
     }
 
-    function testSqueezeDrips() public {
-        uint128 amt = 5;
-        DripsReceiver[] memory receivers = new DripsReceiver[](1);
-        receivers[0] = DripsReceiver(thisId, DripsConfigImpl.create(amt * 10 ** 18, 0, 0));
-        vm.prank(user);
-        driver.setDrips(erc20, new DripsReceiver[](0), int128(amt), receivers, address(this));
-        DripsHistory[] memory history = new DripsHistory[](1);
-        history[0] = DripsHistory({
-            dripsHash: 0,
-            receivers: receivers,
-            updateTime: uint32(block.timestamp),
-            maxEnd: uint32(block.timestamp + 1)
-        });
-        skip(1);
-
-        (uint128 squeezedAmt, uint32 nextSqueezed) = driver.squeezeDrips(erc20, userId, 0, history);
-
-        assertEq(squeezedAmt, amt, "Invalid squeezed amount");
-        assertEq(nextSqueezed, block.timestamp, "Invalid next squeezed");
-        assertEq(dripsHub.splittable(thisId, erc20), amt, "Invalid splittable amount");
-    }
-
     function testCollect() public {
         uint128 amt = 5;
         vm.prank(user);

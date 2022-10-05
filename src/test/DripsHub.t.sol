@@ -612,11 +612,6 @@ contract DripsHubTest is Test {
         collectAll(receiver2, 0);
     }
 
-    function testSqueezeDripsRevertsWhenNotCalledByTheDriver() public {
-        vm.expectRevert(ERROR_NOT_DRIVER);
-        dripsHub.squeezeDrips(user, erc20, 1, 0, new DripsHistory[](0));
-    }
-
     function testSetDripsRevertsWhenNotCalledByTheDriver() public {
         vm.expectRevert(ERROR_NOT_DRIVER);
         dripsHub.setDrips(user, erc20, dripsReceivers(), 0, dripsReceivers());

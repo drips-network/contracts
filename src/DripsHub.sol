@@ -246,7 +246,7 @@ contract DripsHub is Managed, Drips, Splits {
         uint256 senderId,
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory
-    ) public whenNotPaused onlyDriver(userId) returns (uint128 amt, uint32 nextSqueezed) {
+    ) public whenNotPaused returns (uint128 amt, uint32 nextSqueezed) {
         uint256 assetId = _assetId(erc20);
         (amt, nextSqueezed) =
             Drips._squeezeDrips(userId, assetId, senderId, historyHash, dripsHistory);

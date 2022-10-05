@@ -73,38 +73,6 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Upgradeable {
         _safeMint(to, tokenId);
     }
 
-    /// @notice Receive drips from the currently running cycle from a single sender.
-    /// It doesn't receive drips from the previous, finished cycles, to do that use `receiveDrips`.
-    /// Squeezed funds won't be received in the next calls to `squeezeDrips` or `receiveDrips`.
-    /// Only funds dripped from `nextSqueezedDrips` to `block.timestamp` can be squeezed.
-    /// @param tokenId The ID of the token representing the squeezing user ID.
-    /// The caller must be the owner of the token or be approved to use it.
-    /// The token ID is equal to the user ID controlled by it.
-    /// @param erc20 The used ERC-20 token.
-    /// @param senderId The ID of the user sending drips to squeeze funds from.
-    /// @param historyHash The sender's history hash which was valid right before
-    /// they set up the sequence of configurations described by `dripsHistory`.
-    /// @param dripsHistory The sequence of the sender's drips configurations.
-    /// It can start at an arbitrary past configuration, but must describe all the configurations
-    /// which have been used since then including the current one, in the chronological order.
-    /// Only drips described by `dripsHistory` will be squeezed.
-    /// If `dripsHistory` entries have no receivers, they won't be squeezed.
-    /// The next call to `squeezeDrips` will be able to squeeze only funds which
-    /// have been dripped after the last timestamp squeezed in this call.
-    /// This may cause some funds to be unreceivable until the current cycle ends
-    /// and they can be received using `receiveDrips`.
-    /// @return amt The squeezed amount.
-    /// @return nextSqueezed The next timestamp that can be squeezed.
-    function squeezeDrips(
-        uint256 tokenId,
-        IERC20 erc20,
-        uint256 senderId,
-        bytes32 historyHash,
-        DripsHistory[] calldata dripsHistory
-    ) public onlyHolder(tokenId) returns (uint128 amt, uint32 nextSqueezed) {
-        return dripsHub.squeezeDrips(tokenId, erc20, senderId, historyHash, dripsHistory);
-    }
-
     /// @notice Collects the user's received already split funds
     /// and transfers them out of the drips hub contract.
     /// @param tokenId The ID of the token representing the collecting user ID.
