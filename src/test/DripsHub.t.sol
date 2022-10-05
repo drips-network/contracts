@@ -475,29 +475,17 @@ contract DripsHubTest is Test {
 
         // Check squeezableDrips
         skip(1);
-        (uint128 amt, uint32 nextSqueezed) =
-            dripsHub.squeezableDrips(receiver, erc20, user, 0, history);
+        uint128 amt = dripsHub.squeezableDrips(receiver, erc20, user, 0, history);
         assertEq(amt, 1, "Invalid squeezable amt before");
-        assertEq(nextSqueezed, block.timestamp, "Invalid next squeezable before");
-
-        // Check nextSqueezedDrips
-        nextSqueezed = dripsHub.nextSqueezedDrips(receiver, erc20, user);
-        assertEq(nextSqueezed, block.timestamp - 1, "Invalid next squeezed before");
 
         // Squeeze
         vm.prank(driver);
-        (amt, nextSqueezed) = dripsHub.squeezeDrips(receiver, erc20, user, 0, history);
+        amt = dripsHub.squeezeDrips(receiver, erc20, user, 0, history);
         assertEq(amt, 1, "Invalid squeezed amt");
-        assertEq(nextSqueezed, block.timestamp, "Invalid next squeezed");
 
         // Check squeezableDrips
-        (amt, nextSqueezed) = dripsHub.squeezableDrips(receiver, erc20, user, 0, history);
+        amt = dripsHub.squeezableDrips(receiver, erc20, user, 0, history);
         assertEq(amt, 0, "Invalid squeezable amt after");
-        assertEq(nextSqueezed, block.timestamp, "Invalid next squeezed after");
-
-        // Check nextSqueezedDrips
-        nextSqueezed = dripsHub.nextSqueezedDrips(receiver, erc20, user);
-        assertEq(nextSqueezed, block.timestamp, "Invalid next squeezed after");
 
         // Collect the squeezed amount
         split(receiver, 1, 0);
@@ -540,8 +528,8 @@ contract DripsHubTest is Test {
     function testBalanceAt() public {
         DripsReceiver[] memory receivers = dripsReceivers(receiver, 1);
         setDrips(user, 0, 2, receivers);
-        uint256 balance = dripsHub.balanceAt(user, erc20, receivers, uint32(block.timestamp + 1));
-        assertEq(balance, 1, "Invalid balance");
+        uint256 balanceAt = dripsHub.balanceAt(user, erc20, receivers, uint32(block.timestamp + 1));
+        assertEq(balanceAt, 1, "Invalid balance");
     }
 
     function testRegisterDriver() public {

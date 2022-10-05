@@ -203,7 +203,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         history[0] = DripsHistory(0, receivers, updateTime, maxEnd);
     }
 
-    function hist(bytes32 dripsHash, uint32 updateTime, uint32 maxEnd)
+    function histSkip(bytes32 dripsHash, uint32 updateTime, uint32 maxEnd)
         internal
         pure
         returns (DripsHistory[] memory history)
@@ -220,7 +220,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
 
     function histSkip(uint256 userId) internal view returns (DripsHistory[] memory history) {
         (bytes32 dripsHash,, uint32 updateTime,, uint32 maxEnd) = Drips._dripsState(userId, assetId);
-        return hist(dripsHash, updateTime, maxEnd);
+        return histSkip(dripsHash, updateTime, maxEnd);
     }
 
     function hist(DripsHistory[] memory history, uint256 userId)
@@ -451,10 +451,9 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint256 userId,
         uint256 senderId,
         DripsHistory[] memory dripsHistory,
-        uint256 expectedAmt,
-        uint256 expectedNextSqueezed
+        uint256 expectedAmt
     ) internal {
-        squeezeDrips(userId, senderId, 0, dripsHistory, expectedAmt, expectedNextSqueezed);
+        squeezeDrips(userId, senderId, 0, dripsHistory, expectedAmt);
     }
 
     function squeezeDrips(
@@ -462,24 +461,18 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint256 senderId,
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory,
-        uint256 expectedAmt,
-        uint256 expectedNextSqueezed
+        uint256 expectedAmt
     ) internal {
-        (uint128 amtBefore, uint32 nextSqueezedBefore) =
+        (uint128 amtBefore,,) =
             Drips._squeezableDrips(userId, assetId, senderId, historyHash, dripsHistory);
+        assertEq(amtBefore, expectedAmt, "Invalid squeezable amount before squeezing");
 
-        (uint128 amt, uint32 nextSqueezed) =
-            Drips._squeezeDrips(userId, assetId, senderId, historyHash, dripsHistory);
+        uint128 amt = Drips._squeezeDrips(userId, assetId, senderId, historyHash, dripsHistory);
 
         assertEq(amt, expectedAmt, "Invalid squeezed amount");
-        assertEq(nextSqueezed, expectedNextSqueezed, "Invalid next squeezed");
-        assertEq(amtBefore, amt, "Invalid squeezable amount before squeezing");
-        assertEq(nextSqueezedBefore, nextSqueezed, "Invalid next squeezed before squeezing");
-        (uint128 amtAfter, uint32 nextSqueezedAfter) =
+        (uint128 amtAfter,,) =
             Drips._squeezableDrips(userId, assetId, senderId, historyHash, dripsHistory);
         assertEq(amtAfter, 0, "Squeezable amount after squeezing non-zero");
-        assertEq(nextSqueezedAfter, nextSqueezed, "Invalid next squeezed after squeezing");
-        assertNextSqueezedDrips(userId, senderId, nextSqueezed);
     }
 
     function assertSqueezeDripsReverts(
@@ -520,11 +513,6 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         DripsHistory[] memory dripsHistory
     ) external view {
         Drips._squeezableDrips(userId, assetId, senderId, historyHash, dripsHistory);
-    }
-
-    function assertNextSqueezedDrips(uint256 userId, uint256 senderId, uint256 expected) internal {
-        uint256 actual = Drips._nextSqueezedDrips(userId, assetId, senderId);
-        assertEq(actual, expected, "Invalid next squeezable drips");
     }
 
     function testDripsConfigStoresParameters() public {
@@ -1449,7 +1437,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint128 amt = cycleSecs;
         setDrips(sender, 0, amt, recv(receiver, 1));
         skip(2);
-        squeezeDrips(receiver, sender, hist(sender), 2, block.timestamp);
+        squeezeDrips(receiver, sender, hist(sender), 2);
         skipToCycleEnd();
         receiveDrips(receiver, amt - 2);
     }
@@ -1477,11 +1465,25 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         setDrips(sender, 0, amt, recv(receiver, 1));
         DripsHistory[] memory history = hist(sender);
         skip(1);
-        squeezeDrips(receiver, sender, history, 1, block.timestamp);
+        squeezeDrips(receiver, sender, history, 1);
         skip(2);
-        squeezeDrips(receiver, sender, history, 2, block.timestamp);
+        squeezeDrips(receiver, sender, history, 2);
         skipToCycleEnd();
         receiveDrips(receiver, amt - 3);
+    }
+
+    function testFundsFromOldHistoryEntriesAreNotSqueezedTwice() public {
+        setDrips(sender, 0, 9, recv(receiver, 1));
+        DripsHistory[] memory history = hist(sender);
+        skip(1);
+        setDrips(sender, 8, 8, recv(receiver, 2));
+        history = hist(history, sender);
+        skip(1);
+        squeezeDrips(receiver, sender, history, 3);
+        skip(1);
+        squeezeDrips(receiver, sender, history, 2);
+        skipToCycleEnd();
+        receiveDrips(receiver, 4);
     }
 
     function testFundsFromFinishedCyclesAreNotSqueezed() public {
@@ -1489,7 +1491,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         setDrips(sender, 0, amt, recv(receiver, 1));
         skipToCycleEnd();
         skip(2);
-        squeezeDrips(receiver, sender, hist(sender), 2, block.timestamp);
+        squeezeDrips(receiver, sender, hist(sender), 2);
         skipToCycleEnd();
         receiveDrips(receiver, amt - 2);
     }
@@ -1501,7 +1503,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         setDrips(sender, 0, 6, recv(receiver, 3));
         history = hist(history, sender);
         skip(1);
-        squeezeDrips(receiver, sender, history, 3, block.timestamp);
+        squeezeDrips(receiver, sender, history, 3);
         skipToCycleEnd();
         receiveDrips(receiver, 5);
     }
@@ -1510,7 +1512,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint128 amt = 2;
         setDrips(sender, 0, amt, recv(receiver, 1));
         skip(3);
-        squeezeDrips(receiver, sender, hist(sender), 2, block.timestamp);
+        squeezeDrips(receiver, sender, hist(sender), 2);
         skipToCycleEnd();
         receiveDrips(receiver, 0);
     }
@@ -1519,7 +1521,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint128 amt = cycleSecs * 2;
         setDrips(sender, 0, amt, recv(receiver, 1));
         skipToCycleEnd();
-        squeezeDrips(receiver, sender, hist(sender), 0, block.timestamp);
+        squeezeDrips(receiver, sender, hist(sender), 0);
         skipToCycleEnd();
         receiveDrips(receiver, amt);
     }
@@ -1527,21 +1529,21 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     function testDripsWithStartAndDurationCanBeSqueezed() public {
         setDrips(sender, 0, 10, recv(receiver, 1, block.timestamp + 2, 2));
         skip(5);
-        squeezeDrips(receiver, sender, hist(sender), 2, block.timestamp);
+        squeezeDrips(receiver, sender, hist(sender), 2);
         skipToCycleEnd();
         receiveDrips(receiver, 0);
     }
 
     function testEmptyHistoryCanBeSqueezed() public {
         skip(1);
-        squeezeDrips(receiver, sender, hist(), 0, block.timestamp - 1);
+        squeezeDrips(receiver, sender, hist(), 0);
     }
 
     function testHistoryWithoutTheSqueezingReceiverCanBeSqueezed() public {
         setDrips(sender, 0, 1, recv(receiver1, 1));
         DripsHistory[] memory history = hist(sender);
         skip(1);
-        squeezeDrips(receiver2, sender, history, 0, block.timestamp);
+        squeezeDrips(receiver2, sender, history, 0);
         skipToCycleEnd();
         receiveDrips(receiver1, 1);
     }
@@ -1552,9 +1554,9 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         setDrips(sender2, 0, 6, recv(receiver, 3));
         DripsHistory[] memory history2 = hist(sender2);
         skip(1);
-        squeezeDrips(receiver, sender1, history1, 2, block.timestamp);
+        squeezeDrips(receiver, sender1, history1, 2);
         skip(1);
-        squeezeDrips(receiver, sender2, history2, 6, block.timestamp);
+        squeezeDrips(receiver, sender2, history2, 6);
         skipToCycleEnd();
         receiveDrips(receiver, 2);
     }
@@ -1566,7 +1568,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         setDrips(sender, 4, 4, recv(receiver, 2));
         history = hist(history, sender);
         skip(1);
-        squeezeDrips(receiver, sender, history, 3, block.timestamp);
+        squeezeDrips(receiver, sender, history, 3);
         skipToCycleEnd();
         receiveDrips(receiver, 2);
     }
@@ -1582,7 +1584,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         setDrips(sender, 0, 4, recv(receiver, 4));
         history = hist(history, sender);
         skip(1);
-        squeezeDrips(receiver, sender, history, 5, block.timestamp);
+        squeezeDrips(receiver, sender, history, 5);
         skipToCycleEnd();
         receiveDrips(receiver, 2);
     }
@@ -1598,7 +1600,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         setDrips(sender, 0, 4, recv(receiver, 4));
         history = histSkip(history, sender);
         skip(1);
-        squeezeDrips(receiver, sender, history, 2, block.timestamp - 1);
+        squeezeDrips(receiver, sender, history, 2);
         skipToCycleEnd();
         receiveDrips(receiver, 5);
     }
@@ -1610,7 +1612,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         setDrips(sender, 0, 2, recv(receiver, 2));
         DripsHistory[] memory history = hist(sender);
         skip(1);
-        squeezeDrips(receiver, sender, historyHash, history, 2, block.timestamp);
+        squeezeDrips(receiver, sender, historyHash, history, 2);
         skipToCycleEnd();
         receiveDrips(receiver, 1);
     }
@@ -1618,7 +1620,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     function testDripsWithCopiesOfTheReceiverCanBeSqueezed() public {
         setDrips(sender, 0, 6, recv(recv(receiver, 1), recv(receiver, 2)));
         skip(1);
-        squeezeDrips(receiver, sender, hist(sender), 3, block.timestamp);
+        squeezeDrips(receiver, sender, hist(sender), 3);
         skipToCycleEnd();
         receiveDrips(receiver, 3);
     }
@@ -1626,20 +1628,84 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     function testDripsWithManyReceiversCanBeSqueezed() public {
         setDrips(sender, 0, 14, recv(recv(receiver1, 1), recv(receiver2, 2), recv(receiver3, 4)));
         skip(1);
-        squeezeDrips(receiver2, sender, hist(sender), 2, block.timestamp);
+        squeezeDrips(receiver2, sender, hist(sender), 2);
         skipToCycleEnd();
         receiveDrips(receiver1, 2);
         receiveDrips(receiver2, 2);
         receiveDrips(receiver3, 8);
     }
 
-    function testNextSqueezableDripsIsAtLeastCurrentCycleStart() public {
-        skipToCycleEnd();
-        uint256 cycleStart = block.timestamp;
-        assertNextSqueezedDrips(receiver, sender, cycleStart);
-        skip(cycleSecs - 1);
-        assertNextSqueezedDrips(receiver, sender, cycleStart);
+    function testPartiallySqueezedOldHistoryEntryCanBeSqueezedFully() public {
+        setDrips(sender, 0, 8, recv(receiver, 1));
+        DripsHistory[] memory history = hist(sender);
         skip(1);
-        assertNextSqueezedDrips(receiver, sender, block.timestamp);
+        squeezeDrips(receiver, sender, history, 1);
+        skip(1);
+        setDrips(sender, 6, 6, recv(receiver, 2));
+        history = hist(history, sender);
+        skip(1);
+        squeezeDrips(receiver, sender, history, 3);
+        skipToCycleEnd();
+        receiveDrips(receiver, 4);
+    }
+
+    function testUnsqueezedHistoryEntriesFromBeforeLastSqueezeCanBeSqueezed() public {
+        setDrips(sender, 0, 9, recv(receiver, 1));
+        DripsHistory[] memory history1 = histSkip(sender);
+        DripsHistory[] memory history2 = hist(sender);
+        skip(1);
+        setDrips(sender, 8, 8, recv(receiver, 2));
+        history1 = hist(history1, sender);
+        history2 = histSkip(history2, sender);
+        skip(1);
+        squeezeDrips(receiver, sender, history1, 2);
+        squeezeDrips(receiver, sender, history2, 1);
+        skipToCycleEnd();
+        receiveDrips(receiver, 6);
+    }
+
+    function testLastSqueezedForPastCycleIsIgnored() public {
+        setDrips(sender, 0, 3, recv(receiver, 1));
+        DripsHistory[] memory history = hist(sender);
+        skip(1);
+        // Set the first element of the next squeezed table
+        squeezeDrips(receiver, sender, history, 1);
+        setDrips(sender, 2, 2, recv(receiver, 2));
+        history = hist(history, sender);
+        skip(1);
+        // Set the second element of the next squeezed table
+        squeezeDrips(receiver, sender, history, 2);
+        skipToCycleEnd();
+        setDrips(sender, 0, 8, recv(receiver, 3));
+        history = hist(history, sender);
+        skip(1);
+        setDrips(sender, 5, 5, recv(receiver, 5));
+        history = hist(history, sender);
+        skip(1);
+        // The next squeezed table entries are ignored
+        squeezeDrips(receiver, sender, history, 8);
+    }
+
+    function testLastSqueezedForConfigurationSetInPastCycleIsKeptAfterUpdatingDrips() public {
+        setDrips(sender, 0, 2, recv(receiver, 2));
+        DripsHistory[] memory history = hist(sender);
+        skip(1);
+        // Set the first element of the next squeezed table
+        squeezeDrips(receiver, sender, history, 2);
+        setDrips(sender, 0, cycleSecs + 1, recv(receiver, 1));
+        history = hist(history, sender);
+        skip(1);
+        // Set the second element of the next squeezed table
+        squeezeDrips(receiver, sender, history, 1);
+        skipToCycleEnd();
+        skip(1);
+        // Set the first element of the next squeezed table
+        squeezeDrips(receiver, sender, history, 1);
+        skip(1);
+        setDrips(sender, 0, 3, recv(receiver, 3));
+        history = hist(history, sender);
+        skip(1);
+        // There's 1 second of unsqueezed dripping of 1 per second in the current cycle
+        squeezeDrips(receiver, sender, history, 4);
     }
 }

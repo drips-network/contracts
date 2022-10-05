@@ -223,7 +223,7 @@ contract DripsHub is Managed, Drips, Splits {
     /// @notice Receive drips from the currently running cycle from a single sender.
     /// It doesn't receive drips from the previous, finished cycles, to do that use `receiveDrips`.
     /// Squeezed funds won't be received in the next calls to `squeezeDrips` or `receiveDrips`.
-    /// Only funds dripped from `nextSqueezedDrips` to `block.timestamp` can be squeezed.
+    /// Only funds dripped before `block.timestamp` can be squeezed.
     /// @param userId The ID of the user receiving drips to squeeze funds for.
     /// @param erc20 The used ERC-20 token.
     /// @param senderId The ID of the user sending drips to squeeze funds from.
@@ -234,22 +234,16 @@ contract DripsHub is Managed, Drips, Splits {
     /// which have been used since then including the current one, in the chronological order.
     /// Only drips described by `dripsHistory` will be squeezed.
     /// If `dripsHistory` entries have no receivers, they won't be squeezed.
-    /// The next call to `squeezeDrips` will be able to squeeze only funds which
-    /// have been dripped after the last timestamp squeezed in this call.
-    /// This may cause some funds to be unreceivable until the current cycle ends
-    /// and they can be received using `receiveDrips`.
     /// @return amt The squeezed amount.
-    /// @return nextSqueezed The next timestamp that can be squeezed.
     function squeezeDrips(
         uint256 userId,
         IERC20 erc20,
         uint256 senderId,
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory
-    ) public whenNotPaused returns (uint128 amt, uint32 nextSqueezed) {
+    ) public whenNotPaused returns (uint128 amt) {
         uint256 assetId = _assetId(erc20);
-        (amt, nextSqueezed) =
-            Drips._squeezeDrips(userId, assetId, senderId, historyHash, dripsHistory);
+        amt = Drips._squeezeDrips(userId, assetId, senderId, historyHash, dripsHistory);
         if (amt > 0) {
             Splits._give(userId, userId, assetId, amt);
         }
@@ -263,28 +257,15 @@ contract DripsHub is Managed, Drips, Splits {
     /// @param historyHash The sender's history hash which was valid right before `dripsHistory`.
     /// @param dripsHistory The sequence of the sender's drips configurations.
     /// @return amt The squeezed amount.
-    /// @return nextSqueezed The next timestamp that can be squeezed.
     function squeezableDrips(
         uint256 userId,
         IERC20 erc20,
         uint256 senderId,
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory
-    ) public view returns (uint128 amt, uint32 nextSqueezed) {
-        return Drips._squeezableDrips(userId, _assetId(erc20), senderId, historyHash, dripsHistory);
-    }
-
-    /// @notice Get the next timestamp for which the user can squeeze drips from the sender.
-    /// @param userId The ID of the user receiving drips to squeeze funds for.
-    /// @param erc20 The used ERC-20 token.
-    /// @param senderId The ID of the user sending drips to squeeze funds from.
-    /// @return nextSqueezed The next timestamp that can be squeezed.
-    function nextSqueezedDrips(uint256 userId, IERC20 erc20, uint256 senderId)
-        public
-        view
-        returns (uint32 nextSqueezed)
-    {
-        return Drips._nextSqueezedDrips(userId, _assetId(erc20), senderId);
+    ) public view returns (uint128 amt) {
+        (amt,,) =
+            Drips._squeezableDrips(userId, _assetId(erc20), senderId, historyHash, dripsHistory);
     }
 
     /// @notice Returns user's received but not split yet funds.

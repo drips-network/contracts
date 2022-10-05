@@ -19,9 +19,6 @@ struct DripsHistory {
     /// and `dripsHash` will be used when verifying the drips history validity.
     /// Skipping a history entry allows cutting gas usage on analysis
     /// of parts of the drips history which are not worth squeezing.
-    /// Only the last non-skipped history entry affects the `nextSqueezableDrips` timestamp,
-    /// so if a squeezed history list ends with `N` skipped entries, these `N` entries
-    /// still will be squeezable in the following calls to `squeezeDrips`.
     /// The hash of an empty receivers list is `0`, so when the sender updates
     /// their receivers list to be empty, the new `DripsHistory` entry will have
     /// both the `dripsHash` equal to `0` and the `receivers` empty making it always skipped.
@@ -148,13 +145,8 @@ abstract contract Drips {
     /// @param assetId The used asset ID.
     /// @param senderId The ID of the user sending drips which are squeezed.
     /// @param amt The squeezed amount.
-    /// @param nextSqueezed The next timestamp that can be squeezed.
     event SqueezedDrips(
-        uint256 indexed userId,
-        uint256 indexed assetId,
-        uint256 indexed senderId,
-        uint128 amt,
-        uint32 nextSqueezed
+        uint256 indexed userId, uint256 indexed assetId, uint256 indexed senderId, uint128 amt
     );
 
     struct DripsStorage {
@@ -166,9 +158,10 @@ abstract contract Drips {
     struct DripsState {
         /// @notice The drips history hash, see `_hashDripsHistory`.
         bytes32 dripsHistoryHash;
-        /// @notice The next timestamp for which the user can squeeze drips from the sender.
-        /// The key is the sender's user ID. See `_nextSqueezedDrips`.
-        mapping(uint256 => uint32) nextSqueezed;
+        /// @notice The next squeezable timestamps. The key is the sender's user ID.
+        /// Each `N`th element of the array is the next squeezable timestamp
+        /// of the `N`th sender's drips configuration in effect in the current cycle.
+        mapping(uint256 => uint32[2 ** 32]) nextSqueezed;
         /// @notice The drips receivers list hash, see `_hashDrips`.
         bytes32 dripsHash;
         /// @notice The next cycle to be received
@@ -179,6 +172,8 @@ abstract contract Drips {
         uint32 maxEnd;
         /// @notice The balance when drips have been configured for the last time
         uint128 balance;
+        /// @notice The number of drips configurations seen in the current cycle
+        uint32 currCycleConfigs;
         /// @notice The changes of received amounts on specific cycle.
         /// The keys are cycles, each cycle `C` becomes receivable on timestamp `C * cycleSecs`.
         /// Values for cycles before `nextReceivableCycle` are guaranteed to be zeroed.
@@ -324,7 +319,7 @@ abstract contract Drips {
     /// @notice Receive drips from the currently running cycle from a single sender.
     /// It doesn't receive drips from the previous, finished cycles, to do that use `_receiveDrips`.
     /// Squeezed funds won't be received in the next calls to `_squeezeDrips` or `_receiveDrips`.
-    /// Only funds dripped from `_nextSqueezedDrips` to `block.timestamp` can be squeezed.
+    /// Only funds dripped before `block.timestamp` can be squeezed.
     /// @param userId The ID of the user receiving drips to squeeze funds for.
     /// @param assetId The used asset ID.
     /// @param senderId The ID of the user sending drips to squeeze funds from.
@@ -335,25 +330,26 @@ abstract contract Drips {
     /// which have been used since then including the current one, in the chronological order.
     /// Only drips described by `dripsHistory` will be squeezed.
     /// If `dripsHistory` entries have no receivers, they won't be squeezed.
-    /// The next call to `_squeezeDrips` will be able to squeeze only funds which
-    /// have been dripped after the last timestamp squeezed in this call.
-    /// This may cause some funds to be unreceivable until the current cycle ends
-    /// and they can be received using `_receiveDrips`.
     /// @return amt The squeezed amount.
-    /// @return nextSqueezed The next timestamp that can be squeezed.
     function _squeezeDrips(
         uint256 userId,
         uint256 assetId,
         uint256 senderId,
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory
-    ) internal returns (uint128 amt, uint32 nextSqueezed) {
-        (amt, nextSqueezed) = _squeezableDrips(userId, assetId, senderId, historyHash, dripsHistory);
+    ) internal returns (uint128 amt) {
+        uint256 squeezedNum;
+        uint256[] memory squeezedIdxs;
+        (amt, squeezedNum, squeezedIdxs) =
+            _squeezableDrips(userId, assetId, senderId, historyHash, dripsHistory);
         DripsState storage state = _dripsStorage().states[assetId][userId];
-        state.nextSqueezed[senderId] = nextSqueezed;
-        uint32 cycleStart = _currTimestamp() - (_currTimestamp() % _cycleSecs);
+        uint32[2 ** 32] storage nextSqueezed = state.nextSqueezed[senderId];
+        for (uint256 i = 0; i < squeezedNum; i++) {
+            nextSqueezed[squeezedIdxs[i]] = _currTimestamp();
+        }
+        uint32 cycleStart = _currCycleStart();
         _addDeltaRange(state, cycleStart, cycleStart + 1, -int256(amt * _AMT_PER_SEC_MULTIPLIER));
-        emit SqueezedDrips(userId, assetId, senderId, amt, nextSqueezed);
+        emit SqueezedDrips(userId, assetId, senderId, amt);
     }
 
     /// @notice Calculate effects of calling `_squeezeDrips` with the given parameters.
@@ -364,26 +360,36 @@ abstract contract Drips {
     /// @param historyHash The sender's history hash which was valid right before `dripsHistory`.
     /// @param dripsHistory The sequence of the sender's drips configurations.
     /// @return amt The squeezed amount.
-    /// @return nextSqueezed The next timestamp that can be squeezed.
+    /// @return squeezedNum The number of squeezed history entries.
+    /// @return squeezedIdxs The `nextSqueezed` indexes of squeezed history entries.
     function _squeezableDrips(
         uint256 userId,
         uint256 assetId,
         uint256 senderId,
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory
-    ) internal view returns (uint128 amt, uint32 nextSqueezed) {
-        bytes32 currHistoryHash = _dripsStorage().states[assetId][senderId].dripsHistoryHash;
-        _verifyDripsHistory(historyHash, dripsHistory, currHistoryHash);
-        uint32 squeezeStart = _nextSqueezedDrips(userId, assetId, senderId);
+    ) internal view returns (uint128 amt, uint256 squeezedNum, uint256[] memory squeezedIdxs) {
+        DripsState storage senderState = _dripsStorage().states[assetId][senderId];
+        _verifyDripsHistory(historyHash, dripsHistory, senderState.dripsHistoryHash);
+        uint32[2 ** 32] storage nextSqueezed =
+            _dripsStorage().states[assetId][userId].nextSqueezed[senderId];
         uint32 squeezeEnd = _currTimestamp();
-        nextSqueezed = squeezeStart;
-        uint256 i = dripsHistory.length;
-        while (i > 0 && squeezeStart < squeezeEnd) {
-            DripsHistory memory drips = dripsHistory[--i];
+        // If the last update was not in the current cycle,
+        // there's only the single latest history entry to squeeze in the current cycle.
+        uint256 squeezedIdx = 1;
+        if (senderState.updateTime >= _currCycleStart()) squeezedIdx = senderState.currCycleConfigs;
+        uint256 historyIdx = dripsHistory.length;
+        squeezedIdxs = new uint256[](historyIdx);
+        while (squeezedIdx > 0 && historyIdx > 0) {
+            squeezedIdx--;
+            historyIdx--;
+            DripsHistory memory drips = dripsHistory[historyIdx];
             if (drips.receivers.length != 0) {
-                amt += _squeezedAmt(userId, drips, squeezeStart, squeezeEnd);
-                if (nextSqueezed < squeezeEnd) {
-                    nextSqueezed = squeezeEnd;
+                uint32 squeezeStart = nextSqueezed[squeezedIdx];
+                if (squeezeStart < _currCycleStart()) squeezeStart = _currCycleStart();
+                if (squeezeStart < squeezeEnd) {
+                    squeezedIdxs[squeezedNum++] = squeezedIdx;
+                    amt += _squeezedAmt(userId, drips, squeezeStart, squeezeEnd);
                 }
             }
             squeezeEnd = drips.updateTime;
@@ -424,10 +430,9 @@ abstract contract Drips {
         uint32 squeezeEnd
     ) private view returns (uint128 squeezedAmt) {
         DripsReceiver[] memory receivers = dripsHistory.receivers;
-        // Binary search for the `idx` of the first `userId` receiver being
+        // Binary search for the `idx` of the first occurrence of `userId`
         uint256 idx = 0;
-        uint256 idxCap = receivers.length;
-        while (idx < idxCap) {
+        for (uint256 idxCap = receivers.length; idx < idxCap;) {
             uint256 idxMid = (idx + idxCap) / 2;
             if (receivers[idxMid].userId < userId) {
                 idx = idxMid + 1;
@@ -440,31 +445,12 @@ abstract contract Drips {
         uint256 amt = 0;
         for (; idx < receivers.length; idx++) {
             DripsReceiver memory receiver = receivers[idx];
-            if (receiver.userId != userId) {
-                break;
-            }
+            if (receiver.userId != userId) break;
             (uint32 start, uint32 end) =
                 _dripsRange(receiver, updateTime, maxEnd, squeezeStart, squeezeEnd);
             amt += _drippedAmt(receiver.config.amtPerSec(), start, end);
         }
         return uint128(amt);
-    }
-
-    /// @notice Get the next timestamp for which the user can squeeze drips from the sender.
-    /// @param userId The ID of the user receiving drips to squeeze funds for.
-    /// @param assetId The used asset ID.
-    /// @param senderId The ID of the user sending drips to squeeze funds from.
-    /// @return nextSqueezed The next timestamp that can be squeezed.
-    function _nextSqueezedDrips(uint256 userId, uint256 assetId, uint256 senderId)
-        internal
-        view
-        returns (uint32 nextSqueezed)
-    {
-        nextSqueezed = _dripsStorage().states[assetId][userId].nextSqueezed[senderId];
-        uint32 cycleStart = _currTimestamp() - (_currTimestamp() % _cycleSecs);
-        if (nextSqueezed < cycleStart) {
-            nextSqueezed = cycleStart;
-        }
     }
 
     /// @notice Current user drips state.
@@ -591,8 +577,13 @@ abstract contract Drips {
         state.updateTime = _currTimestamp();
         state.maxEnd = newMaxEnd;
         state.balance = newBalance;
-        bytes32 newDripsHash = _hashDrips(newReceivers);
         bytes32 dripsHistory = state.dripsHistoryHash;
+        if (dripsHistory != 0 && _cycleOf(lastUpdate) != _cycleOf(_currTimestamp())) {
+            state.currCycleConfigs = 2;
+        } else {
+            state.currCycleConfigs++;
+        }
+        bytes32 newDripsHash = _hashDrips(newReceivers);
         state.dripsHistoryHash =
             _hashDripsHistory(dripsHistory, newDripsHash, _currTimestamp(), newMaxEnd);
         emit DripsSet(userId, assetId, newDripsHash, dripsHistory, newBalance, newMaxEnd);
@@ -1015,10 +1006,17 @@ abstract contract Drips {
         }
     }
 
-    /// @notice The current timestamp, casted to the library's internal representation.
+    /// @notice The current timestamp, casted to the contract's internal representation.
     /// @return timestamp The current timestamp
     function _currTimestamp() private view returns (uint32 timestamp) {
         return uint32(block.timestamp);
+    }
+
+    /// @notice The current cycle start timestamp, casted to the contract's internal representation.
+    /// @return timestamp The current cycle start timestamp
+    function _currCycleStart() private view returns (uint32 timestamp) {
+        uint32 currTimestamp = _currTimestamp();
+        return currTimestamp - (currTimestamp % _cycleSecs);
     }
 
     /// @notice Returns the Drips storage.
