@@ -103,12 +103,12 @@ abstract contract Splits {
         return _splitsStorage().splitsStates[userId].balances[assetId].splittable;
     }
 
-    /// @notice Calculate results of splitting an amount using the current splits configuration.
+    /// @notice Calculate the result of splitting an amount using the current splits configuration.
     /// @param userId The user ID
     /// @param currReceivers The list of the user's current splits receivers.
     /// @param amount The amount being split.
     /// @return collectableAmt The part of the `amount` left for collection after splitting.
-    function _splitResults(uint256 userId, SplitsReceiver[] memory currReceivers, uint128 amount)
+    function _splitResult(uint256 userId, SplitsReceiver[] memory currReceivers, uint128 amount)
         internal
         view
         returns (uint128 collectableAmt)

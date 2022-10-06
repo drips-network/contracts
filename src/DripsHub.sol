@@ -277,17 +277,17 @@ contract DripsHub is Managed, Drips, Splits {
         return Splits._splittable(userId, _assetId(erc20));
     }
 
-    /// @notice Calculate results of splitting an amount using the current splits configuration.
+    /// @notice Calculate the result of splitting an amount using the current splits configuration.
     /// @param userId The user ID
     /// @param currReceivers The list of the user's current splits receivers.
     /// @param amount The amount being split.
     /// @return collectableAmt The part of the `amount` left for collection after splitting.
-    function splitResults(uint256 userId, SplitsReceiver[] memory currReceivers, uint128 amount)
+    function splitResult(uint256 userId, SplitsReceiver[] memory currReceivers, uint128 amount)
         public
         view
         returns (uint128 collectableAmt)
     {
-        return Splits._splitResults(userId, currReceivers, amount);
+        return Splits._splitResult(userId, currReceivers, amount);
     }
 
     /// @notice Splits user's received but not split yet funds among receivers.

@@ -339,7 +339,7 @@ contract DripsHubTest is Test {
 
     function split(uint256 forUser, uint128 expectedCollectable, uint128 expectedSplit) internal {
         assertSplittable(forUser, expectedCollectable + expectedSplit);
-        assertSplitResults(forUser, expectedCollectable + expectedSplit, expectedCollectable);
+        assertSplitResult(forUser, expectedCollectable + expectedSplit, expectedCollectable);
         uint128 collectableBefore = collectable(forUser);
 
         (uint128 collectableAmt, uint128 splitAmt) =
@@ -360,10 +360,10 @@ contract DripsHubTest is Test {
         assertEq(actual, expected, "Invalid splittable");
     }
 
-    function assertSplitResults(uint256 forUser, uint256 amt, uint256 expected) internal {
+    function assertSplitResult(uint256 forUser, uint256 amt, uint256 expected) internal {
         uint128 actual =
-            dripsHub.splitResults(forUser, getCurrSplitsReceivers(forUser), uint128(amt));
-        assertEq(actual, expected, "Invalid split results");
+            dripsHub.splitResult(forUser, getCurrSplitsReceivers(forUser), uint128(amt));
+        assertEq(actual, expected, "Invalid split result");
     }
 
     function collect(uint256 forUser, uint128 expectedAmt) internal {
