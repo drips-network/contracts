@@ -464,14 +464,14 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint256 expectedAmt
     ) internal {
         (uint128 amtBefore,,) =
-            Drips._squeezableDrips(userId, assetId, senderId, historyHash, dripsHistory);
+            Drips._squeezeDripsResult(userId, assetId, senderId, historyHash, dripsHistory);
         assertEq(amtBefore, expectedAmt, "Invalid squeezable amount before squeezing");
 
         uint128 amt = Drips._squeezeDrips(userId, assetId, senderId, historyHash, dripsHistory);
 
         assertEq(amt, expectedAmt, "Invalid squeezed amount");
         (uint128 amtAfter,,) =
-            Drips._squeezableDrips(userId, assetId, senderId, historyHash, dripsHistory);
+            Drips._squeezeDripsResult(userId, assetId, senderId, historyHash, dripsHistory);
         assertEq(amtAfter, 0, "Squeezable amount after squeezing non-zero");
     }
 
@@ -484,6 +484,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     ) internal {
         vm.expectRevert(expectedReason);
         this.squeezeDripsExternal(userId, senderId, historyHash, dripsHistory);
+        vm.expectRevert(expectedReason);
+        this.squeezeDripsResultExternal(userId, senderId, historyHash, dripsHistory);
     }
 
     function squeezeDripsExternal(
@@ -495,24 +497,13 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         Drips._squeezeDrips(userId, assetId, senderId, historyHash, dripsHistory);
     }
 
-    function assertSqueezableDripsReverts(
-        uint256 userId,
-        uint256 senderId,
-        bytes32 historyHash,
-        DripsHistory[] memory dripsHistory,
-        bytes memory expectedReason
-    ) internal {
-        vm.expectRevert(expectedReason);
-        this.squeezableDripsExternal(userId, senderId, historyHash, dripsHistory);
-    }
-
-    function squeezableDripsExternal(
+    function squeezeDripsResultExternal(
         uint256 userId,
         uint256 senderId,
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory
     ) external view {
-        Drips._squeezableDrips(userId, assetId, senderId, historyHash, dripsHistory);
+        Drips._squeezeDripsResult(userId, assetId, senderId, historyHash, dripsHistory);
     }
 
     function testDripsConfigStoresParameters() public {

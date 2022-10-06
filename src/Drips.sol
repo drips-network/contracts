@@ -327,7 +327,7 @@ abstract contract Drips {
         uint256 squeezedNum;
         uint256[] memory squeezedIdxs;
         (amt, squeezedNum, squeezedIdxs) =
-            _squeezableDrips(userId, assetId, senderId, historyHash, dripsHistory);
+            _squeezeDripsResult(userId, assetId, senderId, historyHash, dripsHistory);
         DripsState storage state = _dripsStorage().states[assetId][userId];
         uint32[2 ** 32] storage nextSqueezed = state.nextSqueezed[senderId];
         for (uint256 i = 0; i < squeezedNum; i++) {
@@ -348,7 +348,7 @@ abstract contract Drips {
     /// @return amt The squeezed amount.
     /// @return squeezedNum The number of squeezed history entries.
     /// @return squeezedIdxs The `nextSqueezed` indexes of squeezed history entries.
-    function _squeezableDrips(
+    function _squeezeDripsResult(
         uint256 userId,
         uint256 assetId,
         uint256 senderId,

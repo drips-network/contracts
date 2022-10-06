@@ -475,7 +475,7 @@ contract DripsHubTest is Test {
 
         // Check squeezableDrips
         skip(1);
-        uint128 amt = dripsHub.squeezableDrips(receiver, erc20, user, 0, history);
+        uint128 amt = dripsHub.squeezeDripsResult(receiver, erc20, user, 0, history);
         assertEq(amt, 1, "Invalid squeezable amt before");
 
         // Squeeze
@@ -484,7 +484,7 @@ contract DripsHubTest is Test {
         assertEq(amt, 1, "Invalid squeezed amt");
 
         // Check squeezableDrips
-        amt = dripsHub.squeezableDrips(receiver, erc20, user, 0, history);
+        amt = dripsHub.squeezeDripsResult(receiver, erc20, user, 0, history);
         assertEq(amt, 0, "Invalid squeezable amt after");
 
         // Collect the squeezed amount

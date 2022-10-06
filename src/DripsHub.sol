@@ -258,7 +258,7 @@ contract DripsHub is Managed, Drips, Splits {
     /// @param historyHash The sender's history hash which was valid right before `dripsHistory`.
     /// @param dripsHistory The sequence of the sender's drips configurations.
     /// @return amt The squeezed amount.
-    function squeezableDrips(
+    function squeezeDripsResult(
         uint256 userId,
         IERC20 erc20,
         uint256 senderId,
@@ -266,7 +266,7 @@ contract DripsHub is Managed, Drips, Splits {
         DripsHistory[] memory dripsHistory
     ) public view returns (uint128 amt) {
         (amt,,) =
-            Drips._squeezableDrips(userId, _assetId(erc20), senderId, historyHash, dripsHistory);
+            Drips._squeezeDripsResult(userId, _assetId(erc20), senderId, historyHash, dripsHistory);
     }
 
     /// @notice Returns user's received but not split yet funds.
