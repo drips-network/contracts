@@ -190,12 +190,13 @@ contract DripsHub is Managed, Drips, Splits {
     /// If too high, receiving may become too expensive to fit in a single transaction.
     /// @return receivableAmt The amount which would be received
     /// @return receivableCycles The number of cycles which would still be receivable after the call
-    function receivableDrips(uint256 userId, IERC20 erc20, uint32 maxCycles)
+    function receiveDripsResult(uint256 userId, IERC20 erc20, uint32 maxCycles)
         public
         view
         returns (uint128 receivableAmt, uint32 receivableCycles)
     {
-        return Drips._receivableDrips(userId, _assetId(erc20), maxCycles);
+        (receivableAmt, receivableCycles,,,) =
+            Drips._receiveDripsResult(userId, _assetId(erc20), maxCycles);
     }
 
     /// @notice Receive drips for the user.

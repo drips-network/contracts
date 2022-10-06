@@ -379,8 +379,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint128 expectedTotalAmt = expectedReceivedAmt + expectedAmtAfter;
         uint32 expectedTotalCycles = expectedReceivedCycles + expectedCyclesAfter;
         assertReceivableDripsCycles(userId, expectedTotalCycles);
-        assertReceivableDrips(userId, type(uint32).max, expectedTotalAmt, 0);
-        assertReceivableDrips(userId, maxCycles, expectedReceivedAmt, expectedCyclesAfter);
+        assertReceiveDripsResult(userId, type(uint32).max, expectedTotalAmt, 0);
+        assertReceiveDripsResult(userId, maxCycles, expectedReceivedAmt, expectedCyclesAfter);
 
         (uint128 receivedAmt, uint32 receivableCycles) =
             Drips._receiveDrips(userId, assetId, maxCycles);
@@ -388,7 +388,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         assertEq(receivedAmt, expectedReceivedAmt, "Invalid amount received from drips");
         assertEq(receivableCycles, expectedCyclesAfter, "Invalid receivable drips cycles left");
         assertReceivableDripsCycles(userId, expectedCyclesAfter);
-        assertReceivableDrips(userId, type(uint32).max, expectedAmtAfter, 0);
+        assertReceiveDripsResult(userId, type(uint32).max, expectedAmtAfter, 0);
     }
 
     function receiveDrips(DripsReceiver[] memory receivers, uint32 maxEnd, uint32 updateTime)
@@ -430,19 +430,19 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         assertEq(actualCycles, expectedCycles, "Invalid total receivable drips cycles");
     }
 
-    function assertReceivableDrips(uint256 userId, uint128 expectedAmt) internal {
-        (uint128 actualAmt,) = Drips._receivableDrips(userId, assetId, type(uint32).max);
+    function assertReceiveDripsResult(uint256 userId, uint128 expectedAmt) internal {
+        (uint128 actualAmt,,,,) = Drips._receiveDripsResult(userId, assetId, type(uint32).max);
         assertEq(actualAmt, expectedAmt, "Invalid receivable amount");
     }
 
-    function assertReceivableDrips(
+    function assertReceiveDripsResult(
         uint256 userId,
         uint32 maxCycles,
         uint128 expectedAmt,
         uint32 expectedCycles
     ) internal {
-        (uint128 actualAmt, uint32 actualCycles) =
-            Drips._receivableDrips(userId, assetId, maxCycles);
+        (uint128 actualAmt, uint32 actualCycles,,,) =
+            Drips._receiveDripsResult(userId, assetId, maxCycles);
         assertEq(actualAmt, expectedAmt, "Invalid receivable amount");
         assertEq(actualCycles, expectedCycles, "Invalid receivable drips cycles");
     }
@@ -749,11 +749,11 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         // The first cycle hasn't been dripping
         skipToCycleEnd();
         assertReceivableDripsCycles(receiver, 0);
-        assertReceivableDrips(receiver, 0);
+        assertReceiveDripsResult(receiver, 0);
         // The second cycle hasn't been dripping
         skipToCycleEnd();
         assertReceivableDripsCycles(receiver, 0);
-        assertReceivableDrips(receiver, 0);
+        assertReceiveDripsResult(receiver, 0);
         // The third cycle has been dripping
         skipToCycleEnd();
         assertReceivableDripsCycles(receiver, 1);
@@ -817,7 +817,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint128 amt = amtPerSec * secs * 2;
         setDrips(sender, 0, amt, recv(receiver, amtPerSec, block.timestamp + cycleSecs - secs, 0));
         skipToCycleEnd();
-        assertReceivableDrips(receiver, amt / 2);
+        assertReceiveDripsResult(receiver, amt / 2);
         skipToCycleEnd();
         receiveDrips(receiver, amt);
     }
@@ -860,7 +860,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         assertBalance(sender, 0);
         skipToCycleEnd();
         // Receiver had 10 seconds paying 10 per second
-        assertReceivableDrips(receiver, 100);
+        assertReceiveDripsResult(receiver, 100);
         changeBalance(sender, 0, 60);
         skip(5);
         // Sender had 5 seconds paying 10 per second

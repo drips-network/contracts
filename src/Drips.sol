@@ -201,22 +201,6 @@ abstract contract Drips {
         _dripsStorageSlot = dripsStorageSlot;
     }
 
-    /// @notice Calculate effects of calling `_receiveDrips` with the given parameters.
-    /// @param userId The user ID
-    /// @param assetId The used asset ID
-    /// @param maxCycles The maximum number of received drips cycles.
-    /// If too low, receiving will be cheap, but may not cover many cycles.
-    /// If too high, receiving may become too expensive to fit in a single transaction.
-    /// @return receivableAmt The amount which would be received
-    /// @return receivableCycles The number of cycles which would still be receivable after the call
-    function _receivableDrips(uint256 userId, uint256 assetId, uint32 maxCycles)
-        internal
-        view
-        returns (uint128 receivableAmt, uint32 receivableCycles)
-    {
-        (receivableAmt, receivableCycles,,,) = _receivableDripsVerbose(userId, assetId, maxCycles);
-    }
-
     /// @notice Receive drips from unreceived cycles of the user.
     /// Received drips cycles won't need to be analyzed ever again.
     /// @param userId The user ID
@@ -234,7 +218,7 @@ abstract contract Drips {
         uint32 toCycle;
         int128 finalAmtPerCycle;
         (receivedAmt, receivableCycles, fromCycle, toCycle, finalAmtPerCycle) =
-            _receivableDripsVerbose(userId, assetId, maxCycles);
+            _receiveDripsResult(userId, assetId, maxCycles);
         if (fromCycle != toCycle) {
             DripsState storage state = _dripsStorage().states[assetId][userId];
             state.nextReceivableCycle = toCycle;
@@ -251,17 +235,19 @@ abstract contract Drips {
         emit ReceivedDrips(userId, assetId, receivedAmt, receivableCycles);
     }
 
-    /// @notice Receivable drips from unreceived cycles of the user.
+    /// @notice Calculate effects of calling `_receiveDrips` with the given parameters.
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param maxCycles The maximum number of received drips cycles.
-    /// @return receivedAmt The receivable amount
-    /// @return receivableCycles The number of cycles which still will be receivable
-    /// @return fromCycle The cycle from which funds can be received
-    /// @return toCycle The cycle to which funds can be received
+    /// If too low, receiving will be cheap, but may not cover many cycles.
+    /// If too high, receiving may become too expensive to fit in a single transaction.
+    /// @return receivedAmt The amount which would be received
+    /// @return receivableCycles The number of cycles which would still be receivable after the call
+    /// @return fromCycle The cycle from which funds would be received
+    /// @return toCycle The cycle to which funds would be received
     /// @return amtPerCycle The amount per cycle when `toCycle` starts.
-    function _receivableDripsVerbose(uint256 userId, uint256 assetId, uint32 maxCycles)
-        private
+    function _receiveDripsResult(uint256 userId, uint256 assetId, uint32 maxCycles)
+        internal
         view
         returns (
             uint128 receivedAmt,
