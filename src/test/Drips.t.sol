@@ -5,19 +5,19 @@ import {Test} from "forge-std/Test.sol";
 import {Drips, DripsConfig, DripsHistory, DripsConfigImpl, DripsReceiver} from "../Drips.sol";
 
 contract PseudoRandomUtils {
-    bytes32 private salt;
+    bytes32 private seed;
     bool private initialized = false;
 
     // returns a pseudo-random number between 0 and range
     function random(uint256 range) public returns (uint256) {
-        require(initialized, "salt not set for test run");
-        salt = keccak256(bytes.concat(salt));
-        return uint256(salt) % range;
+        require(initialized, "seed not set for test run");
+        seed = keccak256(bytes.concat(seed));
+        return uint256(seed) % range;
     }
 
-    function initSalt(bytes32 salt_) public {
-        require(initialized == false, "only init salt once per test run");
-        salt = salt_;
+    function initSeed(bytes32 seed_) public {
+        require(initialized == false, "only init seed once per test run");
+        seed = seed_;
         initialized = true;
     }
 }
@@ -1371,8 +1371,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         assertBalanceAtReverts(sender, receivers, block.timestamp, ERROR_INVALID_DRIPS_LIST);
     }
 
-    function testFuzzDripsReceiver(bytes32 salt) public {
-        initSalt(salt);
+    function testFuzzDripsReceiver(bytes32 seed) public {
+        initSeed(seed);
         uint8 amountReceivers = 10;
         uint128 maxAmtPerSec = 50;
         uint32 maxDuration = 100;
