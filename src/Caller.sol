@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity ^0.8.15;
+pragma solidity ^0.8.17;
 
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {ECDSA, EIP712} from "openzeppelin-contracts/utils/cryptography/draft-EIP712.sol";
