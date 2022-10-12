@@ -112,10 +112,22 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint256 start,
         uint256 duration
     ) internal pure returns (DripsReceiver[] memory receivers) {
+        return recv(userId, 0, amtPerSec, amtPerSecFrac, start, duration);
+    }
+
+    function recv(
+        uint256 userId,
+        uint256 dripId,
+        uint256 amtPerSec,
+        uint256 amtPerSecFrac,
+        uint256 start,
+        uint256 duration
+    ) internal pure returns (DripsReceiver[] memory receivers) {
         receivers = new DripsReceiver[](1);
         uint256 amtPerSecFull = amtPerSec * Drips._AMT_PER_SEC_MULTIPLIER + amtPerSecFrac;
-        DripsConfig config =
-            DripsConfigImpl.create(uint160(amtPerSecFull), uint32(start), uint32(duration));
+        DripsConfig config = DripsConfigImpl.create(
+            uint32(dripId), uint160(amtPerSecFull), uint32(start), uint32(duration)
+        );
         receivers[0] = DripsReceiver(userId, config);
     }
 
@@ -174,6 +186,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     ) internal returns (DripsReceiver[] memory) {
         DripsReceiver[] memory receivers = new DripsReceiver[](amountReceiver);
         for (uint8 i = 0; i < amountReceiver; i++) {
+            uint256 dripId = random(type(uint32).max + uint256(1));
             uint256 amtPerSec = random(maxAmtPerSec) + 1;
             uint256 start = random(maxStart);
             if (start % 100 <= probStartNow) {
@@ -183,10 +196,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
             if (duration % 100 <= probMaxEnd) {
                 duration = 0;
             }
-
-            receivers[i] = DripsReceiver(
-                i, DripsConfigImpl.create(uint128(amtPerSec), uint32(start), uint32(duration))
-            );
+            receivers[i] = recv(i, dripId, 0, amtPerSec, start, duration)[0];
         }
         return receivers;
     }
@@ -508,27 +518,32 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function testDripsConfigStoresParameters() public {
-        DripsConfig config = DripsConfigImpl.create(1, 2, 3);
-        assertEq(config.amtPerSec(), 1, "Invalid amtPerSec");
-        assertEq(config.start(), 2, "Invalid start");
-        assertEq(config.duration(), 3, "Invalid duration");
+        DripsConfig config = DripsConfigImpl.create(1, 2, 3, 4);
+        assertEq(config.dripId(), 1, "Invalid dripId");
+        assertEq(config.amtPerSec(), 2, "Invalid amtPerSec");
+        assertEq(config.start(), 3, "Invalid start");
+        assertEq(config.duration(), 4, "Invalid duration");
     }
 
     function testDripsConfigChecksOrdering() public {
-        DripsConfig config = DripsConfigImpl.create(1, 1, 1);
-        assertTrue(!config.lt(config), "Configs equal");
+        DripsConfig config = DripsConfigImpl.create(1, 1, 1, 1);
+        assertFalse(config.lt(config), "Configs equal");
 
-        DripsConfig higherAmtPerSec = DripsConfigImpl.create(2, 1, 1);
+        DripsConfig higherDripId = DripsConfigImpl.create(2, 1, 1, 1);
+        assertTrue(config.lt(higherDripId), "DripId higher");
+        assertFalse(higherDripId.lt(config), "DripId lower");
+
+        DripsConfig higherAmtPerSec = DripsConfigImpl.create(1, 2, 1, 1);
         assertTrue(config.lt(higherAmtPerSec), "AmtPerSec higher");
-        assertTrue(!higherAmtPerSec.lt(config), "AmtPerSec lower");
+        assertFalse(higherAmtPerSec.lt(config), "AmtPerSec lower");
 
-        DripsConfig higherStart = DripsConfigImpl.create(1, 2, 1);
+        DripsConfig higherStart = DripsConfigImpl.create(1, 1, 2, 1);
         assertTrue(config.lt(higherStart), "Start higher");
-        assertTrue(!higherStart.lt(config), "Start lower");
+        assertFalse(higherStart.lt(config), "Start lower");
 
-        DripsConfig higherDuration = DripsConfigImpl.create(1, 1, 2);
+        DripsConfig higherDuration = DripsConfigImpl.create(1, 1, 1, 2);
         assertTrue(config.lt(higherDuration), "Duration higher");
-        assertTrue(!higherDuration.lt(config), "Duration lower");
+        assertFalse(higherDuration.lt(config), "Duration lower");
     }
 
     function testAllowsDrippingToASingleReceiver() public {
@@ -1171,6 +1186,16 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     function testDripsNotSortedByReceiverAreRejected() public {
         assertSetDripsReverts(
             sender, 0, 0, recv(recv(receiver2, 1), recv(receiver1, 1)), ERROR_NOT_SORTED
+        );
+    }
+
+    function testDripsNotSortedByDripIdAreRejected() public {
+        assertSetDripsReverts(
+            sender,
+            0,
+            0,
+            recv(recv(receiver, 1, 1, 0, 0, 0), recv(receiver, 0, 1, 0, 0, 0)),
+            ERROR_NOT_SORTED
         );
     }
 

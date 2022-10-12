@@ -115,7 +115,7 @@ contract DripsHubTest is Test {
         list = new DripsReceiver[](1);
         list[0] = DripsReceiver(
             dripsReceiver,
-            DripsConfigImpl.create(uint160(amtPerSec * dripsHub.AMT_PER_SEC_MULTIPLIER()), 0, 0)
+            DripsConfigImpl.create(0, uint160(amtPerSec * dripsHub.AMT_PER_SEC_MULTIPLIER()), 0, 0)
         );
     }
 

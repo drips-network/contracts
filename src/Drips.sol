@@ -31,8 +31,10 @@ struct DripsHistory {
 }
 
 /// @notice Describes a drips configuration.
-/// It's constructed from `amtPerSec`, `start` and `duration` as
-/// `amtPerSec << 64 | start << 32 | duration`.
+/// It's constructed from `dripId`, `amtPerSec`, `start` and `duration` as
+/// `dripId << 224 | amtPerSec << 64 | start << 32 | duration`.
+/// `dripId` is an arbitrary number used to identify a drip.
+/// It's a part of the configuration but the protocol doesn't use it.
 /// `amtPerSec` is the amount per second being dripped. Must never be zero.
 /// It must have additional `Drips._AMT_PER_SEC_EXTRA_DECIMALS` decimals and can have fractions.
 /// To achieve that its value must be multiplied by `Drips._AMT_PER_SEC_MULTIPLIER`.
@@ -46,6 +48,8 @@ using DripsConfigImpl for DripsConfig global;
 
 library DripsConfigImpl {
     /// @notice Create a new DripsConfig.
+    /// @param _dripId An arbitrary number used to identify a drip.
+    /// It's a part of the configuration but the protocol doesn't use it.
     /// @param _amtPerSec The amount per second being dripped. Must never be zero.
     /// It must have additional `Drips._AMT_PER_SEC_EXTRA_DECIMALS` decimals and can have fractions.
     /// To achieve that the passed value must be multiplied by `Drips._AMT_PER_SEC_MULTIPLIER`.
@@ -53,15 +57,21 @@ library DripsConfigImpl {
     /// If zero, use the timestamp when drips are configured.
     /// @param _duration The duration of dripping.
     /// If zero, drip until balance runs out.
-    function create(uint160 _amtPerSec, uint32 _start, uint32 _duration)
+    function create(uint32 _dripId, uint160 _amtPerSec, uint32 _start, uint32 _duration)
         internal
         pure
         returns (DripsConfig)
     {
-        uint256 config = _amtPerSec;
+        uint256 config = _dripId;
+        config = (config << 160) | _amtPerSec;
         config = (config << 32) | _start;
         config = (config << 32) | _duration;
         return DripsConfig.wrap(config);
+    }
+
+    /// @notice Extracts dripId from a `DripsConfig`
+    function dripId(DripsConfig config) internal pure returns (uint32) {
+        return uint32(DripsConfig.unwrap(config) >> 224);
     }
 
     /// @notice Extracts amtPerSec from a `DripsConfig`

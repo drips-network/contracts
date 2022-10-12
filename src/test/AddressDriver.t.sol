@@ -93,7 +93,7 @@ contract AddressDriverTest is Test {
         // Top-up
 
         DripsReceiver[] memory receivers = new DripsReceiver[](1);
-        receivers[0] = DripsReceiver(userId, DripsConfigImpl.create(1, 0, 0));
+        receivers[0] = DripsReceiver(userId, DripsConfigImpl.create(0, 1, 0, 0));
         uint256 balance = erc20.balanceOf(address(this));
 
         (uint128 newBalance, int128 realBalanceDelta) =
