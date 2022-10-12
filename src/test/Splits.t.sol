@@ -172,10 +172,10 @@ contract SplitsTest is Test, Splits {
     }
 
     function testLimitsTheTotalSplitsReceiversCount() public {
-        uint160 countMax = Splits._MAX_SPLITS_RECEIVERS;
+        uint256 countMax = Splits._MAX_SPLITS_RECEIVERS;
         SplitsReceiver[] memory receiversGood = new SplitsReceiver[](countMax);
         SplitsReceiver[] memory receiversBad = new SplitsReceiver[](countMax + 1);
-        for (uint160 i = 0; i < countMax; i++) {
+        for (uint256 i = 0; i < countMax; i++) {
             receiversGood[i] = SplitsReceiver(i, 1);
             receiversBad[i] = receiversGood[i];
         }

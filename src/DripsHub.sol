@@ -48,9 +48,8 @@ contract DripsHub is Managed, Drips, Splits {
     uint8 public constant AMT_PER_SEC_EXTRA_DECIMALS = _AMT_PER_SEC_EXTRA_DECIMALS;
     /// @notice The multiplier for all amtPerSec values.
     uint256 public constant AMT_PER_SEC_MULTIPLIER = _AMT_PER_SEC_MULTIPLIER;
-    /// @notice Maximum number of splits receivers of a single user.
-    /// Limits cost of collecting.
-    uint32 public constant MAX_SPLITS_RECEIVERS = _MAX_SPLITS_RECEIVERS;
+    /// @notice Maximum number of splits receivers of a single user. Limits the cost of splitting.
+    uint256 public constant MAX_SPLITS_RECEIVERS = _MAX_SPLITS_RECEIVERS;
     /// @notice The total splits weight of a user
     uint32 public constant TOTAL_SPLITS_WEIGHT = _TOTAL_SPLITS_WEIGHT;
     /// @notice The offset of the controlling driver ID in the user ID.
