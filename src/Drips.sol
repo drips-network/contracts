@@ -103,7 +103,7 @@ library DripsConfigImpl {
 abstract contract Drips {
     /// @notice Maximum number of drips receivers of a single user.
     /// Limits cost of changes in drips configuration.
-    uint8 internal constant _MAX_DRIPS_RECEIVERS = 100;
+    uint256 internal constant _MAX_DRIPS_RECEIVERS = 100;
     /// @notice The additional decimals for all amtPerSec values.
     uint8 internal constant _AMT_PER_SEC_EXTRA_DECIMALS = 9;
     /// @notice The multiplier for all amtPerSec values. It's `10 ** _AMT_PER_SEC_EXTRA_DECIMALS`.

@@ -163,7 +163,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function genRandomRecv(
-        uint8 amountReceiver,
+        uint256 amountReceiver,
         uint128 maxAmtPerSec,
         uint32 maxStart,
         uint32 maxDuration
@@ -177,7 +177,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function genRandomRecv(
-        uint8 amountReceiver,
+        uint256 amountReceiver,
         uint128 maxAmtPerSec,
         uint32 maxStart,
         uint32 maxDuration,
@@ -185,7 +185,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint256 probStartNow
     ) internal returns (DripsReceiver[] memory) {
         DripsReceiver[] memory receivers = new DripsReceiver[](amountReceiver);
-        for (uint8 i = 0; i < amountReceiver; i++) {
+        for (uint256 i = 0; i < amountReceiver; i++) {
             uint256 dripId = random(type(uint32).max + uint256(1));
             uint256 amtPerSec = random(maxAmtPerSec) + 1;
             uint256 start = random(maxStart);
@@ -1085,7 +1085,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function testLimitsTheTotalReceiversCount() public {
-        uint160 countMax = Drips._MAX_DRIPS_RECEIVERS;
+        uint256 countMax = Drips._MAX_DRIPS_RECEIVERS;
         DripsReceiver[] memory receivers = new DripsReceiver[](countMax);
         for (uint160 i = 0; i < countMax; i++) {
             receivers[i] = recv(i, 1, 0, 0)[0];
@@ -1098,7 +1098,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function testBenchSetDrips100() public {
-        uint160 countMax = Drips._MAX_DRIPS_RECEIVERS;
+        uint256 countMax = Drips._MAX_DRIPS_RECEIVERS;
         DripsReceiver[] memory receivers = new DripsReceiver[](countMax);
         for (uint160 i = 0; i < countMax; i++) {
             receivers[i] = recv(i, 1, 1000 + i, 0)[0];
@@ -1106,11 +1106,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
 
         uint256 gas = gasleft();
         Drips._setDrips(
-            sender,
-            assetId,
-            new DripsReceiver[](0),
-            int128(int160((countMax * countMax))),
-            receivers
+            sender, assetId, new DripsReceiver[](0), int128(int256(countMax * countMax)), receivers
         );
         gas -= gasleft();
         emit log_named_uint("GAS USED", gas);
@@ -1121,7 +1117,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         // Every candidate end time requires iterating over all the receivers to tell that
         // the balance is enough to cover it, but on the highest possible timestamp
         // there isn't enough funds, so we can't skip the whole search.
-        uint160 countMax = Drips._MAX_DRIPS_RECEIVERS;
+        uint256 countMax = Drips._MAX_DRIPS_RECEIVERS;
         DripsReceiver[] memory receivers = new DripsReceiver[](countMax);
         for (uint160 i = 0; i < countMax; i++) {
             receivers[i] = recv(i, 1, 0, 0)[0];
