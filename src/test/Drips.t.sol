@@ -113,8 +113,9 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint256 duration
     ) internal pure returns (DripsReceiver[] memory receivers) {
         receivers = new DripsReceiver[](1);
-        uint192 amtPerSecFull = uint192((amtPerSec * Drips._AMT_PER_SEC_MULTIPLIER) + amtPerSecFrac);
-        DripsConfig config = DripsConfigImpl.create(amtPerSecFull, uint32(start), uint32(duration));
+        uint256 amtPerSecFull = amtPerSec * Drips._AMT_PER_SEC_MULTIPLIER + amtPerSecFrac;
+        DripsConfig config =
+            DripsConfigImpl.create(uint160(amtPerSecFull), uint32(start), uint32(duration));
         receivers[0] = DripsReceiver(userId, config);
     }
 

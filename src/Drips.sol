@@ -53,7 +53,7 @@ library DripsConfigImpl {
     /// If zero, use the timestamp when drips are configured.
     /// @param _duration The duration of dripping.
     /// If zero, drip until balance runs out.
-    function create(uint192 _amtPerSec, uint32 _start, uint32 _duration)
+    function create(uint160 _amtPerSec, uint32 _start, uint32 _duration)
         internal
         pure
         returns (DripsConfig)
@@ -65,8 +65,8 @@ library DripsConfigImpl {
     }
 
     /// @notice Extracts amtPerSec from a `DripsConfig`
-    function amtPerSec(DripsConfig config) internal pure returns (uint192) {
-        return uint192(DripsConfig.unwrap(config) >> 64);
+    function amtPerSec(DripsConfig config) internal pure returns (uint160) {
+        return uint160(DripsConfig.unwrap(config) >> 64);
     }
 
     /// @notice Extracts start from a `DripsConfig`
@@ -95,9 +95,9 @@ abstract contract Drips {
     /// Limits cost of changes in drips configuration.
     uint8 internal constant _MAX_DRIPS_RECEIVERS = 100;
     /// @notice The additional decimals for all amtPerSec values.
-    uint8 internal constant _AMT_PER_SEC_EXTRA_DECIMALS = 18;
+    uint8 internal constant _AMT_PER_SEC_EXTRA_DECIMALS = 9;
     /// @notice The multiplier for all amtPerSec values. It's `10 ** _AMT_PER_SEC_EXTRA_DECIMALS`.
-    uint256 internal constant _AMT_PER_SEC_MULTIPLIER = 1_000_000_000_000_000_000;
+    uint256 internal constant _AMT_PER_SEC_MULTIPLIER = 1_000_000_000;
     /// @notice The total amount the contract can keep track of each asset.
     uint256 internal constant _MAX_TOTAL_DRIPS_BALANCE = uint128(type(int128).max);
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
@@ -679,14 +679,14 @@ abstract contract Drips {
         view
         returns (uint256 newConfigsLen)
     {
-        uint192 amtPerSec = receiver.config.amtPerSec();
+        uint256 amtPerSec = receiver.config.amtPerSec();
         require(amtPerSec != 0, "Drips receiver amtPerSec is zero");
-        (uint32 start, uint32 end) =
+        (uint256 start, uint256 end) =
             _dripsRangeInFuture(receiver, _currTimestamp(), type(uint32).max);
         if (start == end) {
             return configsLen;
         }
-        configs[configsLen] = (uint256(amtPerSec) << 64) | (uint256(start) << 32) | end;
+        configs[configsLen] = (amtPerSec << 64) | (start << 32) | end;
         return configsLen + 1;
     }
 

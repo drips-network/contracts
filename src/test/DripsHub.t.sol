@@ -115,7 +115,7 @@ contract DripsHubTest is Test {
         list = new DripsReceiver[](1);
         list[0] = DripsReceiver(
             dripsReceiver,
-            DripsConfigImpl.create(uint192(amtPerSec * dripsHub.AMT_PER_SEC_MULTIPLIER()), 0, 0)
+            DripsConfigImpl.create(uint160(amtPerSec * dripsHub.AMT_PER_SEC_MULTIPLIER()), 0, 0)
         );
     }
 
@@ -126,14 +126,8 @@ contract DripsHubTest is Test {
         uint128 amtPerSec2
     ) internal view returns (DripsReceiver[] memory list) {
         list = new DripsReceiver[](2);
-        list[0] = DripsReceiver(
-            dripsReceiver1,
-            DripsConfigImpl.create(uint192(amtPerSec1 * dripsHub.AMT_PER_SEC_MULTIPLIER()), 0, 0)
-        );
-        list[1] = DripsReceiver(
-            dripsReceiver2,
-            DripsConfigImpl.create(uint192(amtPerSec2 * dripsHub.AMT_PER_SEC_MULTIPLIER()), 0, 0)
-        );
+        list[0] = dripsReceivers(dripsReceiver1, amtPerSec1)[0];
+        list[1] = dripsReceivers(dripsReceiver2, amtPerSec2)[0];
     }
 
     function setDrips(
