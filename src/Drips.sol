@@ -123,7 +123,9 @@ abstract contract Drips {
     /// @param receiversHash The drips receivers list hash
     /// @param dripsHistoryHash The drips history hash which was valid right before the update.
     /// @param balance The new drips balance. These funds will be dripped to the receivers.
-    /// @param maxEnd The maximum end time of drips
+    /// @param maxEnd The maximum end time of drips, when funds run out.
+    /// If funds run out after the timestamp `type(uint32).max`, it's set to `type(uint32).max`.
+    /// If the balance is 0 or there are no receivers, it's set to the current timestamp.
     event DripsSet(
         uint256 indexed userId,
         uint256 indexed assetId,
