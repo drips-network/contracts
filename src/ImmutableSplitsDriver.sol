@@ -28,6 +28,11 @@ contract ImmutableSplitsDriver is Upgradeable {
     /// @notice The ERC-1967 storage slot holding a single `uint256` counter of created identities.
     bytes32 private immutable _counterSlot = erc1967Slot("eip1967.immutableSplitsDriver.storage");
 
+    /// @notice Emitted when an immutable splits configuration is created.
+    /// @param userId The user ID
+    /// @param receiversHash The splits receivers list hash
+    event CreatedSplits(uint256 indexed userId, bytes32 indexed receiversHash);
+
     /// @param _dripsHub The drips hub to use.
     /// @param _driverId The driver ID to use when calling DripsHub.
     constructor(DripsHub _dripsHub, uint32 _driverId) {
@@ -71,5 +76,6 @@ contract ImmutableSplitsDriver is Upgradeable {
             UserMetadata calldata data = metadata[i];
             dripsHub.emitUserMetadata(userId, data.key, data.value);
         }
+        emit CreatedSplits(userId, dripsHub.splitsHash(userId));
     }
 }
