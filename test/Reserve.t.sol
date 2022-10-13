@@ -2,7 +2,7 @@
 pragma solidity ^0.8.17;
 
 import {Test} from "forge-std/Test.sol";
-import {IReservePlugin, Reserve} from "../Reserve.sol";
+import {IReservePlugin, Reserve} from "src/Reserve.sol";
 import {
     IERC20,
     ERC20PresetFixedSupply

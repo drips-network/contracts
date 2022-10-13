@@ -4,7 +4,6 @@ optimizer_runs = 35_000
 verbosity = 1
 fuzz_runs = 5
 remappings = [
-    'forge-std/=lib/forge-std/src/',
     'openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/'
 ]
 [fmt]

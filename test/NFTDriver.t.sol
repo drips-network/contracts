@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.17;
 
-import {Caller} from "../Caller.sol";
-import {NFTDriver} from "../NFTDriver.sol";
+import {Caller} from "src/Caller.sol";
+import {NFTDriver} from "src/NFTDriver.sol";
 import {
-    DripsConfigImpl, DripsHub, DripsHistory, DripsReceiver, SplitsReceiver
-} from "../DripsHub.sol";
-import {Reserve} from "../Reserve.sol";
-import {Proxy} from "../Upgradeable.sol";
+    DripsConfigImpl,
+    DripsHub,
+    DripsHistory,
+    DripsReceiver,
+    SplitsReceiver
+} from "src/DripsHub.sol";
+import {Reserve} from "src/Reserve.sol";
+import {Proxy} from "src/Upgradeable.sol";
 import {Test} from "forge-std/Test.sol";
 import {
     IERC20,

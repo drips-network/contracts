@@ -2,10 +2,14 @@
 pragma solidity ^0.8.17;
 
 import {
-    SplitsReceiver, DripsConfigImpl, DripsHub, DripsHistory, DripsReceiver
-} from "../DripsHub.sol";
-import {Reserve} from "../Reserve.sol";
-import {Proxy} from "../Upgradeable.sol";
+    SplitsReceiver,
+    DripsConfigImpl,
+    DripsHub,
+    DripsHistory,
+    DripsReceiver
+} from "src/DripsHub.sol";
+import {Reserve} from "src/Reserve.sol";
+import {Proxy} from "src/Upgradeable.sol";
 import {Test} from "forge-std/Test.sol";
 import {
     IERC20,

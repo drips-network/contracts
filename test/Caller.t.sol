@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {ECDSA} from "openzeppelin-contracts/utils/cryptography/ECDSA.sol";
-import {Call, Caller} from "../Caller.sol";
+import {Call, Caller} from "src/Caller.sol";
 
 contract CallerTest is Test {
     bytes internal constant ERROR_ZERO_INPUT = "Input is zero";

@@ -1,3 +1,5 @@
+.PHONY: *
+
 install         :  forge_install yarn_install
 forge_install   :; forge install
 yarn_install    :; yarn install

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.17;
 
-import {ImmutableSplitsDriver, UserMetadata} from "../ImmutableSplitsDriver.sol";
-import {DripsHub, SplitsReceiver} from "../DripsHub.sol";
-import {Reserve} from "../Reserve.sol";
-import {Proxy} from "../Upgradeable.sol";
+import {ImmutableSplitsDriver, UserMetadata} from "src/ImmutableSplitsDriver.sol";
+import {DripsHub, SplitsReceiver} from "src/DripsHub.sol";
+import {Reserve} from "src/Reserve.sol";
+import {Proxy} from "src/Upgradeable.sol";
 import {Test} from "forge-std/Test.sol";
 
 contract ImmutableSplitsDriverTest is Test {
