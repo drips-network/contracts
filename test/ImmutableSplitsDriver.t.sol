@@ -4,7 +4,7 @@ pragma solidity ^0.8.17;
 import {ImmutableSplitsDriver, UserMetadata} from "src/ImmutableSplitsDriver.sol";
 import {DripsHub, SplitsReceiver} from "src/DripsHub.sol";
 import {Reserve} from "src/Reserve.sol";
-import {Proxy} from "src/Upgradeable.sol";
+import {UpgradeableProxy} from "src/Upgradeable.sol";
 import {Test} from "forge-std/Test.sol";
 
 contract ImmutableSplitsDriverTest is Test {
@@ -15,7 +15,7 @@ contract ImmutableSplitsDriverTest is Test {
     function setUp() public {
         Reserve reserve = new Reserve(address(this));
         DripsHub hubLogic = new DripsHub(10, reserve);
-        dripsHub = DripsHub(address(new Proxy(hubLogic, address(this))));
+        dripsHub = DripsHub(address(new UpgradeableProxy(hubLogic, address(this))));
         reserve.addUser(address(dripsHub));
 
         // Make the driver ID non-0 to test if it's respected by the driver
@@ -23,7 +23,7 @@ contract ImmutableSplitsDriverTest is Test {
         dripsHub.registerDriver(address(0));
         uint32 driverId = dripsHub.registerDriver(address(this));
         ImmutableSplitsDriver driverLogic = new ImmutableSplitsDriver(dripsHub, driverId);
-        driver = ImmutableSplitsDriver(address(new Proxy(driverLogic, address(0xDEAD))));
+        driver = ImmutableSplitsDriver(address(new UpgradeableProxy(driverLogic, address(0xDEAD))));
         dripsHub.updateDriverAddress(driverId, address(driver));
         totalSplitsWeight = driver.totalSplitsWeight();
     }

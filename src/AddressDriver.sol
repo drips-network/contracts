@@ -115,7 +115,7 @@ contract AddressDriver is Upgradeable, ERC2771Context {
         address reserve = address(dripsHub.reserve());
         // Approval is done only on the first usage of the ERC-20 token in the reserve by the driver
         if (erc20.allowance(address(this), reserve) == 0) {
-            erc20.approve(reserve, type(uint256).max);
+            erc20.safeApprove(reserve, type(uint256).max);
         }
     }
 }

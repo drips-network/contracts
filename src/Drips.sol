@@ -48,24 +48,24 @@ using DripsConfigImpl for DripsConfig global;
 
 library DripsConfigImpl {
     /// @notice Create a new DripsConfig.
-    /// @param _dripId An arbitrary number used to identify a drip.
+    /// @param dripId_ An arbitrary number used to identify a drip.
     /// It's a part of the configuration but the protocol doesn't use it.
-    /// @param _amtPerSec The amount per second being dripped. Must never be zero.
+    /// @param amtPerSec_ The amount per second being dripped. Must never be zero.
     /// It must have additional `Drips._AMT_PER_SEC_EXTRA_DECIMALS` decimals and can have fractions.
     /// To achieve that the passed value must be multiplied by `Drips._AMT_PER_SEC_MULTIPLIER`.
-    /// @param _start The timestamp when dripping should start.
+    /// @param start_ The timestamp when dripping should start.
     /// If zero, use the timestamp when drips are configured.
-    /// @param _duration The duration of dripping.
+    /// @param duration_ The duration of dripping.
     /// If zero, drip until balance runs out.
-    function create(uint32 _dripId, uint160 _amtPerSec, uint32 _start, uint32 _duration)
+    function create(uint32 dripId_, uint160 amtPerSec_, uint32 start_, uint32 duration_)
         internal
         pure
         returns (DripsConfig)
     {
-        uint256 config = _dripId;
-        config = (config << 160) | _amtPerSec;
-        config = (config << 32) | _start;
-        config = (config << 32) | _duration;
+        uint256 config = dripId_;
+        config = (config << 160) | amtPerSec_;
+        config = (config << 32) | start_;
+        config = (config << 32) | duration_;
         return DripsConfig.wrap(config);
     }
 

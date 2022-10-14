@@ -9,7 +9,7 @@ import {
     DripsReceiver
 } from "src/DripsHub.sol";
 import {Reserve} from "src/Reserve.sol";
-import {Proxy} from "src/Upgradeable.sol";
+import {UpgradeableProxy} from "src/Upgradeable.sol";
 import {Test} from "forge-std/Test.sol";
 import {
     IERC20,
@@ -53,7 +53,7 @@ contract DripsHubTest is Test {
         erc20 = defaultErc20;
         Reserve reserve = new Reserve(address(this));
         DripsHub hubLogic = new DripsHub(10, reserve);
-        dripsHub = DripsHub(address(new Proxy(hubLogic, admin)));
+        dripsHub = DripsHub(address(new UpgradeableProxy(hubLogic, admin)));
         reserve.addUser(address(dripsHub));
 
         uint32 driverId = dripsHub.registerDriver(driver);

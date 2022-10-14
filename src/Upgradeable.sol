@@ -43,7 +43,7 @@ abstract contract Upgradeable is UUPSUpgradeable {
 }
 
 /// @notice A generic proxy for Upgradeable contracts.
-contract Proxy is ERC1967Proxy {
+contract UpgradeableProxy is ERC1967Proxy {
     constructor(Upgradeable logic, address admin) ERC1967Proxy(address(logic), new bytes(0)) {
         _changeAdmin(admin);
     }

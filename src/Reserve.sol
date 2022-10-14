@@ -126,9 +126,9 @@ contract Reserve is IReserve, Ownable {
     /// @param user The unregistered user address.
     event UserRemoved(address owner, address indexed user);
 
-    /// @param owner The initial owner address.
-    constructor(address owner) {
-        transferOwnership(owner);
+    /// @param owner_ The initial owner address.
+    constructor(address owner_) {
+        transferOwnership(owner_);
     }
 
     modifier onlyUser() {
