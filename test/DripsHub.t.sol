@@ -146,7 +146,7 @@ contract DripsHubTest is Test {
 
         vm.prank(driver);
         (uint128 newBalance, int128 realBalanceDelta) =
-            dripsHub.setDrips(forUser, erc20, currReceivers, balanceDelta, newReceivers);
+            dripsHub.setDrips(forUser, erc20, currReceivers, balanceDelta, newReceivers, 0, 0);
 
         storeDrips(forUser, newReceivers);
         assertEq(newBalance, balanceTo, "Invalid drips balance");
@@ -191,7 +191,7 @@ contract DripsHubTest is Test {
     ) internal {
         vm.prank(driver);
         vm.expectRevert(expectedReason);
-        dripsHub.setDrips(forUser, erc20, currReceivers, balanceDelta, newReceivers);
+        dripsHub.setDrips(forUser, erc20, currReceivers, balanceDelta, newReceivers, 0, 0);
     }
 
     function give(uint256 fromUser, uint256 toUser, uint128 amt) internal {
@@ -600,7 +600,7 @@ contract DripsHubTest is Test {
 
     function testSetDripsRevertsWhenNotCalledByTheDriver() public {
         vm.expectRevert(ERROR_NOT_DRIVER);
-        dripsHub.setDrips(user, erc20, dripsReceivers(), 0, dripsReceivers());
+        dripsHub.setDrips(user, erc20, dripsReceivers(), 0, dripsReceivers(), 0, 0);
     }
 
     function testGiveRevertsWhenNotCalledByTheDriver() public {
@@ -739,7 +739,7 @@ contract DripsHubTest is Test {
         pauseDripsHub();
         vm.prank(driver);
         vm.expectRevert(ERROR_PAUSED);
-        dripsHub.setDrips(user, erc20, dripsReceivers(), 1, dripsReceivers());
+        dripsHub.setDrips(user, erc20, dripsReceivers(), 1, dripsReceivers(), 0, 0);
     }
 
     function testGiveCanBePaused() public {

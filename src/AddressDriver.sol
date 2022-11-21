@@ -80,13 +80,16 @@ contract AddressDriver is Upgradeable, ERC2771Context {
         DripsReceiver[] calldata currReceivers,
         int128 balanceDelta,
         DripsReceiver[] calldata newReceivers,
+        uint32 maxEndTip1,
+        uint32 maxEndTip2,
         address transferTo
     ) public returns (uint128 newBalance, int128 realBalanceDelta) {
         if (balanceDelta > 0) {
             _transferFromCaller(erc20, uint128(balanceDelta));
         }
-        (newBalance, realBalanceDelta) =
-            dripsHub.setDrips(callerUserId(), erc20, currReceivers, balanceDelta, newReceivers);
+        (newBalance, realBalanceDelta) = dripsHub.setDrips(
+            callerUserId(), erc20, currReceivers, balanceDelta, newReceivers, maxEndTip1, maxEndTip2
+        );
         if (realBalanceDelta < 0) {
             erc20.safeTransfer(transferTo, uint128(-realBalanceDelta));
         }

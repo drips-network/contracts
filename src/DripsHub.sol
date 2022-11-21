@@ -404,7 +404,9 @@ contract DripsHub is Managed, Drips, Splits {
         IERC20 erc20,
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
-        DripsReceiver[] memory newReceivers
+        DripsReceiver[] memory newReceivers,
+        uint32 maxEndTip1,
+        uint32 maxEndTip2
     )
         public
         whenNotPaused
@@ -414,8 +416,15 @@ contract DripsHub is Managed, Drips, Splits {
         if (balanceDelta > 0) {
             _increaseTotalBalance(erc20, uint128(balanceDelta));
         }
-        (newBalance, realBalanceDelta) =
-            Drips._setDrips(userId, _assetId(erc20), currReceivers, balanceDelta, newReceivers);
+        (newBalance, realBalanceDelta) = Drips._setDrips(
+            userId,
+            _assetId(erc20),
+            currReceivers,
+            balanceDelta,
+            newReceivers,
+            maxEndTip1,
+            maxEndTip2
+        );
         if (realBalanceDelta > 0) {
             reserve.deposit(erc20, msg.sender, uint128(realBalanceDelta));
         } else if (realBalanceDelta < 0) {

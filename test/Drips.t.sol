@@ -272,8 +272,9 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         (, bytes32 oldHistoryHash,,,) = Drips._dripsState(userId, assetId);
         int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
 
-        (uint128 newBalance, int128 realBalanceDelta) =
-            Drips._setDrips(userId, assetId, loadCurrReceivers(userId), balanceDelta, newReceivers);
+        (uint128 newBalance, int128 realBalanceDelta) = Drips._setDrips(
+            userId, assetId, loadCurrReceivers(userId), balanceDelta, newReceivers, 0, 0
+        );
 
         storeCurrReceivers(userId, newReceivers);
         assertEq(newBalance, balanceTo, "Invalid drips balance");
@@ -371,7 +372,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers
     ) external {
-        Drips._setDrips(userId, assetId, currReceivers, balanceDelta, newReceivers);
+        Drips._setDrips(userId, assetId, currReceivers, balanceDelta, newReceivers, 0, 0);
     }
 
     function receiveDrips(uint256 userId, uint128 expectedAmt) internal {
@@ -1097,82 +1098,82 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         );
     }
 
-    function testBenchSetDrips100() public {
-        uint256 countMax = Drips._MAX_DRIPS_RECEIVERS;
-        DripsReceiver[] memory receivers = new DripsReceiver[](countMax);
-        for (uint160 i = 0; i < countMax; i++) {
-            receivers[i] = recv(i, 1, 1000 + i, 0)[0];
-        }
+    function testBenchSetDrips() public {
+        initSeed(0);
+        uint32 wrongTip1 = uint32(block.timestamp) + 1;
+        uint32 wrongTip2 = wrongTip1 + 1;
 
-        uint256 gas = gasleft();
-        Drips._setDrips(
-            sender, assetId, new DripsReceiver[](0), int128(int256(countMax * countMax)), receivers
-        );
-        gas -= gasleft();
-        emit log_named_uint("GAS USED", gas);
+        uint32 worstEnd = type(uint32).max - 2;
+        uint32 worstTip = worstEnd + 1;
+        uint32 worstTipPerfect = worstEnd;
+        uint32 worstTip1Minute = worstEnd - 1 minutes;
+        uint32 worstTip1Hour = worstEnd - 1 hours;
+
+        benchSetDrips("worst 100 no tip         ", 100, worstEnd, 0, 0);
+        benchSetDrips("worst 100 perfect tip    ", 100, worstEnd, worstTip, worstTipPerfect);
+        benchSetDrips("worst 100 1 minute tip   ", 100, worstEnd, worstTip, worstTip1Minute);
+        benchSetDrips("worst 100 1 hour tip     ", 100, worstEnd, worstTip, worstTip1Hour);
+        benchSetDrips("worst 100 wrong tip      ", 100, worstEnd, wrongTip1, wrongTip2);
+        emit log_string("-----------------------------------------------");
+
+        benchSetDrips("worst 10 no tip          ", 10, worstEnd, 0, 0);
+        benchSetDrips("worst 10 perfect tip     ", 10, worstEnd, worstTip, worstTipPerfect);
+        benchSetDrips("worst 10 1 minute tip    ", 10, worstEnd, worstTip, worstTip1Minute);
+        benchSetDrips("worst 10 1 hour tip      ", 10, worstEnd, worstTip, worstTip1Hour);
+        benchSetDrips("worst 10 wrong tip       ", 10, worstEnd, wrongTip1, wrongTip2);
+        emit log_string("-----------------------------------------------");
+
+        benchSetDrips("worst 1 no tip           ", 1, worstEnd, 0, 0);
+        benchSetDrips("worst 1 perfect tip      ", 1, worstEnd, worstTip, worstTipPerfect);
+        benchSetDrips("worst 1 1 minute tip     ", 1, worstEnd, worstTip, worstTip1Minute);
+        benchSetDrips("worst 1 1 hour tip       ", 1, worstEnd, worstTip, worstTip1Hour);
+        benchSetDrips("worst 1 wrong tip        ", 1, worstEnd, wrongTip1, wrongTip2);
+        emit log_string("-----------------------------------------------");
+
+        uint32 monthEnd = uint32(block.timestamp) + 30 days;
+        uint32 monthTip = monthEnd + 1;
+        uint32 monthTipPerfect = monthEnd;
+        uint32 monthTip1Minute = monthEnd - 1 minutes;
+        uint32 monthTip1Hour = monthEnd - 1 hours;
+
+        benchSetDrips("1 month 100 no tip       ", 100, monthEnd, 0, 0);
+        benchSetDrips("1 month 100 perfect tip  ", 100, monthEnd, monthTip, monthTipPerfect);
+        benchSetDrips("1 month 100 1 minute tip ", 100, monthEnd, monthTip, monthTip1Minute);
+        benchSetDrips("1 month 100 1 hour tip   ", 100, monthEnd, monthTip, monthTip1Hour);
+        benchSetDrips("1 month 100 wrong tip    ", 100, monthEnd, wrongTip1, wrongTip2);
+        emit log_string("-----------------------------------------------");
+
+        benchSetDrips("1 month 10 no tip        ", 10, monthEnd, 0, 0);
+        benchSetDrips("1 month 10 perfect tip   ", 10, monthEnd, monthTip, monthTipPerfect);
+        benchSetDrips("1 month 10 1 minute tip  ", 10, monthEnd, monthTip, monthTip1Minute);
+        benchSetDrips("1 month 10 1 hour tip    ", 10, monthEnd, monthTip, monthTip1Hour);
+        benchSetDrips("1 month 10 wrong tip     ", 10, monthEnd, wrongTip1, wrongTip2);
+        emit log_string("-----------------------------------------------");
+
+        benchSetDrips("1 month 1 no tip         ", 1, monthEnd, 0, 0);
+        benchSetDrips("1 month 1 perfect tip    ", 1, monthEnd, monthTip, monthTipPerfect);
+        benchSetDrips("1 month 1 1 minute tip   ", 1, monthEnd, monthTip, monthTip1Minute);
+        benchSetDrips("1 month 1 1 hour tip     ", 1, monthEnd, monthTip, monthTip1Hour);
+        benchSetDrips("1 month 1 wrong tip      ", 1, monthEnd, wrongTip1, wrongTip2);
     }
 
-    function testBenchSetDrips100Worst() public {
-        // The worst possible case: dripping until the maximum timestamp minus 1 second.
-        // Every candidate end time requires iterating over all the receivers to tell that
-        // the balance is enough to cover it, but on the highest possible timestamp
-        // there isn't enough funds, so we can't skip the whole search.
-        uint256 countMax = Drips._MAX_DRIPS_RECEIVERS;
-        DripsReceiver[] memory receivers = new DripsReceiver[](countMax);
-        for (uint160 i = 0; i < countMax; i++) {
-            receivers[i] = recv(i, 1, 0, 0)[0];
+    function benchSetDrips(
+        string memory testName,
+        uint256 count,
+        uint256 maxEnd,
+        uint32 maxEndTip1,
+        uint32 maxEndTip2
+    ) public {
+        uint256 senderId = random(type(uint256).max);
+        DripsReceiver[] memory receivers = new DripsReceiver[](count);
+        for (uint256 i = 0; i < count; i++) {
+            receivers[i] = recv(senderId + 1 + i, 1, 0, 0)[0];
         }
-        uint128 amt = (type(uint32).max - uint32(block.timestamp)) * uint128(countMax) - 1;
-
+        int128 amt = int128(int256((maxEnd - block.timestamp) * count));
         uint256 gas = gasleft();
-        Drips._setDrips(sender, assetId, new DripsReceiver[](0), int128(amt), receivers);
+        Drips._setDrips(senderId, assetId, recv(), amt, receivers, maxEndTip1, maxEndTip2);
         gas -= gasleft();
-        emit log_named_uint("GAS USED", gas);
-    }
-
-    function testBenchSetDrips10() public {
-        uint160 countMax = 10;
-        DripsReceiver[] memory receivers = new DripsReceiver[](countMax);
-        for (uint160 i = 0; i < countMax; i++) {
-            receivers[i] = recv(i, 1, 1000 + i, 0)[0];
-        }
-
-        uint256 gas = gasleft();
-        Drips._setDrips(
-            sender,
-            assetId,
-            new DripsReceiver[](0),
-            int128(int160((countMax * countMax))),
-            receivers
-        );
-        gas -= gasleft();
-        emit log_named_uint("GAS USED", gas);
-    }
-
-    function testBenchSetDrips10Worst() public {
-        // The worst possible case: dripping until the maximum timestamp minus 1 second.
-        // Every candidate end time requires iterating over all the receivers to tell that
-        // the balance is enough to cover it, but on the highest possible timestamp
-        // there isn't enough funds, so we can't skip the whole search.
-        uint160 countMax = 10;
-        DripsReceiver[] memory receivers = new DripsReceiver[](countMax);
-        for (uint160 i = 0; i < countMax; i++) {
-            receivers[i] = recv(i, 1, 0, 0)[0];
-        }
-        uint128 amt = (type(uint32).max - uint32(block.timestamp)) * uint128(countMax) - 1;
-
-        uint256 gas = gasleft();
-        Drips._setDrips(sender, assetId, new DripsReceiver[](0), int128(amt), receivers);
-        gas -= gasleft();
-        emit log_named_uint("GAS USED", gas);
-    }
-
-    function testBenchSetDrips1() public {
-        DripsReceiver[] memory receivers = recv(1, 1, 1000, 0);
-        uint256 gas = gasleft();
-        Drips._setDrips(sender, assetId, new DripsReceiver[](0), 1, receivers);
-        gas -= gasleft();
-        emit log_named_uint("GAS USED", gas);
+        emit log_named_uint(string.concat("Gas used for ", testName), gas);
     }
 
     function testRejectsZeroAmtPerSecReceivers() public {
@@ -1242,7 +1243,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
 
         DripsReceiver[] memory newRecv = recv();
         (uint128 newBalance, int128 realBalanceDelta) =
-            Drips._setDrips(sender, assetId, receivers, type(int128).min, newRecv);
+            Drips._setDrips(sender, assetId, receivers, type(int128).min, newRecv, 0, 0);
         storeCurrReceivers(sender, newRecv);
         assertEq(newBalance, 0, "Invalid balance");
         assertEq(realBalanceDelta, -6, "Invalid real balance delta");
@@ -1406,7 +1407,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         );
 
         skipTo(0);
-        assertEq(Drips._calcMaxEnd(100, receivers), 75);
+        assertEq(Drips._calcMaxEnd(100, receivers, 0, type(uint32).max), 75);
     }
 
     function testReceiverMaxEndExampleB() public {
@@ -1417,7 +1418,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
 
         // in the past
         skipTo(70);
-        assertEq(Drips._calcMaxEnd(100, receivers), 130);
+        assertEq(Drips._calcMaxEnd(100, receivers, 0, type(uint32).max), 130);
     }
 
     function _receiverMaxEndEdgeCase(uint128 balance) internal {
@@ -1426,7 +1427,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
             recv({userId: receiver2, amtPerSec: 1, start: 2, duration: 0})
         );
         skipTo(0);
-        assertEq(Drips._calcMaxEnd(balance, receivers), 3);
+        assertEq(Drips._calcMaxEnd(balance, receivers, 0, type(uint32).max), 3);
     }
 
     function testReceiverMaxEndEdgeCase() public {
@@ -1443,7 +1444,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
             recv({userId: receiver2, amtPerSec: 1, start: 1000, duration: 0})
         );
         skipTo(0);
-        assertEq(Drips._calcMaxEnd(100, receivers), 150);
+        assertEq(Drips._calcMaxEnd(100, receivers, 0, type(uint32).max), 150);
     }
 
     function testSqueezeDrips() public {

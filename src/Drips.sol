@@ -471,9 +471,8 @@ abstract contract Drips {
         )
     {
         DripsState storage state = _dripsStorage().states[assetId][userId];
-        return (
-            state.dripsHash, state.dripsHistoryHash, state.updateTime, state.balance, state.maxEnd
-        );
+        return
+            (state.dripsHash, state.dripsHistoryHash, state.updateTime, state.balance, state.maxEnd);
     }
 
     /// @notice User drips balance at a given timestamp
@@ -545,33 +544,35 @@ abstract contract Drips {
         uint256 assetId,
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
-        DripsReceiver[] memory newReceivers
+        DripsReceiver[] memory newReceivers,
+        uint32 maxEndTip1,
+        uint32 maxEndTip2
     ) internal returns (uint128 newBalance, int128 realBalanceDelta) {
         DripsState storage state = _dripsStorage().states[assetId][userId];
-        bytes32 currDripsHash = _hashDrips(currReceivers);
-        require(currDripsHash == state.dripsHash, "Invalid current drips list");
+        require(_hashDrips(currReceivers) == state.dripsHash, "Invalid current drips list");
         uint32 lastUpdate = state.updateTime;
-        uint32 currMaxEnd = state.maxEnd;
+        uint32 newMaxEnd;
         {
-            uint128 lastBalance = state.balance;
-            uint128 currBalance =
-                _balanceAt(lastBalance, lastUpdate, currMaxEnd, currReceivers, _currTimestamp());
-            int136 balance = int128(currBalance) + int136(balanceDelta);
-            if (balance < 0) {
-                balance = 0;
+            uint32 currMaxEnd = state.maxEnd;
+            int128 currBalance = int128(
+                _balanceAt(state.balance, lastUpdate, currMaxEnd, currReceivers, _currTimestamp())
+            );
+            realBalanceDelta = balanceDelta;
+            // Cap `realBalanceDelta` at withdrawal of the entire `currBalance`
+            if (realBalanceDelta < -currBalance) {
+                realBalanceDelta = -currBalance;
             }
-            newBalance = uint128(uint136(balance));
-            realBalanceDelta = int128(balance - int128(currBalance));
+            newBalance = uint128(currBalance + realBalanceDelta);
+            newMaxEnd = _calcMaxEnd(newBalance, newReceivers, maxEndTip1, maxEndTip2);
+            _updateReceiverStates(
+                _dripsStorage().states[assetId],
+                currReceivers,
+                lastUpdate,
+                currMaxEnd,
+                newReceivers,
+                newMaxEnd
+            );
         }
-        uint32 newMaxEnd = _calcMaxEnd(newBalance, newReceivers);
-        _updateReceiverStates(
-            _dripsStorage().states[assetId],
-            currReceivers,
-            lastUpdate,
-            currMaxEnd,
-            newReceivers,
-            newMaxEnd
-        );
         state.updateTime = _currTimestamp();
         state.maxEnd = newMaxEnd;
         state.balance = newBalance;
@@ -585,7 +586,7 @@ abstract contract Drips {
         state.dripsHistoryHash =
             _hashDripsHistory(dripsHistory, newDripsHash, _currTimestamp(), newMaxEnd);
         emit DripsSet(userId, assetId, newDripsHash, dripsHistory, newBalance, newMaxEnd);
-        if (newDripsHash != currDripsHash) {
+        if (newDripsHash != state.dripsHash) {
             state.dripsHash = newDripsHash;
             for (uint256 i = 0; i < newReceivers.length; i++) {
                 DripsReceiver memory receiver = newReceivers[i];
@@ -599,11 +600,12 @@ abstract contract Drips {
     /// @param receivers The list of drips receivers.
     /// Must be sorted, deduplicated and without 0 amtPerSecs.
     /// @return maxEnd The maximum end time of drips
-    function _calcMaxEnd(uint128 balance, DripsReceiver[] memory receivers)
-        internal
-        view
-        returns (uint32 maxEnd)
-    {
+    function _calcMaxEnd(
+        uint128 balance,
+        DripsReceiver[] memory receivers,
+        uint32 maxEndTip1,
+        uint32 maxEndTip2
+    ) internal view returns (uint32 maxEnd) {
         require(receivers.length <= _MAX_DRIPS_RECEIVERS, "Too many drips receivers");
         uint256[] memory configs = new uint256[](receivers.length);
         uint256 configsLen = 0;
@@ -614,7 +616,7 @@ abstract contract Drips {
             }
             configsLen = _addConfig(configs, configsLen, receiver);
         }
-        return _calcMaxEnd(balance, configs, configsLen);
+        return _calcMaxEnd(balance, configs, configsLen, maxEndTip1, maxEndTip2);
     }
 
     /// @notice Calculates the maximum end time of drips.
@@ -622,20 +624,40 @@ abstract contract Drips {
     /// @param configs The list of drips configurations
     /// @param configsLen The length of `configs`
     /// @return maxEnd The maximum end time of drips
-    function _calcMaxEnd(uint128 balance, uint256[] memory configs, uint256 configsLen)
-        private
-        view
-        returns (uint32 maxEnd)
-    {
+    function _calcMaxEnd(
+        uint128 balance,
+        uint256[] memory configs,
+        uint256 configsLen,
+        uint32 maxEndTip1,
+        uint32 maxEndTip2
+    ) private view returns (uint32 maxEnd) {
         unchecked {
             uint256 enoughEnd = _currTimestamp();
             if (configsLen == 0 || balance == 0) {
                 return uint32(enoughEnd);
             }
+
             uint256 notEnoughEnd = type(uint32).max;
             if (_isBalanceEnough(balance, configs, configsLen, notEnoughEnd)) {
                 return uint32(notEnoughEnd);
             }
+
+            if (maxEndTip1 > enoughEnd && maxEndTip1 < notEnoughEnd) {
+                if (_isBalanceEnough(balance, configs, configsLen, maxEndTip1)) {
+                    enoughEnd = maxEndTip1;
+                } else {
+                    notEnoughEnd = maxEndTip1;
+                }
+            }
+
+            if (maxEndTip2 > enoughEnd && maxEndTip2 < notEnoughEnd) {
+                if (_isBalanceEnough(balance, configs, configsLen, maxEndTip2)) {
+                    enoughEnd = maxEndTip2;
+                } else {
+                    notEnoughEnd = maxEndTip2;
+                }
+            }
+
             while (true) {
                 uint256 end = (enoughEnd + notEnoughEnd) / 2;
                 if (end == enoughEnd) {

@@ -152,7 +152,7 @@ contract NFTDriverTest is Test {
         uint256 balance = erc20.balanceOf(address(this));
 
         (uint128 newBalance, int128 realBalanceDelta) = driver.setDrips(
-            tokenId1, erc20, new DripsReceiver[](0), int128(amt), receivers, address(this)
+            tokenId1, erc20, new DripsReceiver[](0), int128(amt), receivers, 0, 0, address(this)
         );
 
         assertEq(erc20.balanceOf(address(this)), balance - amt, "Invalid balance after top-up");
@@ -164,8 +164,9 @@ contract NFTDriverTest is Test {
         // Withdraw
         balance = erc20.balanceOf(address(user));
 
-        (newBalance, realBalanceDelta) =
-            driver.setDrips(tokenId1, erc20, receivers, -int128(amt), receivers, address(user));
+        (newBalance, realBalanceDelta) = driver.setDrips(
+            tokenId1, erc20, receivers, -int128(amt), receivers, 0, 0, address(user)
+        );
 
         assertEq(erc20.balanceOf(address(user)), balance + amt, "Invalid balance after withdrawal");
         assertEq(newBalance, 0, "Invalid drips balance after withdrawal");
@@ -175,11 +176,11 @@ contract NFTDriverTest is Test {
     function testSetDripsDecreasingBalanceTransfersFundsToTheProvidedAddress() public {
         uint128 amt = 5;
         DripsReceiver[] memory receivers = new DripsReceiver[](0);
-        driver.setDrips(tokenId, erc20, receivers, int128(amt), receivers, address(this));
+        driver.setDrips(tokenId, erc20, receivers, int128(amt), receivers, 0, 0, address(this));
         address transferTo = address(1234);
 
         (uint128 newBalance, int128 realBalanceDelta) =
-            driver.setDrips(tokenId, erc20, receivers, -int128(amt), receivers, transferTo);
+            driver.setDrips(tokenId, erc20, receivers, -int128(amt), receivers, 0, 0, transferTo);
 
         assertEq(erc20.balanceOf(transferTo), amt, "Invalid balance");
         assertEq(newBalance, 0, "Invalid drips balance");
@@ -189,7 +190,7 @@ contract NFTDriverTest is Test {
     function testSetDripsRevertsWhenNotTokenHolder() public {
         DripsReceiver[] memory noReceivers = new DripsReceiver[](0);
         vm.expectRevert(ERROR_NOT_OWNER);
-        driver.setDrips(tokenIdUser, erc20, noReceivers, 0, noReceivers, address(this));
+        driver.setDrips(tokenIdUser, erc20, noReceivers, 0, noReceivers, 0, 0, address(this));
     }
 
     function testSetSplits() public {
