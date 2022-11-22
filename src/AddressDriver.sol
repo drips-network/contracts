@@ -7,7 +7,7 @@ import {ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
 import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @notice A DripsHub driver implementing address-based user identification.
-/// Each address can use `AddressDriver` to control a user ID equal to that address.
+/// Each address can use `AddressDriver` to control a single user ID derived from that address.
 /// No registration is required, an `AddressDriver`-based user ID for each address is know upfront.
 contract AddressDriver is Upgradeable, ERC2771Context {
     using SafeERC20 for IERC20;
