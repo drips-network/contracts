@@ -168,7 +168,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Upgradeable {
     /// The token ID is equal to the user ID controlled by it.
     /// @param key The metadata key
     /// @param value The metadata value
-    function emitUserMetadata(uint256 tokenId, uint256 key, bytes calldata value)
+    function emitUserMetadata(uint256 tokenId, bytes32 key, bytes calldata value)
         public
         onlyHolder(tokenId)
     {

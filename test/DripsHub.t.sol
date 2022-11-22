@@ -520,7 +520,7 @@ contract DripsHubTest is Test {
 
     function testEmitUserMetadata() public {
         vm.prank(driver);
-        dripsHub.emitUserMetadata(user, 1, "value");
+        dripsHub.emitUserMetadata(user, 0, "value");
     }
 
     function testBalanceAt() public {
@@ -615,7 +615,7 @@ contract DripsHubTest is Test {
 
     function testEmitUserMetadataRevertsWhenNotCalledByTheDriver() public {
         vm.expectRevert(ERROR_NOT_DRIVER);
-        dripsHub.emitUserMetadata(user, 1, "value");
+        dripsHub.emitUserMetadata(user, 0, "value");
     }
 
     function testSetDripsLimitsTotalBalance() public {
@@ -760,7 +760,7 @@ contract DripsHubTest is Test {
         pauseDripsHub();
         vm.prank(driver);
         vm.expectRevert(ERROR_PAUSED);
-        dripsHub.emitUserMetadata(user, 1, "value");
+        dripsHub.emitUserMetadata(user, 0, "value");
     }
 
     function testRegisterDriverCanBePaused() public {

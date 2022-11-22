@@ -34,7 +34,7 @@ contract ImmutableSplitsDriverTest is Test {
         receivers[1] = SplitsReceiver({userId: 2, weight: 1});
         uint256 nextUserId = driver.nextUserId();
         UserMetadata[] memory metadata = new UserMetadata[](1);
-        metadata[0] = UserMetadata(1, "value");
+        metadata[0] = UserMetadata(0, "value");
 
         uint256 userId = driver.createSplits(receivers, metadata);
 

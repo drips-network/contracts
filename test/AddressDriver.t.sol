@@ -147,7 +147,7 @@ contract AddressDriverTest is Test {
     }
 
     function testEmitUserMetadata() public {
-        driver.emitUserMetadata(1, "value");
+        driver.emitUserMetadata(0, "value");
     }
 
     function testForwarderIsTrusted() public {

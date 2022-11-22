@@ -109,7 +109,7 @@ contract AddressDriver is Upgradeable, ERC2771Context {
     /// to establish and follow conventions to ensure compatibility with the consumers.
     /// @param key The metadata key
     /// @param value The metadata value
-    function emitUserMetadata(uint256 key, bytes calldata value) public {
+    function emitUserMetadata(bytes32 key, bytes calldata value) public {
         dripsHub.emitUserMetadata(callerUserId(), key, value);
     }
 

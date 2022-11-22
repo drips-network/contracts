@@ -210,12 +210,12 @@ contract NFTDriverTest is Test {
     }
 
     function testEmitUserMetadata() public {
-        driver.emitUserMetadata(tokenId, 1, "value");
+        driver.emitUserMetadata(tokenId, 0, "value");
     }
 
     function testEmitUserMetadataRevertsWhenNotTokenHolder() public {
         vm.expectRevert(ERROR_NOT_OWNER);
-        driver.emitUserMetadata(tokenIdUser, 1, "value");
+        driver.emitUserMetadata(tokenIdUser, 0, "value");
     }
 
     function testForwarderIsTrustedInErc721Calls() public {

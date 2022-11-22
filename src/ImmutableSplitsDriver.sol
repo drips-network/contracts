@@ -11,7 +11,7 @@ import {
 
 /// @notice The user metadata.
 struct UserMetadata {
-    uint256 key;
+    bytes32 key;
     bytes value;
 }
 
