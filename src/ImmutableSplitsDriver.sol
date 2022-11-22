@@ -4,10 +4,6 @@ pragma solidity ^0.8.17;
 import {DripsHub, SplitsReceiver} from "./DripsHub.sol";
 import {Upgradeable} from "./Upgradeable.sol";
 import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
-import {
-    ERC721,
-    ERC721Burnable
-} from "openzeppelin-contracts/token/ERC721/extensions/ERC721Burnable.sol";
 
 /// @notice The user metadata.
 struct UserMetadata {
