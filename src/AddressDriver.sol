@@ -42,7 +42,12 @@ contract AddressDriver is Upgradeable, ERC2771Context {
 
     /// @notice Collects the user's received already split funds
     /// and transfers them out of the drips hub contract.
-    /// @param erc20 The token to use
+    /// @param erc20 The used ERC-20 token.
+    /// It must preserve amounts, so if some amount of tokens is transferred to
+    /// an address, then later the same amount must be transferrable from that address.
+    /// Tokens which rebase the holders' balances, collect taxes on transfers,
+    /// or impose any restrictions on holding or transferring tokens are not supported.
+    /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param transferTo The address to send collected funds to
     /// @return amt The collected amount
     function collect(IERC20 erc20, address transferTo) public returns (uint128 amt) {
@@ -54,7 +59,12 @@ contract AddressDriver is Upgradeable, ERC2771Context {
     /// The receiver can collect them immediately.
     /// Transfers the funds to be given from the message sender's wallet to the drips hub contract.
     /// @param receiver The receiver
-    /// @param erc20 The token to use
+    /// @param erc20 The used ERC-20 token.
+    /// It must preserve amounts, so if some amount of tokens is transferred to
+    /// an address, then later the same amount must be transferrable from that address.
+    /// Tokens which rebase the holders' balances, collect taxes on transfers,
+    /// or impose any restrictions on holding or transferring tokens are not supported.
+    /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param amt The given amount
     function give(uint256 receiver, IERC20 erc20, uint128 amt) public {
         _transferFromCaller(erc20, amt);
@@ -64,7 +74,12 @@ contract AddressDriver is Upgradeable, ERC2771Context {
     /// @notice Sets the message sender's drips configuration.
     /// Transfers funds between the message sender's wallet and the drips hub contract
     /// to fulfill the change of the drips balance.
-    /// @param erc20 The token to use
+    /// @param erc20 The used ERC-20 token.
+    /// It must preserve amounts, so if some amount of tokens is transferred to
+    /// an address, then later the same amount must be transferrable from that address.
+    /// Tokens which rebase the holders' balances, collect taxes on transfers,
+    /// or impose any restrictions on holding or transferring tokens are not supported.
+    /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param currReceivers The list of the drips receivers set in the last drips update
     /// of the sender.
     /// If this is the first update, pass an empty array.

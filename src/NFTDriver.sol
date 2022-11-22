@@ -78,7 +78,12 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Upgradeable {
     /// @param tokenId The ID of the token representing the collecting user ID.
     /// The caller must be the owner of the token or be approved to use it.
     /// The token ID is equal to the user ID controlled by it.
-    /// @param erc20 The token to use
+    /// @param erc20 The used ERC-20 token.
+    /// It must preserve amounts, so if some amount of tokens is transferred to
+    /// an address, then later the same amount must be transferrable from that address.
+    /// Tokens which rebase the holders' balances, collect taxes on transfers,
+    /// or impose any restrictions on holding or transferring tokens are not supported.
+    /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param transferTo The address to send collected funds to
     /// @return amt The collected amount
     function collect(uint256 tokenId, IERC20 erc20, address transferTo)
@@ -97,7 +102,12 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Upgradeable {
     /// The caller must be the owner of the token or be approved to use it.
     /// The token ID is equal to the user ID controlled by it.
     /// @param receiver The receiver
-    /// @param erc20 The token to use
+    /// @param erc20 The used ERC-20 token.
+    /// It must preserve amounts, so if some amount of tokens is transferred to
+    /// an address, then later the same amount must be transferrable from that address.
+    /// Tokens which rebase the holders' balances, collect taxes on transfers,
+    /// or impose any restrictions on holding or transferring tokens are not supported.
+    /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param amt The given amount
     function give(uint256 tokenId, uint256 receiver, IERC20 erc20, uint128 amt)
         public
@@ -113,7 +123,12 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Upgradeable {
     /// @param tokenId The ID of the token representing the configured user ID.
     /// The caller must be the owner of the token or be approved to use it.
     /// The token ID is equal to the user ID controlled by it.
-    /// @param erc20 The token to use
+    /// @param erc20 The used ERC-20 token.
+    /// It must preserve amounts, so if some amount of tokens is transferred to
+    /// an address, then later the same amount must be transferrable from that address.
+    /// Tokens which rebase the holders' balances, collect taxes on transfers,
+    /// or impose any restrictions on holding or transferring tokens are not supported.
+    /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param currReceivers The list of the drips receivers set in the last drips update
     /// of the sender.
     /// If this is the first update, pass an empty array.

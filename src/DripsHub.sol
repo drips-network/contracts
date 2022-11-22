@@ -161,7 +161,12 @@ contract DripsHub is Managed, Drips, Splits {
     }
 
     /// @notice Returns the total amount currently stored in DripsHub of the given token.
-    /// @param erc20 The ERC-20 token
+    /// @param erc20 The used ERC-20 token.
+    /// It must preserve amounts, so if some amount of tokens is transferred to
+    /// an address, then later the same amount must be transferrable from that address.
+    /// Tokens which rebase the holders' balances, collect taxes on transfers,
+    /// or impose any restrictions on holding or transferring tokens are not supported.
+    /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @return balance The balance of the token.
     function totalBalance(IERC20 erc20) public view returns (uint256 balance) {
         return _dripsHubStorage().totalBalances[erc20];
@@ -171,7 +176,12 @@ contract DripsHub is Managed, Drips, Splits {
     /// This function can be used to detect that there are
     /// too many cycles to analyze in a single transaction.
     /// @param userId The user ID
-    /// @param erc20 The used ERC-20 token
+    /// @param erc20 The used ERC-20 token.
+    /// It must preserve amounts, so if some amount of tokens is transferred to
+    /// an address, then later the same amount must be transferrable from that address.
+    /// Tokens which rebase the holders' balances, collect taxes on transfers,
+    /// or impose any restrictions on holding or transferring tokens are not supported.
+    /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @return cycles The number of cycles which can be flushed
     function receivableDripsCycles(uint256 userId, IERC20 erc20)
         public
@@ -183,7 +193,12 @@ contract DripsHub is Managed, Drips, Splits {
 
     /// @notice Calculate effects of calling `receiveDrips` with the given parameters.
     /// @param userId The user ID
-    /// @param erc20 The used ERC-20 token
+    /// @param erc20 The used ERC-20 token.
+    /// It must preserve amounts, so if some amount of tokens is transferred to
+    /// an address, then later the same amount must be transferrable from that address.
+    /// Tokens which rebase the holders' balances, collect taxes on transfers,
+    /// or impose any restrictions on holding or transferring tokens are not supported.
+    /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param maxCycles The maximum number of received drips cycles.
     /// If too low, receiving will be cheap, but may not cover many cycles.
     /// If too high, receiving may become too expensive to fit in a single transaction.
@@ -200,7 +215,12 @@ contract DripsHub is Managed, Drips, Splits {
     /// Received drips cycles won't need to be analyzed ever again.
     /// Calling this function does not collect but makes the funds ready to be split and collected.
     /// @param userId The user ID
-    /// @param erc20 The used ERC-20 token
+    /// @param erc20 The used ERC-20 token.
+    /// It must preserve amounts, so if some amount of tokens is transferred to
+    /// an address, then later the same amount must be transferrable from that address.
+    /// Tokens which rebase the holders' balances, collect taxes on transfers,
+    /// or impose any restrictions on holding or transferring tokens are not supported.
+    /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param maxCycles The maximum number of received drips cycles.
     /// If too low, receiving will be cheap, but may not cover many cycles.
     /// If too high, receiving may become too expensive to fit in a single transaction.
@@ -223,6 +243,11 @@ contract DripsHub is Managed, Drips, Splits {
     /// Only funds dripped before `block.timestamp` can be squeezed.
     /// @param userId The ID of the user receiving drips to squeeze funds for.
     /// @param erc20 The used ERC-20 token.
+    /// It must preserve amounts, so if some amount of tokens is transferred to
+    /// an address, then later the same amount must be transferrable from that address.
+    /// Tokens which rebase the holders' balances, collect taxes on transfers,
+    /// or impose any restrictions on holding or transferring tokens are not supported.
+    /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param senderId The ID of the user sending drips to squeeze funds from.
     /// @param historyHash The sender's history hash which was valid right before
     /// they set up the sequence of configurations described by `dripsHistory`.
@@ -250,6 +275,11 @@ contract DripsHub is Managed, Drips, Splits {
     /// See its documentation for more details.
     /// @param userId The ID of the user receiving drips to squeeze funds for.
     /// @param erc20 The used ERC-20 token.
+    /// It must preserve amounts, so if some amount of tokens is transferred to
+    /// an address, then later the same amount must be transferrable from that address.
+    /// Tokens which rebase the holders' balances, collect taxes on transfers,
+    /// or impose any restrictions on holding or transferring tokens are not supported.
+    /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param senderId The ID of the user sending drips to squeeze funds from.
     /// @param historyHash The sender's history hash which was valid right before `dripsHistory`.
     /// @param dripsHistory The sequence of the sender's drips configurations.
@@ -268,6 +298,11 @@ contract DripsHub is Managed, Drips, Splits {
     /// @notice Returns user's received but not split yet funds.
     /// @param userId The user ID
     /// @param erc20 The used ERC-20 token.
+    /// It must preserve amounts, so if some amount of tokens is transferred to
+    /// an address, then later the same amount must be transferrable from that address.
+    /// Tokens which rebase the holders' balances, collect taxes on transfers,
+    /// or impose any restrictions on holding or transferring tokens are not supported.
+    /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @return amt The amount received but not split yet.
     function splittable(uint256 userId, IERC20 erc20) public view returns (uint128 amt) {
         return Splits._splittable(userId, _assetId(erc20));
@@ -290,7 +325,12 @@ contract DripsHub is Managed, Drips, Splits {
 
     /// @notice Splits user's received but not split yet funds among receivers.
     /// @param userId The user ID
-    /// @param erc20 The used ERC-20 token
+    /// @param erc20 The used ERC-20 token.
+    /// It must preserve amounts, so if some amount of tokens is transferred to
+    /// an address, then later the same amount must be transferrable from that address.
+    /// Tokens which rebase the holders' balances, collect taxes on transfers,
+    /// or impose any restrictions on holding or transferring tokens are not supported.
+    /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param currReceivers The list of the user's current splits receivers.
     /// @return collectableAmt The amount made collectable for the user
     /// on top of what was collectable before.
@@ -306,6 +346,11 @@ contract DripsHub is Managed, Drips, Splits {
     /// @notice Returns user's received funds already split and ready to be collected.
     /// @param userId The user ID
     /// @param erc20 The used ERC-20 token.
+    /// It must preserve amounts, so if some amount of tokens is transferred to
+    /// an address, then later the same amount must be transferrable from that address.
+    /// Tokens which rebase the holders' balances, collect taxes on transfers,
+    /// or impose any restrictions on holding or transferring tokens are not supported.
+    /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @return amt The collectable amount.
     function collectable(uint256 userId, IERC20 erc20) public view returns (uint128 amt) {
         return Splits._collectable(userId, _assetId(erc20));
@@ -314,7 +359,12 @@ contract DripsHub is Managed, Drips, Splits {
     /// @notice Collects user's received already split funds
     /// and transfers them out of the drips hub contract to msg.sender.
     /// @param userId The user ID
-    /// @param erc20 The used ERC-20 token
+    /// @param erc20 The used ERC-20 token.
+    /// It must preserve amounts, so if some amount of tokens is transferred to
+    /// an address, then later the same amount must be transferrable from that address.
+    /// Tokens which rebase the holders' balances, collect taxes on transfers,
+    /// or impose any restrictions on holding or transferring tokens are not supported.
+    /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @return amt The collected amount
     function collect(uint256 userId, IERC20 erc20)
         public
@@ -332,7 +382,12 @@ contract DripsHub is Managed, Drips, Splits {
     /// Transfers the funds to be given from the user's wallet to the drips hub contract.
     /// @param userId The user ID
     /// @param receiver The receiver
-    /// @param erc20 The used ERC-20 token
+    /// @param erc20 The used ERC-20 token.
+    /// It must preserve amounts, so if some amount of tokens is transferred to
+    /// an address, then later the same amount must be transferrable from that address.
+    /// Tokens which rebase the holders' balances, collect taxes on transfers,
+    /// or impose any restrictions on holding or transferring tokens are not supported.
+    /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param amt The given amount
     function give(uint256 userId, uint256 receiver, IERC20 erc20, uint128 amt)
         public
@@ -346,7 +401,12 @@ contract DripsHub is Managed, Drips, Splits {
 
     /// @notice Current user drips state.
     /// @param userId The user ID
-    /// @param erc20 The used ERC-20 token
+    /// @param erc20 The used ERC-20 token.
+    /// It must preserve amounts, so if some amount of tokens is transferred to
+    /// an address, then later the same amount must be transferrable from that address.
+    /// Tokens which rebase the holders' balances, collect taxes on transfers,
+    /// or impose any restrictions on holding or transferring tokens are not supported.
+    /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @return dripsHash The current drips receivers list hash, see `hashDrips`
     /// @return dripsHistoryHash The current drips history hash, see `hashDripsHistory`.
     /// @return updateTime The time when drips have been configured for the last time
@@ -368,7 +428,12 @@ contract DripsHub is Managed, Drips, Splits {
 
     /// @notice User drips balance at a given timestamp
     /// @param userId The user ID
-    /// @param erc20 The used ERC-20 token
+    /// @param erc20 The used ERC-20 token.
+    /// It must preserve amounts, so if some amount of tokens is transferred to
+    /// an address, then later the same amount must be transferrable from that address.
+    /// Tokens which rebase the holders' balances, collect taxes on transfers,
+    /// or impose any restrictions on holding or transferring tokens are not supported.
+    /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param receivers The current drips receivers list
     /// @param timestamp The timestamps for which balance should be calculated.
     /// It can't be lower than the timestamp of the last call to `setDrips`.
@@ -388,7 +453,12 @@ contract DripsHub is Managed, Drips, Splits {
     /// Transfers funds between the user's wallet and the drips hub contract
     /// to fulfill the change of the drips balance.
     /// @param userId The user ID
-    /// @param erc20 The used ERC-20 token
+    /// @param erc20 The used ERC-20 token.
+    /// It must preserve amounts, so if some amount of tokens is transferred to
+    /// an address, then later the same amount must be transferrable from that address.
+    /// Tokens which rebase the holders' balances, collect taxes on transfers,
+    /// or impose any restrictions on holding or transferring tokens are not supported.
+    /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param currReceivers The list of the drips receivers set in the last drips update
     /// of the user.
     /// If this is the first update, pass an empty array.
