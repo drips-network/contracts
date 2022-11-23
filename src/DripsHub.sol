@@ -188,14 +188,12 @@ contract DripsHub is Managed, Drips, Splits {
     /// If too low, receiving will be cheap, but may not cover many cycles.
     /// If too high, receiving may become too expensive to fit in a single transaction.
     /// @return receivableAmt The amount which would be received
-    /// @return receivableCycles The number of cycles which would still be receivable after the call
     function receiveDripsResult(uint256 userId, IERC20 erc20, uint32 maxCycles)
         public
         view
-        returns (uint128 receivableAmt, uint32 receivableCycles)
+        returns (uint128 receivableAmt)
     {
-        (receivableAmt, receivableCycles,,,) =
-            Drips._receiveDripsResult(userId, _assetId(erc20), maxCycles);
+        (receivableAmt,,,,) = Drips._receiveDripsResult(userId, _assetId(erc20), maxCycles);
     }
 
     /// @notice Receive drips for the user.
@@ -207,14 +205,13 @@ contract DripsHub is Managed, Drips, Splits {
     /// If too low, receiving will be cheap, but may not cover many cycles.
     /// If too high, receiving may become too expensive to fit in a single transaction.
     /// @return receivedAmt The received amount
-    /// @return receivableCycles The number of cycles which still can be received
     function receiveDrips(uint256 userId, IERC20 erc20, uint32 maxCycles)
         public
         whenNotPaused
-        returns (uint128 receivedAmt, uint32 receivableCycles)
+        returns (uint128 receivedAmt)
     {
         uint256 assetId = _assetId(erc20);
-        (receivedAmt, receivableCycles) = Drips._receiveDrips(userId, assetId, maxCycles);
+        (receivedAmt,) = Drips._receiveDrips(userId, assetId, maxCycles);
         if (receivedAmt > 0) {
             Splits._give(userId, userId, assetId, receivedAmt);
         }

@@ -276,11 +276,10 @@ contract DripsHubTest is Test {
     function collectAll(uint256 forUser, uint128 expectedCollected, uint128 expectedSplit)
         internal
     {
-        (uint128 receivable,) = dripsHub.receiveDripsResult(forUser, erc20, type(uint32).max);
-        (uint128 received, uint32 receivableCycles) =
-            dripsHub.receiveDrips(forUser, erc20, type(uint32).max);
+        uint128 receivable = dripsHub.receiveDripsResult(forUser, erc20, type(uint32).max);
+        uint128 received = dripsHub.receiveDrips(forUser, erc20, type(uint32).max);
         assertEq(received, receivable, "Invalid received amount");
-        assertEq(receivableCycles, 0, "Non-zero receivable cycles");
+        assertReceivableDripsCycles(forUser, 0);
 
         split(forUser, expectedCollected - collectable(forUser), expectedSplit);
 
@@ -306,16 +305,14 @@ contract DripsHubTest is Test {
         uint128 expectedTotalAmt = expectedReceivedAmt + expectedAmtAfter;
         uint32 expectedTotalCycles = expectedReceivedCycles + expectedCyclesAfter;
         assertReceivableDripsCycles(forUser, expectedTotalCycles);
-        assertReceiveDripsResult(forUser, type(uint32).max, expectedTotalAmt, 0);
-        assertReceiveDripsResult(forUser, maxCycles, expectedReceivedAmt, expectedCyclesAfter);
+        assertReceiveDripsResult(forUser, type(uint32).max, expectedTotalAmt);
+        assertReceiveDripsResult(forUser, maxCycles, expectedReceivedAmt);
 
-        (uint128 receivedAmt, uint32 receivableCycles) =
-            dripsHub.receiveDrips(forUser, erc20, maxCycles);
+        uint128 receivedAmt = dripsHub.receiveDrips(forUser, erc20, maxCycles);
 
         assertEq(receivedAmt, expectedReceivedAmt, "Invalid amount received from drips");
-        assertEq(receivableCycles, expectedCyclesAfter, "Invalid receivable drips cycles left");
         assertReceivableDripsCycles(forUser, expectedCyclesAfter);
-        assertReceiveDripsResult(forUser, type(uint32).max, expectedAmtAfter, 0);
+        assertReceiveDripsResult(forUser, type(uint32).max, expectedAmtAfter);
     }
 
     function assertReceivableDripsCycles(uint256 forUser, uint32 expectedCycles) internal {
@@ -323,16 +320,11 @@ contract DripsHubTest is Test {
         assertEq(actualCycles, expectedCycles, "Invalid total receivable drips cycles");
     }
 
-    function assertReceiveDripsResult(
-        uint256 forUser,
-        uint32 maxCycles,
-        uint128 expectedAmt,
-        uint32 expectedCycles
-    ) internal {
-        (uint128 actualAmt, uint32 actualCycles) =
-            dripsHub.receiveDripsResult(forUser, erc20, maxCycles);
+    function assertReceiveDripsResult(uint256 forUser, uint32 maxCycles, uint128 expectedAmt)
+        internal
+    {
+        uint128 actualAmt = dripsHub.receiveDripsResult(forUser, erc20, maxCycles);
         assertEq(actualAmt, expectedAmt, "Invalid receivable amount");
-        assertEq(actualCycles, expectedCycles, "Invalid receivable drips cycles");
     }
 
     function split(uint256 forUser, uint128 expectedCollectable, uint128 expectedSplit) internal {
