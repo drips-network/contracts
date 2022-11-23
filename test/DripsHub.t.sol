@@ -145,11 +145,11 @@ contract DripsHubTest is Test {
         DripsReceiver[] memory currReceivers = loadDrips(forUser);
 
         vm.prank(driver);
-        (uint128 newBalance, int128 realBalanceDelta) =
+        int128 realBalanceDelta =
             dripsHub.setDrips(forUser, erc20, currReceivers, balanceDelta, newReceivers, 0, 0);
 
         storeDrips(forUser, newReceivers);
-        assertEq(newBalance, balanceTo, "Invalid drips balance");
+        assertDripsBalance(forUser, balanceTo);
         assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
         (,, uint32 updateTime, uint128 actualBalance,) = dripsHub.dripsState(forUser, erc20);
         assertEq(updateTime, block.timestamp, "Invalid new last update time");

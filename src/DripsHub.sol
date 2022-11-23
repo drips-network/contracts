@@ -396,7 +396,6 @@ contract DripsHub is Managed, Drips, Splits {
     /// Positive to add funds to the drips balance, negative to remove them.
     /// @param newReceivers The list of the drips receivers of the user to be set.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
-    /// @return newBalance The new drips balance of the user.
     /// @return realBalanceDelta The actually applied drips balance change.
     function setDrips(
         uint256 userId,
@@ -406,16 +405,11 @@ contract DripsHub is Managed, Drips, Splits {
         DripsReceiver[] memory newReceivers,
         uint32 maxEndTip1,
         uint32 maxEndTip2
-    )
-        public
-        whenNotPaused
-        onlyDriver(userId)
-        returns (uint128 newBalance, int128 realBalanceDelta)
-    {
+    ) public whenNotPaused onlyDriver(userId) returns (int128 realBalanceDelta) {
         if (balanceDelta > 0) {
             _increaseTotalBalance(erc20, uint128(balanceDelta));
         }
-        (newBalance, realBalanceDelta) = Drips._setDrips(
+        (, realBalanceDelta) = Drips._setDrips(
             userId,
             _assetId(erc20),
             currReceivers,

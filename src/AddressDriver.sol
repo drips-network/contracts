@@ -73,7 +73,6 @@ contract AddressDriver is Upgradeable, ERC2771Context {
     /// @param newReceivers The list of the drips receivers of the sender to be set.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
     /// @param transferTo The address to send funds to in case of decreasing balance
-    /// @return newBalance The new drips balance of the sender.
     /// @return realBalanceDelta The actually applied drips balance change.
     function setDrips(
         IERC20 erc20,
@@ -83,11 +82,11 @@ contract AddressDriver is Upgradeable, ERC2771Context {
         uint32 maxEndTip1,
         uint32 maxEndTip2,
         address transferTo
-    ) public returns (uint128 newBalance, int128 realBalanceDelta) {
+    ) public returns (int128 realBalanceDelta) {
         if (balanceDelta > 0) {
             _transferFromCaller(erc20, uint128(balanceDelta));
         }
-        (newBalance, realBalanceDelta) = dripsHub.setDrips(
+        realBalanceDelta = dripsHub.setDrips(
             callerUserId(), erc20, currReceivers, balanceDelta, newReceivers, maxEndTip1, maxEndTip2
         );
         if (realBalanceDelta < 0) {

@@ -100,12 +100,13 @@ contract AddressDriverTest is Test {
         receivers[0] = DripsReceiver(userId, DripsConfigImpl.create(0, 1, 0, 0));
         uint256 balance = erc20.balanceOf(address(this));
 
-        (uint128 newBalance, int128 realBalanceDelta) = driver.setDrips(
+        int128 realBalanceDelta = driver.setDrips(
             erc20, new DripsReceiver[](0), int128(amt), receivers, 0, 0, address(this)
         );
 
         assertEq(erc20.balanceOf(address(this)), balance - amt, "Invalid balance after top-up");
-        assertEq(newBalance, amt, "Invalid drips balance after top-up");
+        (,,, uint128 dripsBalance,) = dripsHub.dripsState(thisId, erc20);
+        assertEq(dripsBalance, amt, "Invalid drips balance after top-up");
         assertEq(realBalanceDelta, int128(amt), "Invalid drips balance delta after top-up");
         (bytes32 dripsHash,,,,) = dripsHub.dripsState(thisId, erc20);
         assertEq(dripsHash, dripsHub.hashDrips(receivers), "Invalid drips hash after top-up");
@@ -113,11 +114,12 @@ contract AddressDriverTest is Test {
         // Withdraw
         balance = erc20.balanceOf(address(user));
 
-        (newBalance, realBalanceDelta) =
+        realBalanceDelta =
             driver.setDrips(erc20, receivers, -int128(amt), receivers, 0, 0, address(user));
 
         assertEq(erc20.balanceOf(address(user)), balance + amt, "Invalid balance after withdrawal");
-        assertEq(newBalance, 0, "Invalid drips balance after withdrawal");
+        (,,, dripsBalance,) = dripsHub.dripsState(thisId, erc20);
+        assertEq(dripsBalance, 0, "Invalid drips balance after withdrawal");
         assertEq(realBalanceDelta, -int128(amt), "Invalid drips balance delta after withdrawal");
     }
 
@@ -127,11 +129,12 @@ contract AddressDriverTest is Test {
         driver.setDrips(erc20, receivers, int128(amt), receivers, 0, 0, address(this));
         address transferTo = address(1234);
 
-        (uint128 newBalance, int128 realBalanceDelta) =
+        int128 realBalanceDelta =
             driver.setDrips(erc20, receivers, -int128(amt), receivers, 0, 0, transferTo);
 
         assertEq(erc20.balanceOf(transferTo), amt, "Invalid balance");
-        assertEq(newBalance, 0, "Invalid drips balance");
+        (,,, uint128 dripsBalance,) = dripsHub.dripsState(thisId, erc20);
+        assertEq(dripsBalance, 0, "Invalid drips balance");
         assertEq(realBalanceDelta, -int128(amt), "Invalid drips balance delta");
     }
 
