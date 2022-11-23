@@ -112,12 +112,22 @@ contract SplitsTest is Test, Splits {
         uint128 expectedCollectable,
         uint128 expectedSplit
     ) internal {
-        (uint128 collectableAmt, uint128 splitAmt) =
-            Splits._split(userId, asset, getCurrSplitsReceivers(userId));
+        uint128 collectableBefore = Splits._collectable(userId, asset);
+        SplitsReceiver[] memory receivers = getCurrSplitsReceivers(userId);
+        uint128 amt = Splits._splittable(userId, asset);
+        (uint128 collectableRes, uint128 splitRes) = Splits._splitResult(userId, receivers, amt);
 
+        (uint128 collectableAmt, uint128 splitAmt) = Splits._split(userId, asset, receivers);
+
+        assertEq(collectableRes, collectableAmt, "Invalid result collectable amount");
         assertEq(collectableAmt, expectedCollectable, "Invalid collectable amount");
-        assertEq(Splits._collectable(userId, asset), collectableAmt);
+        assertEq(
+            collectableBefore + collectableAmt,
+            Splits._collectable(userId, asset),
+            "Invalid collectable after splitting"
+        );
         assertEq(splitAmt, expectedSplit, "Invalid split amount");
+        assertEq(splitRes, splitAmt, "Invalid result split amount");
         assertSplittable(userId, 0);
     }
 

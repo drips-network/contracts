@@ -351,9 +351,10 @@ contract DripsHubTest is Test {
     }
 
     function assertSplitResult(uint256 forUser, uint256 amt, uint256 expected) internal {
-        uint128 actual =
+        (uint128 collectableAmt, uint128 splitAmt) =
             dripsHub.splitResult(forUser, getCurrSplitsReceivers(forUser), uint128(amt));
-        assertEq(actual, expected, "Invalid split result");
+        assertEq(collectableAmt, expected, "Invalid collectable amount");
+        assertEq(splitAmt, amt - expected, "Invalid split amount");
     }
 
     function collect(uint256 forUser, uint128 expectedAmt) internal {

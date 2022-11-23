@@ -106,22 +106,24 @@ abstract contract Splits {
     /// @param userId The user ID
     /// @param currReceivers The list of the user's current splits receivers.
     /// @param amount The amount being split.
-    /// @return collectableAmt The part of the `amount` left for collection after splitting.
+    /// @return collectableAmt The amount made collectable for the user
+    /// on top of what was collectable before.
+    /// @return splitAmt The amount split to the user's splits receivers
     function _splitResult(uint256 userId, SplitsReceiver[] memory currReceivers, uint128 amount)
         internal
         view
-        returns (uint128 collectableAmt)
+        returns (uint128 collectableAmt, uint128 splitAmt)
     {
         _assertCurrSplits(userId, currReceivers);
         if (amount == 0) {
-            return 0;
+            return (0, 0);
         }
         uint32 splitsWeight = 0;
         for (uint256 i = 0; i < currReceivers.length; i++) {
             splitsWeight += currReceivers[i].weight;
         }
-        uint128 splitAmt = uint128((uint160(amount) * splitsWeight) / _TOTAL_SPLITS_WEIGHT);
-        return amount - splitAmt;
+        splitAmt = uint128((uint160(amount) * splitsWeight) / _TOTAL_SPLITS_WEIGHT);
+        collectableAmt = amount - splitAmt;
     }
 
     /// @notice Splits user's received but not split yet funds among receivers.

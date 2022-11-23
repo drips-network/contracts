@@ -277,11 +277,13 @@ contract DripsHub is Managed, Drips, Splits {
     /// @param userId The user ID
     /// @param currReceivers The list of the user's current splits receivers.
     /// @param amount The amount being split.
-    /// @return collectableAmt The part of the `amount` left for collection after splitting.
+    /// @return collectableAmt The amount made collectable for the user
+    /// on top of what was collectable before.
+    /// @return splitAmt The amount split to the user's splits receivers
     function splitResult(uint256 userId, SplitsReceiver[] memory currReceivers, uint128 amount)
         public
         view
-        returns (uint128 collectableAmt)
+        returns (uint128 collectableAmt, uint128 splitAmt)
     {
         return Splits._splitResult(userId, currReceivers, amount);
     }
