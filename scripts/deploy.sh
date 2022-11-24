@@ -57,7 +57,6 @@ fi
 print_title "Deployment Config"
 echo "Network:                      $NETWORK"
 echo "Deployer address:             $DEPLOYER"
-echo "Gas price:                    ${ETH_GAS_PRICE:-use the default}"
 if [ -n "$ETHERSCAN_API_KEY" ]; then
     ETHERSCAN_API_KEY_PROVIDED="provided"
 else
