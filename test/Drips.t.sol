@@ -301,6 +301,11 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         assertEq(actual, expected, "Invalid drips configuration");
     }
 
+    function assertMaxEnd(uint256 userId, uint256 expected) internal {
+        (,,,, uint32 actual) = Drips._dripsState(userId, assetId);
+        assertEq(actual, expected, "Invalid max end");
+    }
+
     function assertBalance(uint256 userId, uint128 expected) internal {
         assertBalanceAt(userId, expected, block.timestamp);
     }
@@ -1407,7 +1412,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         );
 
         skipTo(0);
-        assertEq(Drips._calcMaxEnd(100, receivers, 0, type(uint32).max), 75);
+        setDrips(sender, 0, 100, receivers);
+        assertMaxEnd(sender, 75);
     }
 
     function testReceiverMaxEndExampleB() public {
@@ -1418,7 +1424,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
 
         // in the past
         skipTo(70);
-        assertEq(Drips._calcMaxEnd(100, receivers, 0, type(uint32).max), 130);
+        setDrips(sender, 0, 100, receivers);
+        assertMaxEnd(sender, 130);
     }
 
     function _receiverMaxEndEdgeCase(uint128 balance) internal {
@@ -1427,7 +1434,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
             recv({userId: receiver2, amtPerSec: 1, start: 2, duration: 0})
         );
         skipTo(0);
-        assertEq(Drips._calcMaxEnd(balance, receivers, 0, type(uint32).max), 3);
+        setDrips(sender, 0, balance, receivers);
+        assertMaxEnd(sender, 3);
     }
 
     function testReceiverMaxEndEdgeCase() public {
@@ -1444,7 +1452,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
             recv({userId: receiver2, amtPerSec: 1, start: 1000, duration: 0})
         );
         skipTo(0);
-        assertEq(Drips._calcMaxEnd(100, receivers, 0, type(uint32).max), 150);
+        setDrips(sender, 0, 100, receivers);
+        assertMaxEnd(sender, 150);
     }
 
     function testSqueezeDrips() public {
