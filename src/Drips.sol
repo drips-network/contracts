@@ -537,7 +537,6 @@ abstract contract Drips {
     /// Positive when adding funds to the drips balance, negative to removing them.
     /// @param newReceivers The list of the drips receivers of the user to be set.
     /// Must be sorted, deduplicated and without 0 amtPerSecs.
-    /// @return newBalance The new drips balance of the user.
     /// @return realBalanceDelta The actually applied drips balance change.
     function _setDrips(
         uint256 userId,
@@ -547,10 +546,11 @@ abstract contract Drips {
         DripsReceiver[] memory newReceivers,
         uint32 maxEndTip1,
         uint32 maxEndTip2
-    ) internal returns (uint128 newBalance, int128 realBalanceDelta) {
+    ) internal returns (int128 realBalanceDelta) {
         DripsState storage state = _dripsStorage().states[assetId][userId];
         require(_hashDrips(currReceivers) == state.dripsHash, "Invalid current drips list");
         uint32 lastUpdate = state.updateTime;
+        uint128 newBalance;
         uint32 newMaxEnd;
         {
             uint32 currMaxEnd = state.maxEnd;

@@ -272,12 +272,11 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         (, bytes32 oldHistoryHash,,,) = Drips._dripsState(userId, assetId);
         int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
 
-        (uint128 newBalance, int128 realBalanceDelta) = Drips._setDrips(
+        int128 realBalanceDelta = Drips._setDrips(
             userId, assetId, loadCurrReceivers(userId), balanceDelta, newReceivers, 0, 0
         );
 
         storeCurrReceivers(userId, newReceivers);
-        assertEq(newBalance, balanceTo, "Invalid drips balance");
         (
             bytes32 dripsHash,
             bytes32 historyHash,
@@ -1245,10 +1244,10 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         // Sender had 4 second paying 1 per second
 
         DripsReceiver[] memory newRecv = recv();
-        (uint128 newBalance, int128 realBalanceDelta) =
+        int128 realBalanceDelta =
             Drips._setDrips(sender, assetId, receivers, type(int128).min, newRecv, 0, 0);
         storeCurrReceivers(sender, newRecv);
-        assertEq(newBalance, 0, "Invalid balance");
+        assertBalance(sender, 0);
         assertEq(realBalanceDelta, -6, "Invalid real balance delta");
         assertBalance(sender, 0);
         skipToCycleEnd();

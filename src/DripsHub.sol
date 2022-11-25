@@ -489,7 +489,7 @@ contract DripsHub is Managed, Drips, Splits {
         if (balanceDelta > 0) {
             _increaseTotalBalance(erc20, uint128(balanceDelta));
         }
-        (, realBalanceDelta) = Drips._setDrips(
+        realBalanceDelta = Drips._setDrips(
             userId,
             _assetId(erc20),
             currReceivers,
