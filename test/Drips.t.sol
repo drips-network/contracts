@@ -381,7 +381,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function receiveDrips(uint256 userId, uint128 expectedAmt) internal {
-        (uint128 actualAmt,) = Drips._receiveDrips(userId, assetId, type(uint32).max);
+        uint128 actualAmt = Drips._receiveDrips(userId, assetId, type(uint32).max);
         assertEq(actualAmt, expectedAmt, "Invalid amount received from drips");
     }
 
@@ -399,11 +399,9 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         assertReceiveDripsResult(userId, type(uint32).max, expectedTotalAmt, 0);
         assertReceiveDripsResult(userId, maxCycles, expectedReceivedAmt, expectedCyclesAfter);
 
-        (uint128 receivedAmt, uint32 receivableCycles) =
-            Drips._receiveDrips(userId, assetId, maxCycles);
+        uint128 receivedAmt = Drips._receiveDrips(userId, assetId, maxCycles);
 
         assertEq(receivedAmt, expectedReceivedAmt, "Invalid amount received from drips");
-        assertEq(receivableCycles, expectedCyclesAfter, "Invalid receivable drips cycles left");
         assertReceivableDripsCycles(userId, expectedCyclesAfter);
         assertReceiveDripsResult(userId, type(uint32).max, expectedAmtAfter, 0);
     }
@@ -430,7 +428,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
             }
 
             uint256 expectedAmt = (duration * r.config.amtPerSec()) >> 64;
-            (uint128 actualAmt,) = Drips._receiveDrips(r.userId, assetId, type(uint32).max);
+            uint128 actualAmt = Drips._receiveDrips(r.userId, assetId, type(uint32).max);
             // only log if acutalAmt doesn't match exptectedAmt
             if (expectedAmt != actualAmt) {
                 emit log_named_uint("userId:", r.userId);

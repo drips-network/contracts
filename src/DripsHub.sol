@@ -241,7 +241,7 @@ contract DripsHub is Managed, Drips, Splits {
         returns (uint128 receivedAmt)
     {
         uint256 assetId = _assetId(erc20);
-        (receivedAmt,) = Drips._receiveDrips(userId, assetId, maxCycles);
+        receivedAmt = Drips._receiveDrips(userId, assetId, maxCycles);
         if (receivedAmt > 0) {
             Splits._give(userId, userId, assetId, receivedAmt);
         }

@@ -221,11 +221,11 @@ abstract contract Drips {
     /// If too low, receiving will be cheap, but may not cover many cycles.
     /// If too high, receiving may become too expensive to fit in a single transaction.
     /// @return receivedAmt The received amount
-    /// @return receivableCycles The number of cycles which still can be received
     function _receiveDrips(uint256 userId, uint256 assetId, uint32 maxCycles)
         internal
-        returns (uint128 receivedAmt, uint32 receivableCycles)
+        returns (uint128 receivedAmt)
     {
+        uint32 receivableCycles;
         uint32 fromCycle;
         uint32 toCycle;
         int128 finalAmtPerCycle;
