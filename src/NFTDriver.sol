@@ -50,27 +50,48 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Upgradeable {
         return (uint256(driverId) << 224) + StorageSlot.getUint256Slot(_mintedTokensSlot).value;
     }
 
-    /// @notice Get the ID of the next minted token and generate a new token ID for future minting.
-    function _useNextTokenId() internal returns (uint256 tokenId) {
-        tokenId = nextTokenId();
-        StorageSlot.getUint256Slot(_mintedTokensSlot).value++;
-    }
-
     /// @notice Mints a new token controlling a new user ID and transfers it to an address.
+    /// Emits user metadata for the new token.
     /// Usage of this method is discouraged, use `safeMint` whenever possible.
     /// @param to The address to transfer the minted token to.
+    /// @param userMetadata The list of user metadata to emit for the minted token.
+    /// The keys and the values are not standardized by the protocol, it's up to the user
+    /// to establish and follow conventions to ensure compatibility with the consumers.
     /// @return tokenId The minted token ID. It's equal to the user ID controlled by it.
-    function mint(address to) public returns (uint256 tokenId) {
-        tokenId = _useNextTokenId();
+    function mint(address to, UserMetadata[] calldata userMetadata)
+        public
+        returns (uint256 tokenId)
+    {
+        tokenId = _registerTokenId(userMetadata);
         _mint(to, tokenId);
     }
 
     /// @notice Mints a new token controlling a new user ID and safely transfers it to an address.
+    /// Emits user metadata for the new token.
     /// @param to The address to transfer the minted token to.
+    /// @param userMetadata The list of user metadata to emit for the minted token.
+    /// The keys and the values are not standardized by the protocol, it's up to the user
+    /// to establish and follow conventions to ensure compatibility with the consumers.
     /// @return tokenId The minted token ID. It's equal to the user ID controlled by it.
-    function safeMint(address to) public returns (uint256 tokenId) {
-        tokenId = _useNextTokenId();
+    function safeMint(address to, UserMetadata[] calldata userMetadata)
+        public
+        returns (uint256 tokenId)
+    {
+        tokenId = _registerTokenId(userMetadata);
         _safeMint(to, tokenId);
+    }
+
+    /// @notice Registers the next token ID when minting.
+    /// Emits the user metadata for the minted token.
+    /// @param userMetadata The list of user metadata.
+    /// @return tokenId The registered token ID.
+    function _registerTokenId(UserMetadata[] calldata userMetadata)
+        internal
+        returns (uint256 tokenId)
+    {
+        tokenId = nextTokenId();
+        StorageSlot.getUint256Slot(_mintedTokensSlot).value++;
+        if (userMetadata.length > 0) dripsHub.emitUserMetadata(tokenId, userMetadata);
     }
 
     /// @notice Collects the user's received already split funds

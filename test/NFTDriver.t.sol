@@ -51,10 +51,10 @@ contract NFTDriverTest is Test {
         dripsHub.updateDriverAddress(nftDriverId, address(driver));
 
         user = address(1);
-        tokenId = driver.mint(address(this));
-        tokenId1 = driver.mint(address(this));
-        tokenId2 = driver.mint(address(this));
-        tokenIdUser = driver.mint(user);
+        tokenId = driver.mint(address(this), new UserMetadata[](0));
+        tokenId1 = driver.mint(address(this), new UserMetadata[](0));
+        tokenId2 = driver.mint(address(this), new UserMetadata[](0));
+        tokenIdUser = driver.mint(user, new UserMetadata[](0));
 
         erc20 = new ERC20PresetFixedSupply("test", "test", type(uint136).max, address(this));
         erc20.approve(address(driver), type(uint256).max);
@@ -79,8 +79,10 @@ contract NFTDriverTest is Test {
         uint256 nextTokenId = driver.nextTokenId();
         vm.expectRevert(ERROR_INVALID_TOKEN);
         driver.ownerOf(nextTokenId);
+        UserMetadata[] memory userMetadata = new UserMetadata[](1);
+        userMetadata[0] = UserMetadata("key", "value");
 
-        uint256 newTokenId = driver.mint(user);
+        uint256 newTokenId = driver.mint(user, userMetadata);
 
         assertEq(newTokenId, nextTokenId, "Invalid new tokenId");
         assertEq(driver.nextTokenId(), newTokenId + 1, "Invalid next tokenId");
@@ -91,8 +93,10 @@ contract NFTDriverTest is Test {
         uint256 nextTokenId = driver.nextTokenId();
         vm.expectRevert(ERROR_INVALID_TOKEN);
         driver.ownerOf(nextTokenId);
+        UserMetadata[] memory userMetadata = new UserMetadata[](1);
+        userMetadata[0] = UserMetadata("key", "value");
 
-        uint256 newTokenId = driver.safeMint(user);
+        uint256 newTokenId = driver.safeMint(user, userMetadata);
 
         assertEq(newTokenId, nextTokenId, "Invalid new tokenId");
         assertEq(driver.nextTokenId(), newTokenId + 1, "Invalid next tokenId");
