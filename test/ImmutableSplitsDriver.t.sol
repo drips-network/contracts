@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.17;
 
-import {ImmutableSplitsDriver, UserMetadata} from "src/ImmutableSplitsDriver.sol";
-import {DripsHub, SplitsReceiver} from "src/DripsHub.sol";
+import {ImmutableSplitsDriver} from "src/ImmutableSplitsDriver.sol";
+import {DripsHub, SplitsReceiver, UserMetadata} from "src/DripsHub.sol";
 import {Reserve} from "src/Reserve.sol";
 import {UpgradeableProxy} from "src/Upgradeable.sol";
 import {Test} from "forge-std/Test.sol";
@@ -34,7 +34,7 @@ contract ImmutableSplitsDriverTest is Test {
         receivers[1] = SplitsReceiver({userId: 2, weight: 1});
         uint256 nextUserId = driver.nextUserId();
         UserMetadata[] memory metadata = new UserMetadata[](1);
-        metadata[0] = UserMetadata(0, "value");
+        metadata[0] = UserMetadata("key", "value");
 
         uint256 userId = driver.createSplits(receivers, metadata);
 

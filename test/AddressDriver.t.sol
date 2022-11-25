@@ -8,7 +8,8 @@ import {
     DripsHub,
     DripsHistory,
     DripsReceiver,
-    SplitsReceiver
+    SplitsReceiver,
+    UserMetadata
 } from "src/DripsHub.sol";
 import {Reserve} from "src/Reserve.sol";
 import {UpgradeableProxy} from "src/Upgradeable.sol";
@@ -150,7 +151,9 @@ contract AddressDriverTest is Test {
     }
 
     function testEmitUserMetadata() public {
-        driver.emitUserMetadata(0, "value");
+        UserMetadata[] memory userMetadata = new UserMetadata[](1);
+        userMetadata[0] = UserMetadata("key", "value");
+        driver.emitUserMetadata(userMetadata);
     }
 
     function testForwarderIsTrusted() public {

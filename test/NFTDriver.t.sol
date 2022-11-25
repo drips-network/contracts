@@ -8,7 +8,8 @@ import {
     DripsHub,
     DripsHistory,
     DripsReceiver,
-    SplitsReceiver
+    SplitsReceiver,
+    UserMetadata
 } from "src/DripsHub.sol";
 import {Reserve} from "src/Reserve.sol";
 import {UpgradeableProxy} from "src/Upgradeable.sol";
@@ -215,12 +216,16 @@ contract NFTDriverTest is Test {
     }
 
     function testEmitUserMetadata() public {
-        driver.emitUserMetadata(tokenId, 0, "value");
+        UserMetadata[] memory userMetadata = new UserMetadata[](1);
+        userMetadata[0] = UserMetadata("key", "value");
+        driver.emitUserMetadata(tokenId, userMetadata);
     }
 
     function testEmitUserMetadataRevertsWhenNotTokenHolder() public {
+        UserMetadata[] memory userMetadata = new UserMetadata[](1);
+        userMetadata[0] = UserMetadata("key", "value");
         vm.expectRevert(ERROR_NOT_OWNER);
-        driver.emitUserMetadata(tokenIdUser, 0, "value");
+        driver.emitUserMetadata(tokenIdUser, userMetadata);
     }
 
     function testForwarderIsTrustedInErc721Calls() public {

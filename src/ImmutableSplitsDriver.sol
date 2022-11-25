@@ -1,15 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.17;
 
-import {DripsHub, SplitsReceiver} from "./DripsHub.sol";
+import {DripsHub, SplitsReceiver, UserMetadata} from "./DripsHub.sol";
 import {Upgradeable} from "./Upgradeable.sol";
 import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
-
-/// @notice The user metadata.
-struct UserMetadata {
-    bytes32 key;
-    bytes value;
-}
 
 /// @notice A DripsHub driver implementing immutable splits configurations.
 /// Anybody can create a new user ID and configure its splits configuration,
@@ -52,11 +46,11 @@ contract ImmutableSplitsDriver is Upgradeable {
     /// share of the funds collected by the user.
     /// The sum of the receivers' weights must be equal to `totalSplitsWeight`,
     /// or in other words the configuration must be splitting 100% of received funds.
-    /// @param metadata The list of user metadata to emit for the created user.
-    /// The key and the value are not standardized by the protocol, it's up to the user
+    /// @param userMetadata The list of user metadata to emit for the created user.
+    /// The keys and the values are not standardized by the protocol, it's up to the user
     /// to establish and follow conventions to ensure compatibility with the consumers.
     /// @return userId The new user ID with `receivers` configured.
-    function createSplits(SplitsReceiver[] calldata receivers, UserMetadata[] calldata metadata)
+    function createSplits(SplitsReceiver[] calldata receivers, UserMetadata[] calldata userMetadata)
         public
         returns (uint256 userId)
     {
@@ -68,10 +62,7 @@ contract ImmutableSplitsDriver is Upgradeable {
         }
         require(weightSum == totalSplitsWeight, "Invalid total receivers weight");
         dripsHub.setSplits(userId, receivers);
-        for (uint256 i = 0; i < metadata.length; i++) {
-            UserMetadata calldata data = metadata[i];
-            dripsHub.emitUserMetadata(userId, data.key, data.value);
-        }
+        if (userMetadata.length > 0) dripsHub.emitUserMetadata(userId, userMetadata);
         emit CreatedSplits(userId, dripsHub.splitsHash(userId));
     }
 }

@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.17;
 
-import {DripsHistory, DripsHub, DripsReceiver, IERC20, SplitsReceiver} from "./DripsHub.sol";
+import {
+    DripsHistory,
+    DripsHub,
+    DripsReceiver,
+    IERC20,
+    SplitsReceiver,
+    UserMetadata
+} from "./DripsHub.sol";
 import {Upgradeable} from "./Upgradeable.sol";
 import {ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
 import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
@@ -118,13 +125,12 @@ contract AddressDriver is Upgradeable, ERC2771Context {
         dripsHub.setSplits(callerUserId(), receivers);
     }
 
-    /// @notice Emits the message sender's metadata.
-    /// The key and the value are not standardized by the protocol, it's up to the user
+    /// @notice Emits the user metadata for the message sender.
+    /// The keys and the values are not standardized by the protocol, it's up to the user
     /// to establish and follow conventions to ensure compatibility with the consumers.
-    /// @param key The metadata key
-    /// @param value The metadata value
-    function emitUserMetadata(bytes32 key, bytes calldata value) public {
-        dripsHub.emitUserMetadata(callerUserId(), key, value);
+    /// @param userMetadata The list of user metadata.
+    function emitUserMetadata(UserMetadata[] calldata userMetadata) public {
+        dripsHub.emitUserMetadata(callerUserId(), userMetadata);
     }
 
     function _transferFromCaller(IERC20 erc20, uint128 amt) internal {

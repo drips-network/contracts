@@ -7,6 +7,16 @@ import {Managed} from "./Managed.sol";
 import {Splits, SplitsReceiver} from "./Splits.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
+/// @notice The user metadata.
+/// The key and the value are not standardized by the protocol, it's up to the user
+/// to establish and follow conventions to ensure compatibility with the consumers.
+struct UserMetadata {
+    /// @param key The metadata key
+    bytes32 key;
+    /// @param value The metadata value
+    bytes value;
+}
+
 /// @notice Drips hub contract. Automatically drips and splits funds between users.
 ///
 /// The user can transfer some funds to their drips balance in the contract
@@ -79,7 +89,7 @@ contract DripsHub is Managed, Drips, Splits {
     /// @param userId The ID of the user emitting metadata
     /// @param key The metadata key
     /// @param value The metadata value
-    event UserMetadata(uint256 indexed userId, bytes32 indexed key, bytes value);
+    event UserMetadataEmitted(uint256 indexed userId, bytes32 indexed key, bytes value);
 
     struct DripsHubStorage {
         /// @notice The next driver ID that will be used when registering.
@@ -556,16 +566,19 @@ contract DripsHub is Managed, Drips, Splits {
     }
 
     /// @notice Emits user metadata.
-    /// The key and the value are not standardized by the protocol, it's up to the user
+    /// The keys and the values are not standardized by the protocol, it's up to the user
     /// to establish and follow conventions to ensure compatibility with the consumers.
-    /// @param key The metadata key
-    /// @param value The metadata value
-    function emitUserMetadata(uint256 userId, bytes32 key, bytes calldata value)
+    /// @param userId The user ID.
+    /// @param userMetadata The list of user metadata.
+    function emitUserMetadata(uint256 userId, UserMetadata[] calldata userMetadata)
         public
         whenNotPaused
         onlyDriver(userId)
     {
-        emit UserMetadata(userId, key, value);
+        for (uint256 i = 0; i < userMetadata.length; i++) {
+            UserMetadata calldata metadata = userMetadata[i];
+            emit UserMetadataEmitted(userId, metadata.key, metadata.value);
+        }
     }
 
     /// @notice Returns the DripsHub storage.

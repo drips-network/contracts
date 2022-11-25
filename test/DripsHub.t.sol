@@ -6,7 +6,8 @@ import {
     DripsConfigImpl,
     DripsHub,
     DripsHistory,
-    DripsReceiver
+    DripsReceiver,
+    UserMetadata
 } from "src/DripsHub.sol";
 import {Reserve} from "src/Reserve.sol";
 import {UpgradeableProxy} from "src/Upgradeable.sol";
@@ -512,8 +513,11 @@ contract DripsHubTest is Test {
     }
 
     function testEmitUserMetadata() public {
+        UserMetadata[] memory userMetadata = new UserMetadata[](2);
+        userMetadata[0] = UserMetadata("key 1", "value 1");
+        userMetadata[1] = UserMetadata("key 2", "value 2");
         vm.prank(driver);
-        dripsHub.emitUserMetadata(user, 0, "value");
+        dripsHub.emitUserMetadata(user, userMetadata);
     }
 
     function testBalanceAt() public {
@@ -607,8 +611,10 @@ contract DripsHubTest is Test {
     }
 
     function testEmitUserMetadataRevertsWhenNotCalledByTheDriver() public {
+        UserMetadata[] memory userMetadata = new UserMetadata[](1);
+        userMetadata[0] = UserMetadata("key", "value");
         vm.expectRevert(ERROR_NOT_DRIVER);
-        dripsHub.emitUserMetadata(user, 0, "value");
+        dripsHub.emitUserMetadata(user, userMetadata);
     }
 
     function testSetDripsLimitsTotalBalance() public {
@@ -751,9 +757,11 @@ contract DripsHubTest is Test {
 
     function testEmitUserMetadataCanBePaused() public {
         pauseDripsHub();
+        UserMetadata[] memory userMetadata = new UserMetadata[](1);
+        userMetadata[0] = UserMetadata("key", "value");
         vm.prank(driver);
         vm.expectRevert(ERROR_PAUSED);
-        dripsHub.emitUserMetadata(user, 0, "value");
+        dripsHub.emitUserMetadata(user, userMetadata);
     }
 
     function testRegisterDriverCanBePaused() public {
