@@ -605,7 +605,7 @@ abstract contract Drips {
         DripsReceiver[] memory receivers,
         uint32 maxEndTip1,
         uint32 maxEndTip2
-    ) internal view returns (uint32 maxEnd) {
+    ) private view returns (uint32 maxEnd) {
         require(receivers.length <= _MAX_DRIPS_RECEIVERS, "Too many drips receivers");
         uint256[] memory configs = new uint256[](receivers.length);
         uint256 configsLen = 0;
