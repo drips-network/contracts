@@ -1466,6 +1466,82 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         setDrips(sender, 0, 100, receivers, 150);
     }
 
+    function testMaxEndTipsDoNotAffectMaxEnd() public {
+        skipTo(10);
+        setDripsPermuteTips({
+            amt: 10,
+            receivers: recv(receiver, 1),
+            maxEndTip1: 15,
+            maxEndTip2: 25,
+            expectedMaxEndFromNow: 10
+        });
+    }
+
+    function testMaxEndTipsPerfectlyAccurateDoNotAffectMaxEnd() public {
+        skipTo(10);
+        setDripsPermuteTips({
+            amt: 10,
+            receivers: recv(receiver, 1),
+            maxEndTip1: 20,
+            maxEndTip2: 21,
+            expectedMaxEndFromNow: 10
+        });
+    }
+
+    function testMaxEndTipsInThePastDoNotAffectMaxEnd() public {
+        skipTo(10);
+        setDripsPermuteTips({
+            amt: 10,
+            receivers: recv(receiver, 1),
+            maxEndTip1: 5,
+            maxEndTip2: 25,
+            expectedMaxEndFromNow: 10
+        });
+    }
+
+    function testMaxEndTipsAtTheEndOfTimeDoNotAffectMaxEnd() public {
+        skipTo(10);
+        setDripsPermuteTips({
+            amt: 10,
+            receivers: recv(receiver, 1),
+            maxEndTip1: type(uint32).max,
+            maxEndTip2: 25,
+            expectedMaxEndFromNow: 10
+        });
+    }
+
+    function setDripsPermuteTips(
+        uint128 amt,
+        DripsReceiver[] memory receivers,
+        uint32 maxEndTip1,
+        uint32 maxEndTip2,
+        uint256 expectedMaxEndFromNow
+    ) internal {
+        setDripsPermuteTipsCase(amt, receivers, 0, 0, expectedMaxEndFromNow);
+        setDripsPermuteTipsCase(amt, receivers, 0, maxEndTip1, expectedMaxEndFromNow);
+        setDripsPermuteTipsCase(amt, receivers, 0, maxEndTip2, expectedMaxEndFromNow);
+        setDripsPermuteTipsCase(amt, receivers, maxEndTip1, 0, expectedMaxEndFromNow);
+        setDripsPermuteTipsCase(amt, receivers, maxEndTip2, 0, expectedMaxEndFromNow);
+        setDripsPermuteTipsCase(amt, receivers, maxEndTip1, maxEndTip2, expectedMaxEndFromNow);
+        setDripsPermuteTipsCase(amt, receivers, maxEndTip2, maxEndTip1, expectedMaxEndFromNow);
+        setDripsPermuteTipsCase(amt, receivers, maxEndTip1, maxEndTip1, expectedMaxEndFromNow);
+        setDripsPermuteTipsCase(amt, receivers, maxEndTip2, maxEndTip2, expectedMaxEndFromNow);
+    }
+
+    function setDripsPermuteTipsCase(
+        uint128 amt,
+        DripsReceiver[] memory receivers,
+        uint32 maxEndTip1,
+        uint32 maxEndTip2,
+        uint256 expectedMaxEndFromNow
+    ) internal {
+        emit log_named_uint("Setting drips with tip 1", maxEndTip1);
+        emit log_named_uint("               and tip 2", maxEndTip1);
+        uint256 snapshot = vm.snapshot();
+        setDrips(sender, 0, amt, receivers, maxEndTip1, maxEndTip2, expectedMaxEndFromNow);
+        vm.revertTo(snapshot);
+    }
+
     function testSqueezeDrips() public {
         uint128 amt = cycleSecs;
         setDrips(sender, 0, amt, recv(receiver, 1), cycleSecs);
