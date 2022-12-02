@@ -595,6 +595,13 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         receiveDrips(receiver, 47);
     }
 
+    function testDripsWithBalanceLowerThan1SecondOfDripping() public {
+        setDrips(sender, 0, 1, recv(receiver, 2), 0);
+        skipToCycleEnd();
+        drainBalance(sender, 1);
+        receiveDrips(receiver, 0);
+    }
+
     function testDripsWithStartAndDuration() public {
         setDrips(sender, 0, 10, recv(receiver, 1, block.timestamp + 5, 10), maxEndMax());
         skip(5);
@@ -1036,6 +1043,16 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         assertBalanceAt(sender, 0, block.timestamp + 14);
     }
 
+    function testFractionsAreAppliedRegardlessOfStartTime() public {
+        assertEq(cycleSecs, 10, "Unexpected cycle length");
+        skip(3);
+        // Rate of 0.4 per second
+        // Full units are dripped on cycle timestamps 3, 5 and 8
+        setDrips(sender, 0, 1, recv(receiver, 0, Drips._AMT_PER_SEC_MULTIPLIER / 10 * 4 + 1), 4);
+        assertBalanceAt(sender, 1, block.timestamp + 1);
+        assertBalanceAt(sender, 0, block.timestamp + 2);
+    }
+
     function testDripsWithFractionsCanBeSeamlesslyToppedUp() public {
         assertEq(cycleSecs, 10, "Unexpected cycle length");
         // Rate of 0.25 per second
@@ -1420,50 +1437,182 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         receiveDrips(receivers, maxEnd, updateTime);
     }
 
-    function testReceiverMaxEndExampleA() public {
-        skipTo(0);
-        DripsReceiver[] memory receivers = recv(
-            recv({userId: receiver1, amtPerSec: 1, start: 50, duration: 0}),
-            recv({userId: receiver2, amtPerSec: 1, start: 0, duration: 0})
-        );
-        setDrips(sender, 0, 100, receivers, 75);
+    function sanitizeReceivers(
+        DripsReceiver[_MAX_DRIPS_RECEIVERS] memory receiversRaw,
+        uint256 receiversLengthRaw
+    ) internal returns (DripsReceiver[] memory receivers) {
+        receivers = new DripsReceiver[](Test.bound(receiversLengthRaw, 0, receiversRaw.length));
+        for (uint256 i = 0; i < receivers.length; i++) {
+            receivers[i] = receiversRaw[i];
+        }
+        for (uint32 i = 0; i < receivers.length; i++) {
+            for (uint256 j = i + 1; j < receivers.length; j++) {
+                if (receivers[j].userId < receivers[i].userId) {
+                    (receivers[j], receivers[i]) = (receivers[i], receivers[j]);
+                }
+            }
+            DripsConfig cfg = receivers[i].config;
+            uint160 amtPerSec = cfg.amtPerSec();
+            if (amtPerSec == 0) amtPerSec = 1;
+            receivers[i].config = DripsConfigImpl.create(i, amtPerSec, cfg.start(), cfg.duration());
+        }
     }
 
-    function testReceiverMaxEndExampleB() public {
-        skipTo(70);
-        DripsReceiver[] memory receivers = recv(
-            recv({userId: receiver1, amtPerSec: 2, start: 100, duration: 0}),
-            recv({userId: receiver2, amtPerSec: 4, start: 120, duration: 0})
-        );
-        // in the past
-        setDrips(sender, 0, 100, receivers, 60);
+    struct Sender {
+        uint256 userId;
+        uint128 balance;
+        DripsReceiver[] receivers;
     }
 
-    function testReceiverMaxEndEdgeCaseA() public {
-        skipTo(0);
-        DripsReceiver[] memory receivers = recv(
-            recv({userId: receiver1, amtPerSec: 2, start: 0, duration: 0}),
-            recv({userId: receiver2, amtPerSec: 1, start: 2, duration: 0})
-        );
-        setDrips(sender, 0, 7, receivers, 3);
+    function sanitizeSenders(
+        uint256 receiverId,
+        uint128 balance,
+        DripsReceiver[100] memory sendersRaw,
+        uint256 sendersLenRaw
+    ) internal returns (Sender[] memory senders) {
+        uint256 sendersLen = bound(sendersLenRaw, 1, sendersRaw.length);
+        senders = new Sender[](sendersLen);
+        uint256 totalBalanceWeight = 0;
+        for (uint32 i = 0; i < sendersLen; i++) {
+            DripsConfig cfg = sendersRaw[i].config;
+            senders[i].userId = sendersRaw[i].userId;
+            senders[i].balance = cfg.dripId();
+            totalBalanceWeight += cfg.dripId();
+            senders[i].receivers = new DripsReceiver[](1);
+            senders[i].receivers[0].userId = receiverId;
+            uint160 amtPerSec = cfg.amtPerSec();
+            if (amtPerSec == 0) amtPerSec = 1;
+            senders[i].receivers[0].config =
+                DripsConfigImpl.create(i, amtPerSec, cfg.start(), cfg.duration());
+        }
+        uint256 uniqueSenders = 0;
+        uint256 usedBalance = 0;
+        uint256 usedBalanceWeight = 0;
+        if (totalBalanceWeight == 0) {
+            totalBalanceWeight = 1;
+            usedBalanceWeight = 1;
+        }
+        for (uint256 i = 0; i < sendersLen; i++) {
+            usedBalanceWeight += senders[i].balance;
+            uint256 newUsedBalance = usedBalanceWeight * balance / totalBalanceWeight;
+            senders[i].balance = uint128(newUsedBalance - usedBalance);
+            usedBalance = newUsedBalance;
+            senders[uniqueSenders++] = senders[i];
+            for (uint256 j = 0; j + 1 < uniqueSenders; j++) {
+                if (senders[i].userId == senders[j].userId) {
+                    senders[j].balance += senders[i].balance;
+                    senders[j].receivers = recv(senders[j].receivers, senders[i].receivers);
+                    uniqueSenders--;
+                    break;
+                }
+            }
+        }
+        Sender[] memory sendersLong = senders;
+        senders = new Sender[](uniqueSenders);
+        for (uint256 i = 0; i < uniqueSenders; i++) {
+            senders[i] = sendersLong[i];
+        }
     }
 
-    function testReceiverMaxEndEdgeCaseB() public {
-        skipTo(0);
-        DripsReceiver[] memory receivers = recv(
-            recv({userId: receiver1, amtPerSec: 2, start: 0, duration: 0}),
-            recv({userId: receiver2, amtPerSec: 1, start: 2, duration: 0})
-        );
-        setDrips(sender, 0, 6, receivers, 2);
+    function sanitizeDripTime(uint256 dripTimeRaw, uint256 maxCycles)
+        internal
+        returns (uint256 dripTime)
+    {
+        return Test.bound(dripTimeRaw, 0, cycleSecs * maxCycles);
     }
 
-    function testReceiverMaxEndNotEnoughToCoverAll() public {
-        skipTo(0);
-        DripsReceiver[] memory receivers = recv(
-            recv({userId: receiver1, amtPerSec: 1, start: 50, duration: 0}),
-            recv({userId: receiver2, amtPerSec: 1, start: 1000, duration: 0})
-        );
-        setDrips(sender, 0, 100, receivers, 150);
+    function sanitizeDripBalance(uint256 balanceRaw) internal returns (uint128 balance) {
+        return uint128(Test.bound(balanceRaw, 0, _MAX_TOTAL_DRIPS_BALANCE));
+    }
+
+    function testFundsDrippedToReceiversAddUp(
+        uint256 senderId,
+        uint256 asset,
+        uint256 balanceRaw,
+        DripsReceiver[_MAX_DRIPS_RECEIVERS] memory receiversRaw,
+        uint256 receiversLengthRaw,
+        uint256 dripTimeRaw
+    ) public {
+        uint128 balanceBefore = sanitizeDripBalance(balanceRaw);
+        DripsReceiver[] memory receivers = sanitizeReceivers(receiversRaw, receiversLengthRaw);
+        Drips._setDrips(senderId, asset, recv(), int128(balanceBefore), receivers, 0, 0);
+
+        skip(sanitizeDripTime(dripTimeRaw, 100));
+        int128 realBalanceDelta =
+            Drips._setDrips(senderId, asset, receivers, type(int128).min, receivers, 0, 0);
+
+        skipToCycleEnd();
+        uint256 balanceAfter = uint128(-realBalanceDelta);
+        for (uint256 i = 0; i < receivers.length; i++) {
+            balanceAfter += Drips._receiveDrips(receivers[i].userId, asset, type(uint32).max);
+        }
+        assertEq(balanceAfter, balanceBefore, "Dripped funds don't add up");
+    }
+
+    function testFundsDrippedToReceiversAddUpAfterDripsUpdate(
+        uint256 senderId,
+        uint256 asset,
+        uint256 balanceRaw,
+        DripsReceiver[_MAX_DRIPS_RECEIVERS] memory receiversRaw1,
+        uint256 receiversLengthRaw1,
+        uint256 dripTimeRaw1,
+        DripsReceiver[_MAX_DRIPS_RECEIVERS] memory receiversRaw2,
+        uint256 receiversLengthRaw2,
+        uint256 dripTimeRaw2
+    ) public {
+        uint128 balanceBefore = sanitizeDripBalance(balanceRaw);
+        DripsReceiver[] memory receivers1 = sanitizeReceivers(receiversRaw1, receiversLengthRaw1);
+        Drips._setDrips(senderId, asset, recv(), int128(balanceBefore), receivers1, 0, 0);
+
+        skip(sanitizeDripTime(dripTimeRaw1, 50));
+        DripsReceiver[] memory receivers2 = sanitizeReceivers(receiversRaw2, receiversLengthRaw2);
+        int128 realBalanceDelta = Drips._setDrips(senderId, asset, receivers1, 0, receivers2, 0, 0);
+        assertEq(realBalanceDelta, 0, "Zero balance delta changed balance");
+
+        skip(sanitizeDripTime(dripTimeRaw2, 50));
+        realBalanceDelta =
+            Drips._setDrips(senderId, asset, receivers2, type(int128).min, receivers2, 0, 0);
+
+        skipToCycleEnd();
+        uint256 balanceAfter = uint128(-realBalanceDelta);
+        for (uint256 i = 0; i < receivers1.length; i++) {
+            balanceAfter += Drips._receiveDrips(receivers1[i].userId, asset, type(uint32).max);
+        }
+        for (uint256 i = 0; i < receivers2.length; i++) {
+            balanceAfter += Drips._receiveDrips(receivers2[i].userId, asset, type(uint32).max);
+        }
+        assertEq(balanceAfter, balanceBefore, "Dripped funds don't add up");
+    }
+
+    function testFundsDrippedFromSendersAddUp(
+        uint256 receiverId,
+        uint256 asset,
+        uint256 balanceRaw,
+        DripsReceiver[100] memory sendersRaw,
+        uint256 sendersLenRaw,
+        uint256 dripTimeRaw
+    ) public {
+        uint128 balanceBefore = sanitizeDripBalance(balanceRaw);
+        Sender[] memory senders =
+            sanitizeSenders(receiverId, balanceBefore, sendersRaw, sendersLenRaw);
+        for (uint256 i = 0; i < senders.length; i++) {
+            Sender memory snd = senders[i];
+            Drips._setDrips(snd.userId, asset, recv(), int128(snd.balance), snd.receivers, 0, 0);
+        }
+
+        skip(sanitizeDripTime(dripTimeRaw, 1000));
+        uint128 balanceAfter = 0;
+        for (uint256 i = 0; i < senders.length; i++) {
+            Sender memory snd = senders[i];
+            int128 realBalanceDelta = Drips._setDrips(
+                snd.userId, asset, snd.receivers, type(int128).min, snd.receivers, 0, 0
+            );
+            balanceAfter += uint128(-realBalanceDelta);
+        }
+
+        skipToCycleEnd();
+        balanceAfter += Drips._receiveDrips(receiverId, asset, type(uint32).max);
+        assertEq(balanceAfter, balanceBefore, "Dripped funds don't add up");
     }
 
     function testMaxEndTipsDoNotAffectMaxEnd() public {
@@ -1536,7 +1685,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint256 expectedMaxEndFromNow
     ) internal {
         emit log_named_uint("Setting drips with tip 1", maxEndTip1);
-        emit log_named_uint("               and tip 2", maxEndTip1);
+        emit log_named_uint("               and tip 2", maxEndTip2);
         uint256 snapshot = vm.snapshot();
         setDrips(sender, 0, amt, receivers, maxEndTip1, maxEndTip2, expectedMaxEndFromNow);
         vm.revertTo(snapshot);
