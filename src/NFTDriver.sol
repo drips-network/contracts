@@ -62,8 +62,9 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Upgradeable {
         public
         returns (uint256 tokenId)
     {
-        tokenId = _registerTokenId(userMetadata);
+        tokenId = _registerTokenId();
         _mint(to, tokenId);
+        if (userMetadata.length > 0) dripsHub.emitUserMetadata(tokenId, userMetadata);
     }
 
     /// @notice Mints a new token controlling a new user ID and safely transfers it to an address.
@@ -77,21 +78,16 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Upgradeable {
         public
         returns (uint256 tokenId)
     {
-        tokenId = _registerTokenId(userMetadata);
+        tokenId = _registerTokenId();
         _safeMint(to, tokenId);
+        if (userMetadata.length > 0) dripsHub.emitUserMetadata(tokenId, userMetadata);
     }
 
     /// @notice Registers the next token ID when minting.
-    /// Emits the user metadata for the minted token.
-    /// @param userMetadata The list of user metadata.
     /// @return tokenId The registered token ID.
-    function _registerTokenId(UserMetadata[] calldata userMetadata)
-        internal
-        returns (uint256 tokenId)
-    {
+    function _registerTokenId() internal returns (uint256 tokenId) {
         tokenId = nextTokenId();
         StorageSlot.getUint256Slot(_mintedTokensSlot).value++;
-        if (userMetadata.length > 0) dripsHub.emitUserMetadata(tokenId, userMetadata);
     }
 
     /// @notice Collects the user's received already split funds
