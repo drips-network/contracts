@@ -301,7 +301,7 @@ contract DripsHub is Managed, Drips, Splits {
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory
     ) public view returns (uint128 amt) {
-        (amt,,) =
+        (amt,,,,) =
             Drips._squeezeDripsResult(userId, _assetId(erc20), senderId, historyHash, dripsHistory);
     }
 

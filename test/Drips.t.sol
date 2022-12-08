@@ -487,14 +487,14 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         DripsHistory[] memory dripsHistory,
         uint256 expectedAmt
     ) internal {
-        (uint128 amtBefore,,) =
+        (uint128 amtBefore,,,,) =
             Drips._squeezeDripsResult(userId, assetId, senderId, historyHash, dripsHistory);
         assertEq(amtBefore, expectedAmt, "Invalid squeezable amount before squeezing");
 
         uint128 amt = Drips._squeezeDrips(userId, assetId, senderId, historyHash, dripsHistory);
 
         assertEq(amt, expectedAmt, "Invalid squeezed amount");
-        (uint128 amtAfter,,) =
+        (uint128 amtAfter,,,,) =
             Drips._squeezeDripsResult(userId, assetId, senderId, historyHash, dripsHistory);
         assertEq(amtAfter, 0, "Squeezable amount after squeezing non-zero");
     }
