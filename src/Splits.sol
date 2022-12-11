@@ -94,6 +94,10 @@ abstract contract Splits {
         _splitsStorageSlot = splitsStorageSlot;
     }
 
+    function _addSplittable(uint256 userId, uint256 assetId, uint128 amt) internal {
+        _splitsStorage().splitsStates[userId].balances[assetId].splittable += amt;
+    }
+
     /// @notice Returns user's received but not split yet funds.
     /// @param userId The user ID
     /// @param assetId The used asset ID.
@@ -154,7 +158,7 @@ abstract contract Splits {
                 uint128((uint160(collectableAmt) * splitsWeight) / _TOTAL_SPLITS_WEIGHT - splitAmt);
             splitAmt += currSplitAmt;
             uint256 receiver = currReceivers[i].userId;
-            splitsStates[receiver].balances[assetId].splittable += currSplitAmt;
+            _addSplittable(receiver, assetId, currSplitAmt);
             emit Split(userId, receiver, assetId, currSplitAmt);
         }
         collectableAmt -= splitAmt;
@@ -190,7 +194,7 @@ abstract contract Splits {
     /// @param assetId The used asset ID
     /// @param amt The given amount
     function _give(uint256 userId, uint256 receiver, uint256 assetId, uint128 amt) internal {
-        _splitsStorage().splitsStates[receiver].balances[assetId].splittable += amt;
+        _addSplittable(receiver, assetId, amt);
         emit Given(userId, receiver, assetId, amt);
     }
 

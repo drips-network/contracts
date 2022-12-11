@@ -243,7 +243,7 @@ contract DripsHub is Managed, Drips, Splits {
         uint256 assetId = _assetId(erc20);
         receivedAmt = Drips._receiveDrips(userId, assetId, maxCycles);
         if (receivedAmt > 0) {
-            Splits._give(userId, userId, assetId, receivedAmt);
+            Splits._addSplittable(userId, assetId, receivedAmt);
         }
     }
 
@@ -277,7 +277,7 @@ contract DripsHub is Managed, Drips, Splits {
         uint256 assetId = _assetId(erc20);
         amt = Drips._squeezeDrips(userId, assetId, senderId, historyHash, dripsHistory);
         if (amt > 0) {
-            Splits._give(userId, userId, assetId, amt);
+            Splits._addSplittable(userId, assetId, amt);
         }
     }
 

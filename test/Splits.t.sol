@@ -135,9 +135,10 @@ contract SplitsTest is Test, Splits {
         split(defaultAsset, userId, expectedCollectable, expectedSplit);
     }
 
-    function give(uint256 sender, uint256 splitReceiver, uint128 amt) public {
-        Splits._give(sender, splitReceiver, defaultAsset, amt);
-        assertSplittable(splitReceiver, amt);
+    function addSplittable(uint256 userId, uint128 amt) internal {
+        assertSplittable(userId, 0);
+        Splits._addSplittable(userId, defaultAsset, amt);
+        assertSplittable(userId, amt);
     }
 
     function collect(uint256 userId, uint128 expectedAmt) public returns (uint128 collected) {
@@ -162,23 +163,16 @@ contract SplitsTest is Test, Splits {
         return splitCollect(defaultAsset, userId, expectedCollectable, expectedSplit);
     }
 
-    // test cases
-    function testSplitable() public {
-        uint128 amt = 10;
-        Splits._give(0, user, defaultAsset, amt);
-        assertSplittable(user, amt);
+    function testGive() public {
+        Splits._give(user, receiver, defaultAsset, 5);
+        assertSplittable(receiver, 5);
     }
 
     function testSimpleSplit() public {
         // 60% split
         setSplits(user, splitsReceivers(receiver, (Splits._TOTAL_SPLITS_WEIGHT / 10) * 6));
-        uint128 amt = 10;
-        Splits._give(0, user, defaultAsset, amt);
-        assertSplittable(user, amt);
-
-        uint128 expectedCollectable = 4;
-        uint128 expectedSplit = 6;
-        split(user, expectedCollectable, expectedSplit);
+        addSplittable(user, 10);
+        split(user, 4, 6);
     }
 
     function testLimitsTheTotalSplitsReceiversCount() public {
@@ -223,19 +217,17 @@ contract SplitsTest is Test, Splits {
 
     function testCanSplitAllWhenCollectedDoesntSplitEvenly() public {
         uint32 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
-        // 3 waiting for receiver 1
-        Splits._give(user, receiver1, defaultAsset, 3);
+        // 3 waiting for user
+        addSplittable(user, 3);
 
-        setSplits(
-            receiver1, splitsReceivers(receiver2, totalWeight / 2, receiver3, totalWeight / 2)
-        );
+        setSplits(user, splitsReceivers(receiver1, totalWeight / 2, receiver2, totalWeight / 2));
 
-        // Receiver1 received 3 which 100% is split
-        split(receiver1, 0, 3);
-        // Receiver2 got 1 split from receiver
-        split(receiver2, 1, 0);
-        // Receiver3 got 2 split from receiver
-        split(receiver3, 2, 0);
+        // User received 3 which 100% is split
+        split(user, 0, 3);
+        // Receiver1 got 1 split from user
+        split(receiver1, 1, 0);
+        // Receiver2 got 2 split from user
+        split(receiver2, 2, 0);
     }
 
     function testSplitRevertsIfInvalidCurrSplitsReceivers() public {
@@ -249,7 +241,7 @@ contract SplitsTest is Test, Splits {
         setSplits(
             user, splitsReceivers(receiver1, (totalWeight / 5) * 2, receiver2, totalWeight / 5)
         );
-        Splits._give(0, user, defaultAsset, 9);
+        addSplittable(user, 9);
         // user gets 40% of 9, receiver1 40 % and receiver2 20%
         split(user, 4, 5);
         split(receiver1, 3, 0);
@@ -262,7 +254,7 @@ contract SplitsTest is Test, Splits {
         setSplits(
             receiver1, splitsReceivers(receiver1, totalWeight / 2, receiver2, totalWeight / 5)
         );
-        give(receiver1, receiver1, 20);
+        addSplittable(receiver1, 20);
 
         (uint128 collectableAmt, uint128 splitAmt) =
             Splits._split(receiver1, defaultAsset, getCurrSplitsReceivers(receiver1));
@@ -288,8 +280,8 @@ contract SplitsTest is Test, Splits {
     function testSplitsConfigurationIsCommonBetweenTokens() public {
         uint32 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
         setSplits(user, splitsReceivers(receiver1, totalWeight / 10));
-        Splits._give(receiver2, user, defaultAsset, 30);
-        Splits._give(receiver2, user, otherAsset, 100);
+        Splits._addSplittable(user, defaultAsset, 30);
+        Splits._addSplittable(user, otherAsset, 100); // TODO
 
         splitCollect(defaultAsset, user, 27, 3);
         splitCollect(otherAsset, user, 90, 10);
@@ -300,7 +292,7 @@ contract SplitsTest is Test, Splits {
     function testForwardSplits() public {
         uint32 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
 
-        give(user, receiver1, 10);
+        addSplittable(receiver1, 10);
         setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
         setSplits(receiver2, splitsReceivers(receiver3, totalWeight));
 
@@ -316,7 +308,7 @@ contract SplitsTest is Test, Splits {
 
     function testSplitMultipleReceivers() public {
         uint32 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
-        give(user, receiver1, 10);
+        addSplittable(receiver1, 10);
 
         setSplits(
             receiver1, splitsReceivers(receiver2, totalWeight / 4, receiver3, totalWeight / 2)
