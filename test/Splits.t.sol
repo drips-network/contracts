@@ -9,13 +9,13 @@ contract SplitsTest is Test, Splits {
     // Keys is user ID
     mapping(uint256 => SplitsReceiver[]) internal currSplitsReceivers;
 
+    uint256 internal asset = defaultAsset;
     uint256 internal defaultAsset = 1;
     uint256 internal otherAsset = 2;
+    uint256 internal user = 3;
     uint256 internal receiver = 4;
     uint256 internal receiver1 = 5;
     uint256 internal receiver2 = 6;
-    uint256 internal receiver3 = 7;
-    uint256 internal user = 9;
 
     constructor() Splits(bytes32(uint256(1000))) {
         return;
@@ -50,8 +50,7 @@ contract SplitsTest is Test, Splits {
         returns (SplitsReceiver[] memory currSplits)
     {
         currSplits = currSplitsReceivers[userId];
-
-        Splits._assertCurrSplits(userId, currSplits);
+        assertSplits(userId, currSplits);
     }
 
     function setSplitsExternal(uint256 userId, SplitsReceiver[] memory newReceivers) external {
@@ -63,8 +62,6 @@ contract SplitsTest is Test, Splits {
         SplitsReceiver[] memory newReceivers,
         bytes memory expectedReason
     ) internal {
-        SplitsReceiver[] memory curr = getCurrSplitsReceivers(userId);
-        Splits._assertCurrSplits(userId, curr);
         vm.expectRevert(expectedReason);
         this.setSplitsExternal(userId, newReceivers);
     }
@@ -77,22 +74,13 @@ contract SplitsTest is Test, Splits {
     }
 
     function assertSplittable(uint256 userId, uint256 expected) internal {
-        uint256 actual = Splits._splittable(userId, defaultAsset);
+        uint256 actual = Splits._splittable(userId, asset);
         assertEq(actual, expected, "Invalid splittable");
     }
 
     function setSplits(uint256 userId, SplitsReceiver[] memory newReceivers) internal {
-        SplitsReceiver[] memory curr = getCurrSplitsReceivers(userId);
-        assertSplits(userId, curr);
-
+        assertSplits(userId, currSplitsReceivers[userId]);
         Splits._setSplits(userId, newReceivers);
-
-        setCurrSplitsReceivers(userId, newReceivers);
-    }
-
-    function setCurrSplitsReceivers(uint256 userId, SplitsReceiver[] memory newReceivers)
-        internal
-    {
         assertSplits(userId, newReceivers);
         delete currSplitsReceivers[userId];
         for (uint256 i = 0; i < newReceivers.length; i++) {
@@ -106,65 +94,49 @@ contract SplitsTest is Test, Splits {
         Splits._split(userId, assetId, currReceivers);
     }
 
-    function split(
-        uint256 asset,
-        uint256 userId,
-        uint128 expectedCollectable,
-        uint128 expectedSplit
-    ) internal {
-        uint128 collectableBefore = Splits._collectable(userId, asset);
+    function split(uint256 userId, uint128 expectedCollectable, uint128 expectedSplit) internal {
+        assertCollectable(userId, 0);
+        assertSplittable(userId, expectedCollectable + expectedSplit);
         SplitsReceiver[] memory receivers = getCurrSplitsReceivers(userId);
         uint128 amt = Splits._splittable(userId, asset);
         (uint128 collectableRes, uint128 splitRes) = Splits._splitResult(userId, receivers, amt);
+        assertEq(collectableRes, expectedCollectable, "Invalid result collectable amount");
+        assertEq(splitRes, expectedSplit, "Invalid result split amount");
 
         (uint128 collectableAmt, uint128 splitAmt) = Splits._split(userId, asset, receivers);
 
-        assertEq(collectableRes, collectableAmt, "Invalid result collectable amount");
         assertEq(collectableAmt, expectedCollectable, "Invalid collectable amount");
-        assertEq(
-            collectableBefore + collectableAmt,
-            Splits._collectable(userId, asset),
-            "Invalid collectable after splitting"
-        );
         assertEq(splitAmt, expectedSplit, "Invalid split amount");
-        assertEq(splitRes, splitAmt, "Invalid result split amount");
+        assertCollectable(userId, expectedCollectable);
         assertSplittable(userId, 0);
-    }
-
-    function split(uint256 userId, uint128 expectedCollectable, uint128 expectedSplit) internal {
-        split(defaultAsset, userId, expectedCollectable, expectedSplit);
     }
 
     function addSplittable(uint256 userId, uint128 amt) internal {
         assertSplittable(userId, 0);
-        Splits._addSplittable(userId, defaultAsset, amt);
+        Splits._addSplittable(userId, asset, amt);
         assertSplittable(userId, amt);
     }
 
-    function collect(uint256 userId, uint128 expectedAmt) public returns (uint128 collected) {
-        assertEq(Splits._collectable(userId, defaultAsset), expectedAmt);
-        return Splits._collect(userId, defaultAsset);
+    function assertCollectable(uint256 userId, uint128 expected) internal {
+        uint128 actual = Splits._collectable(userId, asset);
+        assertEq(actual, expected, "Invalid collectable amount");
     }
 
-    function splitCollect(
-        uint256 asset,
-        uint256 userId,
-        uint128 expectedCollectable,
-        uint128 expectedSplit
-    ) public returns (uint128 collectedAmt) {
-        split(asset, userId, expectedCollectable, expectedSplit);
-        return Splits._collect(userId, asset);
+    function collect(uint256 userId, uint128 expectedAmt) internal {
+        assertCollectable(userId, expectedAmt);
+        uint128 actualAmt = Splits._collect(userId, asset);
+        assertEq(actualAmt, expectedAmt, "Invalid collected amount");
     }
 
-    function splitCollect(uint256 userId, uint128 expectedCollectable, uint128 expectedSplit)
-        public
-        returns (uint128 collectedAmt)
+    function splitCollect(uint256 userId, uint128 expectedCollected, uint128 expectedSplit)
+        internal
     {
-        return splitCollect(defaultAsset, userId, expectedCollectable, expectedSplit);
+        split(userId, expectedCollected, expectedSplit);
+        collect(userId, expectedCollected);
     }
 
     function testGive() public {
-        Splits._give(user, receiver, defaultAsset, 5);
+        Splits._give(user, receiver, asset, 5);
         assertSplittable(receiver, 5);
     }
 
@@ -233,7 +205,7 @@ contract SplitsTest is Test, Splits {
     function testSplitRevertsIfInvalidCurrSplitsReceivers() public {
         setSplits(user, splitsReceivers(receiver, 1));
         vm.expectRevert("Invalid current splits receivers");
-        this.splitExternal(user, defaultAsset, splitsReceivers(receiver, 2));
+        this.splitExternal(user, asset, splitsReceivers(receiver, 2));
     }
 
     function testSplittingSplitsAllFundsEvenWhenTheyDontDivideEvenly() public {
@@ -257,7 +229,7 @@ contract SplitsTest is Test, Splits {
         addSplittable(receiver1, 20);
 
         (uint128 collectableAmt, uint128 splitAmt) =
-            Splits._split(receiver1, defaultAsset, getCurrSplitsReceivers(receiver1));
+            Splits._split(receiver1, asset, getCurrSplitsReceivers(receiver1));
 
         assertEq(collectableAmt, 6, "Invalid collectable amount");
         assertEq(splitAmt, 14, "Invalid split amount");
@@ -266,9 +238,9 @@ contract SplitsTest is Test, Splits {
         collect(receiver1, 6);
         splitCollect(receiver2, 4, 0);
 
-        // // Splitting 10 which has been split to receiver1 themselves in the previous step
+        // Splitting 10 which has been split to receiver1 themselves in the previous step
         (collectableAmt, splitAmt) =
-            Splits._split(receiver1, defaultAsset, getCurrSplitsReceivers(receiver1));
+            Splits._split(receiver1, asset, getCurrSplitsReceivers(receiver1));
 
         assertEq(collectableAmt, 3, "Invalid collectable amount");
         assertEq(splitAmt, 7, "Invalid split amount");
@@ -280,46 +252,50 @@ contract SplitsTest is Test, Splits {
     function testSplitsConfigurationIsCommonBetweenTokens() public {
         uint32 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
         setSplits(user, splitsReceivers(receiver1, totalWeight / 10));
-        Splits._addSplittable(user, defaultAsset, 30);
-        Splits._addSplittable(user, otherAsset, 100); // TODO
+        asset = defaultAsset;
+        addSplittable(user, 30);
+        asset = otherAsset;
+        addSplittable(user, 100);
 
-        splitCollect(defaultAsset, user, 27, 3);
-        splitCollect(otherAsset, user, 90, 10);
-        splitCollect(defaultAsset, receiver1, 3, 0);
-        splitCollect(otherAsset, receiver1, 10, 0);
+        asset = defaultAsset;
+        splitCollect(user, 27, 3);
+        asset = otherAsset;
+        splitCollect(user, 90, 10);
+        asset = defaultAsset;
+        splitCollect(receiver1, 3, 0);
+        asset = otherAsset;
+        splitCollect(receiver1, 10, 0);
     }
 
     function testForwardSplits() public {
         uint32 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
 
-        addSplittable(receiver1, 10);
+        addSplittable(user, 10);
+        setSplits(user, splitsReceivers(receiver1, totalWeight));
         setSplits(receiver1, splitsReceivers(receiver2, totalWeight));
-        setSplits(receiver2, splitsReceivers(receiver3, totalWeight));
 
+        assertSplittable(receiver1, 0);
         assertSplittable(receiver2, 0);
-        assertSplittable(receiver3, 0);
-        // Receiver1 received 10 with a give of which 10 is split
+        // User has splittable 10 of which 10 is split
+        splitCollect(user, 0, 10);
+        // Receiver1 got 10 split from user of which 10 is split
         splitCollect(receiver1, 0, 10);
-        // Receiver2 got 10 split from receiver1 of which 10 is split
-        splitCollect(receiver2, 0, 10);
-        // Receiver3 got 10 split from receiver2
-        splitCollect(receiver3, 10, 0);
+        // Receiver2 got 10 split from receiver1
+        splitCollect(receiver2, 10, 0);
     }
 
     function testSplitMultipleReceivers() public {
         uint32 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
-        addSplittable(receiver1, 10);
+        addSplittable(user, 10);
 
-        setSplits(
-            receiver1, splitsReceivers(receiver2, totalWeight / 4, receiver3, totalWeight / 2)
-        );
+        setSplits(user, splitsReceivers(receiver1, totalWeight / 4, receiver2, totalWeight / 2));
+        assertSplittable(receiver1, 0);
         assertSplittable(receiver2, 0);
-        assertSplittable(receiver3, 0);
-        // Receiver1 received 10 with a give, of which 3/4 is split, which is 7
-        splitCollect(receiver1, 3, 7);
-        // Receiver2 got 1/3 of 7 split from receiver1, which is 2
-        splitCollect(receiver2, 2, 0);
-        // Receiver3 got 2/3 of 7 split from receiver1, which is 5
-        splitCollect(receiver3, 5, 0);
+        // User has splittable 10, of which 3/4 is split, which is 7
+        splitCollect(user, 3, 7);
+        // Receiver1 got 1/3 of 7 split from user, which is 2
+        splitCollect(receiver1, 2, 0);
+        // Receiver2 got 2/3 of 7 split from user, which is 5
+        splitCollect(receiver2, 5, 0);
     }
 }
