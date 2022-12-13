@@ -13,13 +13,21 @@ print_title() {
 create() {
     print_title "Creating $1"
     DEPLOYED_ADDR=$( \
-        forge create $VERIFY $WALLET_ARGS "$2" --constructor-args "${@:3}" \
+        forge create $(legacy) $VERIFY $WALLET_ARGS "$2" --constructor-args "${@:3}" \
         | tee /dev/tty | grep '^Deployed to: ' | cut -d " " -f 3)
 }
 
 send() {
     print_title "$1"
-    cast send $WALLET_ARGS "$2" "$3" "${@:4}"
+    cast send $(legacy) $WALLET_ARGS "$2" "$3" "${@:4}"
+}
+
+legacy() {
+    # A workaround for invalid detection if the network supports EIP-1559
+    if [ "$NETWORK" == polygon-mumbai ]
+    then
+        echo "--legacy"
+    fi
 }
 
 assertIsDriver() {
