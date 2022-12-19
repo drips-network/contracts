@@ -648,32 +648,9 @@ abstract contract Drips {
         uint32 maxEndTip1,
         uint32 maxEndTip2
     ) private view returns (uint32 maxEnd) {
-        require(receivers.length <= _MAX_DRIPS_RECEIVERS, "Too many drips receivers");
-        uint256[] memory configs = new uint256[](receivers.length);
-        uint256 configsLen = 0;
-        for (uint256 i = 0; i < receivers.length; i++) {
-            DripsReceiver memory receiver = receivers[i];
-            if (i > 0) {
-                require(_isOrdered(receivers[i - 1], receiver), "Receivers not sorted");
-            }
-            configsLen = _addConfig(configs, configsLen, receiver);
-        }
-        return _calcMaxEnd(balance, configs, configsLen, maxEndTip1, maxEndTip2);
-    }
-
-    /// @notice Calculates the maximum end time of drips.
-    /// @param balance The balance when drips have started
-    /// @param configs The list of drips configurations
-    /// @param configsLen The length of `configs`
-    /// @return maxEnd The maximum end time of drips
-    function _calcMaxEnd(
-        uint128 balance,
-        uint256[] memory configs,
-        uint256 configsLen,
-        uint32 maxEndTip1,
-        uint32 maxEndTip2
-    ) private view returns (uint32 maxEnd) {
         unchecked {
+            (uint256[] memory configs, uint256 configsLen) = _buildConfigs(receivers);
+
             uint256 enoughEnd = _currTimestamp();
             if (configsLen == 0 || balance == 0) {
                 return uint32(enoughEnd);
@@ -742,6 +719,29 @@ abstract contract Drips {
                 }
             }
             return true;
+        }
+    }
+
+    /// @notice Build a preprocessed list of drips configurations from receivers.
+    /// @param receivers The list of drips receivers.
+    /// Must be sorted, deduplicated and without 0 amtPerSecs.
+    /// @return configs The list of drips configurations
+    /// @return configsLen The length of `configs`
+    function _buildConfigs(DripsReceiver[] memory receivers)
+        private
+        view
+        returns (uint256[] memory configs, uint256 configsLen)
+    {
+        unchecked {
+            require(receivers.length <= _MAX_DRIPS_RECEIVERS, "Too many drips receivers");
+            configs = new uint256[](receivers.length);
+            for (uint256 i = 0; i < receivers.length; i++) {
+                DripsReceiver memory receiver = receivers[i];
+                if (i > 0) {
+                    require(_isOrdered(receivers[i - 1], receiver), "Receivers not sorted");
+                }
+                configsLen = _addConfig(configs, configsLen, receiver);
+            }
         }
     }
 
