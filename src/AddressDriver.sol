@@ -135,10 +135,9 @@ contract AddressDriver is Upgradeable, ERC2771Context {
 
     function _transferFromCaller(IERC20 erc20, uint128 amt) internal {
         erc20.safeTransferFrom(_msgSender(), address(this), amt);
-        address reserve = address(dripsHub.reserve());
-        // Approval is done only on the first usage of the ERC-20 token in the reserve by the driver
-        if (erc20.allowance(address(this), reserve) == 0) {
-            erc20.safeApprove(reserve, type(uint256).max);
+        // Approval is done only on the first usage of the ERC-20 token in DripsHub by the driver
+        if (erc20.allowance(address(this), address(dripsHub)) == 0) {
+            erc20.safeApprove(address(dripsHub), type(uint256).max);
         }
     }
 }

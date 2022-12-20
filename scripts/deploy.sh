@@ -41,7 +41,6 @@ NETWORK=$(cast chain)
 DEPLOYMENT_JSON=${DEPLOYMENT_JSON:-./deployment_$NETWORK.json}
 DEPLOYER=$(cast wallet address $WALLET_ARGS | cut -d " " -f 2)
 GOVERNANCE=${GOVERNANCE:-$DEPLOYER}
-RESERVE_OWNER=$(cast --to-checksum-address "${RESERVE_OWNER:-$GOVERNANCE}")
 DRIPS_HUB_ADMIN=$(cast --to-checksum-address "${DRIPS_HUB_ADMIN:-$GOVERNANCE}")
 ADDRESS_DRIVER_ADMIN=$(cast --to-checksum-address "${ADDRESS_DRIVER_ADMIN:-$GOVERNANCE}")
 NFT_DRIVER_ADMIN=$(cast --to-checksum-address "${NFT_DRIVER_ADMIN:-$GOVERNANCE}")
@@ -66,8 +65,6 @@ echo "Etherscan API key:            $ETHERSCAN_API_KEY_PROVIDED"
 echo "Deployment JSON:              $DEPLOYMENT_JSON"
 TO_DEPLOY="to be deployed"
 echo "Caller:                       ${CALLER:-$TO_DEPLOY}"
-echo "Reserve:                      ${RESERVE:-$TO_DEPLOY}"
-echo "Reserve owner:                $RESERVE_OWNER"
 echo "DripsHub:                     ${DRIPS_HUB:-$TO_DEPLOY}"
 echo "DripsHub admin:               $DRIPS_HUB_ADMIN"
 echo "DripsHub logic:               ${DRIPS_HUB_LOGIC:-$TO_DEPLOY}"
@@ -97,14 +94,9 @@ if [ -z "$CALLER" ]; then
     CALLER=$DEPLOYED_ADDR
 fi
 
-if [ -z "$RESERVE" ]; then
-    create "Reserve" 'src/Reserve.sol:Reserve' "$DEPLOYER"
-    RESERVE=$DEPLOYED_ADDR
-fi
-
 if [ -z "$DRIPS_HUB" ]; then
     if [ -z "$DRIPS_HUB_LOGIC" ]; then
-        create "DripsHub logic" 'src/DripsHub.sol:DripsHub' "$CYCLE_SECS" "$RESERVE"
+        create "DripsHub logic" 'src/DripsHub.sol:DripsHub' "$CYCLE_SECS"
         DRIPS_HUB_LOGIC=$DEPLOYED_ADDR
     fi
     echo "DRIPS_HUB_LOGIC '$DRIPS_HUB_LOGIC'"
@@ -165,16 +157,6 @@ fi
 assertIsDriver "ImmutableSplitsDriver" "$SPLITS_DRIVER"
 
 # Configuring the contracts
-if [ $(cast call "$RESERVE" 'isUser(address)(bool)' "$DRIPS_HUB") = "false" ]; then
-    send "Adding DripsHub as a Reserve user" \
-        "$RESERVE" 'addUser(address)()' "$DRIPS_HUB"
-fi
-
-if [ $(cast call "$RESERVE" 'owner()(address)') != "$RESERVE_OWNER" ]; then
-    send "Setting Reserve owner to $RESERVE_OWNER" \
-        "$RESERVE" 'transferOwnership(address)()' "$RESERVE_OWNER"
-fi
-
 if [ $(cast call "$DRIPS_HUB" 'admin()(address)') != "$DRIPS_HUB_ADMIN" ]; then
     send "Setting DripsHub admin to $DRIPS_HUB_ADMIN" \
         "$DRIPS_HUB" 'changeAdmin(address)()' "$DRIPS_HUB_ADMIN"
@@ -183,7 +165,6 @@ fi
 # Printing the ownership
 print_title "Checking contracts ownership"
 echo "DripsHub admin:   $(cast call "$DRIPS_HUB" 'admin()(address)')"
-echo "Reserve owner:    $(cast call "$RESERVE" 'owner()(address)')"
 
 # Building and printing the deployment JSON
 print_title "Deployment JSON: $DEPLOYMENT_JSON"
@@ -192,7 +173,6 @@ tee "$DEPLOYMENT_JSON" <<EOF
     "Network":                      "$NETWORK",
     "Deployer address":             "$DEPLOYER",
     "Caller":                       "$CALLER",
-    "Reserve":                      "$RESERVE",
     "DripsHub":                     "$DRIPS_HUB",
     "DripsHub logic":               "$DRIPS_HUB_LOGIC",
     "DripsHub cycle seconds":       "$CYCLE_SECS",

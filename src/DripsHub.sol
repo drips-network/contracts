@@ -2,10 +2,12 @@
 pragma solidity ^0.8.17;
 
 import {Drips, DripsConfig, DripsHistory, DripsConfigImpl, DripsReceiver} from "./Drips.sol";
-import {IReserve} from "./Reserve.sol";
 import {Managed} from "./Managed.sol";
 import {Splits, SplitsReceiver} from "./Splits.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
+
+using SafeERC20 for IERC20;
 
 /// @notice The user metadata.
 /// The key and the value are not standardized by the protocol, it's up to the user
@@ -49,8 +51,6 @@ struct UserMetadata {
 ///
 /// The contract can store at most `type(int128).max` which is `2 ^ 127 - 1` units of each token.
 contract DripsHub is Managed, Drips, Splits {
-    /// @notice The address of the ERC-20 reserve which the drips hub works with
-    IReserve public immutable reserve;
     /// @notice Maximum number of drips receivers of a single user.
     /// Limits cost of changes in drips configuration.
     uint256 public constant MAX_DRIPS_RECEIVERS = _MAX_DRIPS_RECEIVERS;
@@ -105,12 +105,11 @@ contract DripsHub is Managed, Drips, Splits {
     /// between being taken from the users' drips balances and being receivable by their receivers.
     /// High value makes receiving cheaper by making it process less cycles for a given time range.
     /// Must be higher than 1.
-    /// @param reserve_ The address of the ERC-20 reserve which the drips hub will work with
-    constructor(uint32 cycleSecs_, IReserve reserve_)
+    constructor(uint32 cycleSecs_)
         Drips(cycleSecs_, erc1967Slot("eip1967.drips.storage"))
         Splits(erc1967Slot("eip1967.splits.storage"))
     {
-        reserve = reserve_;
+        return;
     }
 
     /// @notice A modifier making functions callable only by the driver controlling the user ID.
@@ -384,7 +383,7 @@ contract DripsHub is Managed, Drips, Splits {
     {
         amt = Splits._collect(userId, _assetId(erc20));
         _decreaseTotalBalance(erc20, amt);
-        reserve.withdraw(erc20, msg.sender, amt);
+        erc20.safeTransfer(msg.sender, amt);
     }
 
     /// @notice Gives funds from the user to the receiver.
@@ -406,7 +405,7 @@ contract DripsHub is Managed, Drips, Splits {
     {
         _increaseTotalBalance(erc20, amt);
         Splits._give(userId, receiver, _assetId(erc20), amt);
-        reserve.deposit(erc20, msg.sender, amt);
+        erc20.safeTransferFrom(msg.sender, address(this), amt);
     }
 
     /// @notice Current user drips state.
@@ -499,10 +498,10 @@ contract DripsHub is Managed, Drips, Splits {
             maxEndTip2
         );
         if (realBalanceDelta > 0) {
-            reserve.deposit(erc20, msg.sender, uint128(realBalanceDelta));
+            erc20.safeTransferFrom(msg.sender, address(this), uint128(realBalanceDelta));
         } else if (realBalanceDelta < 0) {
             _decreaseTotalBalance(erc20, uint128(-realBalanceDelta));
-            reserve.withdraw(erc20, msg.sender, uint128(-realBalanceDelta));
+            erc20.safeTransfer(msg.sender, uint128(-realBalanceDelta));
         }
     }
 

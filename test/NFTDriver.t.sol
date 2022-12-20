@@ -11,7 +11,6 @@ import {
     SplitsReceiver,
     UserMetadata
 } from "src/DripsHub.sol";
-import {Reserve} from "src/Reserve.sol";
 import {UpgradeableProxy} from "src/Upgradeable.sol";
 import {Test} from "forge-std/Test.sol";
 import {
@@ -35,10 +34,8 @@ contract NFTDriverTest is Test {
     bytes internal constant ERROR_NOT_OWNER = "ERC721: caller is not token owner or approved";
 
     function setUp() public {
-        Reserve reserve = new Reserve(address(this));
-        DripsHub hubLogic = new DripsHub(10, reserve);
+        DripsHub hubLogic = new DripsHub(10);
         dripsHub = DripsHub(address(new UpgradeableProxy(hubLogic, address(this))));
-        reserve.addUser(address(dripsHub));
 
         caller = new Caller();
 

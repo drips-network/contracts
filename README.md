@@ -101,14 +101,6 @@ export GOVERNANCE="<ADDRESS>"
 export CALLER="<ADDRESS>"
 
 # OPTIONAL
-# Address of Reserve to use. If not set, a new instance is deployed.
-export RESERVE="<ADDRESS>"
-
-# OPTIONAL
-# Address of Reserve owner to set. If not set, `GOVERNANCE` is used.
-export RESERVE_OWNER="<ADDRESS>"
-
-# OPTIONAL
 # Address of DripsHub to use. If not set, a new instance is deployed.
 export DRIPS_HUB="<ADDRESS>"
 

@@ -11,7 +11,6 @@ import {
     SplitsReceiver,
     UserMetadata
 } from "src/DripsHub.sol";
-import {Reserve} from "src/Reserve.sol";
 import {UpgradeableProxy} from "src/Upgradeable.sol";
 import {Test} from "forge-std/Test.sol";
 import {
@@ -30,10 +29,8 @@ contract AddressDriverTest is Test {
     uint256 internal userId;
 
     function setUp() public {
-        Reserve reserve = new Reserve(address(this));
-        DripsHub hubLogic = new DripsHub(10, reserve);
+        DripsHub hubLogic = new DripsHub(10);
         dripsHub = DripsHub(address(new UpgradeableProxy(hubLogic, address(this))));
-        reserve.addUser(address(dripsHub));
 
         caller = new Caller();
 
