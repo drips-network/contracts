@@ -99,6 +99,9 @@ contract CallerTest is Test {
         bytes memory data = abi.encodeWithSelector(target.run.selector, input);
         uint256 value = 4321;
         authorize(sender, address(this));
+        address[] memory allAuthorized = new address[](1);
+        allAuthorized[0] = address(this);
+        assertEq(caller.allAuthorized(sender), allAuthorized, "Invalid all authorized");
 
         bytes memory returned = caller.callAs{value: value}(sender, address(target), data);
 
@@ -117,9 +120,23 @@ contract CallerTest is Test {
         bytes memory data = abi.encodeWithSelector(target.run.selector, 1);
         authorize(sender, address(this));
         unauthorize(sender, address(this));
+        assertEq(caller.allAuthorized(sender), new address[](0), "Invalid all authorized");
 
         vm.expectRevert(ERROR_UNAUTHORIZED);
         caller.callAs(sender, address(target), data);
+    }
+
+    function testAuthorizingAuthorizedReverts() public {
+        authorize(sender, address(this));
+        vm.prank(sender);
+        vm.expectRevert("Address already is authorized");
+        caller.authorize(address(this));
+    }
+
+    function testUnauthorizingUnauthorizedReverts() public {
+        vm.prank(sender);
+        vm.expectRevert("Address is not authorized");
+        caller.unauthorize(address(this));
     }
 
     function testCallAsBubblesErrors() public {
@@ -228,7 +245,6 @@ contract CallerTest is Test {
         });
         authorize(sender, address(this));
         bytes memory data = abi.encodeWithSelector(caller.callBatched.selector, calls);
-        authorize(sender, address(this));
 
         caller.callAs(sender, address(caller), data);
 
@@ -238,11 +254,13 @@ contract CallerTest is Test {
     function authorize(address authorizing, address authorized) internal {
         vm.prank(authorizing);
         caller.authorize(authorized);
+        assertTrue(caller.isAuthorized(authorizing, authorized), "Authorization failed");
     }
 
     function unauthorize(address authorizing, address unauthorized) internal {
         vm.prank(authorizing);
         caller.unauthorize(unauthorized);
+        assertFalse(caller.isAuthorized(authorizing, unauthorized), "Unauthorization failed");
     }
 
     function signCall(

@@ -4,6 +4,9 @@ pragma solidity ^0.8.17;
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {ECDSA, EIP712} from "openzeppelin-contracts/utils/cryptography/draft-EIP712.sol";
 import {ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
+import {EnumerableSet} from "openzeppelin-contracts/utils/structs/EnumerableSet.sol";
+
+using EnumerableSet for EnumerableSet.AddressSet;
 
 /// @notice Description of a call.
 /// @param to The called address.
@@ -80,9 +83,8 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
         "address sender,address to,bytes data,uint256 value,uint256 nonce,uint256 deadline)";
     bytes32 internal immutable callSignedTypeHash = keccak256(bytes(CALL_SIGNED_TYPE_NAME));
 
-    /// @notice True if the address authorizes another address to make calls on its behalf.
-    /// The first address is the authorizing one and the second address is the authorized one.
-    mapping(address => mapping(address => bool)) public isAuthorized;
+    /// @notice Each sender's set of address authorized to make calls on its behalf.
+    mapping(address => EnumerableSet.AddressSet) internal _authorized;
     /// @notice The nonce which needs to be used in the next EIP-712 message signed by the address.
     mapping(address => uint256) public nonce;
 
@@ -99,19 +101,39 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     event Unauthorized(address indexed sender, address indexed unauthorized);
 
     /// @notice Grants the authorization of an address to make calls on behalf of the sender.
-    /// @param authorized The authorized address.
-    function authorize(address authorized) public {
+    /// @param user The authorized address.
+    function authorize(address user) public {
         address sender = _msgSender();
-        isAuthorized[sender][authorized] = true;
-        emit Authorized(sender, authorized);
+        require(_authorized[sender].add(user), "Address already is authorized");
+        emit Authorized(sender, user);
     }
 
     /// @notice Revokes the authorization of an address to make calls on behalf of the sender.
-    /// @param unauthorized The unauthorized address.
-    function unauthorize(address unauthorized) public {
+    /// @param user The unauthorized address.
+    function unauthorize(address user) public {
         address sender = _msgSender();
-        isAuthorized[sender][unauthorized] = false;
-        emit Unauthorized(sender, unauthorized);
+        require(_authorized[sender].remove(user), "Address is not authorized");
+        emit Unauthorized(sender, user);
+    }
+
+    /// @notice Checks if an address is authorized to make calls on behalf of a sender.
+    /// @param sender The authorizing address.
+    /// @param user The potentially authorized address.
+    /// @return authorized True if `user` is authorized.
+    function isAuthorized(address sender, address user)
+        public
+        view
+        returns (bool authorized)
+    {
+        return _authorized[sender].contains(user);
+    }
+
+    /// @notice Returns all the addresses authorized to make calls on behalf of a sender.
+    /// @param sender The authorizing address.
+    /// @return authorized The list of all the authorized addresses, ordered arbitrarily.
+    /// The list's order may change when sender authorizes or unauthorizes addresses.
+    function allAuthorized(address sender) public view returns (address[] memory authorized) {
+        return _authorized[sender].values();
     }
 
     /// @notice Makes a call on behalf of the `sender`.
@@ -126,7 +148,7 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
         payable
         returns (bytes memory returnData)
     {
-        require(isAuthorized[sender][_msgSender()], "Not authorized");
+        require(isAuthorized(sender, _msgSender()), "Not authorized");
         return _call(sender, to, data, msg.value);
     }
 
