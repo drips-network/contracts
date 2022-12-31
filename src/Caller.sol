@@ -120,11 +120,7 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     /// @param sender The authorizing address.
     /// @param user The potentially authorized address.
     /// @return authorized True if `user` is authorized.
-    function isAuthorized(address sender, address user)
-        public
-        view
-        returns (bool authorized)
-    {
+    function isAuthorized(address sender, address user) public view returns (bool authorized) {
         return _authorized[sender].contains(user);
     }
 

@@ -298,4 +298,62 @@ contract SplitsTest is Test, Splits {
         // Receiver2 got 2/3 of 7 split from user, which is 5
         splitCollect(receiver2, 5, 0);
     }
+
+    function sanitizeReceivers(
+        SplitsReceiver[_MAX_SPLITS_RECEIVERS] memory receiversRaw,
+        uint256 receiversLengthRaw,
+        uint256 totalWeightRaw
+    ) internal returns (SplitsReceiver[] memory receivers) {
+        for (uint256 i = 0; i < receiversRaw.length; i++) {
+            for (uint256 j = i + 1; j < receiversRaw.length; j++) {
+                if (receiversRaw[i].userId > receiversRaw[j].userId) {
+                    (receiversRaw[i], receiversRaw[j]) = (receiversRaw[j], receiversRaw[i]);
+                }
+            }
+        }
+        uint256 unique = 0;
+        for (uint256 i = 1; i < receiversRaw.length; i++) {
+            if (receiversRaw[i].userId != receiversRaw[unique].userId) unique++;
+            receiversRaw[unique] = receiversRaw[i];
+        }
+        receivers = new SplitsReceiver[](Test.bound(receiversLengthRaw, 0, unique));
+        uint256 weightSum = 0;
+        for (uint256 i = 0; i < receivers.length; i++) {
+            receivers[i] = receiversRaw[i];
+            weightSum += receivers[i].weight;
+        }
+        if (weightSum == 0) weightSum = 1;
+        uint256 totalWeight =
+            Test.bound(totalWeightRaw, 0, (_TOTAL_SPLITS_WEIGHT - receivers.length));
+        uint256 usedWeight = 0;
+        for (uint256 i = 0; i < receivers.length; i++) {
+            uint256 usedTotalWeight = totalWeight * usedWeight / weightSum;
+            usedWeight += receivers[i].weight;
+            receivers[i].weight =
+                uint32((totalWeight * usedWeight / weightSum) - usedTotalWeight + 1);
+        }
+    }
+
+    function testSplitFundsAddUp(
+        uint256 userId,
+        uint256 assetId,
+        uint128 amt,
+        SplitsReceiver[_MAX_SPLITS_RECEIVERS] memory receiversRaw,
+        uint256 receiversLengthRaw,
+        uint256 totalWeightRaw
+    ) public {
+        SplitsReceiver[] memory receivers =
+            sanitizeReceivers(receiversRaw, receiversLengthRaw, totalWeightRaw);
+        Splits._addSplittable(userId, assetId, amt);
+        Splits._setSplits(userId, receivers);
+        (uint128 collectableAmt, uint128 splitAmt) = Splits._split(userId, assetId, receivers);
+        assertEq(collectableAmt + splitAmt, amt, "Invalid split results");
+        uint128 collectedAmt = Splits._collect(userId, assetId);
+        assertEq(collectedAmt, collectableAmt, "Invalid collected amount");
+        uint256 splitSum = 0;
+        for (uint256 i = 0; i < receivers.length; i++) {
+            splitSum += Splits._splittable(receivers[i].userId, assetId);
+        }
+        assertEq(splitSum, splitAmt, "Invalid split amount");
+    }
 }
