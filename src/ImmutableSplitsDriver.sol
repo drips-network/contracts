@@ -16,7 +16,7 @@ contract ImmutableSplitsDriver is Upgradeable {
     /// @notice The required total splits weight of each splits configuration
     uint32 public immutable totalSplitsWeight;
     /// @notice The ERC-1967 storage slot holding a single `uint256` counter of created identities.
-    bytes32 private immutable _counterSlot = erc1967Slot("eip1967.immutableSplitsDriver.storage");
+    bytes32 private immutable _counterSlot = _erc1967Slot("eip1967.immutableSplitsDriver.storage");
 
     /// @notice Emitted when an immutable splits configuration is created.
     /// @param userId The user ID
@@ -61,8 +61,8 @@ contract ImmutableSplitsDriver is Upgradeable {
             weightSum += receivers[i].weight;
         }
         require(weightSum == totalSplitsWeight, "Invalid total receivers weight");
+        emit CreatedSplits(userId, dripsHub.hashSplits(receivers));
         dripsHub.setSplits(userId, receivers);
         if (userMetadata.length > 0) dripsHub.emitUserMetadata(userId, userMetadata);
-        emit CreatedSplits(userId, dripsHub.splitsHash(userId));
     }
 }

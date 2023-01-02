@@ -14,7 +14,7 @@ using EnumerableSet for EnumerableSet.AddressSet;
 /// When a proxy uses such contract via delegation, it's initially unpaused.
 abstract contract Managed is Upgradeable {
     /// @notice The pointer to the storage slot holding a single `ManagedStorage` structure.
-    bytes32 private immutable _storageSlot = erc1967Slot("eip1967.managed.storage");
+    bytes32 private immutable _managedStorageSlot = _erc1967Slot("eip1967.managed.storage");
 
     /// @notice Emitted when the pauses role is granted.
     /// @param pauser The address that the pauser role was granted to.
@@ -113,7 +113,7 @@ abstract contract Managed is Upgradeable {
     /// @notice Returns the Managed storage.
     /// @return storageRef The storage.
     function _managedStorage() internal view returns (ManagedStorage storage storageRef) {
-        bytes32 slot = _storageSlot;
+        bytes32 slot = _managedStorageSlot;
         // solhint-disable-next-line no-inline-assembly
         assembly {
             storageRef.slot := slot

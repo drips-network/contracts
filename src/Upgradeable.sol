@@ -21,13 +21,13 @@ abstract contract Upgradeable is UUPSUpgradeable {
     /// @notice Calculates the ERC-1967 slot pointer.
     /// @param name The name of the slot, should be globally unique
     /// @return slot The slot pointer
-    function erc1967Slot(string memory name) internal pure returns (bytes32 slot) {
+    function _erc1967Slot(string memory name) internal pure returns (bytes32 slot) {
         return bytes32(uint256(keccak256(bytes(name))) - 1);
     }
 
     /// @notice Authorizes the contract upgrade. See `UUPSUpgradeable` docs for more details.
-    function _authorizeUpgrade(address newImplementation) internal view override onlyAdmin {
-        newImplementation;
+    function _authorizeUpgrade(address /* newImplementation */ ) internal view override onlyAdmin {
+        return;
     }
 
     /// @notice Returns the address of the current admin.

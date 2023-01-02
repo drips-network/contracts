@@ -23,7 +23,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Upgradeable {
     /// @notice The driver ID which this driver uses when calling DripsHub.
     uint32 public immutable driverId;
     /// @notice The ERC-1967 storage slot holding a single `uint256` counter of minted tokens.
-    bytes32 private immutable _mintedTokensSlot = erc1967Slot("eip1967.nftDriver.storage");
+    bytes32 private immutable _mintedTokensSlot = _erc1967Slot("eip1967.nftDriver.storage");
 
     /// @param _dripsHub The drips hub to use.
     /// @param forwarder The ERC-2771 forwarder to trust. May be the zero address.

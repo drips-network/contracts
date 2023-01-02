@@ -63,12 +63,13 @@ contract DripsHub is Managed, Drips, Splits {
     /// @notice The total splits weight of a user
     uint32 public constant TOTAL_SPLITS_WEIGHT = _TOTAL_SPLITS_WEIGHT;
     /// @notice The offset of the controlling driver ID in the user ID.
-    /// In other words the controlling driver ID is the higest 32 bits of the user ID.
+    /// In other words the controlling driver ID is the highest 32 bits of the user ID.
     uint256 public constant DRIVER_ID_OFFSET = 224;
     /// @notice The total amount the contract can store of each token.
+    /// It's the minimum of _MAX_TOTAL_DRIPS_BALANCE and _MAX_TOTAL_SPLITS_BALANCE.
     uint256 public constant MAX_TOTAL_BALANCE = _MAX_TOTAL_DRIPS_BALANCE;
     /// @notice The ERC-1967 storage slot holding a single `DripsHubStorage` structure.
-    bytes32 private immutable _storageSlot = erc1967Slot("eip1967.dripsHub.storage");
+    bytes32 private immutable _dripsHubStorageSlot = _erc1967Slot("eip1967.dripsHub.storage");
 
     /// @notice Emitted when a driver is registered
     /// @param driverId The driver ID
@@ -106,8 +107,8 @@ contract DripsHub is Managed, Drips, Splits {
     /// High value makes receiving cheaper by making it process less cycles for a given time range.
     /// Must be higher than 1.
     constructor(uint32 cycleSecs_)
-        Drips(cycleSecs_, erc1967Slot("eip1967.drips.storage"))
-        Splits(erc1967Slot("eip1967.splits.storage"))
+        Drips(cycleSecs_, _erc1967Slot("eip1967.drips.storage"))
+        Splits(_erc1967Slot("eip1967.splits.storage"))
     {
         return;
     }
@@ -606,7 +607,7 @@ contract DripsHub is Managed, Drips, Splits {
     /// @notice Returns the DripsHub storage.
     /// @return storageRef The storage.
     function _dripsHubStorage() internal view returns (DripsHubStorage storage storageRef) {
-        bytes32 slot = _storageSlot;
+        bytes32 slot = _dripsHubStorageSlot;
         // solhint-disable-next-line no-inline-assembly
         assembly {
             storageRef.slot := slot

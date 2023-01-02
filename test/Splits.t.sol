@@ -187,7 +187,7 @@ contract SplitsTest is Test, Splits {
         );
     }
 
-    function testCanSplitAllWhenCollectedDoesntSplitEvenly() public {
+    function testCanSplitAllWhenCollectedDoesNotSplitEvenly() public {
         uint32 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
         // 3 waiting for user
         addSplittable(user, 3);
@@ -208,7 +208,7 @@ contract SplitsTest is Test, Splits {
         this.splitExternal(user, asset, splitsReceivers(receiver, 2));
     }
 
-    function testSplittingSplitsAllFundsEvenWhenTheyDontDivideEvenly() public {
+    function testSplittingSplitsAllFundsEvenWhenTheyDoNotDivideEvenly() public {
         uint32 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
         setSplits(
             user, splitsReceivers(receiver1, (totalWeight / 5) * 2, receiver2, totalWeight / 5)
