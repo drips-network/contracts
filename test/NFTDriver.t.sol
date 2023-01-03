@@ -24,7 +24,8 @@ contract NFTDriverTest is Test {
     NFTDriver internal driver;
     IERC20 internal erc20;
 
-    address internal user;
+    address internal admin = address(1);
+    address internal user = address(2);
     uint256 internal tokenId;
     uint256 internal tokenId1;
     uint256 internal tokenId2;
@@ -44,10 +45,9 @@ contract NFTDriverTest is Test {
         dripsHub.registerDriver(address(0));
         uint32 nftDriverId = dripsHub.registerDriver(address(this));
         NFTDriver driverLogic = new NFTDriver(dripsHub, address(caller), nftDriverId);
-        driver = NFTDriver(address(new UpgradeableProxy(driverLogic, address(0xDEAD))));
+        driver = NFTDriver(address(new UpgradeableProxy(driverLogic, admin)));
         dripsHub.updateDriverAddress(nftDriverId, address(driver));
 
-        user = address(1);
         tokenId = driver.mint(address(this), new UserMetadata[](0));
         tokenId1 = driver.mint(address(this), new UserMetadata[](0));
         tokenId2 = driver.mint(address(this), new UserMetadata[](0));
@@ -252,5 +252,64 @@ contract NFTDriverTest is Test {
         caller.callAs(user, address(driver), giveData);
 
         assertEq(dripsHub.splittable(tokenId, erc20), amt, "Invalid splittable after give");
+    }
+
+    modifier canBePausedTest() {
+        vm.prank(admin);
+        driver.pause();
+        vm.expectRevert("Contract paused");
+        _;
+    }
+
+    function testMintCanBePaused() public canBePausedTest {
+        driver.mint(user, new UserMetadata[](0));
+    }
+
+    function testSafeMintCanBePaused() public canBePausedTest {
+        driver.safeMint(user, new UserMetadata[](0));
+    }
+
+    function testCollectCanBePaused() public canBePausedTest {
+        driver.collect(0, erc20, user);
+    }
+
+    function testGiveCanBePaused() public canBePausedTest {
+        driver.give(0, 0, erc20, 0);
+    }
+
+    function testSetDripsCanBePaused() public canBePausedTest {
+        driver.setDrips(0, erc20, new DripsReceiver[](0), 0, new DripsReceiver[](0), 0, 0, user);
+    }
+
+    function testSetSplitsCanBePaused() public canBePausedTest {
+        driver.setSplits(0, new SplitsReceiver[](0));
+    }
+
+    function testEmitUserMetadataCanBePaused() public canBePausedTest {
+        driver.emitUserMetadata(0, new UserMetadata[](0));
+    }
+
+    function testBurnCanBePaused() public canBePausedTest {
+        driver.burn(0);
+    }
+
+    function testApproveCanBePaused() public canBePausedTest {
+        driver.approve(user, 0);
+    }
+
+    function testSafeTransferFromCanBePaused() public canBePausedTest {
+        driver.safeTransferFrom(user, user, 0);
+    }
+
+    function testSafeTransferFromWithDataCanBePaused() public canBePausedTest {
+        driver.safeTransferFrom(user, user, 0, new bytes(0));
+    }
+
+    function testSetApprovalForAllCanBePaused() public canBePausedTest {
+        driver.setApprovalForAll(user, false);
+    }
+
+    function testTransferFromCanBePaused() public canBePausedTest {
+        driver.transferFrom(user, user, 0);
     }
 }

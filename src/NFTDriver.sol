@@ -2,20 +2,21 @@
 pragma solidity ^0.8.17;
 
 import {DripsHistory, DripsHub, DripsReceiver, SplitsReceiver, UserMetadata} from "./DripsHub.sol";
-import {Upgradeable} from "./Upgradeable.sol";
+import {Managed} from "./Managed.sol";
 import {Context, ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
 import {IERC20, SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 import {
     ERC721,
-    ERC721Burnable
+    ERC721Burnable,
+    IERC721
 } from "openzeppelin-contracts/token/ERC721/extensions/ERC721Burnable.sol";
 
 /// @notice A DripsHub driver implementing token-based user identification.
 /// Anybody can mint a new token and create a new identity.
 /// Only the current holder of the token can control its user ID.
 /// The token ID and the user ID controlled by it are always equal.
-contract NFTDriver is ERC721Burnable, ERC2771Context, Upgradeable {
+contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
     using SafeERC20 for IERC20;
 
     /// @notice The DripsHub address used by this driver.
@@ -60,6 +61,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Upgradeable {
     /// @return tokenId The minted token ID. It's equal to the user ID controlled by it.
     function mint(address to, UserMetadata[] calldata userMetadata)
         public
+        whenNotPaused
         returns (uint256 tokenId)
     {
         tokenId = _registerTokenId();
@@ -76,6 +78,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Upgradeable {
     /// @return tokenId The minted token ID. It's equal to the user ID controlled by it.
     function safeMint(address to, UserMetadata[] calldata userMetadata)
         public
+        whenNotPaused
         returns (uint256 tokenId)
     {
         tokenId = _registerTokenId();
@@ -105,6 +108,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Upgradeable {
     /// @return amt The collected amount
     function collect(uint256 tokenId, IERC20 erc20, address transferTo)
         public
+        whenNotPaused
         onlyHolder(tokenId)
         returns (uint128 amt)
     {
@@ -128,6 +132,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Upgradeable {
     /// @param amt The given amount
     function give(uint256 tokenId, uint256 receiver, IERC20 erc20, uint128 amt)
         public
+        whenNotPaused
         onlyHolder(tokenId)
     {
         _transferFromCaller(erc20, amt);
@@ -187,7 +192,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Upgradeable {
         uint32 maxEndTip1,
         uint32 maxEndTip2,
         address transferTo
-    ) public onlyHolder(tokenId) returns (int128 realBalanceDelta) {
+    ) public whenNotPaused onlyHolder(tokenId) returns (int128 realBalanceDelta) {
         if (balanceDelta > 0) {
             _transferFromCaller(erc20, uint128(balanceDelta));
         }
@@ -209,6 +214,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Upgradeable {
     /// share of the funds collected by the user.
     function setSplits(uint256 tokenId, SplitsReceiver[] calldata receivers)
         public
+        whenNotPaused
         onlyHolder(tokenId)
     {
         dripsHub.setSplits(tokenId, receivers);
@@ -223,9 +229,52 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Upgradeable {
     /// @param userMetadata The list of user metadata.
     function emitUserMetadata(uint256 tokenId, UserMetadata[] calldata userMetadata)
         public
+        whenNotPaused
         onlyHolder(tokenId)
     {
         dripsHub.emitUserMetadata(tokenId, userMetadata);
+    }
+
+    /// @inheritdoc ERC721Burnable
+    function burn(uint256 tokenId) public override whenNotPaused {
+        super.burn(tokenId);
+    }
+
+    /// @inheritdoc IERC721
+    function approve(address to, uint256 tokenId) public override whenNotPaused {
+        super.approve(to, tokenId);
+    }
+
+    /// @inheritdoc IERC721
+    function safeTransferFrom(address from, address to, uint256 tokenId)
+        public
+        override
+        whenNotPaused
+    {
+        super.safeTransferFrom(from, to, tokenId);
+    }
+
+    /// @inheritdoc IERC721
+    function safeTransferFrom(address from, address to, uint256 tokenId, bytes memory data)
+        public
+        override
+        whenNotPaused
+    {
+        super.safeTransferFrom(from, to, tokenId, data);
+    }
+
+    /// @inheritdoc IERC721
+    function setApprovalForAll(address operator, bool approved) public override whenNotPaused {
+        super.setApprovalForAll(operator, approved);
+    }
+
+    /// @inheritdoc IERC721
+    function transferFrom(address from, address to, uint256 tokenId)
+        public
+        override
+        whenNotPaused
+    {
+        super.transferFrom(from, to, tokenId);
     }
 
     function _transferFromCaller(IERC20 erc20, uint128 amt) internal {
