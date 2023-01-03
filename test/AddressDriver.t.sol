@@ -24,8 +24,9 @@ contract AddressDriverTest is Test {
     AddressDriver internal driver;
     IERC20 internal erc20;
 
+    address internal admin = address(1);
     uint256 internal thisId;
-    address internal user;
+    address internal user = address(2);
     uint256 internal userId;
 
     function setUp() public {
@@ -39,11 +40,10 @@ contract AddressDriverTest is Test {
         dripsHub.registerDriver(address(0));
         uint32 nftDriverId = dripsHub.registerDriver(address(this));
         AddressDriver driverLogic = new AddressDriver(dripsHub, address(caller), nftDriverId);
-        driver = AddressDriver(address(new UpgradeableProxy(driverLogic, address(0xDEAD))));
+        driver = AddressDriver(address(new UpgradeableProxy(driverLogic, admin)));
         dripsHub.updateDriverAddress(nftDriverId, address(driver));
 
         thisId = driver.calcUserId(address(this));
-        user = address(1);
         userId = driver.calcUserId(user);
 
         erc20 = new ERC20PresetFixedSupply("test", "test", type(uint136).max, address(this));
@@ -163,5 +163,32 @@ contract AddressDriverTest is Test {
         caller.callAs(user, address(driver), giveData);
 
         assertEq(dripsHub.splittable(userId, erc20), amt, "Invalid splittable after give");
+    }
+
+    modifier canBePausedTest() {
+        vm.prank(admin);
+        driver.pause();
+        vm.expectRevert("Contract paused");
+        _;
+    }
+
+    function testCollectCanBePaused() public canBePausedTest {
+        driver.collect(erc20, user);
+    }
+
+    function testGiveCanBePaused() public canBePausedTest {
+        driver.give(userId, erc20, 0);
+    }
+
+    function testSetDripsCanBePaused() public canBePausedTest {
+        driver.setDrips(erc20, new DripsReceiver[](0), 0, new DripsReceiver[](0), 0, 0, user);
+    }
+
+    function testSetSplitsCanBePaused() public canBePausedTest {
+        driver.setSplits(new SplitsReceiver[](0));
+    }
+
+    function testEmitUserMetadataCanBePaused() public canBePausedTest {
+        driver.emitUserMetadata(new UserMetadata[](0));
     }
 }

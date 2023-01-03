@@ -9,14 +9,14 @@ import {
     SplitsReceiver,
     UserMetadata
 } from "./DripsHub.sol";
-import {Upgradeable} from "./Upgradeable.sol";
+import {Managed} from "./Managed.sol";
 import {ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
 import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @notice A DripsHub driver implementing address-based user identification.
 /// Each address can use `AddressDriver` to control a single user ID derived from that address.
 /// No registration is required, an `AddressDriver`-based user ID for each address is know upfront.
-contract AddressDriver is Upgradeable, ERC2771Context {
+contract AddressDriver is Managed, ERC2771Context {
     using SafeERC20 for IERC20;
 
     /// @notice The DripsHub address used by this driver.
@@ -57,7 +57,7 @@ contract AddressDriver is Upgradeable, ERC2771Context {
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param transferTo The address to send collected funds to
     /// @return amt The collected amount
-    function collect(IERC20 erc20, address transferTo) public returns (uint128 amt) {
+    function collect(IERC20 erc20, address transferTo) public whenNotPaused returns (uint128 amt) {
         amt = dripsHub.collect(callerUserId(), erc20);
         erc20.safeTransfer(transferTo, amt);
     }
@@ -73,7 +73,7 @@ contract AddressDriver is Upgradeable, ERC2771Context {
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param amt The given amount
-    function give(uint256 receiver, IERC20 erc20, uint128 amt) public {
+    function give(uint256 receiver, IERC20 erc20, uint128 amt) public whenNotPaused {
         _transferFromCaller(erc20, amt);
         dripsHub.give(callerUserId(), receiver, erc20, amt);
     }
@@ -127,7 +127,7 @@ contract AddressDriver is Upgradeable, ERC2771Context {
         uint32 maxEndTip1,
         uint32 maxEndTip2,
         address transferTo
-    ) public returns (int128 realBalanceDelta) {
+    ) public whenNotPaused returns (int128 realBalanceDelta) {
         if (balanceDelta > 0) {
             _transferFromCaller(erc20, uint128(balanceDelta));
         }
@@ -144,7 +144,7 @@ contract AddressDriver is Upgradeable, ERC2771Context {
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
     /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the user.
-    function setSplits(SplitsReceiver[] calldata receivers) public {
+    function setSplits(SplitsReceiver[] calldata receivers) public whenNotPaused {
         dripsHub.setSplits(callerUserId(), receivers);
     }
 
@@ -152,7 +152,7 @@ contract AddressDriver is Upgradeable, ERC2771Context {
     /// The keys and the values are not standardized by the protocol, it's up to the user
     /// to establish and follow conventions to ensure compatibility with the consumers.
     /// @param userMetadata The list of user metadata.
-    function emitUserMetadata(UserMetadata[] calldata userMetadata) public {
+    function emitUserMetadata(UserMetadata[] calldata userMetadata) public whenNotPaused {
         dripsHub.emitUserMetadata(callerUserId(), userMetadata);
     }
 
