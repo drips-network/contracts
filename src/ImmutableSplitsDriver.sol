@@ -2,13 +2,13 @@
 pragma solidity ^0.8.17;
 
 import {DripsHub, SplitsReceiver, UserMetadata} from "./DripsHub.sol";
-import {Upgradeable} from "./Upgradeable.sol";
+import {Managed} from "./Managed.sol";
 import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 
 /// @notice A DripsHub driver implementing immutable splits configurations.
 /// Anybody can create a new user ID and configure its splits configuration,
 /// but nobody can update its configuration afterwards, it's immutable.
-contract ImmutableSplitsDriver is Upgradeable {
+contract ImmutableSplitsDriver is Managed {
     /// @notice The DripsHub address used by this driver.
     DripsHub public immutable dripsHub;
     /// @notice The driver ID which this driver uses when calling DripsHub.
@@ -52,6 +52,7 @@ contract ImmutableSplitsDriver is Upgradeable {
     /// @return userId The new user ID with `receivers` configured.
     function createSplits(SplitsReceiver[] calldata receivers, UserMetadata[] calldata userMetadata)
         public
+        whenNotPaused
         returns (uint256 userId)
     {
         userId = nextUserId();

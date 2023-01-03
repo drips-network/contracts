@@ -10,6 +10,7 @@ contract ImmutableSplitsDriverTest is Test {
     DripsHub internal dripsHub;
     ImmutableSplitsDriver internal driver;
     uint32 internal totalSplitsWeight;
+    address internal admin = address(1);
 
     function setUp() public {
         DripsHub hubLogic = new DripsHub(10);
@@ -20,7 +21,7 @@ contract ImmutableSplitsDriverTest is Test {
         dripsHub.registerDriver(address(0));
         uint32 driverId = dripsHub.registerDriver(address(this));
         ImmutableSplitsDriver driverLogic = new ImmutableSplitsDriver(dripsHub, driverId);
-        driver = ImmutableSplitsDriver(address(new UpgradeableProxy(driverLogic, address(0xDEAD))));
+        driver = ImmutableSplitsDriver(address(new UpgradeableProxy(driverLogic, admin)));
         dripsHub.updateDriverAddress(driverId, address(driver));
         totalSplitsWeight = driver.totalSplitsWeight();
     }
@@ -49,5 +50,12 @@ contract ImmutableSplitsDriverTest is Test {
 
         vm.expectRevert("Invalid total receivers weight");
         driver.createSplits(receivers, new UserMetadata[](0));
+    }
+
+    function testSetSplitsCanBePaused() public {
+        vm.prank(admin);
+        driver.pause();
+        vm.expectRevert("Contract paused");
+        driver.createSplits(new SplitsReceiver[](0), new UserMetadata[](0));
     }
 }
