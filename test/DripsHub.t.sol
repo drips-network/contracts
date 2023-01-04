@@ -24,13 +24,15 @@ contract DripsHubTest is Test {
     IERC20 internal otherErc20;
 
     // Keys are user ID and ERC-20
-    mapping(uint256 => mapping(IERC20 => DripsReceiver[])) internal drips;
+    mapping(uint256 => mapping(IERC20 => DripsReceiver[])) internal currDripsReceivers;
     // Key is user IDs
     mapping(uint256 => SplitsReceiver[]) internal currSplitsReceivers;
 
-    address internal driver;
-    address internal admin;
-    address internal pauser;
+    address internal driver = address(1);
+    address internal admin = address(2);
+    address internal pauser = address(3);
+
+    uint32 internal driverId;
 
     uint256 internal user;
     uint256 internal receiver;
@@ -47,17 +49,13 @@ contract DripsHubTest is Test {
     bytes internal constant ERROR_BALANCE_TOO_HIGH = "Total balance too high";
 
     function setUp() public {
-        driver = address(1);
-        admin = address(2);
-        pauser = address(3);
-
         defaultErc20 = new ERC20PresetFixedSupply("default", "default", type(uint136).max, driver);
         otherErc20 = new ERC20PresetFixedSupply("other", "other", type(uint136).max, driver);
         erc20 = defaultErc20;
         DripsHub hubLogic = new DripsHub(10);
         dripsHub = DripsHub(address(new ManagedProxy(hubLogic, admin)));
 
-        uint32 driverId = dripsHub.registerDriver(driver);
+        driverId = dripsHub.registerDriver(driver);
         uint256 baseUserId = driverId << 224;
         user = baseUserId + 1;
         user1 = baseUserId + 2;
@@ -78,15 +76,15 @@ contract DripsHubTest is Test {
     }
 
     function loadDrips(uint256 forUser) internal returns (DripsReceiver[] memory currReceivers) {
-        currReceivers = drips[forUser][erc20];
+        currReceivers = currDripsReceivers[forUser][erc20];
         assertDrips(forUser, currReceivers);
     }
 
     function storeDrips(uint256 forUser, DripsReceiver[] memory newReceivers) internal {
         assertDrips(forUser, newReceivers);
-        delete drips[forUser][erc20];
+        delete currDripsReceivers[forUser][erc20];
         for (uint256 i = 0; i < newReceivers.length; i++) {
-            drips[forUser][erc20].push(newReceivers[i]);
+            currDripsReceivers[forUser][erc20].push(newReceivers[i]);
         }
     }
 
@@ -538,25 +536,24 @@ contract DripsHubTest is Test {
 
     function testRegisterDriver() public {
         address driverAddr = address(0x1234);
-        uint32 driverId = dripsHub.nextDriverId();
-        assertEq(address(0), dripsHub.driverAddress(driverId), "Invalid unused driver address");
-        assertEq(driverId, dripsHub.registerDriver(driverAddr), "Invalid assigned driver ID");
-        assertEq(driverAddr, dripsHub.driverAddress(driverId), "Invalid driver address");
-        assertEq(driverId + 1, dripsHub.nextDriverId(), "Invalid next driver ID");
+        uint32 nextDriverId = dripsHub.nextDriverId();
+        assertEq(address(0), dripsHub.driverAddress(nextDriverId), "Invalid unused driver address");
+        assertEq(nextDriverId, dripsHub.registerDriver(driverAddr), "Invalid assigned driver ID");
+        assertEq(driverAddr, dripsHub.driverAddress(nextDriverId), "Invalid driver address");
+        assertEq(nextDriverId + 1, dripsHub.nextDriverId(), "Invalid next driver ID");
     }
 
     function testUpdateDriverAddress() public {
-        uint32 driverId = dripsHub.registerDriver(address(this));
-        assertEq(address(this), dripsHub.driverAddress(driverId), "Invalid driver address before");
+        assertEq(driver, dripsHub.driverAddress(driverId), "Invalid driver address before");
         address newDriverAddr = address(0x1234);
+        vm.prank(driver);
         dripsHub.updateDriverAddress(driverId, newDriverAddr);
         assertEq(newDriverAddr, dripsHub.driverAddress(driverId), "Invalid driver address after");
     }
 
     function testUpdateDriverAddressRevertsWhenNotCalledByTheDriver() public {
-        uint32 driverId = dripsHub.registerDriver(address(1234));
         vm.expectRevert(ERROR_NOT_DRIVER);
-        dripsHub.updateDriverAddress(driverId, address(5678));
+        dripsHub.updateDriverAddress(driverId, address(1234));
     }
 
     function testCollectRevertsWhenNotCalledByTheDriver() public {
@@ -790,75 +787,50 @@ contract DripsHubTest is Test {
         dripsHub.unpause();
     }
 
-    function testReceiveDripsCanBePaused() public {
-        pauseDripsHub();
-        uint256 userId = user;
-        vm.expectRevert(ERROR_PAUSED);
-        dripsHub.receiveDrips(userId, erc20, 1);
+    modifier canBePausedTest() {
+        vm.prank(admin);
+        dripsHub.pause();
+        vm.expectRevert("Contract paused");
+        _;
     }
 
-    function testSqueezeDripsCanBePaused() public {
-        pauseDripsHub();
-        uint256 userId = user;
-        vm.expectRevert(ERROR_PAUSED);
-        vm.prank(driver);
-        dripsHub.squeezeDrips(user, erc20, userId, 0, new DripsHistory[](0));
+    function testReceiveDripsCanBePaused() public canBePausedTest {
+        dripsHub.receiveDrips(user, erc20, 1);
     }
 
-    function testSplitCanBePaused() public {
-        pauseDripsHub();
-        uint256 userId = user;
-        vm.expectRevert(ERROR_PAUSED);
-        dripsHub.split(userId, erc20, splitsReceivers());
+    function testSqueezeDripsCanBePaused() public canBePausedTest {
+        dripsHub.squeezeDrips(user, erc20, user, 0, new DripsHistory[](0));
     }
 
-    function testCollectCanBePaused() public {
-        pauseDripsHub();
-        vm.prank(driver);
-        vm.expectRevert(ERROR_PAUSED);
+    function testSplitCanBePaused() public canBePausedTest {
+        dripsHub.split(user, erc20, splitsReceivers());
+    }
+
+    function testCollectCanBePaused() public canBePausedTest {
         dripsHub.collect(user, erc20);
     }
 
-    function testSetDripsCanBePaused() public {
-        pauseDripsHub();
-        vm.prank(driver);
-        vm.expectRevert(ERROR_PAUSED);
+    function testSetDripsCanBePaused() public canBePausedTest {
         dripsHub.setDrips(user, erc20, dripsReceivers(), 1, dripsReceivers(), 0, 0);
     }
 
-    function testGiveCanBePaused() public {
-        pauseDripsHub();
-        vm.prank(driver);
-        vm.expectRevert(ERROR_PAUSED);
+    function testGiveCanBePaused() public canBePausedTest {
         dripsHub.give(user, 0, erc20, 1);
     }
 
-    function testSetSplitsCanBePaused() public {
-        pauseDripsHub();
-        vm.prank(driver);
-        vm.expectRevert(ERROR_PAUSED);
+    function testSetSplitsCanBePaused() public canBePausedTest {
         dripsHub.setSplits(user, splitsReceivers());
     }
 
-    function testEmitUserMetadataCanBePaused() public {
-        pauseDripsHub();
-        UserMetadata[] memory userMetadata = new UserMetadata[](1);
-        userMetadata[0] = UserMetadata("key", "value");
-        vm.prank(driver);
-        vm.expectRevert(ERROR_PAUSED);
-        dripsHub.emitUserMetadata(user, userMetadata);
+    function testEmitUserMetadataCanBePaused() public canBePausedTest {
+        dripsHub.emitUserMetadata(user, new UserMetadata[](0));
     }
 
-    function testRegisterDriverCanBePaused() public {
-        pauseDripsHub();
-        vm.expectRevert(ERROR_PAUSED);
+    function testRegisterDriverCanBePaused() public canBePausedTest {
         dripsHub.registerDriver(address(0x1234));
     }
 
-    function testUpdateDriverAddressCanBePaused() public {
-        uint32 driverId = dripsHub.registerDriver(address(this));
-        pauseDripsHub();
-        vm.expectRevert(ERROR_PAUSED);
+    function testUpdateDriverAddressCanBePaused() public canBePausedTest {
         dripsHub.updateDriverAddress(driverId, address(0x1234));
     }
 }
