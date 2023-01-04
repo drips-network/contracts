@@ -282,8 +282,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint128 balanceFrom,
         uint128 balanceTo,
         DripsReceiver[] memory newReceivers,
-        uint32 maxEndTip1,
-        uint32 maxEndTip2,
+        uint32 maxEndHint1,
+        uint32 maxEndHint2,
         uint256 expectedMaxEndFromNow
     ) internal {
         (, bytes32 oldHistoryHash,,,) = Drips._dripsState(userId, assetId);
@@ -295,8 +295,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
             loadCurrReceivers(userId),
             balanceDelta,
             newReceivers,
-            maxEndTip1,
-            maxEndTip2
+            maxEndHint1,
+            maxEndHint2
         );
 
         assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
@@ -1138,69 +1138,69 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
 
     function testBenchSetDrips() public {
         initSeed(0);
-        uint32 wrongTip1 = uint32(block.timestamp) + 1;
-        uint32 wrongTip2 = wrongTip1 + 1;
+        uint32 wrongHint1 = uint32(block.timestamp) + 1;
+        uint32 wrongHint2 = wrongHint1 + 1;
 
         uint32 worstEnd = type(uint32).max - 2;
-        uint32 worstTip = worstEnd + 1;
-        uint32 worstTipPerfect = worstEnd;
-        uint32 worstTip1Minute = worstEnd - 1 minutes;
-        uint32 worstTip1Hour = worstEnd - 1 hours;
+        uint32 worstHint = worstEnd + 1;
+        uint32 worstHintPerfect = worstEnd;
+        uint32 worstHint1Minute = worstEnd - 1 minutes;
+        uint32 worstHint1Hour = worstEnd - 1 hours;
 
-        benchSetDrips("worst 100 no tip         ", 100, worstEnd, 0, 0);
-        benchSetDrips("worst 100 perfect tip    ", 100, worstEnd, worstTip, worstTipPerfect);
-        benchSetDrips("worst 100 1 minute tip   ", 100, worstEnd, worstTip, worstTip1Minute);
-        benchSetDrips("worst 100 1 hour tip     ", 100, worstEnd, worstTip, worstTip1Hour);
-        benchSetDrips("worst 100 wrong tip      ", 100, worstEnd, wrongTip1, wrongTip2);
+        benchSetDrips("worst 100 no hint        ", 100, worstEnd, 0, 0);
+        benchSetDrips("worst 100 perfect hint   ", 100, worstEnd, worstHint, worstHintPerfect);
+        benchSetDrips("worst 100 1 minute hint  ", 100, worstEnd, worstHint, worstHint1Minute);
+        benchSetDrips("worst 100 1 hour hint    ", 100, worstEnd, worstHint, worstHint1Hour);
+        benchSetDrips("worst 100 wrong hint     ", 100, worstEnd, wrongHint1, wrongHint2);
         emit log_string("-----------------------------------------------");
 
-        benchSetDrips("worst 10 no tip          ", 10, worstEnd, 0, 0);
-        benchSetDrips("worst 10 perfect tip     ", 10, worstEnd, worstTip, worstTipPerfect);
-        benchSetDrips("worst 10 1 minute tip    ", 10, worstEnd, worstTip, worstTip1Minute);
-        benchSetDrips("worst 10 1 hour tip      ", 10, worstEnd, worstTip, worstTip1Hour);
-        benchSetDrips("worst 10 wrong tip       ", 10, worstEnd, wrongTip1, wrongTip2);
+        benchSetDrips("worst 10 no hint         ", 10, worstEnd, 0, 0);
+        benchSetDrips("worst 10 perfect hint    ", 10, worstEnd, worstHint, worstHintPerfect);
+        benchSetDrips("worst 10 1 minute hint   ", 10, worstEnd, worstHint, worstHint1Minute);
+        benchSetDrips("worst 10 1 hour hint     ", 10, worstEnd, worstHint, worstHint1Hour);
+        benchSetDrips("worst 10 wrong hint      ", 10, worstEnd, wrongHint1, wrongHint2);
         emit log_string("-----------------------------------------------");
 
-        benchSetDrips("worst 1 no tip           ", 1, worstEnd, 0, 0);
-        benchSetDrips("worst 1 perfect tip      ", 1, worstEnd, worstTip, worstTipPerfect);
-        benchSetDrips("worst 1 1 minute tip     ", 1, worstEnd, worstTip, worstTip1Minute);
-        benchSetDrips("worst 1 1 hour tip       ", 1, worstEnd, worstTip, worstTip1Hour);
-        benchSetDrips("worst 1 wrong tip        ", 1, worstEnd, wrongTip1, wrongTip2);
+        benchSetDrips("worst 1 no hint          ", 1, worstEnd, 0, 0);
+        benchSetDrips("worst 1 perfect hint     ", 1, worstEnd, worstHint, worstHintPerfect);
+        benchSetDrips("worst 1 1 minute hint    ", 1, worstEnd, worstHint, worstHint1Minute);
+        benchSetDrips("worst 1 1 hour hint      ", 1, worstEnd, worstHint, worstHint1Hour);
+        benchSetDrips("worst 1 wrong hint       ", 1, worstEnd, wrongHint1, wrongHint2);
         emit log_string("-----------------------------------------------");
 
         uint32 monthEnd = uint32(block.timestamp) + 30 days;
-        uint32 monthTip = monthEnd + 1;
-        uint32 monthTipPerfect = monthEnd;
-        uint32 monthTip1Minute = monthEnd - 1 minutes;
-        uint32 monthTip1Hour = monthEnd - 1 hours;
+        uint32 monthHint = monthEnd + 1;
+        uint32 monthHintPerfect = monthEnd;
+        uint32 monthHint1Minute = monthEnd - 1 minutes;
+        uint32 monthHint1Hour = monthEnd - 1 hours;
 
-        benchSetDrips("1 month 100 no tip       ", 100, monthEnd, 0, 0);
-        benchSetDrips("1 month 100 perfect tip  ", 100, monthEnd, monthTip, monthTipPerfect);
-        benchSetDrips("1 month 100 1 minute tip ", 100, monthEnd, monthTip, monthTip1Minute);
-        benchSetDrips("1 month 100 1 hour tip   ", 100, monthEnd, monthTip, monthTip1Hour);
-        benchSetDrips("1 month 100 wrong tip    ", 100, monthEnd, wrongTip1, wrongTip2);
+        benchSetDrips("1 month 100 no hint      ", 100, monthEnd, 0, 0);
+        benchSetDrips("1 month 100 perfect hint ", 100, monthEnd, monthHint, monthHintPerfect);
+        benchSetDrips("1 month 100 1 minute hint", 100, monthEnd, monthHint, monthHint1Minute);
+        benchSetDrips("1 month 100 1 hour hint  ", 100, monthEnd, monthHint, monthHint1Hour);
+        benchSetDrips("1 month 100 wrong hint   ", 100, monthEnd, wrongHint1, wrongHint2);
         emit log_string("-----------------------------------------------");
 
-        benchSetDrips("1 month 10 no tip        ", 10, monthEnd, 0, 0);
-        benchSetDrips("1 month 10 perfect tip   ", 10, monthEnd, monthTip, monthTipPerfect);
-        benchSetDrips("1 month 10 1 minute tip  ", 10, monthEnd, monthTip, monthTip1Minute);
-        benchSetDrips("1 month 10 1 hour tip    ", 10, monthEnd, monthTip, monthTip1Hour);
-        benchSetDrips("1 month 10 wrong tip     ", 10, monthEnd, wrongTip1, wrongTip2);
+        benchSetDrips("1 month 10 no hint       ", 10, monthEnd, 0, 0);
+        benchSetDrips("1 month 10 perfect hint  ", 10, monthEnd, monthHint, monthHintPerfect);
+        benchSetDrips("1 month 10 1 minute hint ", 10, monthEnd, monthHint, monthHint1Minute);
+        benchSetDrips("1 month 10 1 hour hint   ", 10, monthEnd, monthHint, monthHint1Hour);
+        benchSetDrips("1 month 10 wrong hint    ", 10, monthEnd, wrongHint1, wrongHint2);
         emit log_string("-----------------------------------------------");
 
-        benchSetDrips("1 month 1 no tip         ", 1, monthEnd, 0, 0);
-        benchSetDrips("1 month 1 perfect tip    ", 1, monthEnd, monthTip, monthTipPerfect);
-        benchSetDrips("1 month 1 1 minute tip   ", 1, monthEnd, monthTip, monthTip1Minute);
-        benchSetDrips("1 month 1 1 hour tip     ", 1, monthEnd, monthTip, monthTip1Hour);
-        benchSetDrips("1 month 1 wrong tip      ", 1, monthEnd, wrongTip1, wrongTip2);
+        benchSetDrips("1 month 1 no hint        ", 1, monthEnd, 0, 0);
+        benchSetDrips("1 month 1 perfect hint   ", 1, monthEnd, monthHint, monthHintPerfect);
+        benchSetDrips("1 month 1 1 minute hint  ", 1, monthEnd, monthHint, monthHint1Minute);
+        benchSetDrips("1 month 1 1 hour hint    ", 1, monthEnd, monthHint, monthHint1Hour);
+        benchSetDrips("1 month 1 wrong hint     ", 1, monthEnd, wrongHint1, wrongHint2);
     }
 
     function benchSetDrips(
         string memory testName,
         uint256 count,
         uint256 maxEnd,
-        uint32 maxEndTip1,
-        uint32 maxEndTip2
+        uint32 maxEndHint1,
+        uint32 maxEndHint2
     ) public {
         uint256 senderId = random(type(uint256).max);
         DripsReceiver[] memory receivers = new DripsReceiver[](count);
@@ -1209,7 +1209,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         }
         int128 amt = int128(int256((maxEnd - block.timestamp) * count));
         uint256 gas = gasleft();
-        Drips._setDrips(senderId, assetId, recv(), amt, receivers, maxEndTip1, maxEndTip2);
+        Drips._setDrips(senderId, assetId, recv(), amt, receivers, maxEndHint1, maxEndHint2);
         gas -= gasleft();
         emit log_named_uint(string.concat("Gas used for ", testName), gas);
     }
@@ -1615,79 +1615,79 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         assertEq(balanceAfter, balanceBefore, "Dripped funds don't add up");
     }
 
-    function testMaxEndTipsDoNotAffectMaxEnd() public {
+    function testMaxEndHintsDoNotAffectMaxEnd() public {
         skipTo(10);
-        setDripsPermuteTips({
+        setDripsPermuteHints({
             amt: 10,
             receivers: recv(receiver, 1),
-            maxEndTip1: 15,
-            maxEndTip2: 25,
+            maxEndHint1: 15,
+            maxEndHint2: 25,
             expectedMaxEndFromNow: 10
         });
     }
 
-    function testMaxEndTipsPerfectlyAccurateDoNotAffectMaxEnd() public {
+    function testMaxEndHintsPerfectlyAccurateDoNotAffectMaxEnd() public {
         skipTo(10);
-        setDripsPermuteTips({
+        setDripsPermuteHints({
             amt: 10,
             receivers: recv(receiver, 1),
-            maxEndTip1: 20,
-            maxEndTip2: 21,
+            maxEndHint1: 20,
+            maxEndHint2: 21,
             expectedMaxEndFromNow: 10
         });
     }
 
-    function testMaxEndTipsInThePastDoNotAffectMaxEnd() public {
+    function testMaxEndHintsInThePastDoNotAffectMaxEnd() public {
         skipTo(10);
-        setDripsPermuteTips({
+        setDripsPermuteHints({
             amt: 10,
             receivers: recv(receiver, 1),
-            maxEndTip1: 5,
-            maxEndTip2: 25,
+            maxEndHint1: 5,
+            maxEndHint2: 25,
             expectedMaxEndFromNow: 10
         });
     }
 
-    function testMaxEndTipsAtTheEndOfTimeDoNotAffectMaxEnd() public {
+    function testMaxEndHintsAtTheEndOfTimeDoNotAffectMaxEnd() public {
         skipTo(10);
-        setDripsPermuteTips({
+        setDripsPermuteHints({
             amt: 10,
             receivers: recv(receiver, 1),
-            maxEndTip1: type(uint32).max,
-            maxEndTip2: 25,
+            maxEndHint1: type(uint32).max,
+            maxEndHint2: 25,
             expectedMaxEndFromNow: 10
         });
     }
 
-    function setDripsPermuteTips(
+    function setDripsPermuteHints(
         uint128 amt,
         DripsReceiver[] memory receivers,
-        uint32 maxEndTip1,
-        uint32 maxEndTip2,
+        uint32 maxEndHint1,
+        uint32 maxEndHint2,
         uint256 expectedMaxEndFromNow
     ) internal {
-        setDripsPermuteTipsCase(amt, receivers, 0, 0, expectedMaxEndFromNow);
-        setDripsPermuteTipsCase(amt, receivers, 0, maxEndTip1, expectedMaxEndFromNow);
-        setDripsPermuteTipsCase(amt, receivers, 0, maxEndTip2, expectedMaxEndFromNow);
-        setDripsPermuteTipsCase(amt, receivers, maxEndTip1, 0, expectedMaxEndFromNow);
-        setDripsPermuteTipsCase(amt, receivers, maxEndTip2, 0, expectedMaxEndFromNow);
-        setDripsPermuteTipsCase(amt, receivers, maxEndTip1, maxEndTip2, expectedMaxEndFromNow);
-        setDripsPermuteTipsCase(amt, receivers, maxEndTip2, maxEndTip1, expectedMaxEndFromNow);
-        setDripsPermuteTipsCase(amt, receivers, maxEndTip1, maxEndTip1, expectedMaxEndFromNow);
-        setDripsPermuteTipsCase(amt, receivers, maxEndTip2, maxEndTip2, expectedMaxEndFromNow);
+        setDripsPermuteHintsCase(amt, receivers, 0, 0, expectedMaxEndFromNow);
+        setDripsPermuteHintsCase(amt, receivers, 0, maxEndHint1, expectedMaxEndFromNow);
+        setDripsPermuteHintsCase(amt, receivers, 0, maxEndHint2, expectedMaxEndFromNow);
+        setDripsPermuteHintsCase(amt, receivers, maxEndHint1, 0, expectedMaxEndFromNow);
+        setDripsPermuteHintsCase(amt, receivers, maxEndHint2, 0, expectedMaxEndFromNow);
+        setDripsPermuteHintsCase(amt, receivers, maxEndHint1, maxEndHint2, expectedMaxEndFromNow);
+        setDripsPermuteHintsCase(amt, receivers, maxEndHint2, maxEndHint1, expectedMaxEndFromNow);
+        setDripsPermuteHintsCase(amt, receivers, maxEndHint1, maxEndHint1, expectedMaxEndFromNow);
+        setDripsPermuteHintsCase(amt, receivers, maxEndHint2, maxEndHint2, expectedMaxEndFromNow);
     }
 
-    function setDripsPermuteTipsCase(
+    function setDripsPermuteHintsCase(
         uint128 amt,
         DripsReceiver[] memory receivers,
-        uint32 maxEndTip1,
-        uint32 maxEndTip2,
+        uint32 maxEndHint1,
+        uint32 maxEndHint2,
         uint256 expectedMaxEndFromNow
     ) internal {
-        emit log_named_uint("Setting drips with tip 1", maxEndTip1);
-        emit log_named_uint("               and tip 2", maxEndTip2);
+        emit log_named_uint("Setting drips with hint 1", maxEndHint1);
+        emit log_named_uint("               and hint 2", maxEndHint2);
         uint256 snapshot = vm.snapshot();
-        setDrips(sender, 0, amt, receivers, maxEndTip1, maxEndTip2, expectedMaxEndFromNow);
+        setDrips(sender, 0, amt, receivers, maxEndHint1, maxEndHint2, expectedMaxEndFromNow);
         vm.revertTo(snapshot);
     }
 
