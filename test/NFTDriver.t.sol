@@ -11,7 +11,7 @@ import {
     SplitsReceiver,
     UserMetadata
 } from "src/DripsHub.sol";
-import {UpgradeableProxy} from "src/Upgradeable.sol";
+import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
 import {
     IERC20,
@@ -36,7 +36,7 @@ contract NFTDriverTest is Test {
 
     function setUp() public {
         DripsHub hubLogic = new DripsHub(10);
-        dripsHub = DripsHub(address(new UpgradeableProxy(hubLogic, address(this))));
+        dripsHub = DripsHub(address(new ManagedProxy(hubLogic, address(this))));
 
         caller = new Caller();
 
@@ -45,7 +45,7 @@ contract NFTDriverTest is Test {
         dripsHub.registerDriver(address(0));
         uint32 nftDriverId = dripsHub.registerDriver(address(this));
         NFTDriver driverLogic = new NFTDriver(dripsHub, address(caller), nftDriverId);
-        driver = NFTDriver(address(new UpgradeableProxy(driverLogic, admin)));
+        driver = NFTDriver(address(new ManagedProxy(driverLogic, admin)));
         dripsHub.updateDriverAddress(nftDriverId, address(driver));
 
         tokenId = driver.mint(address(this), new UserMetadata[](0));

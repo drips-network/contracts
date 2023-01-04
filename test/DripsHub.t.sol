@@ -9,7 +9,7 @@ import {
     DripsReceiver,
     UserMetadata
 } from "src/DripsHub.sol";
-import {UpgradeableProxy} from "src/Upgradeable.sol";
+import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
 import {
     IERC20,
@@ -55,7 +55,7 @@ contract DripsHubTest is Test {
         otherErc20 = new ERC20PresetFixedSupply("other", "other", type(uint136).max, driver);
         erc20 = defaultErc20;
         DripsHub hubLogic = new DripsHub(10);
-        dripsHub = DripsHub(address(new UpgradeableProxy(hubLogic, admin)));
+        dripsHub = DripsHub(address(new ManagedProxy(hubLogic, admin)));
 
         uint32 driverId = dripsHub.registerDriver(driver);
         uint256 baseUserId = driverId << 224;

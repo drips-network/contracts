@@ -1,18 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.17;
 
-import {Upgradeable} from "./Upgradeable.sol";
+import {UUPSUpgradeable} from "openzeppelin-contracts/proxy/utils/UUPSUpgradeable.sol";
+import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 import {EnumerableSet} from "openzeppelin-contracts/utils/structs/EnumerableSet.sol";
 
 using EnumerableSet for EnumerableSet.AddressSet;
 
-/// @notice A mix-in for contract pauseability and upgradeability.
+/// @notice A mix-in for contract pausing, upgrading and admin management.
 /// It can't be used directly, only via a proxy. It uses the upgrade-safe ERC-1967 storage scheme.
 ///
-/// All instances of the contracts are paused and can't be unpaused.
-/// When a proxy uses such contract via delegation, it's initially unpaused.
-abstract contract Managed is Upgradeable {
+/// Managed uses the ERC-1967 admin slot to store the admin address.
+/// All instances of the contracts have admin address `0x00` and are forever paused.
+/// When a proxy uses such contract via delegation, the proxy should define
+/// the initial admin address and the contract is initially unpaused.
+abstract contract Managed is UUPSUpgradeable {
     /// @notice The pointer to the storage slot holding a single `ManagedStorage` structure.
     bytes32 private immutable _managedStorageSlot = _erc1967Slot("eip1967.managed.storage");
 
@@ -39,6 +42,12 @@ abstract contract Managed is Upgradeable {
         EnumerableSet.AddressSet pausers;
     }
 
+    /// @notice Throws if called by any caller other than the admin.
+    modifier onlyAdmin() {
+        require(admin() == msg.sender, "Caller is not the admin");
+        _;
+    }
+
     /// @notice Throws if called by any caller other than the admin or a pauser.
     modifier onlyAdminOrPauser() {
         require(
@@ -63,6 +72,17 @@ abstract contract Managed is Upgradeable {
     /// The contract instance can be used only as a call delegation target for a proxy.
     constructor() {
         _managedStorage().isPaused = true;
+    }
+
+    /// @notice Returns the address of the current admin.
+    function admin() public view returns (address) {
+        return _getAdmin();
+    }
+
+    /// @notice Changes the admin of the contract.
+    /// Can only be called by the current admin.
+    function changeAdmin(address newAdmin) public onlyAdmin {
+        _changeAdmin(newAdmin);
     }
 
     /// @notice Grants the pauser role to an address. Callable only by the admin.
@@ -110,6 +130,13 @@ abstract contract Managed is Upgradeable {
         emit Unpaused(msg.sender);
     }
 
+    /// @notice Calculates the ERC-1967 slot pointer.
+    /// @param name The name of the slot, should be globally unique
+    /// @return slot The slot pointer
+    function _erc1967Slot(string memory name) internal pure returns (bytes32 slot) {
+        return bytes32(uint256(keccak256(bytes(name))) - 1);
+    }
+
     /// @notice Returns the Managed storage.
     /// @return storageRef The storage.
     function _managedStorage() internal view returns (ManagedStorage storage storageRef) {
@@ -118,5 +145,17 @@ abstract contract Managed is Upgradeable {
         assembly {
             storageRef.slot := slot
         }
+    }
+
+    /// @notice Authorizes the contract upgrade. See `UUPSUpgradeable` docs for more details.
+    function _authorizeUpgrade(address /* newImplementation */ ) internal view override onlyAdmin {
+        return;
+    }
+}
+
+/// @notice A generic proxy for contracts implementing `Managed`.
+contract ManagedProxy is ERC1967Proxy {
+    constructor(Managed logic, address admin) ERC1967Proxy(address(logic), new bytes(0)) {
+        _changeAdmin(admin);
     }
 }
