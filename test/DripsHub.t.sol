@@ -30,7 +30,6 @@ contract DripsHubTest is Test {
 
     address internal driver = address(1);
     address internal admin = address(2);
-    address internal pauser = address(3);
 
     uint32 internal driverId;
 
@@ -43,9 +42,6 @@ contract DripsHubTest is Test {
     uint256 internal receiver3;
 
     bytes internal constant ERROR_NOT_DRIVER = "Callable only by the driver";
-    bytes internal constant ERROR_NOT_ADMIN = "Caller is not the admin";
-    bytes internal constant ERROR_NOT_ADMIN_OR_PAUSER = "Caller is not the admin or a pauser";
-    bytes internal constant ERROR_PAUSED = "Contract paused";
     bytes internal constant ERROR_BALANCE_TOO_HIGH = "Total balance too high";
 
     function setUp() public {
@@ -374,16 +370,6 @@ contract DripsHubTest is Test {
         assertEq(dripsHubBalance(), expected, "Invalid DripsHub balance");
     }
 
-    function pauseDripsHub() internal {
-        vm.prank(admin);
-        dripsHub.pause();
-    }
-
-    function grantPauser(address addr) internal {
-        vm.prank(admin);
-        dripsHub.grantPauser(addr);
-    }
-
     function testDoesNotRequireReceiverToBeInitialized() public {
         receiveDrips(receiver, 0, 0);
         split(receiver, 0, 0);
@@ -647,144 +633,6 @@ contract DripsHubTest is Test {
         assertTotalBalance(maxBalance - 1);
         give(user2, receiver3, 1);
         assertTotalBalance(maxBalance);
-    }
-
-    function testAdminCanBeChanged() public {
-        assertEq(dripsHub.admin(), admin);
-        address newAdmin = address(1234);
-        vm.prank(admin);
-        dripsHub.changeAdmin(newAdmin);
-        assertEq(dripsHub.admin(), newAdmin);
-    }
-
-    function testOnlyAdminCanChangeAdmin() public {
-        vm.expectRevert(ERROR_NOT_ADMIN);
-        dripsHub.changeAdmin(address(1234));
-    }
-
-    function testContractCanBeUpgraded() public {
-        uint32 newCycleLength = dripsHub.cycleSecs() + 1;
-        DripsHub newLogic = new DripsHub(newCycleLength);
-        vm.prank(admin);
-        dripsHub.upgradeTo(address(newLogic));
-        assertEq(dripsHub.cycleSecs(), newCycleLength, "Invalid new cycle length");
-    }
-
-    function testOnlyAdminCanUpgradeContract() public {
-        uint32 newCycleLength = dripsHub.cycleSecs() + 1;
-        DripsHub newLogic = new DripsHub(newCycleLength);
-        vm.expectRevert(ERROR_NOT_ADMIN);
-        dripsHub.upgradeTo(address(newLogic));
-    }
-
-    function testAdminCanGrantPauser() public {
-        vm.prank(admin);
-        dripsHub.grantPauser(pauser);
-        assertTrue(dripsHub.isPauser(pauser), "Pauser not revoked");
-        address[] memory allPausers = new address[](1);
-        allPausers[0] = pauser;
-        assertEq(dripsHub.allPausers(), allPausers, "Invalid pausers");
-    }
-
-    function testPauserCanNotGrantPauser() public {
-        address otherPauser = address(1234);
-        grantPauser(pauser);
-        vm.prank(pauser);
-        vm.expectRevert(ERROR_NOT_ADMIN);
-        dripsHub.grantPauser(otherPauser);
-    }
-
-    function testOnlyAdminCanGrantPauser() public {
-        vm.expectRevert(ERROR_NOT_ADMIN);
-        dripsHub.grantPauser(pauser);
-    }
-
-    function testAdminCanRevokePauser() public {
-        grantPauser(pauser);
-        vm.prank(admin);
-        dripsHub.revokePauser(pauser);
-        assertFalse(dripsHub.isPauser(pauser), "Pauser not revoked");
-        assertEq(dripsHub.allPausers(), new address[](0), "Invalid pausers");
-    }
-
-    function testPauserCanNotRevokePauser() public {
-        address otherPauser = address(1234);
-        grantPauser(pauser);
-        grantPauser(otherPauser);
-        vm.prank(pauser);
-        vm.expectRevert(ERROR_NOT_ADMIN);
-        dripsHub.revokePauser(otherPauser);
-    }
-
-    function testOnlyAdminCanRevokePauser() public {
-        grantPauser(pauser);
-        vm.expectRevert(ERROR_NOT_ADMIN);
-        dripsHub.revokePauser(pauser);
-    }
-
-    function testGrantingPauserToPauserReverts() public {
-        grantPauser(pauser);
-        vm.prank(admin);
-        vm.expectRevert("Address already is a pauser");
-        dripsHub.grantPauser(pauser);
-    }
-
-    function testRevokingPauserFromNotPauserReverts() public {
-        vm.prank(admin);
-        vm.expectRevert("Address is not a pauser");
-        dripsHub.revokePauser(pauser);
-    }
-
-    function testAdminCanPause() public {
-        vm.prank(admin);
-        dripsHub.pause();
-        assertTrue(dripsHub.paused(), "Pausing failed");
-    }
-
-    function testPauserCanPause() public {
-        grantPauser(pauser);
-        vm.prank(pauser);
-        dripsHub.pause();
-        assertTrue(dripsHub.paused(), "Pausing failed");
-    }
-
-    function testOnlyAdminOrPauserCanPause() public {
-        vm.expectRevert(ERROR_NOT_ADMIN_OR_PAUSER);
-        dripsHub.pause();
-    }
-
-    function testAdminCanUnpause() public {
-        pauseDripsHub();
-        vm.prank(admin);
-        dripsHub.unpause();
-        assertFalse(dripsHub.paused(), "Unpausing failed");
-    }
-
-    function testPauserCanUnpause() public {
-        grantPauser(pauser);
-        pauseDripsHub();
-        vm.prank(pauser);
-        dripsHub.unpause();
-        assertFalse(dripsHub.paused(), "Unpausing failed");
-    }
-
-    function testOnlyAdminOrPauserCanUnpause() public {
-        pauseDripsHub();
-        vm.expectRevert(ERROR_NOT_ADMIN_OR_PAUSER);
-        dripsHub.unpause();
-    }
-
-    function testOnlyUnpausedContractCanBePaused() public {
-        pauseDripsHub();
-        vm.prank(admin);
-        vm.expectRevert(ERROR_PAUSED);
-        dripsHub.pause();
-    }
-
-    function testOnlyPausedContractCanBeUnpaused() public {
-        vm.prank(admin);
-        vm.expectRevert("Contract not paused");
-        dripsHub.unpause();
     }
 
     modifier canBePausedTest() {
