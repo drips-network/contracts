@@ -333,7 +333,14 @@ contract DripsHub is Managed, Drips, Splits {
         return Splits._splitResult(userId, currReceivers, amount);
     }
 
-    /// @notice Splits user's received but not split yet funds among receivers.
+    /// @notice Splits the user's splittable funds among receivers.
+    /// The entire splittable balance of the given asset is split.
+    /// All split funds are split using the current splits configuration.
+    /// Because the user can update their splits configuration at any time,
+    /// it is possible that calling this function will be frontrun,
+    /// and all the splittable funds will become splittable only using the new configuration.
+    /// The user must be trusted with how funds sent to them will be splits,
+    /// in the end they can do with their funds whatever they want by changing the configuration.
     /// @param userId The user ID
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
@@ -555,7 +562,11 @@ contract DripsHub is Managed, Drips, Splits {
         return Drips._hashDripsHistory(oldDripsHistoryHash, dripsHash, updateTime, maxEnd);
     }
 
-    /// @notice Sets user splits configuration.
+    /// @notice Sets user splits configuration. The configuration is common for all assets.
+    /// Nothing happens to the currently splittable funds, but when they are split
+    /// after this function finishes, the new splits configuration will be used.
+    /// Because anybody can call `split`, calling this function may be frontrun
+    /// and all the currently splittable funds will be split using the old splits configuration.
     /// @param userId The user ID
     /// @param receivers The list of the user's splits receivers to be set.
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.

@@ -145,7 +145,11 @@ contract AddressDriver is Managed, ERC2771Context {
         }
     }
 
-    /// @notice Sets the message sender's splits configuration.
+    /// @notice Sets user splits configuration. The configuration is common for all assets.
+    /// Nothing happens to the currently splittable funds, but when they are split
+    /// after this function finishes, the new splits configuration will be used.
+    /// Because anybody can call `split` on `DripsHub`, calling this function may be frontrun
+    /// and all the currently splittable funds will be split using the old splits configuration.
     /// @param receivers The list of the user's splits receivers to be set.
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
     /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`

@@ -204,7 +204,11 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
         }
     }
 
-    /// @notice Sets the user's splits configuration.
+    /// @notice Sets user splits configuration. The configuration is common for all assets.
+    /// Nothing happens to the currently splittable funds, but when they are split
+    /// after this function finishes, the new splits configuration will be used.
+    /// Because anybody can call `split` on `DripsHub`, calling this function may be frontrun
+    /// and all the currently splittable funds will be split using the old splits configuration.
     /// @param tokenId The ID of the token representing the configured user ID.
     /// The caller must be the owner of the token or be approved to use it.
     /// The token ID is equal to the user ID controlled by it.

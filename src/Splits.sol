@@ -130,7 +130,9 @@ abstract contract Splits {
         collectableAmt = amount - splitAmt;
     }
 
-    /// @notice Splits user's received but not split yet funds among receivers.
+    /// @notice Splits the user's splittable funds among receivers.
+    /// The entire splittable balance of the given asset is split.
+    /// All split funds are split using the current splits configuration.
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param currReceivers The list of the user's current splits receivers.
@@ -198,7 +200,9 @@ abstract contract Splits {
         emit Given(userId, receiver, assetId, amt);
     }
 
-    /// @notice Sets user splits configuration.
+    /// @notice Sets user splits configuration. The configuration is common for all assets.
+    /// Nothing happens to the currently splittable funds, but when they are split
+    /// after this function finishes, the new splits configuration will be used.
     /// @param userId The user ID
     /// @param receivers The list of the user's splits receivers to be set.
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
