@@ -135,6 +135,7 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     /// @notice Makes a call on behalf of the `sender`.
     /// Callable only by an address currently `authorize`d by the `sender`.
     /// Reverts if the call reverts or the called address is not a smart contract.
+    /// This function is payable, any Ether sent to it will be passed in the call.
     /// @param sender The sender to be set as the message sender of the call as per ERC-2771.
     /// @param to The called address.
     /// @param data The calldata to be used for the call.
@@ -151,6 +152,7 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     /// @notice Makes a call on behalf of the `sender`.
     /// Requires a `sender`'s signature of an ERC-721 message approving the call.
     /// Reverts if the call reverts or the called address is not a smart contract.
+    /// This function is payable, any Ether sent to it will be passed in the call.
     /// @param sender The sender to be set as the message sender of the call as per ERC-2771.
     /// @param to The called address.
     /// @param data The calldata to be used for the call.
@@ -181,6 +183,9 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     /// @notice Executes a batch of calls.
     /// The caller will be set as the message sender of all the calls as per ERC-2771.
     /// Reverts if any of the calls reverts or any of the called addresses is not a smart contract.
+    /// This function is payable, any Ether sent to it can be used in the batched calls.
+    /// Any unused Ether will stay in this contract,
+    /// anybody will be able to use it in future calls to `callBatched`.
     /// @param calls The calls to perform.
     /// @return returnData The data returned by each of the calls.
     function callBatched(Call[] memory calls) public payable returns (bytes[] memory returnData) {
