@@ -59,7 +59,8 @@ contract DripsHub is Managed, Drips, Splits {
     /// @notice The total amount the contract can store of each token.
     uint256 public constant MAX_TOTAL_BALANCE = _MAX_TOTAL_DRIPS_BALANCE;
     /// @notice The ERC-1967 storage slot holding a single `DripsHubStorage` structure.
-    bytes32 private immutable _storageSlot = erc1967Slot("eip1967.dripsHub.storage");
+    //bytes32 private immutable _storageSlot = erc1967Slot("eip1967.dripsHub.storage");
+    bytes32 public immutable _storageSlot = erc1967Slot("eip1967.dripsHub.storage");
 
     /// @notice Emitted when an app is registered
     /// @param appId The app ID
@@ -449,7 +450,7 @@ contract DripsHub is Managed, Drips, Splits {
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers
-    ) public whenNotPaused onlyApp(userId) returns (uint128 newBalance, int128 realBalanceDelta) {
+    ) public virtual whenNotPaused onlyApp(userId) returns (uint128 newBalance, int128 realBalanceDelta) {
         if (balanceDelta > 0) {
             increaseTotalBalance(erc20, uint128(balanceDelta));
         }

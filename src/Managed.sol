@@ -17,7 +17,8 @@ import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 /// When a proxy uses such contract via delegation, it's initially unpaused.
 abstract contract Managed is UUPSUpgradeable {
     /// @notice The pointer to the storage slot with the boolean holding the paused state.
-    bytes32 private immutable pausedSlot = erc1967Slot("eip1967.managed.paused");
+    //bytes32 private immutable pausedSlot = erc1967Slot("eip1967.managed.paused");
+    bytes32 public immutable pausedSlot = erc1967Slot("eip1967.managed.paused");
 
     /// @notice Emitted when the pause is triggered.
     /// @param caller The caller who triggered the change.

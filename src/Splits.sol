@@ -9,6 +9,7 @@ struct SplitsReceiver {
     /// The user will be getting `weight / _TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the splitting user.
     uint32 weight;
+    //uint224 weight2; // just to get a whole word for proper hashing
 }
 
 /// @notice Splits can keep track of at most `type(uint128).max`
@@ -24,7 +25,8 @@ abstract contract Splits {
     /// @notice The total amount the contract can keep track of each asset.
     uint256 internal constant _MAX_TOTAL_SPLITS_BALANCE = type(uint128).max;
     /// @notice The storage slot holding a single `SplitsStorage` structure.
-    bytes32 private immutable _splitsStorageSlot;
+    //bytes32 private immutable _splitsStorageSlot;
+    bytes32 public immutable _splitsStorageSlot;
 
     /// @notice Emitted when a user collects funds
     /// @param userId The user ID
@@ -224,7 +226,7 @@ abstract contract Splits {
     /// @param receivers The list of splits receivers
     /// @param receiversHash The hash of the list of splits receivers.
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
-    function _assertSplitsValid(SplitsReceiver[] memory receivers, bytes32 receiversHash) private {
+    function _assertSplitsValid(SplitsReceiver[] memory receivers, bytes32 receiversHash) internal {
         require(receivers.length <= _MAX_SPLITS_RECEIVERS, "Too many splits receivers");
         uint64 totalWeight = 0;
         uint256 prevUserId;
@@ -273,7 +275,9 @@ abstract contract Splits {
         pure
         returns (bytes32 receiversHash)
     {
-        if (receivers.length == 0) return bytes32(0);
+        if (receivers.length == 0) {
+            return bytes32(0);
+        }
         return keccak256(abi.encode(receivers));
     }
 
