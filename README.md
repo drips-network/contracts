@@ -1,8 +1,9 @@
-# Radicle Drips Hub Contracts
+# Radicle Drips protocol V2 smart contracts
 
-Radicle Drips Hub is the smart contract running the drips and splits ecosystem.
+Radicle Drips is an EVM blockchain protocol for streaming and splitting ERC-20 tokens.
+See [docs](https://docs.drips.network) for a high-level introduction and documentation.
 
-## Getting started
+# Development
 Radicle Drips Hub uses [Foundry](https://github.com/foundry-rs/foundry) for development.
 You can install it using [foundryup](https://github.com/foundry-rs/foundry#installation).
 Then, run the following command to install the dependencies:
@@ -11,29 +12,29 @@ Then, run the following command to install the dependencies:
 make install
 ```
 
-### Run linter
+## Run linter
 ```bash
 make lint
 ```
 
-### Run prettier
+## Run prettier
 ```bash
 make prettier
 ```
 
-### Run all tests
+## Run all tests
 ```bash
 make test
 ```
 
-### Run specific tests
-A regular expression can be used to only run specific tests.
+## Run tests with extra options
+`forge test` can be used directly to provide extra options, like running only specific tests.
 
 ```bash
-forge test -m <REGEX>
-forge test -m testName
-forge test -m ':ContractName\.'
+forge test --mt testName
 ```
+
+# Deployment
 
 ## Deploy to a local testnet
 Start a local testnet node and let it run in the background:
@@ -162,20 +163,3 @@ Run deployment:
 ```bash
 scripts/deploy.sh
 ```
-
-### Deploying to Polygon Mumbai
-
-As of now gas estimation isn't working and you need to set it manually to an arbitrary high value:
-
-```bash
-export ETH_GAS=10000000
-```
-
-For deployment you can use the public MaticVigil RPC endpoint:
-
-```bash
-export ETH_RPC_URL='https://rpc-mumbai.maticvigil.com/'
-```
-
-To publish smart contracts to `https://mumbai.polygonscan.com/` you need to
-use the API key generated for an account on regular `https://polygonscan.com/`.
