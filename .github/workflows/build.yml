@@ -13,13 +13,10 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
-      - name: make install
-        run: make install
-      - name: lint
-        run: make lint
-      - name: test
-        if: ${{ github.event_name == 'pull_request' }}
-        run: make test
-      - name: test deep
+      - name: check formatting
+        run: forge fmt --check
+      - name: make fuzz tests on master branch extensive
         if: ${{ github.event_name == 'push' }}
-        run: make test_deep
+        run: echo FOUNDRY_FUZZ_RUNS=50000 >> $GITHUB_ENV
+      - name: run tests
+        run: forge test
