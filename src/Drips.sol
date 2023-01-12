@@ -805,7 +805,6 @@ abstract contract Drips {
         returns (uint256 amtPerSec, uint256 start, uint256 end)
     {
         uint256 val;
-        // solhint-disable-next-line no-inline-assembly
         assembly ("memory-safe") {
             val := mload(add(32, add(configs, shl(5, idx))))
         }
@@ -1074,7 +1073,6 @@ abstract contract Drips {
         // per transaction and it needs to be optimized as much as possible.
         // As of Solidity 0.8.13, rewriting it in unchecked Solidity triples its gas cost.
         uint256 cycleSecs = _cycleSecs;
-        // solhint-disable-next-line no-inline-assembly
         assembly {
             let endedCycles := sub(div(end, cycleSecs), div(start, cycleSecs))
             let amtPerCycle := div(mul(cycleSecs, amtPerSec), _AMT_PER_SEC_MULTIPLIER)
@@ -1112,7 +1110,6 @@ abstract contract Drips {
     /// @return dripsStorage The storage.
     function _dripsStorage() private view returns (DripsStorage storage dripsStorage) {
         bytes32 slot = _dripsStorageSlot;
-        // solhint-disable-next-line no-inline-assembly
         assembly {
             dripsStorage.slot := slot
         }

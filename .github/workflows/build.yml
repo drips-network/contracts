@@ -13,11 +13,6 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
-      - name: install Node
-        uses: actions/setup-node@v3
-        with:
-          node-version: "14"
-          cache: "yarn"
       - name: make install
         run: make install
       - name: lint

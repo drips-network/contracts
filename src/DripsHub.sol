@@ -619,7 +619,6 @@ contract DripsHub is Managed, Drips, Splits {
     /// @return storageRef The storage.
     function _dripsHubStorage() internal view returns (DripsHubStorage storage storageRef) {
         bytes32 slot = _dripsHubStorageSlot;
-        // solhint-disable-next-line no-inline-assembly
         assembly {
             storageRef.slot := slot
         }

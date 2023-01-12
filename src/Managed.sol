@@ -141,7 +141,6 @@ abstract contract Managed is UUPSUpgradeable {
     /// @return storageRef The storage.
     function _managedStorage() internal view returns (ManagedStorage storage storageRef) {
         bytes32 slot = _managedStorageSlot;
-        // solhint-disable-next-line no-inline-assembly
         assembly {
             storageRef.slot := slot
         }

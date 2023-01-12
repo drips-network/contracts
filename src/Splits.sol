@@ -280,7 +280,6 @@ abstract contract Splits {
     /// @return splitsStorage The storage.
     function _splitsStorage() private view returns (SplitsStorage storage splitsStorage) {
         bytes32 slot = _splitsStorageSlot;
-        // solhint-disable-next-line no-inline-assembly
         assembly {
             splitsStorage.slot := slot
         }
