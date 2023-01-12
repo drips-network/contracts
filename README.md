@@ -6,32 +6,15 @@ See [docs](https://docs.drips.network) for a high-level introduction and documen
 # Development
 Radicle Drips Hub uses [Foundry](https://github.com/foundry-rs/foundry) for development.
 You can install it using [foundryup](https://github.com/foundry-rs/foundry#installation).
-Then, run the following command to install the dependencies:
 
+## Format code
 ```bash
-make install
+forge fmt
 ```
 
-## Run linter
+## Run tests
 ```bash
-make lint
-```
-
-## Run prettier
-```bash
-make prettier
-```
-
-## Run all tests
-```bash
-make test
-```
-
-## Run tests with extra options
-`forge test` can be used directly to provide extra options, like running only specific tests.
-
-```bash
-forge test --mt testName
+forge test
 ```
 
 # Deployment
