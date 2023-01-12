@@ -141,6 +141,7 @@ abstract contract Managed is UUPSUpgradeable {
     /// @return storageRef The storage.
     function _managedStorage() internal view returns (ManagedStorage storage storageRef) {
         bytes32 slot = _managedStorageSlot;
+        // slither-disable-next-line assembly
         assembly {
             storageRef.slot := slot
         }

@@ -189,6 +189,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
         DripsReceiver[] calldata currReceivers,
         int128 balanceDelta,
         DripsReceiver[] calldata newReceivers,
+        // slither-disable-next-line similar-names
         uint32 maxEndHint1,
         uint32 maxEndHint2,
         address transferTo
@@ -295,6 +296,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
     }
 
     // Workaround for https://github.com/ethereum/solidity/issues/12554
+    // slither-disable-next-line dead-code
     function _msgData() internal view override(Context, ERC2771Context) returns (bytes calldata) {
         return ERC2771Context._msgData();
     }

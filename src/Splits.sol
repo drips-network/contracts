@@ -21,6 +21,7 @@ abstract contract Splits {
     /// @notice The total splits weight of a user
     uint32 internal constant _TOTAL_SPLITS_WEIGHT = 1_000_000;
     /// @notice The total amount the contract can keep track of each asset.
+    // slither-disable-next-line unused-state
     uint256 internal constant _MAX_TOTAL_SPLITS_BALANCE = type(uint128).max;
     /// @notice The storage slot holding a single `SplitsStorage` structure.
     bytes32 private immutable _splitsStorageSlot;
@@ -225,6 +226,7 @@ abstract contract Splits {
     function _assertSplitsValid(SplitsReceiver[] memory receivers, bytes32 receiversHash) private {
         require(receivers.length <= _MAX_SPLITS_RECEIVERS, "Too many splits receivers");
         uint64 totalWeight = 0;
+        // slither-disable-next-line uninitialized-local
         uint256 prevUserId;
         for (uint256 i = 0; i < receivers.length; i++) {
             SplitsReceiver memory receiver = receivers[i];
@@ -280,6 +282,7 @@ abstract contract Splits {
     /// @return splitsStorage The storage.
     function _splitsStorage() private view returns (SplitsStorage storage splitsStorage) {
         bytes32 slot = _splitsStorageSlot;
+        // slither-disable-next-line assembly
         assembly {
             splitsStorage.slot := slot
         }

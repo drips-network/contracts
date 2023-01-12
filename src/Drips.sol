@@ -113,6 +113,7 @@ abstract contract Drips {
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
     /// gain access to drips received during `T - cycleSecs` to `T - 1`.
     /// Always higher than 1.
+    // slither-disable-next-line naming-convention
     uint32 internal immutable _cycleSecs;
     /// @notice The storage slot holding a single `DripsStorage` structure.
     bytes32 private immutable _dripsStorageSlot;
@@ -317,6 +318,7 @@ abstract contract Drips {
     {
         fromCycle = _dripsStorage().states[assetId][userId].nextReceivableCycle;
         toCycle = _cycleOf(_currTimestamp());
+        // slither-disable-next-line timestamp
         if (fromCycle == 0 || toCycle < fromCycle) {
             toCycle = fromCycle;
         }
@@ -410,6 +412,7 @@ abstract contract Drips {
             // If the last update was not in the current cycle,
             // there's only the single latest history entry to squeeze in the current cycle.
             currCycleConfigs = 1;
+            // slither-disable-next-line timestamp
             if (sender.updateTime >= _currCycleStart()) currCycleConfigs = sender.currCycleConfigs;
         }
         squeezedRevIdxs = new uint256[](dripsHistory.length);
@@ -454,6 +457,7 @@ abstract contract Drips {
             historyHashes[i] = historyHash;
             historyHash = _hashDripsHistory(historyHash, dripsHash, drips.updateTime, drips.maxEnd);
         }
+        // slither-disable-next-line incorrect-equality,timestamp
         require(historyHash == finalHistoryHash, "Invalid drips history");
     }
 
@@ -609,10 +613,12 @@ abstract contract Drips {
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers,
+        // slither-disable-next-line similar-names
         uint32 maxEndHint1,
         uint32 maxEndHint2
     ) internal returns (int128 realBalanceDelta) {
         DripsState storage state = _dripsStorage().states[assetId][userId];
+        // slither-disable-next-line timestamp
         require(_hashDrips(currReceivers) == state.dripsHash, "Invalid current drips list");
         uint32 lastUpdate = state.updateTime;
         uint128 newBalance;
@@ -642,6 +648,7 @@ abstract contract Drips {
         state.maxEnd = newMaxEnd;
         state.balance = newBalance;
         bytes32 dripsHistory = state.dripsHistoryHash;
+        // slither-disable-next-line timestamp
         if (dripsHistory != 0 && _cycleOf(lastUpdate) != _cycleOf(_currTimestamp())) {
             state.currCycleConfigs = 2;
         } else {
@@ -651,6 +658,7 @@ abstract contract Drips {
         state.dripsHistoryHash =
             _hashDripsHistory(dripsHistory, newDripsHash, _currTimestamp(), newMaxEnd);
         emit DripsSet(userId, assetId, newDripsHash, dripsHistory, newBalance, newMaxEnd);
+        // slither-disable-next-line timestamp
         if (newDripsHash != state.dripsHash) {
             state.dripsHash = newDripsHash;
             for (uint256 i = 0; i < newReceivers.length; i++) {
@@ -679,6 +687,7 @@ abstract contract Drips {
             (uint256[] memory configs, uint256 configsLen) = _buildConfigs(receivers);
 
             uint256 enoughEnd = _currTimestamp();
+            // slither-disable-start incorrect-equality,timestamp
             if (configsLen == 0 || balance == 0) {
                 return uint32(enoughEnd);
             }
@@ -715,6 +724,7 @@ abstract contract Drips {
                     notEnoughEnd = end;
                 }
             }
+            // slither-disable-end incorrect-equality,timestamp
         }
     }
 
@@ -734,9 +744,11 @@ abstract contract Drips {
             uint256 spent = 0;
             for (uint256 i = 0; i < configsLen; i++) {
                 (uint256 amtPerSec, uint256 start, uint256 end) = _getConfig(configs, i);
+                // slither-disable-next-line timestamp
                 if (maxEnd <= start) {
                     continue;
                 }
+                // slither-disable-next-line timestamp
                 if (end > maxEnd) {
                     end = maxEnd;
                 }
@@ -786,6 +798,7 @@ abstract contract Drips {
         require(amtPerSec != 0, "Drips receiver amtPerSec is zero");
         (uint256 start, uint256 end) =
             _dripsRangeInFuture(receiver, _currTimestamp(), type(uint32).max);
+        // slither-disable-next-line incorrect-equality,timestamp
         if (start == end) {
             return configsLen;
         }
@@ -805,6 +818,7 @@ abstract contract Drips {
         returns (uint256 amtPerSec, uint256 start, uint256 end)
     {
         uint256 val;
+        // slither-disable-next-line assembly
         assembly ("memory-safe") {
             val := mload(add(32, add(configs, shl(5, idx))))
         }
@@ -867,12 +881,14 @@ abstract contract Drips {
         uint256 newIdx = 0;
         while (true) {
             bool pickCurr = currIdx < currReceivers.length;
+            // slither-disable-next-line uninitialized-local
             DripsReceiver memory currRecv;
             if (pickCurr) {
                 currRecv = currReceivers[currIdx];
             }
 
             bool pickNew = newIdx < newReceivers.length;
+            // slither-disable-next-line uninitialized-local
             DripsReceiver memory newRecv;
             if (pickNew) {
                 newRecv = newReceivers[newIdx];
@@ -909,24 +925,29 @@ abstract contract Drips {
                 // The `currStartCycle > newStartCycle` check is just an optimization.
                 // If it's false, then `state.nextReceivableCycle > newStartCycle` must be
                 // false too, there's no need to pay for the storage access to check it.
+                // slither-disable-next-line timestamp
                 if (currStartCycle > newStartCycle && state.nextReceivableCycle > newStartCycle) {
                     state.nextReceivableCycle = newStartCycle;
                 }
             } else if (pickCurr) {
                 // Remove an existing drip
+                // slither-disable-next-line similar-names
                 DripsState storage state = states[currRecv.userId];
                 (uint32 start, uint32 end) = _dripsRangeInFuture(currRecv, lastUpdate, currMaxEnd);
+                // slither-disable-next-line similar-names
                 int256 amtPerSec = int256(uint256(currRecv.config.amtPerSec()));
                 _addDeltaRange(state, start, end, -amtPerSec);
             } else if (pickNew) {
                 // Create a new drip
                 DripsState storage state = states[newRecv.userId];
+                // slither-disable-next-line uninitialized-local
                 (uint32 start, uint32 end) =
                     _dripsRangeInFuture(newRecv, _currTimestamp(), newMaxEnd);
                 int256 amtPerSec = int256(uint256(newRecv.config.amtPerSec()));
                 _addDeltaRange(state, start, end, amtPerSec);
                 // Ensure that the user receives the updated cycles
                 uint32 startCycle = _cycleOf(start);
+                // slither-disable-next-line timestamp
                 if (state.nextReceivableCycle == 0 || state.nextReceivableCycle > startCycle) {
                     state.nextReceivableCycle = startCycle;
                 }
@@ -969,10 +990,12 @@ abstract contract Drips {
         uint32 endCap
     ) private pure returns (uint32 start, uint32 end_) {
         start = receiver.config.start();
+        // slither-disable-start timestamp
         if (start == 0) {
             start = updateTime;
         }
         uint40 end = uint40(start) + receiver.config.duration();
+        // slither-disable-next-line incorrect-equality
         if (end == start || end > maxEnd) {
             end = maxEnd;
         }
@@ -985,6 +1008,7 @@ abstract contract Drips {
         if (end < start) {
             end = start;
         }
+        // slither-disable-end timestamp
         return (start, uint32(end));
     }
 
@@ -996,6 +1020,7 @@ abstract contract Drips {
     function _addDeltaRange(DripsState storage state, uint32 start, uint32 end, int256 amtPerSec)
         private
     {
+        // slither-disable-next-line incorrect-equality,timestamp
         if (start == end) {
             return;
         }
@@ -1018,6 +1043,7 @@ abstract contract Drips {
             // These formulas follow the logic from `_drippedAmt`, see it for more details.
             int256 amtPerSecMultiplier = int256(_AMT_PER_SEC_MULTIPLIER);
             int256 fullCycle = (int256(uint256(_cycleSecs)) * amtPerSec) / amtPerSecMultiplier;
+            // slither-disable-next-line weak-prng
             int256 nextCycle = (int256(timestamp % _cycleSecs) * amtPerSec) / amtPerSecMultiplier;
             AmtDelta storage amtDelta = amtDeltas[_cycleOf(uint32(timestamp))];
             // Any over- or under-flows are fine, they're guaranteed to be fixed by a matching
@@ -1073,12 +1099,16 @@ abstract contract Drips {
         // per transaction and it needs to be optimized as much as possible.
         // As of Solidity 0.8.13, rewriting it in unchecked Solidity triples its gas cost.
         uint256 cycleSecs = _cycleSecs;
+        // slither-disable-next-line assembly
         assembly {
             let endedCycles := sub(div(end, cycleSecs), div(start, cycleSecs))
+            // slither-disable-next-line divide-before-multiply
             let amtPerCycle := div(mul(cycleSecs, amtPerSec), _AMT_PER_SEC_MULTIPLIER)
             amt := mul(endedCycles, amtPerCycle)
+            // slither-disable-next-line weak-prng
             let amtEnd := div(mul(mod(end, cycleSecs), amtPerSec), _AMT_PER_SEC_MULTIPLIER)
             amt := add(amt, amtEnd)
+            // slither-disable-next-line weak-prng
             let amtStart := div(mul(mod(start, cycleSecs), amtPerSec), _AMT_PER_SEC_MULTIPLIER)
             amt := sub(amt, amtStart)
         }
@@ -1103,6 +1133,7 @@ abstract contract Drips {
     /// @return timestamp The current cycle start timestamp
     function _currCycleStart() private view returns (uint32 timestamp) {
         uint32 currTimestamp = _currTimestamp();
+        // slither-disable-next-line weak-prng
         return currTimestamp - (currTimestamp % _cycleSecs);
     }
 
@@ -1110,6 +1141,7 @@ abstract contract Drips {
     /// @return dripsStorage The storage.
     function _dripsStorage() private view returns (DripsStorage storage dripsStorage) {
         bytes32 slot = _dripsStorageSlot;
+        // slither-disable-next-line assembly
         assembly {
             dripsStorage.slot := slot
         }

@@ -513,6 +513,7 @@ contract DripsHub is Managed, Drips, Splits {
         DripsReceiver[] memory currReceivers,
         int128 balanceDelta,
         DripsReceiver[] memory newReceivers,
+        // slither-disable-next-line similar-names
         uint32 maxEndHint1,
         uint32 maxEndHint2
     ) public whenNotPaused onlyDriver(userId) returns (int128 realBalanceDelta) {
@@ -619,6 +620,7 @@ contract DripsHub is Managed, Drips, Splits {
     /// @return storageRef The storage.
     function _dripsHubStorage() internal view returns (DripsHubStorage storage storageRef) {
         bytes32 slot = _dripsHubStorageSlot;
+        // slither-disable-next-line assembly
         assembly {
             storageRef.slot := slot
         }

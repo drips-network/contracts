@@ -124,6 +124,7 @@ contract AddressDriver is Managed, ERC2771Context {
         DripsReceiver[] calldata currReceivers,
         int128 balanceDelta,
         DripsReceiver[] calldata newReceivers,
+        // slither-disable-next-line similar-names
         uint32 maxEndHint1,
         uint32 maxEndHint2,
         address transferTo
