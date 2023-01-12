@@ -18,6 +18,11 @@ jobs:
         with:
           node-version: "14"
           cache: "yarn"
+      - name: set_var
+        if: ${{ github.event_name == 'pull_request' }}
+        run: echo FOUNDRY_FUZZ_RUNS=50000 >> $GITHUB_ENV
+      - name: use_var
+        run: echo foundry fuzz has $FOUNDRY_FUZZ_RUNS runs
       - name: make install
         run: make install
       - name: lint
