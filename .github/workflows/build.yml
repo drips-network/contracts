@@ -13,13 +13,6 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
-      - name: install Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-          cache: pip
-      - name: install Slither
-        run: pip install slither-analyzer==0.9.2
       - name: check formatting
         run: forge fmt --check
       - name: make fuzz tests on master branch extensive
@@ -28,4 +21,6 @@ jobs:
       - name: run tests
         run: forge test
       - name: run Slither
-        run: slither .
+        uses: crytic/slither-action@v0.2.0
+        with:
+          slither-version: '0.9.2'
