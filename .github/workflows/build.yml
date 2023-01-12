@@ -13,6 +13,13 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
+      - name: install Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: install Slither
+        run: pip install slither-analyzer==0.9.2
       - name: check formatting
         run: forge fmt --check
       - name: make fuzz tests on master branch extensive
@@ -20,3 +27,5 @@ jobs:
         run: echo FOUNDRY_FUZZ_RUNS=50000 >> $GITHUB_ENV
       - name: run tests
         run: forge test
+      - name: run Slither
+        run: slither .
