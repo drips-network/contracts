@@ -303,7 +303,7 @@ contract SplitsTest is Test, Splits {
         SplitsReceiver[_MAX_SPLITS_RECEIVERS] memory receiversRaw,
         uint256 receiversLengthRaw,
         uint256 totalWeightRaw
-    ) internal returns (SplitsReceiver[] memory receivers) {
+    ) internal view returns (SplitsReceiver[] memory receivers) {
         for (uint256 i = 0; i < receiversRaw.length; i++) {
             for (uint256 j = i + 1; j < receiversRaw.length; j++) {
                 if (receiversRaw[i].userId > receiversRaw[j].userId) {
@@ -316,15 +316,14 @@ contract SplitsTest is Test, Splits {
             if (receiversRaw[i].userId != receiversRaw[unique].userId) unique++;
             receiversRaw[unique] = receiversRaw[i];
         }
-        receivers = new SplitsReceiver[](Test.bound(receiversLengthRaw, 0, unique));
+        receivers = new SplitsReceiver[](bound(receiversLengthRaw, 0, unique));
         uint256 weightSum = 0;
         for (uint256 i = 0; i < receivers.length; i++) {
             receivers[i] = receiversRaw[i];
             weightSum += receivers[i].weight;
         }
         if (weightSum == 0) weightSum = 1;
-        uint256 totalWeight =
-            Test.bound(totalWeightRaw, 0, (_TOTAL_SPLITS_WEIGHT - receivers.length));
+        uint256 totalWeight = bound(totalWeightRaw, 0, (_TOTAL_SPLITS_WEIGHT - receivers.length));
         uint256 usedWeight = 0;
         for (uint256 i = 0; i < receivers.length; i++) {
             uint256 usedTotalWeight = totalWeight * usedWeight / weightSum;

@@ -270,7 +270,7 @@ contract CallerTest is Test {
         uint256 value,
         uint256 nonce,
         uint256 deadline
-    ) internal returns (bytes32 r, bytes32 sv) {
+    ) internal view returns (bytes32 r, bytes32 sv) {
         bytes memory payload = abi.encode(
             callSignedTypeHash,
             vm.addr(privKey),

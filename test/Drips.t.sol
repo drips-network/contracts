@@ -1440,8 +1440,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     function sanitizeReceivers(
         DripsReceiver[_MAX_DRIPS_RECEIVERS] memory receiversRaw,
         uint256 receiversLengthRaw
-    ) internal returns (DripsReceiver[] memory receivers) {
-        receivers = new DripsReceiver[](Test.bound(receiversLengthRaw, 0, receiversRaw.length));
+    ) internal view returns (DripsReceiver[] memory receivers) {
+        receivers = new DripsReceiver[](bound(receiversLengthRaw, 0, receiversRaw.length));
         for (uint256 i = 0; i < receivers.length; i++) {
             receivers[i] = receiversRaw[i];
         }
@@ -1469,7 +1469,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint128 balance,
         DripsReceiver[100] memory sendersRaw,
         uint256 sendersLenRaw
-    ) internal returns (Sender[] memory senders) {
+    ) internal view returns (Sender[] memory senders) {
         uint256 sendersLen = bound(sendersLenRaw, 1, sendersRaw.length);
         senders = new Sender[](sendersLen);
         uint256 totalBalanceWeight = 0;
@@ -1516,13 +1516,14 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
 
     function sanitizeDripTime(uint256 dripTimeRaw, uint256 maxCycles)
         internal
+        view
         returns (uint256 dripTime)
     {
-        return Test.bound(dripTimeRaw, 0, cycleSecs * maxCycles);
+        return bound(dripTimeRaw, 0, cycleSecs * maxCycles);
     }
 
-    function sanitizeDripBalance(uint256 balanceRaw) internal returns (uint128 balance) {
-        return uint128(Test.bound(balanceRaw, 0, _MAX_TOTAL_DRIPS_BALANCE));
+    function sanitizeDripBalance(uint256 balanceRaw) internal view returns (uint128 balance) {
+        return uint128(bound(balanceRaw, 0, _MAX_TOTAL_DRIPS_BALANCE));
     }
 
     function testFundsDrippedToReceiversAddUp(
