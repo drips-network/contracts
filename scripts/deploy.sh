@@ -101,7 +101,7 @@ if [ -z "$DRIPS_HUB" ]; then
     fi
     echo "DRIPS_HUB_LOGIC '$DRIPS_HUB_LOGIC'"
     echo "DRIPS_HUB_ADMIN '$DRIPS_HUB_ADMIN'"
-    create "DripsHub" 'src/Upgradeable.sol:UpgradeableProxy' "$DRIPS_HUB_LOGIC" "$DRIPS_HUB_ADMIN"
+    create "DripsHub" 'src/Managed.sol:ManagedProxy' "$DRIPS_HUB_LOGIC" "$DRIPS_HUB_ADMIN"
     DRIPS_HUB=$DEPLOYED_ADDR
 fi
 
@@ -116,7 +116,7 @@ if [ -z "$ADDRESS_DRIVER" ]; then
             "$DRIPS_HUB" "$CALLER" "$ADDRESS_DRIVER_ID"
         ADDRESS_DRIVER_LOGIC=$DEPLOYED_ADDR
     fi
-    create "AddressDriver" 'src/Upgradeable.sol:UpgradeableProxy' \
+    create "AddressDriver" 'src/Managed.sol:ManagedProxy' \
         "$ADDRESS_DRIVER_LOGIC" "$ADDRESS_DRIVER_ADMIN"
     ADDRESS_DRIVER=$DEPLOYED_ADDR
 fi
@@ -133,8 +133,7 @@ if [ -z "$NFT_DRIVER" ]; then
             "$DRIPS_HUB" "$CALLER" "$NFT_DRIVER_ID"
         NFT_DRIVER_LOGIC=$DEPLOYED_ADDR
     fi
-    create "NFTDriver" 'src/Upgradeable.sol:UpgradeableProxy' \
-        "$NFT_DRIVER_LOGIC" "$NFT_DRIVER_ADMIN"
+    create "NFTDriver" 'src/Managed.sol:ManagedProxy' "$NFT_DRIVER_LOGIC" "$NFT_DRIVER_ADMIN"
     NFT_DRIVER=$DEPLOYED_ADDR
 fi
 assertIsDriver "NFTDriver" "$NFT_DRIVER"
@@ -150,7 +149,7 @@ if [ -z "$SPLITS_DRIVER" ]; then
             "$DRIPS_HUB" "$SPLITS_DRIVER_ID"
         SPLITS_DRIVER_LOGIC=$DEPLOYED_ADDR
     fi
-    create "ImmutableSplitsDriver" 'src/Upgradeable.sol:UpgradeableProxy' \
+    create "ImmutableSplitsDriver" 'src/Managed.sol:ManagedProxy' \
         "$SPLITS_DRIVER_LOGIC" "$SPLITS_DRIVER_ADMIN"
     SPLITS_DRIVER=$DEPLOYED_ADDR
 fi
