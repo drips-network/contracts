@@ -110,6 +110,7 @@ abstract contract Splits {
     /// @notice Calculate the result of splitting an amount using the current splits configuration.
     /// @param userId The user ID
     /// @param currReceivers The list of the user's current splits receivers.
+    /// It must be exactly the same as the last list set for the user with `_setSplits`.
     /// @param amount The amount being split.
     /// @return collectableAmt The amount made collectable for the user
     /// on top of what was collectable before.
@@ -137,6 +138,7 @@ abstract contract Splits {
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param currReceivers The list of the user's current splits receivers.
+    /// It must be exactly the same as the last list set for the user with `_setSplits`.
     /// @return collectableAmt The amount made collectable for the user
     /// on top of what was collectable before.
     /// @return splitAmt The amount split to the user's splits receivers

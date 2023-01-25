@@ -321,6 +321,7 @@ contract DripsHub is Managed, Drips, Splits {
     /// @notice Calculate the result of splitting an amount using the current splits configuration.
     /// @param userId The user ID
     /// @param currReceivers The list of the user's current splits receivers.
+    /// It must be exactly the same as the last list set for the user with `setSplits`.
     /// @param amount The amount being split.
     /// @return collectableAmt The amount made collectable for the user
     /// on top of what was collectable before.
@@ -349,6 +350,7 @@ contract DripsHub is Managed, Drips, Splits {
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param currReceivers The list of the user's current splits receivers.
+    /// It must be exactly the same as the last list set for the user with `setSplits`.
     /// @return collectableAmt The amount made collectable for the user
     /// on top of what was collectable before.
     /// @return splitAmt The amount split to the user's splits receivers
@@ -451,7 +453,8 @@ contract DripsHub is Managed, Drips, Splits {
     /// Tokens which rebase the holders' balances, collect taxes on transfers,
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
-    /// @param receivers The current drips receivers list
+    /// @param currReceivers The current drips receivers list.
+    /// It must be exactly the same as the last list set for the user with `setDrips`.
     /// @param timestamp The timestamps for which balance should be calculated.
     /// It can't be lower than the timestamp of the last call to `setDrips`.
     /// If it's bigger than `block.timestamp`, then it's a prediction assuming
@@ -460,10 +463,10 @@ contract DripsHub is Managed, Drips, Splits {
     function balanceAt(
         uint256 userId,
         IERC20 erc20,
-        DripsReceiver[] memory receivers,
+        DripsReceiver[] memory currReceivers,
         uint32 timestamp
     ) public view returns (uint128 balance) {
-        return Drips._balanceAt(userId, _assetId(erc20), receivers, timestamp);
+        return Drips._balanceAt(userId, _assetId(erc20), currReceivers, timestamp);
     }
 
     /// @notice Sets the user's drips configuration.
@@ -476,8 +479,8 @@ contract DripsHub is Managed, Drips, Splits {
     /// Tokens which rebase the holders' balances, collect taxes on transfers,
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
-    /// @param currReceivers The list of the drips receivers set in the last drips update
-    /// of the user.
+    /// @param currReceivers The current drips receivers list.
+    /// It must be exactly the same as the last list set for the user with `setDrips`.
     /// If this is the first update, pass an empty array.
     /// @param balanceDelta The drips balance change to be applied.
     /// Positive to add funds to the drips balance, negative to remove them.

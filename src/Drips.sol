@@ -524,7 +524,8 @@ abstract contract Drips {
     /// @notice User drips balance at a given timestamp
     /// @param userId The user ID
     /// @param assetId The used asset ID
-    /// @param receivers The current drips receivers list
+    /// @param currReceivers The current drips receivers list.
+    /// It must be exactly the same as the last list set for the user with `_setDrips`.
     /// @param timestamp The timestamps for which balance should be calculated.
     /// It can't be lower than the timestamp of the last call to `setDrips`.
     /// If it's bigger than `block.timestamp`, then it's a prediction assuming
@@ -533,13 +534,13 @@ abstract contract Drips {
     function _balanceAt(
         uint256 userId,
         uint256 assetId,
-        DripsReceiver[] memory receivers,
+        DripsReceiver[] memory currReceivers,
         uint32 timestamp
     ) internal view returns (uint128 balance) {
         DripsState storage state = _dripsStorage().states[assetId][userId];
         require(timestamp >= state.updateTime, "Timestamp before last drips update");
-        require(_hashDrips(receivers) == state.dripsHash, "Invalid current drips list");
-        return _balanceAt(state.balance, state.updateTime, state.maxEnd, receivers, timestamp);
+        require(_hashDrips(currReceivers) == state.dripsHash, "Invalid current drips list");
+        return _balanceAt(state.balance, state.updateTime, state.maxEnd, currReceivers, timestamp);
     }
 
     /// @notice Calculates the drips balance at a given timestamp.
@@ -576,8 +577,8 @@ abstract contract Drips {
     /// @notice Sets the user's drips configuration.
     /// @param userId The user ID
     /// @param assetId The used asset ID
-    /// @param currReceivers The list of the drips receivers set in the last drips update
-    /// of the user.
+    /// @param currReceivers The current drips receivers list.
+    /// It must be exactly the same as the last list set for the user with `_setDrips`.
     /// If this is the first update, pass an empty array.
     /// @param balanceDelta The drips balance change being applied.
     /// Positive when adding funds to the drips balance, negative to removing them.

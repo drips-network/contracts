@@ -87,8 +87,8 @@ contract AddressDriver is Managed, ERC2771Context {
     /// Tokens which rebase the holders' balances, collect taxes on transfers,
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
-    /// @param currReceivers The list of the drips receivers set in the last drips update
-    /// of the sender.
+    /// @param currReceivers The current drips receivers list.
+    /// It must be exactly the same as the last list set for the sender with `setDrips`.
     /// If this is the first update, pass an empty array.
     /// @param balanceDelta The drips balance change to be applied.
     /// Positive to add funds to the drips balance, negative to remove them.
