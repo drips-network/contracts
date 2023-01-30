@@ -1767,6 +1767,25 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         receiveDrips(receiver, 5);
     }
 
+    function testFundsFromBeforeDrippingStartedAreNotSqueezed() public {
+        skip(1);
+        setDrips(sender, 0, 10, recv(receiver, 1, block.timestamp - 1, 0), 10);
+        squeezeDrips(receiver, sender, hist(sender), 0);
+        skip(2);
+        drainBalance(sender, 8);
+        skipToCycleEnd();
+        receiveDrips(receiver, 2);
+    }
+
+    function testFundsFromAfterDripsEndAreNotSqueezed() public {
+        setDrips(sender, 0, 10, recv(receiver, 1, 0, 2), maxEndMax());
+        skip(3);
+        squeezeDrips(receiver, sender, hist(sender), 2);
+        drainBalance(sender, 8);
+        skipToCycleEnd();
+        receiveDrips(receiver, 0);
+    }
+
     function testFundsFromAfterDripsRunOutAreNotSqueezed() public {
         uint128 amt = 2;
         setDrips(sender, 0, amt, recv(receiver, 1), 2);

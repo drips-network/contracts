@@ -424,6 +424,7 @@ abstract contract Drips {
             if (drips.receivers.length != 0) {
                 uint32 squeezeStartCap = nextSqueezed[currCycleConfigs - i];
                 if (squeezeStartCap < _currCycleStart()) squeezeStartCap = _currCycleStart();
+                if (squeezeStartCap < drips.updateTime) squeezeStartCap = drips.updateTime;
                 if (squeezeStartCap < squeezeEndCap) {
                     squeezedRevIdxs[squeezedNum++] = i;
                     amt += _squeezedAmt(userId, drips, squeezeStartCap, squeezeEndCap);
