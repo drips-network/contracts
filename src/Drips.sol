@@ -90,8 +90,9 @@ library DripsConfigImpl {
     }
 
     /// @notice Compares two `DripsConfig`s.
-    /// First compares their `amtPerSec`s, then their `start`s and then their `duration`s.
-    function lt(DripsConfig config, DripsConfig otherConfig) internal pure returns (bool) {
+    /// First compares `dripId`s, then `amtPerSec`s, then `start`s and finally `duration`s.
+    /// @return isLower True if `config` is strictly lower than `otherConfig`.
+    function lt(DripsConfig config, DripsConfig otherConfig) internal pure returns (bool isLower) {
         return DripsConfig.unwrap(config) < DripsConfig.unwrap(otherConfig);
     }
 }

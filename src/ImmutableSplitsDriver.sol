@@ -8,6 +8,9 @@ import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 /// @notice A DripsHub driver implementing immutable splits configurations.
 /// Anybody can create a new user ID and configure its splits configuration,
 /// but nobody can update its configuration afterwards, it's immutable.
+/// This driver doesn't allow collecting funds for user IDs it manages, but anybody
+/// can receive drips and split for them on DripsHub, which is enough because the splits
+/// configurations always give away 100% funds, so there's never anything left to collect.
 contract ImmutableSplitsDriver is Managed {
     /// @notice The DripsHub address used by this driver.
     DripsHub public immutable dripsHub;

@@ -128,7 +128,8 @@ contract DripsHub is Managed, Drips, Splits {
     /// @notice Registers a driver.
     /// The driver is assigned a unique ID and a range of user IDs it can control.
     /// That range consists of all 2^224 user IDs with highest 32 bits equal to the driver ID.
-    /// Multiple drivers can have the same address, that address can then control all of them.
+    /// Every driver ID is assigned only to a single address,
+    /// but a single address can have multiple driver IDs assigned to it.
     /// @param driverAddr The address of the driver.
     /// @return driverId The registered driver ID.
     function registerDriver(address driverAddr) public whenNotPaused returns (uint32 driverId) {
