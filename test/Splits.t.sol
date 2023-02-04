@@ -2,7 +2,7 @@
 pragma solidity ^0.8.17;
 
 import {Test} from "forge-std/Test.sol";
-import {Splits, SplitsReceiver} from "src//Splits.sol";
+import {Splits, SplitsReceiver} from "src/Splits.sol";
 
 contract SplitsTest is Test, Splits {
     Splits.SplitsStorage internal s;
