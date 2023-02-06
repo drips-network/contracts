@@ -108,7 +108,7 @@ abstract contract Drips {
     /// @notice The additional decimals for all amtPerSec values.
     uint8 internal constant _AMT_PER_SEC_EXTRA_DECIMALS = 9;
     /// @notice The multiplier for all amtPerSec values. It's `10 ** _AMT_PER_SEC_EXTRA_DECIMALS`.
-    uint256 internal constant _AMT_PER_SEC_MULTIPLIER = 1_000_000_000;
+    uint160 internal constant _AMT_PER_SEC_MULTIPLIER = 1_000_000_000;
     /// @notice The total amount the contract can keep track of each asset.
     uint256 internal constant _MAX_TOTAL_DRIPS_BALANCE = uint128(type(int128).max);
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
@@ -364,7 +364,7 @@ abstract contract Drips {
             nextSqueezed[currCycleConfigs - revIdx] = _currTimestamp();
         }
         uint32 cycleStart = _currCycleStart();
-        _addDeltaRange(state, cycleStart, cycleStart + 1, -int256(amt * _AMT_PER_SEC_MULTIPLIER));
+        _addDeltaRange(state, cycleStart, cycleStart + 1, -int160(amt * _AMT_PER_SEC_MULTIPLIER));
         emit SqueezedDrips(userId, assetId, senderId, amt, squeezedHistoryHashes);
     }
 
@@ -1044,7 +1044,7 @@ abstract contract Drips {
         unchecked {
             // In order to set a delta on a specific timestamp it must be introduced in two cycles.
             // These formulas follow the logic from `_drippedAmt`, see it for more details.
-            int256 amtPerSecMultiplier = int256(_AMT_PER_SEC_MULTIPLIER);
+            int256 amtPerSecMultiplier = int160(_AMT_PER_SEC_MULTIPLIER);
             int256 fullCycle = (int256(uint256(_cycleSecs)) * amtPerSec) / amtPerSecMultiplier;
             // slither-disable-next-line weak-prng
             int256 nextCycle = (int256(timestamp % _cycleSecs) * amtPerSec) / amtPerSecMultiplier;
