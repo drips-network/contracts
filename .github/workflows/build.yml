@@ -19,8 +19,11 @@ jobs:
         if: ${{ github.event_name == 'push' }}
         run: echo FOUNDRY_FUZZ_RUNS=50000 >> $GITHUB_ENV
       - name: run tests
-        run: forge test --deny-warnings
+        run: forge test --deny-warnings --build-info
       - name: run Slither
         uses: crytic/slither-action@v0.2.0
         with:
           slither-version: '0.9.2'
+          # A workaround for https://github.com/crytic/slither-action/issues/49,
+          # requires passing `--build-info` to `forge test`
+          ignore-compile: true
