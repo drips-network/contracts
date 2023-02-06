@@ -60,6 +60,14 @@ contract NFTDriverTest is Test {
         erc20.approve(address(driver), type(uint256).max);
     }
 
+    function testName() public {
+        assertEq(driver.name(), "DripsHub identity", "Invalid token name");
+    }
+
+    function testSymbol() public {
+        assertEq(driver.symbol(), "DHI", "Invalid token symbol");
+    }
+
     function testApproveLetsUseIdentity() public {
         vm.prank(user);
         driver.approve(address(this), tokenIdUser);

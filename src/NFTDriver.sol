@@ -9,7 +9,8 @@ import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 import {
     ERC721,
     ERC721Burnable,
-    IERC721
+    IERC721,
+    IERC721Metadata
 } from "openzeppelin-contracts/token/ERC721/extensions/ERC721Burnable.sol";
 
 /// @notice A DripsHub driver implementing token-based user identification.
@@ -31,7 +32,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
     /// @param _driverId The driver ID to use when calling DripsHub.
     constructor(DripsHub _dripsHub, address forwarder, uint32 _driverId)
         ERC2771Context(forwarder)
-        ERC721("DripsHub identity", "DHI")
+        ERC721("", "")
     {
         dripsHub = _dripsHub;
         driverId = _driverId;
@@ -238,6 +239,16 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
         onlyHolder(tokenId)
     {
         dripsHub.emitUserMetadata(tokenId, userMetadata);
+    }
+
+    /// @inheritdoc IERC721Metadata
+    function name() public pure override returns (string memory) {
+        return "DripsHub identity";
+    }
+
+    /// @inheritdoc IERC721Metadata
+    function symbol() public pure override returns (string memory) {
+        return "DHI";
     }
 
     /// @inheritdoc ERC721Burnable
