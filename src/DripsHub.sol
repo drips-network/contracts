@@ -72,6 +72,8 @@ contract DripsHub is Managed, Drips, Splits {
     /// gain access to drips received during `T - cycleSecs` to `T - 1`.
     /// Always higher than 1.
     uint32 public immutable cycleSecs;
+    /// @notice The minimum amtPerSec of a drip. It's 1 token per cycle.
+    uint160 public immutable minAmtPerSec;
     /// @notice The ERC-1967 storage slot holding a single `DripsHubStorage` structure.
     bytes32 private immutable _dripsHubStorageSlot = _erc1967Slot("eip1967.dripsHub.storage");
 
@@ -115,6 +117,7 @@ contract DripsHub is Managed, Drips, Splits {
         Splits(_erc1967Slot("eip1967.splits.storage"))
     {
         cycleSecs = Drips._cycleSecs;
+        minAmtPerSec = Drips._minAmtPerSec;
     }
 
     /// @notice A modifier making functions callable only by the driver controlling the user ID.

@@ -158,7 +158,8 @@ contract NFTDriverTest is Test {
         // Top-up
 
         DripsReceiver[] memory receivers = new DripsReceiver[](1);
-        receivers[0] = DripsReceiver(tokenId2, DripsConfigImpl.create(0, 1, 0, 0));
+        receivers[0] =
+            DripsReceiver(tokenId2, DripsConfigImpl.create(0, dripsHub.minAmtPerSec(), 0, 0));
         uint256 balance = erc20.balanceOf(address(this));
 
         int128 realBalanceDelta = driver.setDrips(

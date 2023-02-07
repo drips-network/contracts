@@ -22,6 +22,14 @@ contract PseudoRandomUtils {
     }
 }
 
+contract AssertMinAmtPerSec is Test, Drips {
+    constructor(uint32 cycleSecs, uint160 expectedMinAmtPerSec) Drips(cycleSecs, 0) {
+        string memory assertMessage =
+            string.concat("Invalid minAmtPerSec for cycleSecs ", vm.toString(cycleSecs));
+        assertEq(_minAmtPerSec, expectedMinAmtPerSec, assertMessage);
+    }
+}
+
 contract DripsTest is Test, PseudoRandomUtils, Drips {
     bytes internal constant ERROR_NOT_SORTED = "Receivers not sorted";
     bytes internal constant ERROR_INVALID_DRIPS_LIST = "Invalid current drips list";
@@ -163,7 +171,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
 
     function genRandomRecv(
         uint256 amountReceiver,
-        uint128 maxAmtPerSec,
+        uint160 maxAmtPerSec,
         uint32 maxStart,
         uint32 maxDuration
     ) internal returns (DripsReceiver[] memory) {
@@ -177,7 +185,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
 
     function genRandomRecv(
         uint256 amountReceiver,
-        uint128 maxAmtPerSec,
+        uint160 maxAmtPerSec,
         uint32 maxStart,
         uint32 maxDuration,
         uint256 probMaxEnd,
@@ -186,7 +194,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         DripsReceiver[] memory receivers = new DripsReceiver[](amountReceiver);
         for (uint256 i = 0; i < amountReceiver; i++) {
             uint256 dripId = random(type(uint32).max + uint256(1));
-            uint256 amtPerSec = random(maxAmtPerSec) + 1;
+            uint256 amtPerSec = _minAmtPerSec + random(maxAmtPerSec - _minAmtPerSec);
             uint256 start = random(maxStart);
             if (start % 100 <= probStartNow) {
                 start = 0;
@@ -425,7 +433,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
             if (start == 0) {
                 start = updateTime;
             }
-            if (duration == 0) {
+            if (duration == 0 && maxEnd > start) {
                 duration = maxEnd - start;
             }
             // drips was in the past, not added
@@ -1213,8 +1221,28 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         emit log_named_uint(string.concat("Gas used for ", testName), gas);
     }
 
-    function testRejectsZeroAmtPerSecReceivers() public {
-        assertSetDripsReverts(sender, 0, 0, recv(receiver, 0), "Drips receiver amtPerSec is zero");
+    function testMinAmtPerSec() public {
+        new AssertMinAmtPerSec(2, 500_000_000);
+        new AssertMinAmtPerSec(3, 333_333_334);
+        new AssertMinAmtPerSec(10, 100_000_000);
+        new AssertMinAmtPerSec(11, 90_909_091);
+        new AssertMinAmtPerSec(999_999_999, 2);
+        new AssertMinAmtPerSec(1_000_000_000, 1);
+        new AssertMinAmtPerSec(1_000_000_001, 1);
+        new AssertMinAmtPerSec(2_000_000_000, 1);
+    }
+
+    function testRejectsTooLowAmtPerSecReceivers() public {
+        assertSetDripsReverts(
+            sender, 0, 0, recv(receiver, 0, _minAmtPerSec - 1), "Drips receiver amtPerSec too low"
+        );
+    }
+
+    function testAcceptMinAmtPerSecReceivers() public {
+        setDrips(sender, 0, 2, recv(receiver, 0, _minAmtPerSec), 3 * _cycleSecs - 1);
+        skipToCycleEnd();
+        drainBalance(sender, 1);
+        receiveDrips(receiver, 1);
     }
 
     function testDripsNotSortedByReceiverAreRejected() public {
@@ -1411,11 +1439,12 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     function testFuzzDripsReceiver(bytes32 seed) public {
         initSeed(seed);
         uint8 amountReceivers = 10;
-        uint128 maxAmtPerSec = 50;
+        uint160 maxAmtPerSec = _minAmtPerSec + 50;
         uint32 maxDuration = 100;
         uint32 maxStart = 100;
 
-        uint128 maxCosts = amountReceivers * maxAmtPerSec * maxDuration;
+        uint128 maxCosts =
+            amountReceivers * uint128(maxAmtPerSec / _AMT_PER_SEC_MULTIPLIER) * maxDuration;
         emit log_named_uint("topUp", maxCosts);
         uint128 maxAllDripsFinished = maxStart + maxDuration;
 
@@ -1452,7 +1481,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
             }
             DripsConfig cfg = receivers[i].config;
             uint160 amtPerSec = cfg.amtPerSec();
-            if (amtPerSec == 0) amtPerSec = 1;
+            if (amtPerSec < _minAmtPerSec) amtPerSec = _minAmtPerSec;
             receivers[i].config = DripsConfigImpl.create(i, amtPerSec, cfg.start(), cfg.duration());
         }
     }
@@ -1480,7 +1509,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
             senders[i].receivers = new DripsReceiver[](1);
             senders[i].receivers[0].userId = receiverId;
             uint160 amtPerSec = cfg.amtPerSec();
-            if (amtPerSec == 0) amtPerSec = 1;
+            if (amtPerSec < _minAmtPerSec) amtPerSec = _minAmtPerSec;
             senders[i].receivers[0].config =
                 DripsConfigImpl.create(i, amtPerSec, cfg.start(), cfg.duration());
         }

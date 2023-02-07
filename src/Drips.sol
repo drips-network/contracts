@@ -116,6 +116,9 @@ abstract contract Drips {
     /// Always higher than 1.
     // slither-disable-next-line naming-convention
     uint32 internal immutable _cycleSecs;
+    /// @notice The minimum amtPerSec of a drip. It's 1 token per cycle.
+    // slither-disable-next-line naming-convention
+    uint160 internal immutable _minAmtPerSec;
     /// @notice The storage slot holding a single `DripsStorage` structure.
     bytes32 private immutable _dripsStorageSlot;
 
@@ -220,6 +223,7 @@ abstract contract Drips {
     constructor(uint32 cycleSecs, bytes32 dripsStorageSlot) {
         require(cycleSecs > 1, "Cycle length too low");
         _cycleSecs = cycleSecs;
+        _minAmtPerSec = (_AMT_PER_SEC_MULTIPLIER + cycleSecs - 1) / cycleSecs;
         _dripsStorageSlot = dripsStorageSlot;
     }
 
@@ -798,7 +802,7 @@ abstract contract Drips {
         returns (uint256 newConfigsLen)
     {
         uint256 amtPerSec = receiver.config.amtPerSec();
-        require(amtPerSec != 0, "Drips receiver amtPerSec is zero");
+        require(amtPerSec >= _minAmtPerSec, "Drips receiver amtPerSec too low");
         (uint256 start, uint256 end) =
             _dripsRangeInFuture(receiver, _currTimestamp(), type(uint32).max);
         // slither-disable-next-line incorrect-equality,timestamp
@@ -916,12 +920,10 @@ abstract contract Drips {
                     _dripsRangeInFuture(currRecv, lastUpdate, currMaxEnd);
                 (uint32 newStart, uint32 newEnd) =
                     _dripsRangeInFuture(newRecv, _currTimestamp(), newMaxEnd);
-                {
-                    int256 amtPerSec = int256(uint256(currRecv.config.amtPerSec()));
-                    // Move the start and end times if updated
-                    _addDeltaRange(state, currStart, newStart, -amtPerSec);
-                    _addDeltaRange(state, currEnd, newEnd, amtPerSec);
-                }
+                int256 amtPerSec = int256(uint256(currRecv.config.amtPerSec()));
+                // Move the start and end times if updated
+                _addDeltaRange(state, currStart, newStart, -amtPerSec);
+                _addDeltaRange(state, currEnd, newEnd, amtPerSec);
                 // Ensure that the user receives the updated cycles
                 uint32 currStartCycle = _cycleOf(currStart);
                 uint32 newStartCycle = _cycleOf(newStart);
