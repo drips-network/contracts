@@ -29,7 +29,6 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     bytes internal constant ERROR_HISTORY_INVALID = "Invalid drips history";
     bytes internal constant ERROR_HISTORY_UNCLEAR = "Drips history entry with hash and receivers";
 
-    uint32 internal cycleSecs;
     // Keys are assetId and userId
     mapping(uint256 => mapping(uint256 => DripsReceiver[])) internal currReceiversStore;
     uint256 internal defaultAssetId = 1;
@@ -46,7 +45,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     uint256 internal receiver4 = 8;
 
     constructor() Drips(10, bytes32(uint256(1000))) {
-        cycleSecs = Drips._cycleSecs;
+        return;
     }
 
     function setUp() public {
@@ -54,7 +53,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function skipToCycleEnd() internal {
-        skip(cycleSecs - (block.timestamp % cycleSecs));
+        skip(_cycleSecs - (block.timestamp % _cycleSecs));
     }
 
     function skipTo(uint256 timestamp) internal {
@@ -744,7 +743,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function testDripsWithStartInTheFutureCycleCanBeMovedToAnEarlierOne() public {
-        setDrips(sender, 0, 1, recv(receiver, 1, block.timestamp + cycleSecs, 0), cycleSecs + 1);
+        setDrips(sender, 0, 1, recv(receiver, 1, block.timestamp + _cycleSecs, 0), _cycleSecs + 1);
         setDrips(sender, 1, 1, recv(receiver, 1), 1);
         skipToCycleEnd();
         receiveDrips(receiver, 1);
@@ -776,10 +775,10 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function testDoesNotCollectCyclesBeforeFirstDrip() public {
-        skip(cycleSecs / 2);
+        skip(_cycleSecs / 2);
         // Dripping starts in 2 cycles
         setDrips(
-            sender, 0, 1, recv(receiver, 1, block.timestamp + cycleSecs * 2, 0), cycleSecs * 2 + 1
+            sender, 0, 1, recv(receiver, 1, block.timestamp + _cycleSecs * 2, 0), _cycleSecs * 2 + 1
         );
         // The first cycle hasn't been dripping
         skipToCycleEnd();
@@ -796,10 +795,10 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function testAllowsReceivingWhileBeingDrippedTo() public {
-        setDrips(sender, 0, cycleSecs + 10, recv(receiver, 1), cycleSecs + 10);
+        setDrips(sender, 0, _cycleSecs + 10, recv(receiver, 1), _cycleSecs + 10);
         skipToCycleEnd();
         // Receiver had cycleSecs seconds paying 1 per second
-        receiveDrips(receiver, cycleSecs);
+        receiveDrips(receiver, _cycleSecs);
         skip(7);
         // Sender had cycleSecs + 7 seconds paying 1 per second
         drainBalance(sender, 3);
@@ -835,7 +834,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         // amtPerSec is valid, but amtPerCycle is over 2 times higher than int128.max.
         // The multiplier is chosen to prevent the amounts from being "clean" binary numbers
         // which could make the overflowing behavior correct by coincidence.
-        uint128 amtPerSec = (uint128(type(int128).max) / cycleSecs / 1000) * 2345;
+        uint128 amtPerSec = (uint128(type(int128).max) / _cycleSecs / 1000) * 2345;
         uint128 amt = amtPerSec * 4;
         setDrips(sender, 0, amt, recv(receiver, amtPerSec), 4);
         skipToCycleEnd();
@@ -846,7 +845,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         // amtPerSec is valid, but amtPerCycle is over 2 times higher than int128.max.
         // The multiplier is chosen to prevent the amounts from being "clean" binary numbers
         // which could make the overflowing behavior correct by coincidence.
-        uint128 amtPerSec = (uint128(type(int128).max) / cycleSecs / 1000) * 2345;
+        uint128 amtPerSec = (uint128(type(int128).max) / _cycleSecs / 1000) * 2345;
         // Dripping time in the current and future cycle
         uint128 secs = 2;
         uint128 amt = amtPerSec * secs * 2;
@@ -854,8 +853,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
             sender,
             0,
             amt,
-            recv(receiver, amtPerSec, block.timestamp + cycleSecs - secs, 0),
-            cycleSecs + 2
+            recv(receiver, amtPerSec, block.timestamp + _cycleSecs - secs, 0),
+            _cycleSecs + 2
         );
         skipToCycleEnd();
         assertReceiveDripsResult(receiver, amt / 2);
@@ -868,15 +867,15 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         // AmtPerCycle is 0.812.
         // The multiplier is chosen to prevent the amounts from being "clean" binary numbers
         // which could make the overflowing behavior correct by coincidence.
-        uint128 amtPerSec = (uint128(type(int128).max) / cycleSecs / 1000) * 812;
-        uint128 amt = amtPerSec * cycleSecs;
+        uint128 amtPerSec = (uint128(type(int128).max) / _cycleSecs / 1000) * 812;
+        uint128 amt = amtPerSec * _cycleSecs;
         // Set amtDeltas to +0.812 for the current cycle and -0.812 for the next.
-        setDrips(sender1, 0, amt, recv(receiver, amtPerSec), cycleSecs);
+        setDrips(sender1, 0, amt, recv(receiver, amtPerSec), _cycleSecs);
         // Alter amtDeltas by +0.0812 for the current cycle and -0.0812 for the next one
         // As an intermediate step when the drips start is applied at the middle of the cycle,
         // but the end not yet, apply +0.406 for the current cycle and -0.406 for the next one.
         // It makes amtDeltas reach +1.218 for the current cycle and -1.218 for the next one.
-        setDrips(sender2, 0, amtPerSec, recv(receiver, amtPerSec, cycleSecs / 2, 0), 1);
+        setDrips(sender2, 0, amtPerSec, recv(receiver, amtPerSec, _cycleSecs / 2, 0), 1);
         skipToCycleEnd();
         receiveDrips(receiver, amt + amtPerSec);
     }
@@ -931,8 +930,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         uint32 duration = maxDuration + 5;
         setDrips(sender, 0, duration, recv(receiver, 1, 0, duration), maxEndMax());
         skipToCycleEnd();
-        receiveDrips(receiver, cycleSecs);
-        setDrips(sender, duration - cycleSecs, 0, recv(), 0);
+        receiveDrips(receiver, _cycleSecs);
+        setDrips(sender, duration - _cycleSecs, 0, recv(), 0);
     }
 
     function testAllowsChangingReceiversWhileDripping() public {
@@ -966,8 +965,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function testDrippingFractions() public {
-        uint256 onePerCycle = Drips._AMT_PER_SEC_MULTIPLIER / cycleSecs + 1;
-        setDrips(sender, 0, 2, recv(receiver, 0, onePerCycle), cycleSecs * 3 - 1);
+        uint256 onePerCycle = Drips._AMT_PER_SEC_MULTIPLIER / _cycleSecs + 1;
+        setDrips(sender, 0, 2, recv(receiver, 0, onePerCycle), _cycleSecs * 3 - 1);
         skipToCycleEnd();
         receiveDrips(receiver, 1);
         skipToCycleEnd();
@@ -977,8 +976,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function testDrippingFractionsWithFundsEnoughForHalfCycle() public {
-        assertEq(cycleSecs, 10, "Unexpected cycle length");
-        uint256 onePerCycle = Drips._AMT_PER_SEC_MULTIPLIER / cycleSecs + 1;
+        assertEq(_cycleSecs, 10, "Unexpected cycle length");
+        uint256 onePerCycle = Drips._AMT_PER_SEC_MULTIPLIER / _cycleSecs + 1;
         // Full units are dripped on cycle timestamps 4 and 9
         setDrips(sender, 0, 1, recv(receiver, 0, onePerCycle * 2), 9);
         skipToCycleEnd();
@@ -989,8 +988,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function testDrippingFractionsWithFundsEnoughForOneCycle() public {
-        assertEq(cycleSecs, 10, "Unexpected cycle length");
-        uint256 onePerCycle = Drips._AMT_PER_SEC_MULTIPLIER / cycleSecs + 1;
+        assertEq(_cycleSecs, 10, "Unexpected cycle length");
+        uint256 onePerCycle = Drips._AMT_PER_SEC_MULTIPLIER / _cycleSecs + 1;
         // Full units are dripped on cycle timestamps 4 and 9
         setDrips(sender, 0, 2, recv(receiver, 0, onePerCycle * 2), 14);
         skipToCycleEnd();
@@ -1001,8 +1000,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function testDrippingFractionsWithFundsEnoughForTwoCycles() public {
-        assertEq(cycleSecs, 10, "Unexpected cycle length");
-        uint256 onePerCycle = Drips._AMT_PER_SEC_MULTIPLIER / cycleSecs + 1;
+        assertEq(_cycleSecs, 10, "Unexpected cycle length");
+        uint256 onePerCycle = Drips._AMT_PER_SEC_MULTIPLIER / _cycleSecs + 1;
         // Full units are dripped on cycle timestamps 4 and 9
         setDrips(sender, 0, 4, recv(receiver, 0, onePerCycle * 2), 24);
         skipToCycleEnd();
@@ -1016,7 +1015,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function testFractionsAreClearedOnCycleBoundary() public {
-        assertEq(cycleSecs, 10, "Unexpected cycle length");
+        assertEq(_cycleSecs, 10, "Unexpected cycle length");
         // Rate of 0.25 per second
         // Full units are dripped on cycle timestamps 3 and 7
         setDrips(sender, 0, 3, recv(receiver, 0, Drips._AMT_PER_SEC_MULTIPLIER / 4 + 1), 17);
@@ -1031,7 +1030,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function testFractionsAreAppliedOnCycleSecondsWhenTheyAddUpToWholeUnits() public {
-        assertEq(cycleSecs, 10, "Unexpected cycle length");
+        assertEq(_cycleSecs, 10, "Unexpected cycle length");
         // Rate of 0.25 per second
         // Full units are dripped on cycle timestamps 3 and 7
         setDrips(sender, 0, 3, recv(receiver, 0, Drips._AMT_PER_SEC_MULTIPLIER / 4 + 1), 17);
@@ -1044,7 +1043,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function testFractionsAreAppliedRegardlessOfStartTime() public {
-        assertEq(cycleSecs, 10, "Unexpected cycle length");
+        assertEq(_cycleSecs, 10, "Unexpected cycle length");
         skip(3);
         // Rate of 0.4 per second
         // Full units are dripped on cycle timestamps 3, 5 and 8
@@ -1054,7 +1053,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function testDripsWithFractionsCanBeSeamlesslyToppedUp() public {
-        assertEq(cycleSecs, 10, "Unexpected cycle length");
+        assertEq(_cycleSecs, 10, "Unexpected cycle length");
         // Rate of 0.25 per second
         DripsReceiver[] memory receivers = recv(receiver, 0, Drips._AMT_PER_SEC_MULTIPLIER / 4 + 1);
         // Full units are dripped on cycle timestamps 3 and 7
@@ -1072,7 +1071,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function testFractionsDoNotCumulateOnSender() public {
-        assertEq(cycleSecs, 10, "Unexpected cycle length");
+        assertEq(_cycleSecs, 10, "Unexpected cycle length");
         // Rate of 0.25 and 0.33 per second
         setDrips(
             sender,
@@ -1104,7 +1103,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function testFractionsDoNotCumulateOnReceiver() public {
-        assertEq(cycleSecs, 10, "Unexpected cycle length");
+        assertEq(_cycleSecs, 10, "Unexpected cycle length");
         // Rate of 0.25 per second or 2.5 per cycle
         setDrips(sender1, 0, 3, recv(receiver, 0, Drips._AMT_PER_SEC_MULTIPLIER / 4 + 1), 17);
         // Rate of 0.66 per second or 6.6 per cycle
@@ -1293,34 +1292,34 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
 
     function testReceiveNotAllDripsCycles() public {
         // Enough for 3 cycles
-        uint128 amt = cycleSecs * 3;
+        uint128 amt = _cycleSecs * 3;
         skipToCycleEnd();
-        setDrips(sender, 0, amt, recv(receiver, 1), cycleSecs * 3);
+        setDrips(sender, 0, amt, recv(receiver, 1), _cycleSecs * 3);
         skipToCycleEnd();
         skipToCycleEnd();
         skipToCycleEnd();
         receiveDrips({
             userId: receiver,
             maxCycles: 2,
-            expectedReceivedAmt: cycleSecs * 2,
+            expectedReceivedAmt: _cycleSecs * 2,
             expectedReceivedCycles: 2,
-            expectedAmtAfter: cycleSecs,
+            expectedAmtAfter: _cycleSecs,
             expectedCyclesAfter: 1
         });
-        receiveDrips(receiver, cycleSecs);
+        receiveDrips(receiver, _cycleSecs);
     }
 
     function testSenderCanDripToThemselves() public {
-        uint128 amt = cycleSecs * 3;
+        uint128 amt = _cycleSecs * 3;
         skipToCycleEnd();
-        setDrips(sender, 0, amt, recv(recv(sender, 1), recv(receiver, 2)), cycleSecs);
+        setDrips(sender, 0, amt, recv(recv(sender, 1), recv(receiver, 2)), _cycleSecs);
         skipToCycleEnd();
-        receiveDrips(sender, cycleSecs);
-        receiveDrips(receiver, cycleSecs * 2);
+        receiveDrips(sender, _cycleSecs);
+        receiveDrips(receiver, _cycleSecs * 2);
     }
 
     function testUpdateDefaultStartDrip() public {
-        setDrips(sender, 0, 3 * cycleSecs, recv(receiver, 1), 3 * cycleSecs);
+        setDrips(sender, 0, 3 * _cycleSecs, recv(receiver, 1), 3 * _cycleSecs);
         skipToCycleEnd();
         skipToCycleEnd();
         // remove drips after two cycles, no balance change
@@ -1328,7 +1327,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
 
         skipToCycleEnd();
         // only two cycles should be dripped
-        receiveDrips(receiver, 2 * cycleSecs);
+        receiveDrips(receiver, 2 * _cycleSecs);
     }
 
     function testDripsOfDifferentAssetsAreIndependent() public {
@@ -1337,26 +1336,26 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         setDrips(
             sender,
             0,
-            9 * cycleSecs,
+            9 * _cycleSecs,
             recv(recv(receiver1, 4), recv(receiver2, 2)),
-            cycleSecs + cycleSecs / 2
+            _cycleSecs + _cycleSecs / 2
         );
 
         skipToCycleEnd();
         // Covers 2 cycles of dripping
         assetId = otherAssetId;
-        setDrips(sender, 0, 6 * cycleSecs, recv(receiver1, 3), cycleSecs * 2);
+        setDrips(sender, 0, 6 * _cycleSecs, recv(receiver1, 3), _cycleSecs * 2);
 
         skipToCycleEnd();
         // receiver1 had 1.5 cycles of 4 per second
         assetId = defaultAssetId;
-        receiveDrips(receiver1, 6 * cycleSecs);
+        receiveDrips(receiver1, 6 * _cycleSecs);
         // receiver1 had 1.5 cycles of 2 per second
         assetId = defaultAssetId;
-        receiveDrips(receiver2, 3 * cycleSecs);
+        receiveDrips(receiver2, 3 * _cycleSecs);
         // receiver1 had 1 cycle of 3 per second
         assetId = otherAssetId;
-        receiveDrips(receiver1, 3 * cycleSecs);
+        receiveDrips(receiver1, 3 * _cycleSecs);
         // receiver2 received nothing
         assetId = otherAssetId;
         receiveDrips(receiver2, 0);
@@ -1370,7 +1369,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         receiveDrips(receiver2, 0);
         // receiver1 had 1 cycle of 3 per second
         assetId = otherAssetId;
-        receiveDrips(receiver1, 3 * cycleSecs);
+        receiveDrips(receiver1, 3 * _cycleSecs);
         // receiver2 received nothing
         assetId = otherAssetId;
         receiveDrips(receiver2, 0);
@@ -1519,7 +1518,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         view
         returns (uint256 dripTime)
     {
-        return bound(dripTimeRaw, 0, cycleSecs * maxCycles);
+        return bound(dripTimeRaw, 0, _cycleSecs * maxCycles);
     }
 
     function sanitizeDripBalance(uint256 balanceRaw) internal view returns (uint128 balance) {
@@ -1693,8 +1692,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function testSqueezeDrips() public {
-        uint128 amt = cycleSecs;
-        setDrips(sender, 0, amt, recv(receiver, 1), cycleSecs);
+        uint128 amt = _cycleSecs;
+        setDrips(sender, 0, amt, recv(receiver, 1), _cycleSecs);
         skip(2);
         squeezeDrips(receiver, sender, hist(sender), 2);
         skipToCycleEnd();
@@ -1702,8 +1701,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function testSqueezeDripsRevertsWhenInvalidHistory() public {
-        uint128 amt = cycleSecs;
-        setDrips(sender, 0, amt, recv(receiver, 1), cycleSecs);
+        uint128 amt = _cycleSecs;
+        setDrips(sender, 0, amt, recv(receiver, 1), _cycleSecs);
         DripsHistory[] memory history = hist(sender);
         history[0].maxEnd += 1;
         skip(2);
@@ -1711,8 +1710,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function testSqueezeDripsRevertsWhenHistoryEntryContainsReceiversAndHash() public {
-        uint128 amt = cycleSecs;
-        setDrips(sender, 0, amt, recv(receiver, 1), cycleSecs);
+        uint128 amt = _cycleSecs;
+        setDrips(sender, 0, amt, recv(receiver, 1), _cycleSecs);
         DripsHistory[] memory history = hist(sender);
         history[0].dripsHash = Drips._hashDrips(history[0].receivers);
         skip(2);
@@ -1720,8 +1719,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function testFundsAreNotSqueezeTwice() public {
-        uint128 amt = cycleSecs;
-        setDrips(sender, 0, amt, recv(receiver, 1), cycleSecs);
+        uint128 amt = _cycleSecs;
+        setDrips(sender, 0, amt, recv(receiver, 1), _cycleSecs);
         DripsHistory[] memory history = hist(sender);
         skip(1);
         squeezeDrips(receiver, sender, history, 1);
@@ -1746,8 +1745,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function testFundsFromFinishedCyclesAreNotSqueezed() public {
-        uint128 amt = cycleSecs * 2;
-        setDrips(sender, 0, amt, recv(receiver, 1), cycleSecs * 2);
+        uint128 amt = _cycleSecs * 2;
+        setDrips(sender, 0, amt, recv(receiver, 1), _cycleSecs * 2);
         skipToCycleEnd();
         skip(2);
         squeezeDrips(receiver, sender, hist(sender), 2);
@@ -1796,8 +1795,8 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function testOnFirstSecondOfCycleNoFundsCanBeSqueezed() public {
-        uint128 amt = cycleSecs * 2;
-        setDrips(sender, 0, amt, recv(receiver, 1), cycleSecs * 2);
+        uint128 amt = _cycleSecs * 2;
+        setDrips(sender, 0, amt, recv(receiver, 1), _cycleSecs * 2);
         skipToCycleEnd();
         squeezeDrips(receiver, sender, hist(sender), 0);
         skipToCycleEnd();
@@ -1970,7 +1969,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         skip(1);
         // Set the first element of the next squeezed table
         squeezeDrips(receiver, sender, history, 2);
-        setDrips(sender, 0, cycleSecs + 1, recv(receiver, 1), cycleSecs + 1);
+        setDrips(sender, 0, _cycleSecs + 1, recv(receiver, 1), _cycleSecs + 1);
         history = hist(history, sender);
         skip(1);
         // Set the second element of the next squeezed table

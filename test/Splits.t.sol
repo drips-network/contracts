@@ -5,7 +5,6 @@ import {Test} from "forge-std/Test.sol";
 import {Splits, SplitsReceiver} from "src/Splits.sol";
 
 contract SplitsTest is Test, Splits {
-    Splits.SplitsStorage internal s;
     // Keys is user ID
     mapping(uint256 => SplitsReceiver[]) internal currSplitsReceivers;
 
