@@ -68,6 +68,10 @@ contract DripsHub is Managed, Drips, Splits {
     /// @notice The total amount the contract can store of each token.
     /// It's the minimum of _MAX_TOTAL_DRIPS_BALANCE and _MAX_TOTAL_SPLITS_BALANCE.
     uint256 public constant MAX_TOTAL_BALANCE = _MAX_TOTAL_DRIPS_BALANCE;
+    /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
+    /// gain access to drips received during `T - cycleSecs` to `T - 1`.
+    /// Always higher than 1.
+    uint32 public immutable cycleSecs;
     /// @notice The ERC-1967 storage slot holding a single `DripsHubStorage` structure.
     bytes32 private immutable _dripsHubStorageSlot = _erc1967Slot("eip1967.dripsHub.storage");
 
@@ -110,7 +114,7 @@ contract DripsHub is Managed, Drips, Splits {
         Drips(cycleSecs_, _erc1967Slot("eip1967.drips.storage"))
         Splits(_erc1967Slot("eip1967.splits.storage"))
     {
-        return;
+        cycleSecs = Drips._cycleSecs;
     }
 
     /// @notice A modifier making functions callable only by the driver controlling the user ID.
@@ -160,15 +164,6 @@ contract DripsHub is Managed, Drips, Splits {
     /// @return driverId The next driver ID.
     function nextDriverId() public view returns (uint32 driverId) {
         return _dripsHubStorage().nextDriverId;
-    }
-
-    /// @notice Returns the cycle length in seconds.
-    /// On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
-    /// gain access to drips received during `T - cycleSecs` to `T - 1`.
-    /// Always higher than 1.
-    /// @return cycleSecs_ The cycle length in seconds.
-    function cycleSecs() public view returns (uint32 cycleSecs_) {
-        return Drips._cycleSecs;
     }
 
     /// @notice Returns the total amount currently stored in DripsHub of the given token.
