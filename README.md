@@ -10,6 +10,11 @@ You can install it using [foundryup](https://github.com/foundry-rs/foundry#insta
 The codebase is statically checked with [Slither](https://github.com/crytic/slither) version 0.9.2.
 Here are the [installation instructions](https://github.com/crytic/slither#how-to-install).
 
+## Install dependencies
+```bash
+forge install
+```
+
 ## Format code
 ```bash
 forge fmt
