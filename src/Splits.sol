@@ -147,8 +147,7 @@ abstract contract Splits {
         returns (uint128 collectableAmt, uint128 splitAmt)
     {
         _assertCurrSplits(userId, currReceivers);
-        mapping(uint256 => SplitsState) storage splitsStates = _splitsStorage().splitsStates;
-        SplitsBalance storage balance = splitsStates[userId].balances[assetId];
+        SplitsBalance storage balance = _splitsStorage().splitsStates[userId].balances[assetId];
 
         collectableAmt = balance.splittable;
         if (collectableAmt == 0) {

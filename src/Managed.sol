@@ -3,7 +3,6 @@ pragma solidity ^0.8.17;
 
 import {UUPSUpgradeable} from "openzeppelin-contracts/proxy/utils/UUPSUpgradeable.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 import {EnumerableSet} from "openzeppelin-contracts/utils/structs/EnumerableSet.sol";
 
 using EnumerableSet for EnumerableSet.AddressSet;

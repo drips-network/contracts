@@ -1,10 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.17;
 
-import {DripsHistory, DripsHub, DripsReceiver, SplitsReceiver, UserMetadata} from "./DripsHub.sol";
+import {
+    DripsHub,
+    DripsReceiver,
+    IERC20,
+    SafeERC20,
+    SplitsReceiver,
+    UserMetadata
+} from "./DripsHub.sol";
 import {Managed} from "./Managed.sol";
 import {Context, ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
-import {IERC20, SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 import {
     ERC721,

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.17;
 
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
-import {ECDSA, EIP712} from "openzeppelin-contracts/utils/cryptography/draft-EIP712.sol";
+import {ECDSA, EIP712} from "openzeppelin-contracts/utils/cryptography/EIP712.sol";
 import {ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
 import {EnumerableSet} from "openzeppelin-contracts/utils/structs/EnumerableSet.sol";
 
@@ -204,6 +204,6 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
         returns (bytes memory returnData)
     {
         // Encode the message sender as per ERC-2771
-        return Address.functionCallWithValue(to, abi.encodePacked(data, sender), value);
+        return Address.functionCallWithValue(to, bytes.concat(data, bytes20(sender)), value);
     }
 }

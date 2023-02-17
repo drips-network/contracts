@@ -288,11 +288,13 @@ abstract contract Drips {
             receivableCycles = toCycle - fromCycle - maxCycles;
             toCycle -= receivableCycles;
         }
-        DripsState storage state = _dripsStorage().states[assetId][userId];
+        mapping(uint32 => AmtDelta) storage amtDeltas =
+            _dripsStorage().states[assetId][userId].amtDeltas;
         for (uint32 cycle = fromCycle; cycle < toCycle; cycle++) {
-            amtPerCycle += state.amtDeltas[cycle].thisCycle;
+            AmtDelta memory amtDelta = amtDeltas[cycle];
+            amtPerCycle += amtDelta.thisCycle;
             receivedAmt += uint128(amtPerCycle);
-            amtPerCycle += state.amtDeltas[cycle].nextCycle;
+            amtPerCycle += amtDelta.nextCycle;
         }
     }
 
@@ -545,8 +547,8 @@ abstract contract Drips {
     ) internal view returns (uint128 balance) {
         DripsState storage state = _dripsStorage().states[assetId][userId];
         require(timestamp >= state.updateTime, "Timestamp before last drips update");
-        require(_hashDrips(currReceivers) == state.dripsHash, "Invalid current drips list");
-        return _balanceAt(state.balance, state.updateTime, state.maxEnd, currReceivers, timestamp);
+        _verifyDripsReceivers(currReceivers, state);
+        return _calcBalance(state.balance, state.updateTime, state.maxEnd, currReceivers, timestamp);
     }
 
     /// @notice Calculates the drips balance at a given timestamp.
@@ -559,7 +561,7 @@ abstract contract Drips {
     /// If it's bigger than `block.timestamp`, then it's a prediction assuming
     /// that `setDrips` won't be called before `timestamp`.
     /// @return balance The user balance on `timestamp`
-    function _balanceAt(
+    function _calcBalance(
         uint128 lastBalance,
         uint32 lastUpdate,
         uint32 maxEnd,
@@ -625,15 +627,14 @@ abstract contract Drips {
         uint32 maxEndHint2
     ) internal returns (int128 realBalanceDelta) {
         DripsState storage state = _dripsStorage().states[assetId][userId];
-        // slither-disable-next-line timestamp
-        require(_hashDrips(currReceivers) == state.dripsHash, "Invalid current drips list");
+        _verifyDripsReceivers(currReceivers, state);
         uint32 lastUpdate = state.updateTime;
         uint128 newBalance;
         uint32 newMaxEnd;
         {
             uint32 currMaxEnd = state.maxEnd;
             int128 currBalance = int128(
-                _balanceAt(state.balance, lastUpdate, currMaxEnd, currReceivers, _currTimestamp())
+                _calcBalance(state.balance, lastUpdate, currMaxEnd, currReceivers, _currTimestamp())
             );
             realBalanceDelta = balanceDelta;
             // Cap `realBalanceDelta` at withdrawal of the entire `currBalance`
@@ -673,6 +674,16 @@ abstract contract Drips {
                 emit DripsReceiverSeen(newDripsHash, receiver.userId, receiver.config);
             }
         }
+    }
+
+    /// @notice Verifies that the provided list of receivers is currently active for the user.
+    /// @param currReceivers The verified list of receivers.
+    /// @param state The user's state.
+    function _verifyDripsReceivers(DripsReceiver[] memory currReceivers, DripsState storage state)
+        private
+        view
+    {
+        require(_hashDrips(currReceivers) == state.dripsHash, "Invalid current drips list");
     }
 
     /// @notice Calculates the maximum end time of drips.
@@ -956,7 +967,8 @@ abstract contract Drips {
                 // Ensure that the user receives the updated cycles
                 uint32 startCycle = _cycleOf(start);
                 // slither-disable-next-line timestamp
-                if (state.nextReceivableCycle == 0 || state.nextReceivableCycle > startCycle) {
+                uint32 nextReceivableCycle = state.nextReceivableCycle;
+                if (nextReceivableCycle == 0 || nextReceivableCycle > startCycle) {
                     state.nextReceivableCycle = startCycle;
                 }
             } else {

@@ -88,6 +88,7 @@ then
 fi
 
 # Deploy the contracts
+forge install
 
 if [ -z "$CALLER" ]; then
     create "Caller" 'src/Caller.sol:Caller' ""

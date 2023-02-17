@@ -802,6 +802,17 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
         receiveDrips(receiver, 1);
     }
 
+    function testFirstCollectableCycleCanBeMovedEarlier() public {
+        // Dripping start in the next cycle
+        setDrips(sender1, 0, 1, recv(receiver, 1, block.timestamp + _cycleSecs, 0), _cycleSecs + 1);
+        // Dripping start in the current cycle
+        setDrips(sender2, 0, 2, recv(receiver, 2), 1);
+        skipToCycleEnd();
+        receiveDrips(receiver, 2);
+        skipToCycleEnd();
+        receiveDrips(receiver, 1);
+    }
+
     function testAllowsReceivingWhileBeingDrippedTo() public {
         setDrips(sender, 0, _cycleSecs + 10, recv(receiver, 1), _cycleSecs + 10);
         skipToCycleEnd();

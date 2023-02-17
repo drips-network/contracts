@@ -38,10 +38,10 @@ contract AddressDriverTest is Test {
         // Make AddressDriver's driver ID non-0 to test if it's respected by AddressDriver
         dripsHub.registerDriver(address(0));
         dripsHub.registerDriver(address(0));
-        uint32 nftDriverId = dripsHub.registerDriver(address(this));
-        AddressDriver driverLogic = new AddressDriver(dripsHub, address(caller), nftDriverId);
+        uint32 driverId = dripsHub.registerDriver(address(this));
+        AddressDriver driverLogic = new AddressDriver(dripsHub, address(caller), driverId);
         driver = AddressDriver(address(new ManagedProxy(driverLogic, admin)));
-        dripsHub.updateDriverAddress(nftDriverId, address(driver));
+        dripsHub.updateDriverAddress(driverId, address(driver));
 
         thisId = driver.calcUserId(address(this));
         userId = driver.calcUserId(user);
