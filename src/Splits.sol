@@ -211,6 +211,13 @@ abstract contract Splits {
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
     /// Each splits receiver will be getting `weight / _TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the user.
+    /// If the sum of weights of all receivers is less than `_TOTAL_SPLITS_WEIGHT`,
+    /// some funds won't be split, but they will be left for the user to collect.
+    /// It's valid to include the user's own `userId` in the list of receivers,
+    /// but funds split to themselves return to their splittable balance and are not collectable.
+    /// This is usually unwanted, because if splitting is repeated,
+    /// funds split to themselves will be again split using the current configuration.
+    /// Splitting 100% to self effectively blocks splitting unless the configuration is updated.
     function _setSplits(uint256 userId, SplitsReceiver[] memory receivers) internal {
         SplitsState storage state = _splitsStorage().splitsStates[userId];
         bytes32 newSplitsHash = _hashSplits(receivers);

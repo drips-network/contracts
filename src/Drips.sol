@@ -527,7 +527,7 @@ abstract contract Drips {
             (state.dripsHash, state.dripsHistoryHash, state.updateTime, state.balance, state.maxEnd);
     }
 
-    /// @notice User drips balance at a given timestamp
+    /// @notice User's drips balance at a given timestamp
     /// @param userId The user ID
     /// @param assetId The used asset ID
     /// @param currReceivers The current drips receivers list.
@@ -794,7 +794,7 @@ abstract contract Drips {
     /// @notice Preprocess and add a drips receiver to the list of configurations.
     /// @param configs The list of drips configurations
     /// @param configsLen The length of `configs`
-    /// @param receiver The added drips receivers.
+    /// @param receiver The added drips receiver.
     /// @return newConfigsLen The new length of `configs`
     function _addConfig(uint256[] memory configs, uint256 configsLen, DripsReceiver memory receiver)
         private
@@ -921,7 +921,10 @@ abstract contract Drips {
                 (uint32 newStart, uint32 newEnd) =
                     _dripsRangeInFuture(newRecv, _currTimestamp(), newMaxEnd);
                 int256 amtPerSec = int256(uint256(currRecv.config.amtPerSec()));
-                // Move the start and end times if updated
+                // Move the start and end times if updated. This has the same effects as calling
+                // _addDeltaRange(state, currStart, currEnd, -amtPerSec);
+                // _addDeltaRange(state, newStart, newEnd, amtPerSec);
+                // but it allows skipping storage access if there's no change to the starts or ends.
                 _addDeltaRange(state, currStart, newStart, -amtPerSec);
                 _addDeltaRange(state, currEnd, newEnd, amtPerSec);
                 // Ensure that the user receives the updated cycles
@@ -1062,7 +1065,7 @@ abstract contract Drips {
 
     /// @notice Checks if two receivers fulfil the sortedness requirement of the receivers list.
     /// @param prev The previous receiver
-    /// @param prev The next receiver
+    /// @param next The next receiver
     function _isOrdered(DripsReceiver memory prev, DripsReceiver memory next)
         private
         pure
@@ -1094,7 +1097,7 @@ abstract contract Drips {
     /// @param amtPerSec The dripping rate
     /// @param start The dripping start time
     /// @param end The dripping end time
-    /// @param amt The dripped amount
+    /// @return amt The dripped amount
     function _drippedAmt(uint256 amtPerSec, uint256 start, uint256 end)
         private
         view

@@ -15,7 +15,7 @@ import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol"
 
 /// @notice A DripsHub driver implementing address-based user identification.
 /// Each address can use `AddressDriver` to control a single user ID derived from that address.
-/// No registration is required, an `AddressDriver`-based user ID for each address is know upfront.
+/// No registration is required, an `AddressDriver`-based user ID for each address is known upfront.
 contract AddressDriver is Managed, ERC2771Context {
     using SafeERC20 for IERC20;
 
@@ -51,7 +51,7 @@ contract AddressDriver is Managed, ERC2771Context {
     /// and transfers them out of the drips hub contract.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
-    /// an address, then later the same amount must be transferrable from that address.
+    /// an address, then later the same amount must be transferable from that address.
     /// Tokens which rebase the holders' balances, collect taxes on transfers,
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
@@ -63,12 +63,12 @@ contract AddressDriver is Managed, ERC2771Context {
     }
 
     /// @notice Gives funds from the message sender to the receiver.
-    /// The receiver can collect them immediately.
+    /// The receiver can split and collect them immediately.
     /// Transfers the funds to be given from the message sender's wallet to the drips hub contract.
     /// @param receiver The receiver
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
-    /// an address, then later the same amount must be transferrable from that address.
+    /// an address, then later the same amount must be transferable from that address.
     /// Tokens which rebase the holders' balances, collect taxes on transfers,
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
@@ -80,10 +80,10 @@ contract AddressDriver is Managed, ERC2771Context {
 
     /// @notice Sets the message sender's drips configuration.
     /// Transfers funds between the message sender's wallet and the drips hub contract
-    /// to fulfill the change of the drips balance.
+    /// to fulfil the change of the drips balance.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
-    /// an address, then later the same amount must be transferrable from that address.
+    /// an address, then later the same amount must be transferable from that address.
     /// Tokens which rebase the holders' balances, collect taxes on transfers,
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
@@ -155,6 +155,13 @@ contract AddressDriver is Managed, ERC2771Context {
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
     /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the user.
+    /// If the sum of weights of all receivers is less than `_TOTAL_SPLITS_WEIGHT`,
+    /// some funds won't be split, but they will be left for the user to collect.
+    /// It's valid to include the user's own `userId` in the list of receivers,
+    /// but funds split to themselves return to their splittable balance and are not collectable.
+    /// This is usually unwanted, because if splitting is repeated,
+    /// funds split to themselves will be again split using the current configuration.
+    /// Splitting 100% to self effectively blocks splitting unless the configuration is updated.
     function setSplits(SplitsReceiver[] calldata receivers) public whenNotPaused {
         dripsHub.setSplits(callerUserId(), receivers);
     }

@@ -151,7 +151,7 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     }
 
     /// @notice Makes a call on behalf of the `sender`.
-    /// Requires a `sender`'s signature of an ERC-721 message approving the call.
+    /// Requires a `sender`'s signature of an ERC-712 message approving the call.
     /// Reverts if the call reverts or the called address is not a smart contract.
     /// This function is payable, any Ether sent to it will be passed in the call.
     /// @param sender The sender to be set as the message sender of the call as per ERC-2771.
