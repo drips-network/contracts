@@ -4,8 +4,7 @@ pragma solidity ^0.8.17;
 import {Drips, DripsConfig, DripsHistory, DripsConfigImpl, DripsReceiver} from "./Drips.sol";
 import {Managed} from "./Managed.sol";
 import {Splits, SplitsReceiver} from "./Splits.sol";
-import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20, SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
 using SafeERC20 for IERC20;
 
@@ -90,6 +89,12 @@ contract DripsHub is Managed, Drips, Splits {
         uint32 indexed driverId, address indexed oldDriverAddr, address indexed newDriverAddr
     );
 
+    /// @notice Emitted when funds are withdrawn.
+    /// @param erc20 The used ERC-20 token.
+    /// @param receiver The address that the funds are sent to.
+    /// @param amt The withdrawn amount.
+    event Withdrawn(IERC20 indexed erc20, address indexed receiver, uint256 amt);
+
     /// @notice Emitted by the user to broadcast metadata.
     /// The key and the value are not standardized by the protocol, it's up to the user
     /// to establish and follow conventions to ensure compatibility with the consumers.
@@ -138,6 +143,8 @@ contract DripsHub is Managed, Drips, Splits {
     /// Every driver ID is assigned only to a single address,
     /// but a single address can have multiple driver IDs assigned to it.
     /// @param driverAddr The address of the driver.
+    /// It should be a smart contract capable of dealing with the DripsHub API.
+    /// It shouldn't be an EOA because the API requires making multiple calls per transaction.
     /// @return driverId The registered driver ID.
     function registerDriver(address driverAddr) public whenNotPaused returns (uint32 driverId) {
         DripsHubStorage storage dripsHubStorage = _dripsHubStorage();
@@ -157,6 +164,8 @@ contract DripsHub is Managed, Drips, Splits {
     /// @notice Updates the driver address. Must be called from the current driver address.
     /// @param driverId The driver ID.
     /// @param newDriverAddr The new address of the driver.
+    /// It should be a smart contract capable of dealing with the DripsHub API.
+    /// It shouldn't be an EOA because the API requires making multiple calls per transaction.
     function updateDriverAddress(uint32 driverId, address newDriverAddr) public whenNotPaused {
         _assertCallerIsDriver(driverId);
         _dripsHubStorage().driverAddresses[driverId] = newDriverAddr;
@@ -179,6 +188,41 @@ contract DripsHub is Managed, Drips, Splits {
     /// @return balance The balance of the token.
     function totalBalance(IERC20 erc20) public view returns (uint256 balance) {
         return _dripsHubStorage().totalBalances[erc20];
+    }
+
+    /// @notice Transfers withdrawable funds to an address.
+    /// The withdrawable funds are held by the DripsHub contract,
+    /// but not used in the protocol, so they are free to be transferred out.
+    /// Anybody can call `withdraw`, so all withdrawable funds should be withdrawn
+    /// or used in the protocol before any 3rd parties have a chance to do that.
+    /// @param erc20 The used ERC-20 token.
+    /// It must preserve amounts, so if some amount of tokens is transferred to
+    /// an address, then later the same amount must be transferable from that address.
+    /// Tokens which rebase the holders' balances, collect taxes on transfers,
+    /// or impose any restrictions on holding or transferring tokens are not supported.
+    /// If you use such tokens in the protocol, they can get stuck or lost.
+    /// @param receiver The address to send withdrawn funds to.
+    /// @param amt The withdrawn amount.
+    /// It must be at most the difference between the balance of the token
+    /// held by the DripsHub contract address and the total balance managed by the protocol,
+    /// or in other words `erc20.balanceOf(address(dripsHub)) - dripsHub.totalBalance(erc20)`.
+    function withdraw(IERC20 erc20, address receiver, uint256 amt) public {
+        uint256 withdrawable = erc20.balanceOf(address(this)) - totalBalance(erc20);
+        require(amt <= withdrawable, "Withdrawal amount too high");
+        emit Withdrawn(erc20, receiver, amt);
+        erc20.safeTransfer(receiver, amt);
+    }
+
+    function _increaseTotalBalance(IERC20 erc20, uint128 amt) internal {
+        if (amt == 0) return;
+        uint256 newBalance = _dripsHubStorage().totalBalances[erc20] += amt;
+        require(newBalance <= MAX_TOTAL_BALANCE, "Total balance too high");
+        require(newBalance <= erc20.balanceOf(address(this)), "ERC-20 balance too low");
+    }
+
+    function _decreaseTotalBalance(IERC20 erc20, uint128 amt) internal {
+        if (amt == 0) return;
+        _dripsHubStorage().totalBalances[erc20] -= amt;
     }
 
     /// @notice Counts cycles from which drips can be collected.
@@ -374,8 +418,9 @@ contract DripsHub is Managed, Drips, Splits {
         return Splits._collectable(userId, _assetId(erc20));
     }
 
-    /// @notice Collects user's received already split funds
-    /// and transfers them out of the drips hub contract to msg.sender.
+    /// @notice Collects user's received already split funds and makes them withdrawable.
+    /// Anybody can call `withdraw`, so all withdrawable funds should be withdrawn
+    /// or used in the protocol before any 3rd parties have a chance to do that.
     /// @param userId The user ID
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
@@ -392,12 +437,13 @@ contract DripsHub is Managed, Drips, Splits {
     {
         amt = Splits._collect(userId, _assetId(erc20));
         _decreaseTotalBalance(erc20, amt);
-        erc20.safeTransfer(msg.sender, amt);
     }
 
     /// @notice Gives funds from the user to the receiver.
     /// The receiver can split and collect them immediately.
-    /// Transfers the funds to be given from the user's wallet to the drips hub contract.
+    /// Requires that the tokens used to give are already sent to DripsHub and are withdrawable.
+    /// Anybody can call `withdraw`, so all withdrawable funds should be withdrawn
+    /// or used in the protocol before any 3rd parties have a chance to do that.
     /// @param userId The user ID
     /// @param receiver The receiver
     /// @param erc20 The used ERC-20 token.
@@ -414,7 +460,6 @@ contract DripsHub is Managed, Drips, Splits {
     {
         _increaseTotalBalance(erc20, amt);
         Splits._give(userId, receiver, _assetId(erc20), amt);
-        erc20.safeTransferFrom(msg.sender, address(this), amt);
     }
 
     /// @notice Current user drips state.
@@ -469,8 +514,11 @@ contract DripsHub is Managed, Drips, Splits {
     }
 
     /// @notice Sets the user's drips configuration.
-    /// Transfers funds between the user's wallet and the drips hub contract
-    /// to fulfil the change of the drips balance.
+    /// Requires that the tokens used to increase the drips balance
+    /// are already sent to DripsHub and are withdrawable.
+    /// If the drips balance is decreased, the released tokens become withdrawable.
+    /// Anybody can call `withdraw`, so all withdrawable funds should be withdrawn
+    /// or used in the protocol before any 3rd parties have a chance to do that.
     /// @param userId The user ID
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
@@ -509,6 +557,7 @@ contract DripsHub is Managed, Drips, Splits {
     /// @param maxEndHint2 An optional parameter allowing gas optimization, pass `0` to ignore it.
     /// The second hint for finding the maximum end time, see `maxEndHint1` docs for more details.
     /// @return realBalanceDelta The actually applied drips balance change.
+    /// If it's lower than zero, it's the negative of the amount that became withdrawable.
     function setDrips(
         uint256 userId,
         IERC20 erc20,
@@ -519,9 +568,7 @@ contract DripsHub is Managed, Drips, Splits {
         uint32 maxEndHint1,
         uint32 maxEndHint2
     ) public whenNotPaused onlyDriver(userId) returns (int128 realBalanceDelta) {
-        if (balanceDelta > 0) {
-            _increaseTotalBalance(erc20, uint128(balanceDelta));
-        }
+        if (balanceDelta > 0) _increaseTotalBalance(erc20, uint128(balanceDelta));
         realBalanceDelta = Drips._setDrips(
             userId,
             _assetId(erc20),
@@ -531,12 +578,7 @@ contract DripsHub is Managed, Drips, Splits {
             maxEndHint1,
             maxEndHint2
         );
-        if (realBalanceDelta > 0) {
-            erc20.safeTransferFrom(msg.sender, address(this), uint128(realBalanceDelta));
-        } else if (realBalanceDelta < 0) {
-            _decreaseTotalBalance(erc20, uint128(-realBalanceDelta));
-            erc20.safeTransfer(msg.sender, uint128(-realBalanceDelta));
-        }
+        if (realBalanceDelta < 0) _decreaseTotalBalance(erc20, uint128(-realBalanceDelta));
     }
 
     /// @notice Calculates the hash of the drips configuration.
@@ -633,16 +675,6 @@ contract DripsHub is Managed, Drips, Splits {
         assembly {
             storageRef.slot := slot
         }
-    }
-
-    function _increaseTotalBalance(IERC20 erc20, uint128 amt) internal {
-        mapping(IERC20 => uint256) storage totalBalances = _dripsHubStorage().totalBalances;
-        require(totalBalances[erc20] + amt <= MAX_TOTAL_BALANCE, "Total balance too high");
-        totalBalances[erc20] += amt;
-    }
-
-    function _decreaseTotalBalance(IERC20 erc20, uint128 amt) internal {
-        _dripsHubStorage().totalBalances[erc20] -= amt;
     }
 
     /// @notice Generates an asset ID for the ERC-20 token

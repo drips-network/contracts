@@ -58,7 +58,7 @@ contract AddressDriver is Managed, ERC2771Context {
     /// @return amt The collected amount
     function collect(IERC20 erc20, address transferTo) public whenNotPaused returns (uint128 amt) {
         amt = dripsHub.collect(_callerUserId(), erc20);
-        erc20.safeTransfer(transferTo, amt);
+        if (amt > 0) dripsHub.withdraw(erc20, transferTo, amt);
     }
 
     /// @notice Gives funds from the message sender to the receiver.
@@ -73,7 +73,7 @@ contract AddressDriver is Managed, ERC2771Context {
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param amt The given amount
     function give(uint256 receiver, IERC20 erc20, uint128 amt) public whenNotPaused {
-        _transferFromCaller(erc20, amt);
+        if (amt > 0) _transferFromCaller(erc20, amt);
         dripsHub.give(_callerUserId(), receiver, erc20, amt);
     }
 
@@ -128,9 +128,7 @@ contract AddressDriver is Managed, ERC2771Context {
         uint32 maxEndHint2,
         address transferTo
     ) public whenNotPaused returns (int128 realBalanceDelta) {
-        if (balanceDelta > 0) {
-            _transferFromCaller(erc20, uint128(balanceDelta));
-        }
+        if (balanceDelta > 0) _transferFromCaller(erc20, uint128(balanceDelta));
         realBalanceDelta = dripsHub.setDrips(
             _callerUserId(),
             erc20,
@@ -140,9 +138,7 @@ contract AddressDriver is Managed, ERC2771Context {
             maxEndHint1,
             maxEndHint2
         );
-        if (realBalanceDelta < 0) {
-            erc20.safeTransfer(transferTo, uint128(-realBalanceDelta));
-        }
+        if (realBalanceDelta < 0) dripsHub.withdraw(erc20, transferTo, uint128(-realBalanceDelta));
     }
 
     /// @notice Sets user splits configuration. The configuration is common for all assets.
@@ -174,10 +170,6 @@ contract AddressDriver is Managed, ERC2771Context {
     }
 
     function _transferFromCaller(IERC20 erc20, uint128 amt) internal {
-        erc20.safeTransferFrom(_msgSender(), address(this), amt);
-        // Approval is done only on the first usage of the ERC-20 token in DripsHub by the driver
-        if (erc20.allowance(address(this), address(dripsHub)) == 0) {
-            erc20.safeApprove(address(dripsHub), type(uint256).max);
-        }
+        erc20.safeTransferFrom(_msgSender(), address(dripsHub), amt);
     }
 }

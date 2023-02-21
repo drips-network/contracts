@@ -120,7 +120,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
         returns (uint128 amt)
     {
         amt = dripsHub.collect(tokenId, erc20);
-        erc20.safeTransfer(transferTo, amt);
+        if (amt > 0) dripsHub.withdraw(erc20, transferTo, amt);
     }
 
     /// @notice Gives funds from the user to the receiver.
@@ -142,7 +142,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
         whenNotPaused
         onlyHolder(tokenId)
     {
-        _transferFromCaller(erc20, amt);
+        if (amt > 0) _transferFromCaller(erc20, amt);
         dripsHub.give(tokenId, receiver, erc20, amt);
     }
 
@@ -201,15 +201,11 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
         uint32 maxEndHint2,
         address transferTo
     ) public whenNotPaused onlyHolder(tokenId) returns (int128 realBalanceDelta) {
-        if (balanceDelta > 0) {
-            _transferFromCaller(erc20, uint128(balanceDelta));
-        }
+        if (balanceDelta > 0) _transferFromCaller(erc20, uint128(balanceDelta));
         realBalanceDelta = dripsHub.setDrips(
             tokenId, erc20, currReceivers, balanceDelta, newReceivers, maxEndHint1, maxEndHint2
         );
-        if (realBalanceDelta < 0) {
-            erc20.safeTransfer(transferTo, uint128(-realBalanceDelta));
-        }
+        if (realBalanceDelta < 0) dripsHub.withdraw(erc20, transferTo, uint128(-realBalanceDelta));
     }
 
     /// @notice Sets user splits configuration. The configuration is common for all assets.
@@ -307,11 +303,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
     }
 
     function _transferFromCaller(IERC20 erc20, uint128 amt) internal {
-        erc20.safeTransferFrom(_msgSender(), address(this), amt);
-        // Approval is done only on the first usage of the ERC-20 token in DripsHub by the driver
-        if (erc20.allowance(address(this), address(dripsHub)) == 0) {
-            erc20.safeApprove(address(dripsHub), type(uint256).max);
-        }
+        erc20.safeTransferFrom(_msgSender(), address(dripsHub), amt);
     }
 
     // Workaround for https://github.com/ethereum/solidity/issues/12554

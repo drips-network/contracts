@@ -43,10 +43,11 @@ contract DripsHubTest is Test {
 
     bytes internal constant ERROR_NOT_DRIVER = "Callable only by the driver";
     bytes internal constant ERROR_BALANCE_TOO_HIGH = "Total balance too high";
+    bytes internal constant ERROR_ERC_20_BALANCE_TOO_LOW = "ERC-20 balance too low";
 
     function setUp() public {
-        defaultErc20 = new ERC20PresetFixedSupply("default", "default", type(uint136).max, driver);
-        otherErc20 = new ERC20PresetFixedSupply("other", "other", type(uint136).max, driver);
+        defaultErc20 = new ERC20PresetFixedSupply("default", "default", 2 ** 128, address(this));
+        otherErc20 = new ERC20PresetFixedSupply("other", "other", 2 ** 128, address(this));
         erc20 = defaultErc20;
         DripsHub hubLogic = new DripsHub(10);
         dripsHub = DripsHub(address(new ManagedProxy(hubLogic, admin)));
@@ -60,11 +61,6 @@ contract DripsHubTest is Test {
         receiver1 = baseUserId + 5;
         receiver2 = baseUserId + 6;
         receiver3 = baseUserId + 7;
-
-        vm.prank(driver);
-        defaultErc20.approve(address(dripsHub), UINT256_MAX);
-        vm.prank(driver);
-        otherErc20.approve(address(dripsHub), UINT256_MAX);
     }
 
     function skipToCycleEnd() internal {
@@ -136,9 +132,11 @@ contract DripsHubTest is Test {
         uint256 totalBalanceBefore = totalBalance();
         DripsReceiver[] memory currReceivers = loadDrips(forUser);
 
+        if (balanceDelta > 0) transferToDripsHub(uint128(balanceDelta));
         vm.prank(driver);
         int128 realBalanceDelta =
             dripsHub.setDrips(forUser, erc20, currReceivers, balanceDelta, newReceivers, 0, 0);
+        if (balanceDelta < 0) withdraw(uint128(-balanceDelta));
 
         storeDrips(forUser, newReceivers);
         assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
@@ -156,24 +154,13 @@ contract DripsHubTest is Test {
         assertEq(actual, expected, "Invalid drips configuration");
     }
 
-    function assertSetDripsReverts(
-        uint256 forUser,
-        DripsReceiver[] memory currReceivers,
-        int128 balanceDelta,
-        DripsReceiver[] memory newReceivers,
-        bytes memory expectedReason
-    ) internal {
-        vm.prank(driver);
-        vm.expectRevert(expectedReason);
-        dripsHub.setDrips(forUser, erc20, currReceivers, balanceDelta, newReceivers, 0, 0);
-    }
-
     function give(uint256 fromUser, uint256 toUser, uint128 amt) internal {
         uint256 balanceBefore = balance();
         uint256 dripsHubBalanceBefore = dripsHubBalance();
         uint256 totalBalanceBefore = totalBalance();
         uint128 expectedSplittable = splittable(toUser) + amt;
 
+        transferToDripsHub(amt);
         vm.prank(driver);
         dripsHub.give(fromUser, toUser, erc20, amt);
 
@@ -330,6 +317,7 @@ contract DripsHubTest is Test {
 
         vm.prank(driver);
         uint128 actualAmt = dripsHub.collect(forUser, erc20);
+        withdraw(actualAmt);
 
         assertEq(actualAmt, expectedAmt, "Invalid collected amount");
         assertCollectable(forUser, 0);
@@ -354,8 +342,25 @@ contract DripsHubTest is Test {
         assertEq(totalBalance(), expected, "Invalid total balance");
     }
 
+    function transferToDripsHub(uint256 amt) internal {
+        assertDripsHubBalance(totalBalance());
+        erc20.transfer(address(dripsHub), amt);
+    }
+
+    function withdraw(uint256 amt) internal {
+        uint256 balanceBefore = balance();
+        uint256 totalBalanceBefore = totalBalance();
+        assertDripsHubBalance(totalBalanceBefore + amt);
+
+        dripsHub.withdraw(erc20, address(this), amt);
+
+        assertBalance(balanceBefore + amt);
+        assertTotalBalance(totalBalanceBefore);
+        assertDripsHubBalance(totalBalanceBefore);
+    }
+
     function balance() internal view returns (uint256) {
-        return erc20.balanceOf(driver);
+        return erc20.balanceOf(address(this));
     }
 
     function assertBalance(uint256 expected) internal {
@@ -385,6 +390,7 @@ contract DripsHubTest is Test {
         vm.prank(driver);
         int128 realBalanceDelta =
             dripsHub.setDrips(user, erc20, receivers, -int128(dripsBalance) - 1, receivers, 0, 0);
+        withdraw(uint128(-realBalanceDelta));
 
         assertEq(realBalanceDelta, -int128(dripsBalance), "Invalid real balance delta");
         (,,, uint128 actualBalance,) = dripsHub.dripsState(user, erc20);
@@ -614,25 +620,67 @@ contract DripsHubTest is Test {
         assertTotalBalance(0);
         setDrips(user1, 0, maxBalance, dripsReceivers());
         assertTotalBalance(maxBalance);
-        assertSetDripsReverts(user2, dripsReceivers(), 1, dripsReceivers(), ERROR_BALANCE_TOO_HIGH);
+
+        transferToDripsHub(1);
+        vm.prank(driver);
+        vm.expectRevert(ERROR_BALANCE_TOO_HIGH);
+        dripsHub.setDrips(user2, erc20, dripsReceivers(), 1, dripsReceivers(), 0, 0);
+        withdraw(1);
+
         setDrips(user1, maxBalance, maxBalance - 1, dripsReceivers());
         assertTotalBalance(maxBalance - 1);
         setDrips(user2, 0, 1, dripsReceivers());
         assertTotalBalance(maxBalance);
     }
 
+    function testSetDripsRequiresTransferredTokens() public {
+        setDrips(user, 0, 2, dripsReceivers());
+
+        vm.prank(driver);
+        vm.expectRevert(ERROR_ERC_20_BALANCE_TOO_LOW);
+        dripsHub.setDrips(user, erc20, dripsReceivers(), 1, dripsReceivers(), 0, 0);
+
+        setDrips(user, 2, 3, dripsReceivers());
+    }
+
     function testGiveLimitsTotalBalance() public {
         uint128 maxBalance = uint128(dripsHub.MAX_TOTAL_BALANCE());
         assertTotalBalance(0);
-        give(user1, receiver1, maxBalance - 1);
+        give(user, receiver1, maxBalance - 1);
         assertTotalBalance(maxBalance - 1);
-        give(user1, receiver2, 1);
+        give(user, receiver2, 1);
         assertTotalBalance(maxBalance);
-        assertGiveReverts(user2, receiver3, 1, ERROR_BALANCE_TOO_HIGH);
+
+        transferToDripsHub(1);
+        vm.prank(driver);
+        vm.expectRevert(ERROR_BALANCE_TOO_HIGH);
+        dripsHub.give(user, receiver3, erc20, 1);
+        withdraw(1);
+
         collectAll(receiver2, 1);
         assertTotalBalance(maxBalance - 1);
-        give(user2, receiver3, 1);
+        give(user, receiver3, 1);
         assertTotalBalance(maxBalance);
+    }
+
+    function testGiveRequiresTransferredTokens() public {
+        give(user, receiver, 2);
+
+        vm.prank(driver);
+        vm.expectRevert(ERROR_ERC_20_BALANCE_TOO_LOW);
+        dripsHub.give(user, receiver, erc20, 1);
+
+        give(user, receiver, 1);
+    }
+
+    function testWithdrawalBelowTotalBalanceReverts() public {
+        give(user, receiver, 2);
+        transferToDripsHub(1);
+
+        vm.expectRevert("Withdrawal amount too high");
+        dripsHub.withdraw(erc20, address(this), 2);
+
+        withdraw(1);
     }
 
     modifier canBePausedTest() {
