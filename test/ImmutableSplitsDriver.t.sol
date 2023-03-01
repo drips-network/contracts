@@ -17,8 +17,8 @@ contract ImmutableSplitsDriverTest is Test {
         dripsHub = DripsHub(address(new ManagedProxy(hubLogic, address(this))));
 
         // Make the driver ID non-0 to test if it's respected by the driver
-        dripsHub.registerDriver(address(0));
-        dripsHub.registerDriver(address(0));
+        dripsHub.registerDriver(address(1));
+        dripsHub.registerDriver(address(1));
         uint32 driverId = dripsHub.registerDriver(address(this));
         ImmutableSplitsDriver driverLogic = new ImmutableSplitsDriver(dripsHub, driverId);
         driver = ImmutableSplitsDriver(address(new ManagedProxy(driverLogic, admin)));

@@ -142,11 +142,12 @@ contract DripsHub is Managed, Drips, Splits {
     /// That range consists of all 2^224 user IDs with highest 32 bits equal to the driver ID.
     /// Every driver ID is assigned only to a single address,
     /// but a single address can have multiple driver IDs assigned to it.
-    /// @param driverAddr The address of the driver.
+    /// @param driverAddr The address of the driver. Must not be zero address.
     /// It should be a smart contract capable of dealing with the DripsHub API.
     /// It shouldn't be an EOA because the API requires making multiple calls per transaction.
     /// @return driverId The registered driver ID.
     function registerDriver(address driverAddr) public whenNotPaused returns (uint32 driverId) {
+        require(driverAddr != address(0), "Driver registered for 0 address");
         DripsHubStorage storage dripsHubStorage = _dripsHubStorage();
         driverId = dripsHubStorage.nextDriverId++;
         dripsHubStorage.driverAddresses[driverId] = driverAddr;

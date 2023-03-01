@@ -535,6 +535,11 @@ contract DripsHubTest is Test {
         assertEq(nextDriverId + 1, dripsHub.nextDriverId(), "Invalid next driver ID");
     }
 
+    function testRegisteringDriverForZeroAddressReverts() public {
+        vm.expectRevert("Driver registered for 0 address");
+        dripsHub.registerDriver(address(0));
+    }
+
     function testUpdateDriverAddress() public {
         assertEq(driver, dripsHub.driverAddress(driverId), "Invalid driver address before");
         address newDriverAddr = address(0x1234);

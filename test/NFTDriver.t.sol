@@ -41,8 +41,8 @@ contract NFTDriverTest is Test {
         caller = new Caller();
 
         // Make NFTDriver's driver ID non-0 to test if it's respected by NFTDriver
-        dripsHub.registerDriver(address(0));
-        dripsHub.registerDriver(address(0));
+        dripsHub.registerDriver(address(1));
+        dripsHub.registerDriver(address(1));
         uint32 driverId = dripsHub.registerDriver(address(this));
         NFTDriver driverLogic = new NFTDriver(dripsHub, address(caller), driverId);
         driver = NFTDriver(address(new ManagedProxy(driverLogic, admin)));

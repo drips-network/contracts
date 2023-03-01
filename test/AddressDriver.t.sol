@@ -36,8 +36,8 @@ contract AddressDriverTest is Test {
         caller = new Caller();
 
         // Make AddressDriver's driver ID non-0 to test if it's respected by AddressDriver
-        dripsHub.registerDriver(address(0));
-        dripsHub.registerDriver(address(0));
+        dripsHub.registerDriver(address(1));
+        dripsHub.registerDriver(address(1));
         uint32 driverId = dripsHub.registerDriver(address(this));
         AddressDriver driverLogic = new AddressDriver(dripsHub, address(caller), driverId);
         driver = AddressDriver(address(new ManagedProxy(driverLogic, admin)));
