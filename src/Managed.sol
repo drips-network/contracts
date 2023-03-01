@@ -21,20 +21,20 @@ abstract contract Managed is UUPSUpgradeable {
     /// @notice Emitted when the pauses role is granted.
     /// @param pauser The address that the pauser role was granted to.
     /// @param admin The address of the admin that triggered the change.
-    event PauserGranted(address indexed pauser, address admin);
+    event PauserGranted(address indexed pauser, address indexed admin);
 
     /// @notice Emitted when the pauses role is revoked.
     /// @param pauser The address that the pauser role was revoked from.
     /// @param admin The address of the admin that triggered the change.
-    event PauserRevoked(address indexed pauser, address admin);
+    event PauserRevoked(address indexed pauser, address indexed admin);
 
     /// @notice Emitted when the pause is triggered.
     /// @param pauser The address that triggered the change.
-    event Paused(address pauser);
+    event Paused(address indexed pauser);
 
     /// @notice Emitted when the pause is lifted.
     /// @param pauser The address that triggered the change.
-    event Unpaused(address pauser);
+    event Unpaused(address indexed pauser);
 
     struct ManagedStorage {
         bool isPaused;
