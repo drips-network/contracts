@@ -57,13 +57,13 @@ abstract contract Managed is UUPSUpgradeable {
 
     /// @notice Modifier to make a function callable only when the contract is not paused.
     modifier whenNotPaused() {
-        require(!paused(), "Contract paused");
+        require(!isPaused(), "Contract paused");
         _;
     }
 
     /// @notice Modifier to make a function callable only when the contract is paused.
     modifier whenPaused() {
-        require(paused(), "Contract not paused");
+        require(isPaused(), "Contract not paused");
         _;
     }
 
@@ -113,7 +113,7 @@ abstract contract Managed is UUPSUpgradeable {
     }
 
     /// @notice Returns true if the contract is paused, and false otherwise.
-    function paused() public view returns (bool isPaused) {
+    function isPaused() public view returns (bool) {
         return _managedStorage().isPaused;
     }
 

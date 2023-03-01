@@ -40,7 +40,7 @@ contract ManagedTest is Test {
     }
 
     function testLogicContractIsPausedForever() public {
-        assertTrue(logic.paused(), "Not paused");
+        assertTrue(logic.isPaused(), "Not paused");
         assertEq(logic.admin(), address(0), "Admin not zero");
         assertEq(logic.allPausers(), new address[](0), "Pausers not empty");
     }
@@ -138,13 +138,13 @@ contract ManagedTest is Test {
     function testAdminCanPause() public {
         vm.prank(admin);
         proxy.pause();
-        assertTrue(proxy.paused(), "Pausing failed");
+        assertTrue(proxy.isPaused(), "Pausing failed");
     }
 
     function testPauserCanPause() public {
         vm.prank(pauser);
         proxy.pause();
-        assertTrue(proxy.paused(), "Pausing failed");
+        assertTrue(proxy.isPaused(), "Pausing failed");
     }
 
     function testArbitraryUserCanNotPause() public {
@@ -156,14 +156,14 @@ contract ManagedTest is Test {
         pause();
         vm.prank(admin);
         proxy.unpause();
-        assertFalse(proxy.paused(), "Unpausing failed");
+        assertFalse(proxy.isPaused(), "Unpausing failed");
     }
 
     function testPauserCanUnpause() public {
         pause();
         vm.prank(pauser);
         proxy.unpause();
-        assertFalse(proxy.paused(), "Unpausing failed");
+        assertFalse(proxy.isPaused(), "Unpausing failed");
     }
 
     function testArbitraryUserCanNotUnpause() public {
