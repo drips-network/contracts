@@ -98,6 +98,11 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
         mapping(uint256 => EnumerableSet.AddressSet) addressSets;
     }
 
+    /// @notice Emitted when `authorized` makes a call on behalf of `sender`.
+    /// @param sender The address on behalf of which a call was made.
+    /// @param authorized The address making the call on behalf of `sender`.
+    event CalledAs(address indexed sender, address indexed authorized);
+
     /// @notice Emitted when granting the authorization
     /// of an address to make calls on behalf of the `sender`.
     /// @param sender The authorizing address.
@@ -113,6 +118,11 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     /// @notice Emitted when revoking all authorizations to make calls on behalf of the `sender`.
     /// @param sender The authorizing address.
     event UnauthorizedAll(address indexed sender);
+
+    /// @notice Emitted when a signed call is made on behalf of `sender`.
+    /// @param sender The address on behalf of which a call was made.
+    /// @param nonce The used nonce.
+    event CalledSigned(address indexed sender, uint256 nonce);
 
     /// @notice Grants the authorization of an address to make calls on behalf of the sender.
     /// @param user The authorized address.
@@ -166,7 +176,9 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
         payable
         returns (bytes memory returnData)
     {
-        require(isAuthorized(sender, _msgSender()), "Not authorized");
+        address authorized = _msgSender();
+        require(isAuthorized(sender, authorized), "Not authorized");
+        emit CalledAs(sender, authorized);
         return _call(sender, target, data, msg.value);
     }
 
@@ -199,6 +211,7 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
         );
         address signer = ECDSA.recover(_hashTypedDataV4(executeHash), r, sv);
         require(signer == sender, "Invalid signature");
+        emit CalledSigned(sender, currNonce);
         return _call(sender, target, data, msg.value);
     }
 
