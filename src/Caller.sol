@@ -79,6 +79,8 @@ struct Call {
 /// It also applies to `authorize` and `unauthorize`, they too can be called using
 /// `callAs`, `callSigned` or `callBatched`.
 contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
+    /// @notice The maximum increase of the nonce possible by calling `setNonce`.
+    uint256 public constant MAX_NONCE_INCREASE = 10 ** 9;
     string internal constant CALL_SIGNED_TYPE_NAME = "CallSigned("
         "address sender,address target,bytes data,uint256 value,uint256 nonce,uint256 deadline)";
     bytes32 internal immutable callSignedTypeHash = keccak256(bytes(CALL_SIGNED_TYPE_NAME));
@@ -123,6 +125,11 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     /// @param sender The address on behalf of which a call was made.
     /// @param nonce The used nonce.
     event CalledSigned(address indexed sender, uint256 nonce);
+
+    /// @notice Emitted when a new nonce is set for `sender`.
+    /// @param sender The address for which the nonce was set.
+    /// @param newNonce The new nonce.
+    event NonceSet(address indexed sender, uint256 newNonce);
 
     /// @notice Grants the authorization of an address to make calls on behalf of the sender.
     /// @param user The authorized address.
@@ -213,6 +220,18 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
         require(signer == sender, "Invalid signature");
         emit CalledSigned(sender, currNonce);
         return _call(sender, target, data, msg.value);
+    }
+
+    /// @notice Sets the new nonce for the sender.
+    /// @param newNonce The new nonce.
+    /// It must be larger than the current nonce but by no more than MAX_NONCE_INCREASE.
+    function setNonce(uint256 newNonce) public {
+        address sender = _msgSender();
+        uint256 currNonce = nonce[sender];
+        require(newNonce > currNonce, "Nonce not increased");
+        require(newNonce <= currNonce + MAX_NONCE_INCREASE, "Nonce increased by too much");
+        nonce[sender] = newNonce;
+        emit NonceSet(sender, newNonce);
     }
 
     /// @notice Executes a batch of calls.

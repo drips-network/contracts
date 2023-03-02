@@ -11,6 +11,7 @@ contract CallerTest is Test {
     bytes internal constant ERROR_ZERO_INPUT = "Input is zero";
     bytes internal constant ERROR_DEADLINE = "Execution deadline expired";
     bytes internal constant ERROR_SIGNATURE = "Invalid signature";
+    bytes internal constant ERROR_NONCE_NOT_INCREASED = "Nonce not increased";
     bytes internal constant ERROR_UNAUTHORIZED = "Not authorized";
 
     string internal constant DOMAIN_TYPE_NAME =
@@ -69,7 +70,7 @@ contract CallerTest is Test {
         uint256 deadline = block.timestamp;
         (bytes32 r, bytes32 sv) = signCall(senderKey, target, data, 0, 0, deadline);
         caller.callSigned(sender, address(target), data, deadline, r, sv);
-        assertEq(caller.nonce(sender), 1, "Invalid nonce after a signed call");
+        assertNonce(sender, 1);
 
         vm.expectRevert(ERROR_SIGNATURE);
         caller.callSigned(sender, address(target), data, deadline, r, sv);
@@ -92,6 +93,37 @@ contract CallerTest is Test {
 
         vm.expectRevert(ERROR_ZERO_INPUT);
         caller.callSigned(sender, address(target), data, deadline, r, sv);
+    }
+
+    function testSetNonceCanIncreaseNonce() public {
+        caller.setNonce(1);
+        assertNonce(address(this), 1);
+    }
+
+    function testSetNonceCanIncreaseNonceByMaxNonceIncrease() public {
+        caller.setNonce(1);
+        uint256 newNonce = caller.MAX_NONCE_INCREASE() + 1;
+        caller.setNonce(newNonce);
+        assertNonce(address(this), newNonce);
+    }
+
+    function testSetNonceCanNotLeaveNonceUnchanged() public {
+        caller.setNonce(1);
+        vm.expectRevert(ERROR_NONCE_NOT_INCREASED);
+        caller.setNonce(1);
+    }
+
+    function testSetNonceCanNotDecreaseNonce() public {
+        caller.setNonce(1);
+        vm.expectRevert(ERROR_NONCE_NOT_INCREASED);
+        caller.setNonce(0);
+    }
+
+    function testSetNonceCanNotIncreaseNonceByMoreThanMaxNonceIncrease() public {
+        caller.setNonce(1);
+        uint256 newNonce = caller.MAX_NONCE_INCREASE() + 2;
+        vm.expectRevert("Nonce increased by too much");
+        caller.setNonce(newNonce);
     }
 
     function testCallAs() public {
@@ -269,6 +301,20 @@ contract CallerTest is Test {
         assertFalse(caller.isAuthorized(address(this), sender), "Not unauthorized");
     }
 
+    function testCallerCanCallOnItselfSetNonce() public {
+        Call[] memory calls = new Call[](1);
+        calls[0] = Call({
+            target: address(caller),
+            data: abi.encodeWithSelector(caller.setNonce.selector, 1),
+            value: 0
+        });
+        caller.authorize(sender);
+
+        caller.callBatched(calls);
+
+        assertNonce(address(this), 1);
+    }
+
     function testCallerCanCallOnItselfCallBatched() public {
         Call[] memory calls = new Call[](1);
         calls[0] = Call({
@@ -318,6 +364,10 @@ contract CallerTest is Test {
         bytes32 s;
         (v, r, s) = vm.sign(privKey, digest);
         sv = (s << 1 >> 1) | (bytes32(uint256(v) - 27) << 255);
+    }
+
+    function assertNonce(address user, uint256 expectedNonce) internal {
+        assertEq(caller.nonce(user), expectedNonce, "Invalid nonce");
     }
 }
 
