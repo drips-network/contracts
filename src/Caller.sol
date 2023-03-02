@@ -85,9 +85,18 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
 
     /// @notice Each sender's set of address authorized to make calls on its behalf.
     // slither-disable-next-line naming-convention
-    mapping(address => EnumerableSet.AddressSet) internal _authorized;
+    mapping(address => AddressSetClearable) internal _authorized;
     /// @notice The nonce which needs to be used in the next EIP-712 message signed by the address.
     mapping(address => uint256) public nonce;
+
+    /// @notice A clearable set of addresses.
+    /// @param clears Number of performed clears. Increase to clear.
+    /// @param addressSets The key is the number of performed clears and the value is the set.
+    /// Always use the set under the key equal to the current value of `clears`.
+    struct AddressSetClearable {
+        uint256 clears;
+        mapping(uint256 => EnumerableSet.AddressSet) addressSets;
+    }
 
     /// @notice Emitted when granting the authorization
     /// of an address to make calls on behalf of the `sender`.
@@ -101,11 +110,15 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     /// @param unauthorized The authorized address.
     event Unauthorized(address indexed sender, address indexed unauthorized);
 
+    /// @notice Emitted when revoking all authorizations to make calls on behalf of the `sender`.
+    /// @param sender The authorizing address.
+    event UnauthorizedAll(address indexed sender);
+
     /// @notice Grants the authorization of an address to make calls on behalf of the sender.
     /// @param user The authorized address.
     function authorize(address user) public {
         address sender = _msgSender();
-        require(_authorized[sender].add(user), "Address already is authorized");
+        require(_getAuthorizedSet(sender).add(user), "Address already is authorized");
         emit Authorized(sender, user);
     }
 
@@ -113,8 +126,15 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     /// @param user The unauthorized address.
     function unauthorize(address user) public {
         address sender = _msgSender();
-        require(_authorized[sender].remove(user), "Address is not authorized");
+        require(_getAuthorizedSet(sender).remove(user), "Address is not authorized");
         emit Unauthorized(sender, user);
+    }
+
+    /// @notice Revokes all authorizations to make calls on behalf of the sender.
+    function unauthorizeAll() public {
+        address sender = _msgSender();
+        _authorized[sender].clears++;
+        emit UnauthorizedAll(sender);
     }
 
     /// @notice Checks if an address is authorized to make calls on behalf of a sender.
@@ -122,7 +142,7 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     /// @param user The potentially authorized address.
     /// @return authorized True if `user` is authorized.
     function isAuthorized(address sender, address user) public view returns (bool authorized) {
-        return _authorized[sender].contains(user);
+        return _getAuthorizedSet(sender).contains(user);
     }
 
     /// @notice Returns all the addresses authorized to make calls on behalf of a sender.
@@ -130,7 +150,7 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     /// @return authorized The list of all the authorized addresses, ordered arbitrarily.
     /// The list's order may change when sender authorizes or unauthorizes addresses.
     function allAuthorized(address sender) public view returns (address[] memory authorized) {
-        return _authorized[sender].values();
+        return _getAuthorizedSet(sender).values();
     }
 
     /// @notice Makes a call on behalf of the `sender`.
@@ -199,6 +219,25 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
         }
     }
 
+    /// @notice Gets the set of addresses authorized to make calls on behalf of `sender`.
+    /// @param sender The authorizing address.
+    /// @return authorizedSet The set of authorized addresses.
+    function _getAuthorizedSet(address sender)
+        internal
+        view
+        returns (EnumerableSet.AddressSet storage authorizedSet)
+    {
+        AddressSetClearable storage authorized = _authorized[sender];
+        return authorized.addressSets[authorized.clears];
+    }
+
+    /// @notice Makes a call on behalf of the `sender`.
+    /// Reverts if the call reverts or the called address is not a smart contract.
+    /// @param sender The sender to be set as the message sender of the call as per ERC-2771.
+    /// @param target The called address.
+    /// @param data The calldata to be used for the call.
+    /// @param value The value of the call.
+    /// @return returnData The data returned by the call.
     function _call(address sender, address target, bytes memory data, uint256 value)
         internal
         returns (bytes memory returnData)

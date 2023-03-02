@@ -139,6 +139,25 @@ contract CallerTest is Test {
         caller.unauthorize(address(this));
     }
 
+    function testUnauthorizeAllUnauthorizesAll() public {
+        authorize(sender, address(1));
+        authorize(sender, address(2));
+
+        vm.prank(sender);
+        caller.unauthorizeAll();
+
+        assertFalse(caller.isAuthorized(sender, address(1)), "UnauthorizeAll failed for address 1");
+        assertFalse(caller.isAuthorized(sender, address(2)), "UnauthorizeAll failed for address 2");
+        assertEq(caller.allAuthorized(sender), new address[](0), "All authorized not empty");
+        // Authorization still works
+        authorize(sender, address(1));
+        address[] memory allAuthorized = new address[](1);
+        allAuthorized[0] = address(1);
+        assertEq(caller.allAuthorized(sender), allAuthorized, "Invalid all authorized");
+        // Unauthorization still works
+        unauthorize(sender, address(1));
+    }
+
     function testCallAsBubblesErrors() public {
         // Zero input triggers a revert in Target
         bytes memory data = abi.encodeWithSelector(target.run.selector, 0);
@@ -227,6 +246,20 @@ contract CallerTest is Test {
         calls[0] = Call({
             target: address(caller),
             data: abi.encodeWithSelector(caller.unauthorize.selector, sender),
+            value: 0
+        });
+        caller.authorize(sender);
+
+        caller.callBatched(calls);
+
+        assertFalse(caller.isAuthorized(address(this), sender), "Not unauthorized");
+    }
+
+    function testCallerCanCallOnItselfUnuthorizeAll() public {
+        Call[] memory calls = new Call[](1);
+        calls[0] = Call({
+            target: address(caller),
+            data: abi.encodeWithSelector(caller.unauthorizeAll.selector),
             value: 0
         });
         caller.authorize(sender);
