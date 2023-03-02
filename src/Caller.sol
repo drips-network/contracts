@@ -9,11 +9,11 @@ import {EnumerableSet} from "openzeppelin-contracts/utils/structs/EnumerableSet.
 using EnumerableSet for EnumerableSet.AddressSet;
 
 /// @notice Description of a call.
-/// @param to The called address.
+/// @param target The called address.
 /// @param data The calldata to be used for the call.
 /// @param value The value of the call.
 struct Call {
-    address to;
+    address target;
     bytes data;
     uint256 value;
 }
@@ -80,7 +80,7 @@ struct Call {
 /// `callAs`, `callSigned` or `callBatched`.
 contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     string internal constant CALL_SIGNED_TYPE_NAME = "CallSigned("
-        "address sender,address to,bytes data,uint256 value,uint256 nonce,uint256 deadline)";
+        "address sender,address target,bytes data,uint256 value,uint256 nonce,uint256 deadline)";
     bytes32 internal immutable callSignedTypeHash = keccak256(bytes(CALL_SIGNED_TYPE_NAME));
 
     /// @notice Each sender's set of address authorized to make calls on its behalf.
@@ -138,16 +138,16 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     /// Reverts if the call reverts or the called address is not a smart contract.
     /// This function is payable, any Ether sent to it will be passed in the call.
     /// @param sender The sender to be set as the message sender of the call as per ERC-2771.
-    /// @param to The called address.
+    /// @param target The called address.
     /// @param data The calldata to be used for the call.
     /// @return returnData The data returned by the call.
-    function callAs(address sender, address to, bytes memory data)
+    function callAs(address sender, address target, bytes memory data)
         public
         payable
         returns (bytes memory returnData)
     {
         require(isAuthorized(sender, _msgSender()), "Not authorized");
-        return _call(sender, to, data, msg.value);
+        return _call(sender, target, data, msg.value);
     }
 
     /// @notice Makes a call on behalf of the `sender`.
@@ -155,7 +155,7 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     /// Reverts if the call reverts or the called address is not a smart contract.
     /// This function is payable, any Ether sent to it will be passed in the call.
     /// @param sender The sender to be set as the message sender of the call as per ERC-2771.
-    /// @param to The called address.
+    /// @param target The called address.
     /// @param data The calldata to be used for the call.
     /// @param deadline The timestamp until which the message signature is valid.
     /// @param r The `r` part of the compact message signature as per EIP-2098.
@@ -163,7 +163,7 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     /// @return returnData The data returned by the call.
     function callSigned(
         address sender,
-        address to,
+        address target,
         bytes memory data,
         uint256 deadline,
         bytes32 r,
@@ -174,12 +174,12 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
         uint256 currNonce = nonce[sender]++;
         bytes32 executeHash = keccak256(
             abi.encode(
-                callSignedTypeHash, sender, to, keccak256(data), msg.value, currNonce, deadline
+                callSignedTypeHash, sender, target, keccak256(data), msg.value, currNonce, deadline
             )
         );
         address signer = ECDSA.recover(_hashTypedDataV4(executeHash), r, sv);
         require(signer == sender, "Invalid signature");
-        return _call(sender, to, data, msg.value);
+        return _call(sender, target, data, msg.value);
     }
 
     /// @notice Executes a batch of calls.
@@ -195,15 +195,15 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
         address sender = _msgSender();
         for (uint256 i = 0; i < calls.length; i++) {
             Call memory call = calls[i];
-            returnData[i] = _call(sender, call.to, call.data, call.value);
+            returnData[i] = _call(sender, call.target, call.data, call.value);
         }
     }
 
-    function _call(address sender, address to, bytes memory data, uint256 value)
+    function _call(address sender, address target, bytes memory data, uint256 value)
         internal
         returns (bytes memory returnData)
     {
         // Encode the message sender as per ERC-2771
-        return Address.functionCallWithValue(to, bytes.concat(data, bytes20(sender)), value);
+        return Address.functionCallWithValue(target, bytes.concat(data, bytes20(sender)), value);
     }
 }

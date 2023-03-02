@@ -17,7 +17,7 @@ contract CallerTest is Test {
         "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)";
     bytes32 internal immutable domainTypeHash = keccak256(bytes(DOMAIN_TYPE_NAME));
     string internal constant CALL_SIGNED_TYPE_NAME = "CallSigned("
-        "address sender,address to,bytes data,uint256 value,uint256 nonce,uint256 deadline)";
+        "address sender,address target,bytes data,uint256 value,uint256 nonce,uint256 deadline)";
     bytes32 internal immutable callSignedTypeHash = keccak256(bytes(CALL_SIGNED_TYPE_NAME));
 
     Caller internal caller;
@@ -155,12 +155,12 @@ contract CallerTest is Test {
         uint256 value2 = 8642;
         Call[] memory calls = new Call[](2);
         calls[0] = Call({
-            to: address(target),
+            target: address(target),
             data: abi.encodeWithSelector(target.run.selector, input1),
             value: value1
         });
         calls[1] = Call({
-            to: address(targetOtherForwarder),
+            target: address(targetOtherForwarder),
             data: abi.encodeWithSelector(target.run.selector, input2),
             value: value2
         });
@@ -176,13 +176,13 @@ contract CallerTest is Test {
     function testCallBatchedBubblesErrors() public {
         Call[] memory calls = new Call[](2);
         calls[0] = Call({
-            to: address(target),
+            target: address(target),
             data: abi.encodeWithSelector(target.run.selector, 1234567890),
             value: 0
         });
         // Zero input triggers a revert in Target
         calls[1] = Call({
-            to: address(targetOtherForwarder),
+            target: address(targetOtherForwarder),
             data: abi.encodeWithSelector(target.run.selector, 0),
             value: 0
         });
@@ -198,7 +198,7 @@ contract CallerTest is Test {
         Call[] memory calls = new Call[](1);
         bytes memory data = abi.encodeWithSelector(target.run.selector, 1);
         calls[0] = Call({
-            to: address(caller),
+            target: address(caller),
             data: abi.encodeWithSelector(caller.callAs.selector, sender, address(target), data),
             value: 0
         });
@@ -212,7 +212,7 @@ contract CallerTest is Test {
     function testCallerCanCallOnItselfAuthorize() public {
         Call[] memory calls = new Call[](1);
         calls[0] = Call({
-            to: address(caller),
+            target: address(caller),
             data: abi.encodeWithSelector(caller.authorize.selector, sender),
             value: 0
         });
@@ -225,7 +225,7 @@ contract CallerTest is Test {
     function testCallerCanCallOnItselfUnuthorize() public {
         Call[] memory calls = new Call[](1);
         calls[0] = Call({
-            to: address(caller),
+            target: address(caller),
             data: abi.encodeWithSelector(caller.unauthorize.selector, sender),
             value: 0
         });
@@ -239,7 +239,7 @@ contract CallerTest is Test {
     function testCallerCanCallOnItselfCallBatched() public {
         Call[] memory calls = new Call[](1);
         calls[0] = Call({
-            to: address(target),
+            target: address(target),
             data: abi.encodeWithSelector(target.run.selector, 1),
             value: 0
         });
@@ -265,7 +265,7 @@ contract CallerTest is Test {
 
     function signCall(
         uint256 privKey,
-        Target to,
+        Target callTarget,
         bytes memory data,
         uint256 value,
         uint256 nonce,
@@ -274,7 +274,7 @@ contract CallerTest is Test {
         bytes memory payload = abi.encode(
             callSignedTypeHash,
             vm.addr(privKey),
-            address(to),
+            address(callTarget),
             keccak256(data),
             value,
             nonce,
