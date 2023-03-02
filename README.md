@@ -84,69 +84,28 @@ Set up environment variables configuring the deployed contracts:
 
 ```bash
 # OPTIONAL
-# Address of the governance of the deployed contracts. If not set, `ETH_FROM` is used.
-export GOVERNANCE="<ADDRESS>"
+# Address of the deployed contracts admin to set. If not set, the deployer's wallet address is used.
+export ADMIN="<ADDRESS>"
 
 # OPTIONAL
-# Address of Caller to use. If not set, a new instance is deployed.
-# If set to zero, newly deployed Caller-aware contracts don't get support for Caller.
-export CALLER="<ADDRESS>"
+# Cycle length  to use in `DRIPS_HUB_LOGIC` when it's deployed. If not set, 1 week is used.
+export DRIPS_HUB_CYCLE_SECS="<SECONDS>"
 
 # OPTIONAL
-# Address of DripsHub to use. If not set, a new instance is deployed.
-export DRIPS_HUB="<ADDRESS>"
-
-# OPTIONAL
-# Address of the DripsHub admin to set. If not set, `GOVERNANCE` is used.
+# Address of the DripsHub admin to set. If not set, `ADMIN` is used.
 export DRIPS_HUB_ADMIN="<ADDRESS>"
 
 # OPTIONAL
-# Address of the DripsHub logic contract to use in `DRIPS_HUB` when it's deployed.
-# If not set, a new instance is deployed.
-export DRIPS_HUB_LOGIC="<ADDRESS>"
-
-# OPTIONAL
-# Cycle length  to use in `DRIPS_HUB_LOGIC` when it's deployed. Default is 1 week.
-export CYCLE_SECS="<SECONDS>"
-
-# OPTIONAL
-# Address of AddressDriver to use. If not set, a new instance is deployed for `DRIPS_HUB`.
-export ADDRESS_DRIVER="<ADDRESS>"
-
-# OPTIONAL
-# Address of the AddressDriver admin to set. If not set, `GOVERNANCE` is used.
+# Address of the AddressDriver admin to set. If not set, `ADMIN` is used.
 export ADDRESS_DRIVER_ADMIN="<ADDRESS>"
 
 # OPTIONAL
-# Address of the AddressDriver logic contract to use in `ADDRESS_DRIVER` when it's deployed.
-# If not set, a new instance is deployed and a new app ID is registered for `ADDRESS_DRIVER`.
-export ADDRESS_DRIVER_LOGIC="<ADDRESS>"
-
-# OPTIONAL
-# Address of NFTDriver to use. If not set, a new instance is deployed for `DRIPS_HUB`.
-export NFT_DRIVER="<ADDRESS>"
-
-# OPTIONAL
-# Address of the NFTDriver admin to set. If not set, `GOVERNANCE` is used.
+# Address of the NFTDriver admin to set. If not set, `ADMIN` is used.
 export NFT_DRIVER_ADMIN="<ADDRESS>"
 
 # OPTIONAL
-# Address of the NFTDriver logic contract to use in `NFT_DRIVER` when it's deployed.
-# If not set, a new instance is deployed and a new app ID is registered for `NFT_DRIVER`.
-export NFT_DRIVER_LOGIC="<ADDRESS>"
-
-# OPTIONAL
-# Address of ImmutableSplitsDriver to use. If not set, a new instance is deployed for `DRIPS_HUB`.
-export SPLITS_DRIVER="<ADDRESS>"
-
-# OPTIONAL
-# Address of the ImmutableSplitsDriver admin to set. If not set, `GOVERNANCE` is used.
+# Address of the ImmutableSplitsDriver admin to set. If not set, `ADMIN` is used.
 export SPLITS_DRIVER_ADMIN="<ADDRESS>"
-
-# OPTIONAL
-# Address of the ImmutableSplitsDriver logic contract to use in `SPLITS_DRIVER` when it's deployed.
-# If not set, a new instance is deployed and a new app ID is registered for `SPLITS_DRIVER`.
-export SPLITS_DRIVER_LOGIC="<ADDRESS>"
 ```
 
 Run deployment:
