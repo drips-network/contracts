@@ -71,6 +71,11 @@ abstract contract Managed is UUPSUpgradeable {
         _managedStorage().isPaused = true;
     }
 
+    /// @notice Returns the current implementation address.
+    function implementation() public view returns (address) {
+        return _getImplementation();
+    }
+
     /// @notice Returns the address of the current admin.
     function admin() public view returns (address) {
         return _getAdmin();

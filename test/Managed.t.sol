@@ -66,8 +66,10 @@ contract ManagedTest is Test {
     function testAdminCanUpgradeContract() public {
         uint256 newInstanceId = proxy.instanceId() + 1;
         Logic newLogic = new Logic(newInstanceId);
+        assertEq(proxy.implementation(), address(logic), "Invalid implementation before update");
         vm.prank(admin);
         proxy.upgradeTo(address(newLogic));
+        assertEq(proxy.implementation(), address(newLogic), "Invalid implementation after update");
         assertEq(proxy.instanceId(), newInstanceId, "Invalid new instance ID");
     }
 
