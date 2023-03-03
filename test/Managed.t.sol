@@ -24,8 +24,8 @@ contract ManagedTest is Test {
     address internal pauser = address(2);
     address internal user = address(3);
 
-    bytes internal constant ERROR_NOT_ADMIN = "Caller is not the admin";
-    bytes internal constant ERROR_NOT_ADMIN_OR_PAUSER = "Caller is not the admin or a pauser";
+    bytes internal constant ERROR_NOT_ADMIN = "Caller not the admin";
+    bytes internal constant ERROR_NOT_ADMIN_OR_PAUSER = "Caller not the admin or a pauser";
 
     function setUp() public {
         logic = new Logic(0);

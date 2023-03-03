@@ -5,6 +5,8 @@ import {Test} from "forge-std/Test.sol";
 import {Splits, SplitsReceiver} from "src/Splits.sol";
 
 contract SplitsTest is Test, Splits {
+    bytes internal constant ERROR_NOT_SORTED = "Splits receivers not sorted";
+
     // Keys is user ID
     mapping(uint256 => SplitsReceiver[]) internal currSplitsReceivers;
 
@@ -173,17 +175,11 @@ contract SplitsTest is Test, Splits {
     }
 
     function testRejectsUnsortedSplitsReceivers() public {
-        assertSetSplitsReverts(
-            user,
-            splitsReceivers(receiver2, 1, receiver1, 1),
-            "Splits receivers not sorted by user ID"
-        );
+        assertSetSplitsReverts(user, splitsReceivers(receiver2, 1, receiver1, 1), ERROR_NOT_SORTED);
     }
 
     function testRejectsDuplicateSplitsReceivers() public {
-        assertSetSplitsReverts(
-            user, splitsReceivers(receiver, 1, receiver, 2), "Duplicate splits receivers"
-        );
+        assertSetSplitsReverts(user, splitsReceivers(receiver, 1, receiver, 2), ERROR_NOT_SORTED);
     }
 
     function testCanSplitAllWhenCollectedDoesNotSplitEvenly() public {

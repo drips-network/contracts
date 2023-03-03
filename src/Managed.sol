@@ -43,15 +43,13 @@ abstract contract Managed is UUPSUpgradeable {
 
     /// @notice Throws if called by any caller other than the admin.
     modifier onlyAdmin() {
-        require(admin() == msg.sender, "Caller is not the admin");
+        require(admin() == msg.sender, "Caller not the admin");
         _;
     }
 
     /// @notice Throws if called by any caller other than the admin or a pauser.
     modifier onlyAdminOrPauser() {
-        require(
-            admin() == msg.sender || isPauser(msg.sender), "Caller is not the admin or a pauser"
-        );
+        require(admin() == msg.sender || isPauser(msg.sender), "Caller not the admin or a pauser");
         _;
     }
 

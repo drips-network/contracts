@@ -31,11 +31,11 @@ contract AssertMinAmtPerSec is Test, Drips {
 }
 
 contract DripsTest is Test, PseudoRandomUtils, Drips {
-    bytes internal constant ERROR_NOT_SORTED = "Receivers not sorted";
+    bytes internal constant ERROR_NOT_SORTED = "Drips receivers not sorted";
     bytes internal constant ERROR_INVALID_DRIPS_LIST = "Invalid current drips list";
-    bytes internal constant ERROR_TIMESTAMP_EARLY = "Timestamp before last drips update";
+    bytes internal constant ERROR_TIMESTAMP_EARLY = "Timestamp before the last update";
     bytes internal constant ERROR_HISTORY_INVALID = "Invalid drips history";
-    bytes internal constant ERROR_HISTORY_UNCLEAR = "Drips history entry with hash and receivers";
+    bytes internal constant ERROR_HISTORY_UNCLEAR = "Entry with hash and receivers";
 
     // Keys are assetId and userId
     mapping(uint256 => mapping(uint256 => DripsReceiver[])) internal currReceiversStore;

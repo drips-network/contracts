@@ -459,7 +459,7 @@ abstract contract Drips {
             DripsHistory memory drips = dripsHistory[i];
             bytes32 dripsHash = drips.dripsHash;
             if (drips.receivers.length != 0) {
-                require(dripsHash == 0, "Drips history entry with hash and receivers");
+                require(dripsHash == 0, "Entry with hash and receivers");
                 dripsHash = _hashDrips(drips.receivers);
             }
             historyHashes[i] = historyHash;
@@ -546,7 +546,7 @@ abstract contract Drips {
         uint32 timestamp
     ) internal view returns (uint128 balance) {
         DripsState storage state = _dripsStorage().states[assetId][userId];
-        require(timestamp >= state.updateTime, "Timestamp before last drips update");
+        require(timestamp >= state.updateTime, "Timestamp before the last update");
         _verifyDripsReceivers(currReceivers, state);
         return _calcBalance(state.balance, state.updateTime, state.maxEnd, currReceivers, timestamp);
     }
@@ -795,7 +795,7 @@ abstract contract Drips {
             for (uint256 i = 0; i < receivers.length; i++) {
                 DripsReceiver memory receiver = receivers[i];
                 if (i > 0) {
-                    require(_isOrdered(receivers[i - 1], receiver), "Receivers not sorted");
+                    require(_isOrdered(receivers[i - 1], receiver), "Drips receivers not sorted");
                 }
                 configsLen = _addConfig(configs, configsLen, receiver);
             }

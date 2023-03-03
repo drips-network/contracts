@@ -243,8 +243,7 @@ abstract contract Splits {
             totalWeight += weight;
             uint256 userId = receiver.userId;
             if (i > 0) {
-                require(prevUserId != userId, "Duplicate splits receivers");
-                require(prevUserId < userId, "Splits receivers not sorted by user ID");
+                require(prevUserId < userId, "Splits receivers not sorted");
             }
             prevUserId = userId;
             emit SplitsReceiverSeen(receiversHash, userId, weight);
