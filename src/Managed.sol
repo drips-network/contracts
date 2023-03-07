@@ -172,11 +172,15 @@ abstract contract Managed is UUPSUpgradeable {
         emit Unpaused(msg.sender);
     }
 
-    /// @notice Calculates the ERC-1967 slot pointer.
+    /// @notice Calculates the quasi ERC-1967 slot pointer.
     /// @param name The name of the slot, should be globally unique
     /// @return slot The slot pointer
     function _erc1967Slot(string memory name) internal pure returns (bytes32 slot) {
-        return bytes32(uint256(keccak256(bytes(name))) - 1);
+        // The original ERC-1967 subtracts 1 from the hash to get 1 storage slot
+        // under an index without a known hash preimage which is enough to store a single address.
+        // This implementation subtracts 1024 to get 1024 slots without a known preimage
+        // allowing securely storing much larger structures.
+        return bytes32(uint256(keccak256(bytes(name))) - 1024);
     }
 
     /// @notice Returns the Managed storage.

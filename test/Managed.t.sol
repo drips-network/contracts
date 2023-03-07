@@ -235,7 +235,10 @@ contract ManagedTest is Test {
     function testErc1967Slot() public {
         // Values taken from [EIP-1967](https://eips.ethereum.org/EIPS/eip-1967)
         string memory name = "eip1967.proxy.implementation";
-        bytes32 expected = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+        bytes32 erc1967Proxy = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+        // The ERC-1976 standard proposes slots shifted by 1 from the raw hash,
+        // but the `erc1967Slot` function returns slots shifted by 1024.
+        bytes32 expected = bytes32(uint256(erc1967Proxy) + 1 - 1024);
         assertEq(proxy.erc1967Slot(name), expected, "Invalid EIP-1967 slot");
     }
 }
