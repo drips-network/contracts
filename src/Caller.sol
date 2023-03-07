@@ -178,7 +178,7 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     /// @param target The called address.
     /// @param data The calldata to be used for the call.
     /// @return returnData The data returned by the call.
-    function callAs(address sender, address target, bytes memory data)
+    function callAs(address sender, address target, bytes calldata data)
         public
         payable
         returns (bytes memory returnData)
@@ -203,7 +203,7 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     function callSigned(
         address sender,
         address target,
-        bytes memory data,
+        bytes calldata data,
         uint256 deadline,
         bytes32 r,
         bytes32 sv
@@ -242,11 +242,15 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     /// anybody will be able to use it in future calls to `callBatched`.
     /// @param calls The calls to perform.
     /// @return returnData The data returned by each of the calls.
-    function callBatched(Call[] memory calls) public payable returns (bytes[] memory returnData) {
+    function callBatched(Call[] calldata calls)
+        public
+        payable
+        returns (bytes[] memory returnData)
+    {
         returnData = new bytes[](calls.length);
         address sender = _msgSender();
         for (uint256 i = 0; i < calls.length; i++) {
-            Call memory call = calls[i];
+            Call calldata call = calls[i];
             returnData[i] = _call(sender, call.target, call.data, call.value);
         }
     }
@@ -270,7 +274,7 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     /// @param data The calldata to be used for the call.
     /// @param value The value of the call.
     /// @return returnData The data returned by the call.
-    function _call(address sender, address target, bytes memory data, uint256 value)
+    function _call(address sender, address target, bytes calldata data, uint256 value)
         internal
         returns (bytes memory returnData)
     {
