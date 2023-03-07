@@ -45,22 +45,67 @@ contract ManagedTest is Test {
         assertEq(logic.allPausers(), new address[](0), "Pausers not empty");
     }
 
-    function testAdminCanChangeAdmin() public {
-        assertEq(proxy.admin(), admin);
+    function testAdminCanProposeNewAdmin() public {
+        assertEq(proxy.proposedAdmin(), address(0));
+
         vm.prank(admin);
-        proxy.changeAdmin(user);
-        assertEq(proxy.admin(), user);
+        proxy.proposeNewAdmin(user);
+        assertEq(proxy.proposedAdmin(), user);
+
+        vm.prank(admin);
+        proxy.proposeNewAdmin(address(0));
+        assertEq(proxy.proposedAdmin(), address(0));
     }
 
-    function testPauserCanNotChangeAdmin() public {
+    function testPauserCanNotProposeNewAdmin() public {
         vm.prank(pauser);
         vm.expectRevert(ERROR_NOT_ADMIN);
-        proxy.changeAdmin(user);
+        proxy.proposeNewAdmin(user);
     }
 
-    function testArbitraryUserCanNotChangeAdmin() public {
+    function testArbitraryUserCanNotProposeNewAdmin() public {
         vm.expectRevert(ERROR_NOT_ADMIN);
-        proxy.changeAdmin(user);
+        proxy.proposeNewAdmin(user);
+    }
+
+    function testProposedAddressCanAcceptAdmin() public {
+        vm.prank(admin);
+        proxy.proposeNewAdmin(user);
+        assertEq(proxy.admin(), admin);
+        assertEq(proxy.proposedAdmin(), user);
+        vm.prank(user);
+        proxy.acceptAdmin();
+        assertEq(proxy.admin(), user);
+        assertEq(proxy.proposedAdmin(), address(0));
+    }
+
+    function testArbitraryUserCanNotAcceptAdmin() public {
+        vm.prank(admin);
+        proxy.proposeNewAdmin(user);
+        vm.expectRevert("Caller not the proposed admin");
+        proxy.acceptAdmin();
+    }
+
+    function testAdminCanRenounceAdmin() public {
+        vm.prank(admin);
+        proxy.proposeNewAdmin(user);
+        assertEq(proxy.admin(), admin);
+        assertEq(proxy.proposedAdmin(), user);
+        vm.prank(admin);
+        proxy.renounceAdmin();
+        assertEq(proxy.admin(), address(0));
+        assertEq(proxy.proposedAdmin(), address(0));
+    }
+
+    function testPauserCanNotRenounceAdmin() public {
+        vm.prank(pauser);
+        vm.expectRevert(ERROR_NOT_ADMIN);
+        proxy.renounceAdmin();
+    }
+
+    function testArbitraryUserCanNotRenounceAdmin() public {
+        vm.expectRevert(ERROR_NOT_ADMIN);
+        proxy.renounceAdmin();
     }
 
     function testAdminCanUpgradeContract() public {

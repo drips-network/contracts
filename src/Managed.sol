@@ -4,6 +4,7 @@ pragma solidity ^0.8.17;
 import {UUPSUpgradeable} from "openzeppelin-contracts/proxy/utils/UUPSUpgradeable.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {EnumerableSet} from "openzeppelin-contracts/utils/structs/EnumerableSet.sol";
+import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 
 using EnumerableSet for EnumerableSet.AddressSet;
 
@@ -17,6 +18,12 @@ using EnumerableSet for EnumerableSet.AddressSet;
 abstract contract Managed is UUPSUpgradeable {
     /// @notice The pointer to the storage slot holding a single `ManagedStorage` structure.
     bytes32 private immutable _managedStorageSlot = _erc1967Slot("eip1967.managed.storage");
+
+    /// @notice Emitted when a new admin of the contract is proposed.
+    /// The proposed admin must call `acceptAdmin` to finalize the change.
+    /// @param currentAdmin The current admin address.
+    /// @param newAdmin The proposed admin address.
+    event NewAdminProposed(address indexed currentAdmin, address indexed newAdmin);
 
     /// @notice Emitted when the pauses role is granted.
     /// @param pauser The address that the pauser role was granted to.
@@ -39,6 +46,7 @@ abstract contract Managed is UUPSUpgradeable {
     struct ManagedStorage {
         bool isPaused;
         EnumerableSet.AddressSet pausers;
+        address proposedAdmin;
     }
 
     /// @notice Throws if called by any caller other than the admin.
@@ -81,10 +89,42 @@ abstract contract Managed is UUPSUpgradeable {
         return _getAdmin();
     }
 
-    /// @notice Changes the admin of the contract.
+    /// @notice Returns the proposed address to change the admin to.
+    function proposedAdmin() public view returns (address) {
+        return _managedStorage().proposedAdmin;
+    }
+
+    /// @notice Proposes a change of the admin of the contract.
+    /// The proposed new admin must call `acceptAdmin` to finalize the change.
+    /// To cancel a proposal propose a different address, e.g. the zero address.
     /// Can only be called by the current admin.
-    function changeAdmin(address newAdmin) public onlyAdmin {
-        _changeAdmin(newAdmin);
+    /// @param newAdmin The proposed admin address.
+    function proposeNewAdmin(address newAdmin) public onlyAdmin {
+        emit NewAdminProposed(msg.sender, newAdmin);
+        _managedStorage().proposedAdmin = newAdmin;
+    }
+
+    /// @notice Applies a proposed change of the admin of the contract.
+    /// Sets the proposed admin to the zero address.
+    /// Can only be called by the proposed admin.
+    function acceptAdmin() public {
+        require(proposedAdmin() == msg.sender, "Caller not the proposed admin");
+        _updateAdmin(msg.sender);
+    }
+
+    /// @notice Changes the admin of the contract to address zero.
+    /// It's no longer possible to change the admin or upgrade the contract afterwards.
+    /// Can only be called by the current admin.
+    function renounceAdmin() public onlyAdmin {
+        _updateAdmin(address(0));
+    }
+
+    /// @notice Sets the current admin of the contract and clears the proposed admin.
+    /// @param newAdmin The admin address being set. Can be the zero address.
+    function _updateAdmin(address newAdmin) internal {
+        emit AdminChanged(admin(), newAdmin);
+        _managedStorage().proposedAdmin = address(0);
+        StorageSlot.getAddressSlot(_ADMIN_SLOT).value = newAdmin;
     }
 
     /// @notice Grants the pauser role to an address. Callable only by the admin.
