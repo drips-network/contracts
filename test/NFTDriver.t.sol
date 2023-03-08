@@ -118,6 +118,7 @@ contract NFTDriverTest is Test {
 
         assertEq(collected, amt, "Invalid collected");
         assertEq(erc20.balanceOf(address(this)), balance + amt, "Invalid balance");
+        assertEq(erc20.balanceOf(address(dripsHub)), 0, "Invalid DripsHub balance");
     }
 
     function testCollectTransfersFundsToTheProvidedAddress() public {
@@ -130,6 +131,7 @@ contract NFTDriverTest is Test {
 
         assertEq(collected, amt, "Invalid collected");
         assertEq(erc20.balanceOf(transferTo), amt, "Invalid balance");
+        assertEq(erc20.balanceOf(address(dripsHub)), 0, "Invalid DripsHub balance");
     }
 
     function testCollectRevertsWhenNotTokenHolder() public {
@@ -144,6 +146,7 @@ contract NFTDriverTest is Test {
         driver.give(tokenId1, tokenId2, erc20, amt);
 
         assertEq(erc20.balanceOf(address(this)), balance - amt, "Invalid balance");
+        assertEq(erc20.balanceOf(address(dripsHub)), amt, "Invalid DripsHub balance");
         assertEq(dripsHub.splittable(tokenId2, erc20), amt, "Invalid received amount");
     }
 
@@ -167,6 +170,7 @@ contract NFTDriverTest is Test {
         );
 
         assertEq(erc20.balanceOf(address(this)), balance - amt, "Invalid balance after top-up");
+        assertEq(erc20.balanceOf(address(dripsHub)), amt, "Invalid DripsHub balance after top-up");
         (,,, uint128 dripsBalance,) = dripsHub.dripsState(tokenId1, erc20);
         assertEq(dripsBalance, amt, "Invalid drips balance after top-up");
 
@@ -182,6 +186,7 @@ contract NFTDriverTest is Test {
         );
 
         assertEq(erc20.balanceOf(address(user)), balance + amt, "Invalid balance after withdrawal");
+        assertEq(erc20.balanceOf(address(dripsHub)), 0, "Invalid DripsHub balance after withdrawal");
         (,,, dripsBalance,) = dripsHub.dripsState(tokenId1, erc20);
         assertEq(dripsBalance, 0, "Invalid drips balance after withdrawal");
         assertEq(realBalanceDelta, -int128(amt), "Invalid drips balance delta after withdrawal");
@@ -197,7 +202,7 @@ contract NFTDriverTest is Test {
             driver.setDrips(tokenId, erc20, receivers, -int128(amt), receivers, 0, 0, transferTo);
 
         assertEq(erc20.balanceOf(transferTo), amt, "Invalid balance");
-
+        assertEq(erc20.balanceOf(address(dripsHub)), 0, "Invalid DripsHub balance");
         (,,, uint128 dripsBalance,) = dripsHub.dripsState(tokenId1, erc20);
         assertEq(dripsBalance, 0, "Invalid drips balance");
         assertEq(realBalanceDelta, -int128(amt), "Invalid drips balance delta");
