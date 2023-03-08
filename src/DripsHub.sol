@@ -286,9 +286,7 @@ contract DripsHub is Managed, Drips, Splits {
     {
         uint256 assetId = _assetId(erc20);
         receivedAmt = Drips._receiveDrips(userId, assetId, maxCycles);
-        if (receivedAmt > 0) {
-            Splits._addSplittable(userId, assetId, receivedAmt);
-        }
+        if (receivedAmt > 0) Splits._addSplittable(userId, assetId, receivedAmt);
     }
 
     /// @notice Receive drips from the currently running cycle from a single sender.
@@ -320,9 +318,7 @@ contract DripsHub is Managed, Drips, Splits {
     ) public whenNotPaused returns (uint128 amt) {
         uint256 assetId = _assetId(erc20);
         amt = Drips._squeezeDrips(userId, assetId, senderId, historyHash, dripsHistory);
-        if (amt > 0) {
-            Splits._addSplittable(userId, assetId, amt);
-        }
+        if (amt > 0) Splits._addSplittable(userId, assetId, amt);
     }
 
     /// @notice Calculate effects of calling `squeezeDrips` with the given parameters.
@@ -662,9 +658,11 @@ contract DripsHub is Managed, Drips, Splits {
         whenNotPaused
         onlyDriver(userId)
     {
-        for (uint256 i = 0; i < userMetadata.length; i++) {
-            UserMetadata calldata metadata = userMetadata[i];
-            emit UserMetadataEmitted(userId, metadata.key, metadata.value);
+        unchecked {
+            for (uint256 i = 0; i < userMetadata.length; i++) {
+                UserMetadata calldata metadata = userMetadata[i];
+                emit UserMetadataEmitted(userId, metadata.key, metadata.value);
+            }
         }
     }
 

@@ -249,13 +249,15 @@ abstract contract Drips {
             DripsState storage state = _dripsStorage().states[assetId][userId];
             state.nextReceivableCycle = toCycle;
             mapping(uint32 => AmtDelta) storage amtDeltas = state.amtDeltas;
-            for (uint32 cycle = fromCycle; cycle < toCycle; cycle++) {
-                delete amtDeltas[cycle];
-            }
-            // The next cycle delta must be relative to the last received cycle, which got zeroed.
-            // In other words the next cycle delta must be an absolute value.
-            if (finalAmtPerCycle != 0) {
-                amtDeltas[toCycle].thisCycle += finalAmtPerCycle;
+            unchecked {
+                for (uint32 cycle = fromCycle; cycle < toCycle; cycle++) {
+                    delete amtDeltas[cycle];
+                }
+                // The next cycle delta must be relative to the last received cycle, which deltas
+                // got zeroed. In other words the next cycle delta must be an absolute value.
+                if (finalAmtPerCycle != 0) {
+                    amtDeltas[toCycle].thisCycle += finalAmtPerCycle;
+                }
             }
         }
         emit ReceivedDrips(userId, assetId, receivedAmt, receivableCycles);
@@ -283,18 +285,20 @@ abstract contract Drips {
             int128 amtPerCycle
         )
     {
-        (fromCycle, toCycle) = _receivableDripsCyclesRange(userId, assetId);
-        if (toCycle - fromCycle > maxCycles) {
-            receivableCycles = toCycle - fromCycle - maxCycles;
-            toCycle -= receivableCycles;
-        }
-        mapping(uint32 => AmtDelta) storage amtDeltas =
-            _dripsStorage().states[assetId][userId].amtDeltas;
-        for (uint32 cycle = fromCycle; cycle < toCycle; cycle++) {
-            AmtDelta memory amtDelta = amtDeltas[cycle];
-            amtPerCycle += amtDelta.thisCycle;
-            receivedAmt += uint128(amtPerCycle);
-            amtPerCycle += amtDelta.nextCycle;
+        unchecked {
+            (fromCycle, toCycle) = _receivableDripsCyclesRange(userId, assetId);
+            if (toCycle - fromCycle > maxCycles) {
+                receivableCycles = toCycle - fromCycle - maxCycles;
+                toCycle -= receivableCycles;
+            }
+            mapping(uint32 => AmtDelta) storage amtDeltas =
+                _dripsStorage().states[assetId][userId].amtDeltas;
+            for (uint32 cycle = fromCycle; cycle < toCycle; cycle++) {
+                AmtDelta memory amtDelta = amtDeltas[cycle];
+                amtPerCycle += amtDelta.thisCycle;
+                receivedAmt += uint128(amtPerCycle);
+                amtPerCycle += amtDelta.nextCycle;
+            }
         }
     }
 
@@ -309,8 +313,10 @@ abstract contract Drips {
         view
         returns (uint32 cycles)
     {
-        (uint32 fromCycle, uint32 toCycle) = _receivableDripsCyclesRange(userId, assetId);
-        return toCycle - fromCycle;
+        unchecked {
+            (uint32 fromCycle, uint32 toCycle) = _receivableDripsCyclesRange(userId, assetId);
+            return toCycle - fromCycle;
+        }
     }
 
     /// @notice Calculates the cycles range from which drips can be received.
@@ -353,25 +359,29 @@ abstract contract Drips {
         bytes32 historyHash,
         DripsHistory[] memory dripsHistory
     ) internal returns (uint128 amt) {
-        uint256 squeezedNum;
-        uint256[] memory squeezedRevIdxs;
-        bytes32[] memory historyHashes;
-        uint256 currCycleConfigs;
-        (amt, squeezedNum, squeezedRevIdxs, historyHashes, currCycleConfigs) =
-            _squeezeDripsResult(userId, assetId, senderId, historyHash, dripsHistory);
-        bytes32[] memory squeezedHistoryHashes = new bytes32[](squeezedNum);
-        DripsState storage state = _dripsStorage().states[assetId][userId];
-        uint32[2 ** 32] storage nextSqueezed = state.nextSqueezed[senderId];
-        for (uint256 i = 0; i < squeezedNum; i++) {
-            // `squeezedRevIdxs` are sorted from the newest configuration to the oldest,
-            // but we need to consume them from the oldest to the newest.
-            uint256 revIdx = squeezedRevIdxs[squeezedNum - i - 1];
-            squeezedHistoryHashes[i] = historyHashes[historyHashes.length - revIdx];
-            nextSqueezed[currCycleConfigs - revIdx] = _currTimestamp();
+        unchecked {
+            uint256 squeezedNum;
+            uint256[] memory squeezedRevIdxs;
+            bytes32[] memory historyHashes;
+            uint256 currCycleConfigs;
+            (amt, squeezedNum, squeezedRevIdxs, historyHashes, currCycleConfigs) =
+                _squeezeDripsResult(userId, assetId, senderId, historyHash, dripsHistory);
+            bytes32[] memory squeezedHistoryHashes = new bytes32[](squeezedNum);
+            DripsState storage state = _dripsStorage().states[assetId][userId];
+            uint32[2 ** 32] storage nextSqueezed = state.nextSqueezed[senderId];
+            for (uint256 i = 0; i < squeezedNum; i++) {
+                // `squeezedRevIdxs` are sorted from the newest configuration to the oldest,
+                // but we need to consume them from the oldest to the newest.
+                uint256 revIdx = squeezedRevIdxs[squeezedNum - i - 1];
+                squeezedHistoryHashes[i] = historyHashes[historyHashes.length - revIdx];
+                nextSqueezed[currCycleConfigs - revIdx] = _currTimestamp();
+            }
+            uint32 cycleStart = _currCycleStart();
+            _addDeltaRange(
+                state, cycleStart, cycleStart + 1, -int160(amt * _AMT_PER_SEC_MULTIPLIER)
+            );
+            emit SqueezedDrips(userId, assetId, senderId, amt, squeezedHistoryHashes);
         }
-        uint32 cycleStart = _currCycleStart();
-        _addDeltaRange(state, cycleStart, cycleStart + 1, -int160(amt * _AMT_PER_SEC_MULTIPLIER));
-        emit SqueezedDrips(userId, assetId, senderId, amt, squeezedHistoryHashes);
     }
 
     /// @notice Calculate effects of calling `_squeezeDrips` with the given parameters.
@@ -426,18 +436,20 @@ abstract contract Drips {
         uint32[2 ** 32] storage nextSqueezed =
             _dripsStorage().states[assetId][userId].nextSqueezed[senderId];
         uint32 squeezeEndCap = _currTimestamp();
-        for (uint256 i = 1; i <= dripsHistory.length && i <= currCycleConfigs; i++) {
-            DripsHistory memory drips = dripsHistory[dripsHistory.length - i];
-            if (drips.receivers.length != 0) {
-                uint32 squeezeStartCap = nextSqueezed[currCycleConfigs - i];
-                if (squeezeStartCap < _currCycleStart()) squeezeStartCap = _currCycleStart();
-                if (squeezeStartCap < drips.updateTime) squeezeStartCap = drips.updateTime;
-                if (squeezeStartCap < squeezeEndCap) {
-                    squeezedRevIdxs[squeezedNum++] = i;
-                    amt += _squeezedAmt(userId, drips, squeezeStartCap, squeezeEndCap);
+        unchecked {
+            for (uint256 i = 1; i <= dripsHistory.length && i <= currCycleConfigs; i++) {
+                DripsHistory memory drips = dripsHistory[dripsHistory.length - i];
+                if (drips.receivers.length != 0) {
+                    uint32 squeezeStartCap = nextSqueezed[currCycleConfigs - i];
+                    if (squeezeStartCap < _currCycleStart()) squeezeStartCap = _currCycleStart();
+                    if (squeezeStartCap < drips.updateTime) squeezeStartCap = drips.updateTime;
+                    if (squeezeStartCap < squeezeEndCap) {
+                        squeezedRevIdxs[squeezedNum++] = i;
+                        amt += _squeezedAmt(userId, drips, squeezeStartCap, squeezeEndCap);
+                    }
                 }
+                squeezeEndCap = drips.updateTime;
             }
-            squeezeEndCap = drips.updateTime;
         }
     }
 
@@ -481,28 +493,30 @@ abstract contract Drips {
         uint32 squeezeStartCap,
         uint32 squeezeEndCap
     ) private view returns (uint128 squeezedAmt) {
-        DripsReceiver[] memory receivers = dripsHistory.receivers;
-        // Binary search for the `idx` of the first occurrence of `userId`
-        uint256 idx = 0;
-        for (uint256 idxCap = receivers.length; idx < idxCap;) {
-            uint256 idxMid = (idx + idxCap) / 2;
-            if (receivers[idxMid].userId < userId) {
-                idx = idxMid + 1;
-            } else {
-                idxCap = idxMid;
+        unchecked {
+            DripsReceiver[] memory receivers = dripsHistory.receivers;
+            // Binary search for the `idx` of the first occurrence of `userId`
+            uint256 idx = 0;
+            for (uint256 idxCap = receivers.length; idx < idxCap;) {
+                uint256 idxMid = (idx + idxCap) / 2;
+                if (receivers[idxMid].userId < userId) {
+                    idx = idxMid + 1;
+                } else {
+                    idxCap = idxMid;
+                }
             }
+            uint32 updateTime = dripsHistory.updateTime;
+            uint32 maxEnd = dripsHistory.maxEnd;
+            uint256 amt = 0;
+            for (; idx < receivers.length; idx++) {
+                DripsReceiver memory receiver = receivers[idx];
+                if (receiver.userId != userId) break;
+                (uint32 start, uint32 end) =
+                    _dripsRange(receiver, updateTime, maxEnd, squeezeStartCap, squeezeEndCap);
+                amt += _drippedAmt(receiver.config.amtPerSec(), start, end);
+            }
+            return uint128(amt);
         }
-        uint32 updateTime = dripsHistory.updateTime;
-        uint32 maxEnd = dripsHistory.maxEnd;
-        uint256 amt = 0;
-        for (; idx < receivers.length; idx++) {
-            DripsReceiver memory receiver = receivers[idx];
-            if (receiver.userId != userId) break;
-            (uint32 start, uint32 end) =
-                _dripsRange(receiver, updateTime, maxEnd, squeezeStartCap, squeezeEndCap);
-            amt += _drippedAmt(receiver.config.amtPerSec(), start, end);
-        }
-        return uint128(amt);
     }
 
     /// @notice Current user drips state.
@@ -568,17 +582,19 @@ abstract contract Drips {
         DripsReceiver[] memory receivers,
         uint32 timestamp
     ) private view returns (uint128 balance) {
-        balance = lastBalance;
-        for (uint256 i = 0; i < receivers.length; i++) {
-            DripsReceiver memory receiver = receivers[i];
-            (uint32 start, uint32 end) = _dripsRange({
-                receiver: receiver,
-                updateTime: lastUpdate,
-                maxEnd: maxEnd,
-                startCap: lastUpdate,
-                endCap: timestamp
-            });
-            balance -= uint128(_drippedAmt(receiver.config.amtPerSec(), start, end));
+        unchecked {
+            balance = lastBalance;
+            for (uint256 i = 0; i < receivers.length; i++) {
+                DripsReceiver memory receiver = receivers[i];
+                (uint32 start, uint32 end) = _dripsRange({
+                    receiver: receiver,
+                    updateTime: lastUpdate,
+                    maxEnd: maxEnd,
+                    startCap: lastUpdate,
+                    endCap: timestamp
+                });
+                balance -= uint128(_drippedAmt(receiver.config.amtPerSec(), start, end));
+            }
         }
     }
 
@@ -626,52 +642,56 @@ abstract contract Drips {
         uint32 maxEndHint1,
         uint32 maxEndHint2
     ) internal returns (int128 realBalanceDelta) {
-        DripsState storage state = _dripsStorage().states[assetId][userId];
-        _verifyDripsReceivers(currReceivers, state);
-        uint32 lastUpdate = state.updateTime;
-        uint128 newBalance;
-        uint32 newMaxEnd;
-        {
-            uint32 currMaxEnd = state.maxEnd;
-            int128 currBalance = int128(
-                _calcBalance(state.balance, lastUpdate, currMaxEnd, currReceivers, _currTimestamp())
-            );
-            realBalanceDelta = balanceDelta;
-            // Cap `realBalanceDelta` at withdrawal of the entire `currBalance`
-            if (realBalanceDelta < -currBalance) {
-                realBalanceDelta = -currBalance;
+        unchecked {
+            DripsState storage state = _dripsStorage().states[assetId][userId];
+            _verifyDripsReceivers(currReceivers, state);
+            uint32 lastUpdate = state.updateTime;
+            uint128 newBalance;
+            uint32 newMaxEnd;
+            {
+                uint32 currMaxEnd = state.maxEnd;
+                int128 currBalance = int128(
+                    _calcBalance(
+                        state.balance, lastUpdate, currMaxEnd, currReceivers, _currTimestamp()
+                    )
+                );
+                realBalanceDelta = balanceDelta;
+                // Cap `realBalanceDelta` at withdrawal of the entire `currBalance`
+                if (realBalanceDelta < -currBalance) {
+                    realBalanceDelta = -currBalance;
+                }
+                newBalance = uint128(currBalance + realBalanceDelta);
+                newMaxEnd = _calcMaxEnd(newBalance, newReceivers, maxEndHint1, maxEndHint2);
+                _updateReceiverStates(
+                    _dripsStorage().states[assetId],
+                    currReceivers,
+                    lastUpdate,
+                    currMaxEnd,
+                    newReceivers,
+                    newMaxEnd
+                );
             }
-            newBalance = uint128(currBalance + realBalanceDelta);
-            newMaxEnd = _calcMaxEnd(newBalance, newReceivers, maxEndHint1, maxEndHint2);
-            _updateReceiverStates(
-                _dripsStorage().states[assetId],
-                currReceivers,
-                lastUpdate,
-                currMaxEnd,
-                newReceivers,
-                newMaxEnd
-            );
-        }
-        state.updateTime = _currTimestamp();
-        state.maxEnd = newMaxEnd;
-        state.balance = newBalance;
-        bytes32 dripsHistory = state.dripsHistoryHash;
-        // slither-disable-next-line timestamp
-        if (dripsHistory != 0 && _cycleOf(lastUpdate) != _cycleOf(_currTimestamp())) {
-            state.currCycleConfigs = 2;
-        } else {
-            state.currCycleConfigs++;
-        }
-        bytes32 newDripsHash = _hashDrips(newReceivers);
-        state.dripsHistoryHash =
-            _hashDripsHistory(dripsHistory, newDripsHash, _currTimestamp(), newMaxEnd);
-        emit DripsSet(userId, assetId, newDripsHash, dripsHistory, newBalance, newMaxEnd);
-        // slither-disable-next-line timestamp
-        if (newDripsHash != state.dripsHash) {
-            state.dripsHash = newDripsHash;
-            for (uint256 i = 0; i < newReceivers.length; i++) {
-                DripsReceiver memory receiver = newReceivers[i];
-                emit DripsReceiverSeen(newDripsHash, receiver.userId, receiver.config);
+            state.updateTime = _currTimestamp();
+            state.maxEnd = newMaxEnd;
+            state.balance = newBalance;
+            bytes32 dripsHistory = state.dripsHistoryHash;
+            // slither-disable-next-line timestamp
+            if (dripsHistory != 0 && _cycleOf(lastUpdate) != _cycleOf(_currTimestamp())) {
+                state.currCycleConfigs = 2;
+            } else {
+                state.currCycleConfigs++;
+            }
+            bytes32 newDripsHash = _hashDrips(newReceivers);
+            state.dripsHistoryHash =
+                _hashDripsHistory(dripsHistory, newDripsHash, _currTimestamp(), newMaxEnd);
+            emit DripsSet(userId, assetId, newDripsHash, dripsHistory, newBalance, newMaxEnd);
+            // slither-disable-next-line timestamp
+            if (newDripsHash != state.dripsHash) {
+                state.dripsHash = newDripsHash;
+                for (uint256 i = 0; i < newReceivers.length; i++) {
+                    DripsReceiver memory receiver = newReceivers[i];
+                    emit DripsReceiverSeen(newDripsHash, receiver.userId, receiver.config);
+                }
             }
         }
     }
@@ -701,49 +721,50 @@ abstract contract Drips {
         uint32 hint1,
         uint32 hint2
     ) private view returns (uint32 maxEnd) {
-        unchecked {
-            (uint256[] memory configs, uint256 configsLen) = _buildConfigs(receivers);
+        (uint256[] memory configs, uint256 configsLen) = _buildConfigs(receivers);
 
-            uint256 enoughEnd = _currTimestamp();
-            // slither-disable-start incorrect-equality,timestamp
-            if (configsLen == 0 || balance == 0) {
-                return uint32(enoughEnd);
-            }
-
-            uint256 notEnoughEnd = type(uint32).max;
-            if (_isBalanceEnough(balance, configs, configsLen, notEnoughEnd)) {
-                return uint32(notEnoughEnd);
-            }
-
-            if (hint1 > enoughEnd && hint1 < notEnoughEnd) {
-                if (_isBalanceEnough(balance, configs, configsLen, hint1)) {
-                    enoughEnd = hint1;
-                } else {
-                    notEnoughEnd = hint1;
-                }
-            }
-
-            if (hint2 > enoughEnd && hint2 < notEnoughEnd) {
-                if (_isBalanceEnough(balance, configs, configsLen, hint2)) {
-                    enoughEnd = hint2;
-                } else {
-                    notEnoughEnd = hint2;
-                }
-            }
-
-            while (true) {
-                uint256 end = (enoughEnd + notEnoughEnd) / 2;
-                if (end == enoughEnd) {
-                    return uint32(end);
-                }
-                if (_isBalanceEnough(balance, configs, configsLen, end)) {
-                    enoughEnd = end;
-                } else {
-                    notEnoughEnd = end;
-                }
-            }
-            // slither-disable-end incorrect-equality,timestamp
+        uint256 enoughEnd = _currTimestamp();
+        // slither-disable-start incorrect-equality,timestamp
+        if (configsLen == 0 || balance == 0) {
+            return uint32(enoughEnd);
         }
+
+        uint256 notEnoughEnd = type(uint32).max;
+        if (_isBalanceEnough(balance, configs, configsLen, notEnoughEnd)) {
+            return uint32(notEnoughEnd);
+        }
+
+        if (hint1 > enoughEnd && hint1 < notEnoughEnd) {
+            if (_isBalanceEnough(balance, configs, configsLen, hint1)) {
+                enoughEnd = hint1;
+            } else {
+                notEnoughEnd = hint1;
+            }
+        }
+
+        if (hint2 > enoughEnd && hint2 < notEnoughEnd) {
+            if (_isBalanceEnough(balance, configs, configsLen, hint2)) {
+                enoughEnd = hint2;
+            } else {
+                notEnoughEnd = hint2;
+            }
+        }
+
+        while (true) {
+            uint256 end;
+            unchecked {
+                end = (enoughEnd + notEnoughEnd) / 2;
+            }
+            if (end == enoughEnd) {
+                return uint32(end);
+            }
+            if (_isBalanceEnough(balance, configs, configsLen, end)) {
+                enoughEnd = end;
+            } else {
+                notEnoughEnd = end;
+            }
+        }
+        // slither-disable-end incorrect-equality,timestamp
     }
 
     /// @notice Check if a given balance is enough to cover drips with the given `maxEnd`.
@@ -821,7 +842,9 @@ abstract contract Drips {
             return configsLen;
         }
         configs[configsLen] = (amtPerSec << 64) | (start << 32) | end;
-        return configsLen + 1;
+        unchecked {
+            return configsLen + 1;
+        }
     }
 
     /// @notice Load a drips configuration from the list.
@@ -913,15 +936,14 @@ abstract contract Drips {
             }
 
             // Limit picking both curr and new to situations when they differ only by time
-            if (
-                pickCurr && pickNew
-                    && (
-                        currRecv.userId != newRecv.userId
-                            || currRecv.config.amtPerSec() != newRecv.config.amtPerSec()
-                    )
-            ) {
-                pickCurr = _isOrdered(currRecv, newRecv);
-                pickNew = !pickCurr;
+            if (pickCurr && pickNew) {
+                if (
+                    currRecv.userId != newRecv.userId
+                        || currRecv.config.amtPerSec() != newRecv.config.amtPerSec()
+                ) {
+                    pickCurr = _isOrdered(currRecv, newRecv);
+                    pickNew = !pickCurr;
+                }
             }
 
             if (pickCurr && pickNew) {
@@ -975,11 +997,13 @@ abstract contract Drips {
                 break;
             }
 
-            if (pickCurr) {
-                currIdx++;
-            }
-            if (pickNew) {
-                newIdx++;
+            unchecked {
+                if (pickCurr) {
+                    currIdx++;
+                }
+                if (pickNew) {
+                    newIdx++;
+                }
             }
         }
     }
@@ -1014,7 +1038,10 @@ abstract contract Drips {
         if (start == 0) {
             start = updateTime;
         }
-        uint40 end = uint40(start) + receiver.config.duration();
+        uint40 end;
+        unchecked {
+            end = uint40(start) + receiver.config.duration();
+        }
         // slither-disable-next-line incorrect-equality
         if (end == start || end > maxEnd) {
             end = maxEnd;
@@ -1152,9 +1179,11 @@ abstract contract Drips {
     /// @notice The current cycle start timestamp, casted to the contract's internal representation.
     /// @return timestamp The current cycle start timestamp
     function _currCycleStart() private view returns (uint32 timestamp) {
-        uint32 currTimestamp = _currTimestamp();
-        // slither-disable-next-line weak-prng
-        return currTimestamp - (currTimestamp % _cycleSecs);
+        unchecked {
+            uint32 currTimestamp = _currTimestamp();
+            // slither-disable-next-line weak-prng
+            return currTimestamp - (currTimestamp % _cycleSecs);
+        }
     }
 
     /// @notice Returns the Drips storage.

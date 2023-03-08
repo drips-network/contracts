@@ -124,12 +124,14 @@ abstract contract Splits {
         if (amount == 0) {
             return (0, 0);
         }
-        uint32 splitsWeight = 0;
-        for (uint256 i = 0; i < currReceivers.length; i++) {
-            splitsWeight += currReceivers[i].weight;
+        unchecked {
+            uint160 splitsWeight = 0;
+            for (uint256 i = 0; i < currReceivers.length; i++) {
+                splitsWeight += currReceivers[i].weight;
+            }
+            splitAmt = uint128(amount * splitsWeight / _TOTAL_SPLITS_WEIGHT);
+            collectableAmt = amount - splitAmt;
         }
-        splitAmt = uint128((uint160(amount) * splitsWeight) / _TOTAL_SPLITS_WEIGHT);
-        collectableAmt = amount - splitAmt;
     }
 
     /// @notice Splits the user's splittable funds among receivers.
@@ -153,20 +155,22 @@ abstract contract Splits {
         if (collectableAmt == 0) {
             return (0, 0);
         }
-
         balance.splittable = 0;
-        uint32 splitsWeight = 0;
-        for (uint256 i = 0; i < currReceivers.length; i++) {
-            splitsWeight += currReceivers[i].weight;
-            uint128 currSplitAmt =
-                uint128((uint160(collectableAmt) * splitsWeight) / _TOTAL_SPLITS_WEIGHT - splitAmt);
-            splitAmt += currSplitAmt;
-            uint256 receiver = currReceivers[i].userId;
-            _addSplittable(receiver, assetId, currSplitAmt);
-            emit Split(userId, receiver, assetId, currSplitAmt);
+
+        unchecked {
+            uint160 splitsWeight = 0;
+            for (uint256 i = 0; i < currReceivers.length; i++) {
+                splitsWeight += currReceivers[i].weight;
+                uint128 currSplitAmt =
+                    uint128(collectableAmt * splitsWeight / _TOTAL_SPLITS_WEIGHT) - splitAmt;
+                splitAmt += currSplitAmt;
+                uint256 receiver = currReceivers[i].userId;
+                _addSplittable(receiver, assetId, currSplitAmt);
+                emit Split(userId, receiver, assetId, currSplitAmt);
+            }
+            collectableAmt -= splitAmt;
+            balance.collectable += collectableAmt;
         }
-        collectableAmt -= splitAmt;
-        balance.collectable += collectableAmt;
         emit Collectable(userId, assetId, collectableAmt);
     }
 
@@ -232,23 +236,23 @@ abstract contract Splits {
     /// @param receiversHash The hash of the list of splits receivers.
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
     function _assertSplitsValid(SplitsReceiver[] memory receivers, bytes32 receiversHash) private {
-        require(receivers.length <= _MAX_SPLITS_RECEIVERS, "Too many splits receivers");
-        uint64 totalWeight = 0;
-        // slither-disable-next-line uninitialized-local
-        uint256 prevUserId;
-        for (uint256 i = 0; i < receivers.length; i++) {
-            SplitsReceiver memory receiver = receivers[i];
-            uint32 weight = receiver.weight;
-            require(weight != 0, "Splits receiver weight is zero");
-            totalWeight += weight;
-            uint256 userId = receiver.userId;
-            if (i > 0) {
-                require(prevUserId < userId, "Splits receivers not sorted");
+        unchecked {
+            require(receivers.length <= _MAX_SPLITS_RECEIVERS, "Too many splits receivers");
+            uint64 totalWeight = 0;
+            // slither-disable-next-line uninitialized-local
+            uint256 prevUserId;
+            for (uint256 i = 0; i < receivers.length; i++) {
+                SplitsReceiver memory receiver = receivers[i];
+                uint32 weight = receiver.weight;
+                require(weight != 0, "Splits receiver weight is zero");
+                totalWeight += weight;
+                uint256 userId = receiver.userId;
+                if (i > 0) require(prevUserId < userId, "Splits receivers not sorted");
+                prevUserId = userId;
+                emit SplitsReceiverSeen(receiversHash, userId, weight);
             }
-            prevUserId = userId;
-            emit SplitsReceiverSeen(receiversHash, userId, weight);
+            require(totalWeight <= _TOTAL_SPLITS_WEIGHT, "Splits weights sum too high");
         }
-        require(totalWeight <= _TOTAL_SPLITS_WEIGHT, "Splits weights sum too high");
     }
 
     /// @notice Asserts that the list of splits receivers is the user's currently used one.

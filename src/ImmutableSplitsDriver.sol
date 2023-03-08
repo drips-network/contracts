@@ -61,8 +61,10 @@ contract ImmutableSplitsDriver is Managed {
         userId = nextUserId();
         StorageSlot.getUint256Slot(_counterSlot).value++;
         uint256 weightSum = 0;
-        for (uint256 i = 0; i < receivers.length; i++) {
-            weightSum += receivers[i].weight;
+        unchecked {
+            for (uint256 i = 0; i < receivers.length; i++) {
+                weightSum += receivers[i].weight;
+            }
         }
         require(weightSum == totalSplitsWeight, "Invalid total receivers weight");
         emit CreatedSplits(userId, dripsHub.hashSplits(receivers));
