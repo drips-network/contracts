@@ -31,8 +31,8 @@ contract NFTDriverTest is Test {
     uint256 internal tokenId2;
     uint256 internal tokenIdUser;
 
-    bytes internal constant ERROR_INVALID_TOKEN = "ERC721: invalid token ID";
     bytes internal constant ERROR_NOT_OWNER = "ERC721: caller is not token owner or approved";
+    bytes internal constant ERROR_ALREADY_MINTED = "ERC721: token already minted";
 
     function setUp() public {
         DripsHub hubLogic = new DripsHub(10);
@@ -48,16 +48,30 @@ contract NFTDriverTest is Test {
         driver = NFTDriver(address(new ManagedProxy(driverLogic, admin)));
         dripsHub.updateDriverAddress(driverId, address(driver));
 
-        tokenId = driver.mint(address(this), new UserMetadata[](0));
-        tokenId1 = driver.mint(address(this), new UserMetadata[](0));
-        tokenId2 = driver.mint(address(this), new UserMetadata[](0));
-        tokenIdUser = driver.mint(user, new UserMetadata[](0));
+        tokenId = driver.mint(address(this), noMetadata());
+        tokenId1 = driver.mint(address(this), noMetadata());
+        tokenId2 = driver.mint(address(this), noMetadata());
+        tokenIdUser = driver.mint(user, noMetadata());
 
         erc20 = new ERC20PresetFixedSupply("test", "test", type(uint136).max, address(this));
         erc20.approve(address(driver), type(uint256).max);
         erc20.transfer(user, erc20.totalSupply() / 100);
         vm.prank(user);
         erc20.approve(address(driver), type(uint256).max);
+    }
+
+    function noMetadata() internal pure returns (UserMetadata[] memory userMetadata) {
+        userMetadata = new UserMetadata[](0);
+    }
+
+    function someMetadata() internal pure returns (UserMetadata[] memory userMetadata) {
+        userMetadata = new UserMetadata[](1);
+        userMetadata[0] = UserMetadata("key", "value");
+    }
+
+    function assertTokenDoesNotExist(uint256 nonExistentTokenId) internal {
+        vm.expectRevert("ERC721: invalid token ID");
+        driver.ownerOf(nonExistentTokenId);
     }
 
     function testName() public {
@@ -82,12 +96,9 @@ contract NFTDriverTest is Test {
 
     function testMintIncreasesTokenId() public {
         uint256 nextTokenId = driver.nextTokenId();
-        vm.expectRevert(ERROR_INVALID_TOKEN);
-        driver.ownerOf(nextTokenId);
-        UserMetadata[] memory userMetadata = new UserMetadata[](1);
-        userMetadata[0] = UserMetadata("key", "value");
+        assertTokenDoesNotExist(nextTokenId);
 
-        uint256 newTokenId = driver.mint(user, userMetadata);
+        uint256 newTokenId = driver.mint(user, someMetadata());
 
         assertEq(newTokenId, nextTokenId, "Invalid new tokenId");
         assertEq(driver.nextTokenId(), newTokenId + 1, "Invalid next tokenId");
@@ -96,16 +107,65 @@ contract NFTDriverTest is Test {
 
     function testSafeMintIncreasesTokenId() public {
         uint256 nextTokenId = driver.nextTokenId();
-        vm.expectRevert(ERROR_INVALID_TOKEN);
-        driver.ownerOf(nextTokenId);
-        UserMetadata[] memory userMetadata = new UserMetadata[](1);
-        userMetadata[0] = UserMetadata("key", "value");
+        assertTokenDoesNotExist(nextTokenId);
 
-        uint256 newTokenId = driver.safeMint(user, userMetadata);
+        uint256 newTokenId = driver.safeMint(user, someMetadata());
 
         assertEq(newTokenId, nextTokenId, "Invalid new tokenId");
         assertEq(driver.nextTokenId(), newTokenId + 1, "Invalid next tokenId");
         assertEq(driver.ownerOf(newTokenId), user, "Invalid token owner");
+    }
+
+    function testMintWithSaltUsesUpSalt() public {
+        uint64 salt = 123;
+        uint256 newTokenId = driver.calcTokenIdWithSalt(address(this), salt);
+        assertFalse(driver.isSaltUsed(address(this), salt), "Salt already used");
+        assertTokenDoesNotExist(newTokenId);
+
+        uint256 mintedTokenId = driver.mintWithSalt(salt, user, someMetadata());
+
+        assertEq(mintedTokenId, newTokenId, "Invalid new tokenId");
+        assertTrue(driver.isSaltUsed(address(this), salt), "Salt not used");
+        assertEq(driver.ownerOf(newTokenId), user, "Invalid token owner");
+    }
+
+    function testSafeMintWithSaltUsesUpSalt() public {
+        uint64 salt = 123;
+        uint256 newTokenId = driver.calcTokenIdWithSalt(address(this), salt);
+        assertFalse(driver.isSaltUsed(address(this), salt), "Salt already used");
+        assertTokenDoesNotExist(newTokenId);
+
+        uint256 mintedTokenId = driver.safeMintWithSalt(salt, user, someMetadata());
+
+        assertEq(mintedTokenId, newTokenId, "Invalid new tokenId");
+        assertTrue(driver.isSaltUsed(address(this), salt), "Salt not used");
+        assertEq(driver.ownerOf(newTokenId), user, "Invalid token owner");
+    }
+
+    function testUsedSaltCanNotBeUsedToMint() public {
+        uint64 salt = 123;
+        uint256 newTokenId = driver.mintWithSalt(salt, user, noMetadata());
+
+        vm.expectRevert(ERROR_ALREADY_MINTED);
+        driver.mintWithSalt(salt, user, noMetadata());
+
+        vm.prank(user);
+        driver.burn(newTokenId);
+        vm.expectRevert(ERROR_ALREADY_MINTED);
+        driver.mintWithSalt(salt, user, noMetadata());
+    }
+
+    function testUsedSaltCanNotBeUsedToSafeMint() public {
+        uint64 salt = 123;
+        uint256 newTokenId = driver.safeMintWithSalt(salt, user, noMetadata());
+
+        vm.expectRevert(ERROR_ALREADY_MINTED);
+        driver.safeMintWithSalt(salt, user, noMetadata());
+
+        vm.prank(user);
+        driver.burn(newTokenId);
+        vm.expectRevert(ERROR_ALREADY_MINTED);
+        driver.safeMintWithSalt(salt, user, noMetadata());
     }
 
     function testCollect() public {
@@ -276,11 +336,11 @@ contract NFTDriverTest is Test {
     }
 
     function testMintCanBePaused() public canBePausedTest {
-        driver.mint(user, new UserMetadata[](0));
+        driver.mint(user, noMetadata());
     }
 
     function testSafeMintCanBePaused() public canBePausedTest {
-        driver.safeMint(user, new UserMetadata[](0));
+        driver.safeMint(user, noMetadata());
     }
 
     function testCollectCanBePaused() public canBePausedTest {
@@ -300,7 +360,7 @@ contract NFTDriverTest is Test {
     }
 
     function testEmitUserMetadataCanBePaused() public canBePausedTest {
-        driver.emitUserMetadata(0, new UserMetadata[](0));
+        driver.emitUserMetadata(0, noMetadata());
     }
 
     function testBurnCanBePaused() public canBePausedTest {
