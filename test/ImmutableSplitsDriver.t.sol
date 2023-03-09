@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.19;
 
 import {ImmutableSplitsDriver} from "src/ImmutableSplitsDriver.sol";
 import {DripsHub, SplitsReceiver, UserMetadata} from "src/DripsHub.sol";
