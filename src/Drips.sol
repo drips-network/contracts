@@ -31,8 +31,8 @@ struct DripsHistory {
 }
 
 /// @notice Describes a drips configuration.
-/// It's constructed from `dripId`, `amtPerSec`, `start` and `duration` as
-/// `dripId << 224 | amtPerSec << 64 | start << 32 | duration`.
+/// It's a 256-bit integer constructed by concatenating the configuration parameters:
+/// `dripId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`.
 /// `dripId` is an arbitrary number used to identify a drip.
 /// It's a part of the configuration but the protocol doesn't use it.
 /// `amtPerSec` is the amount per second being dripped. Must never be zero.
@@ -62,30 +62,66 @@ library DripsConfigImpl {
         pure
         returns (DripsConfig)
     {
+        // By assignment we get `config` value:
+        // `zeros (224 bits) | dripId (32 bits)`
         uint256 config = dripId_;
+        // By bit shifting we get `config` value:
+        // `zeros (64 bits) | dripId (32 bits) | zeros (160 bits)`
+        // By bit masking we get `config` value:
+        // `zeros (64 bits) | dripId (32 bits) | amtPerSec (160 bits)`
         config = (config << 160) | amtPerSec_;
+        // By bit shifting we get `config` value:
+        // `zeros (32 bits) | dripId (32 bits) | amtPerSec (160 bits) | zeros (32 bits)`
+        // By bit masking we get `config` value:
+        // `zeros (32 bits) | dripId (32 bits) | amtPerSec (160 bits) | start (32 bits)`
         config = (config << 32) | start_;
+        // By bit shifting we get `config` value:
+        // `dripId (32 bits) | amtPerSec (160 bits) | start (32 bits) | zeros (32 bits)`
+        // By bit masking we get `config` value:
+        // `dripId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
         config = (config << 32) | duration_;
         return DripsConfig.wrap(config);
     }
 
     /// @notice Extracts dripId from a `DripsConfig`
     function dripId(DripsConfig config) internal pure returns (uint32) {
+        // `config` has value:
+        // `dripId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
+        // By bit shifting we get value:
+        // `zeros (224 bits) | dripId (32 bits)`
+        // By casting down we get value:
+        // `dripId (32 bits)`
         return uint32(DripsConfig.unwrap(config) >> 224);
     }
 
     /// @notice Extracts amtPerSec from a `DripsConfig`
     function amtPerSec(DripsConfig config) internal pure returns (uint160) {
+        // `config` has value:
+        // `dripId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
+        // By bit shifting we get value:
+        // `zeros (64 bits) | dripId (32 bits) | amtPerSec (160 bits)`
+        // By casting down we get value:
+        // `amtPerSec (160 bits)`
         return uint160(DripsConfig.unwrap(config) >> 64);
     }
 
     /// @notice Extracts start from a `DripsConfig`
     function start(DripsConfig config) internal pure returns (uint32) {
+        // `config` has value:
+        // `dripId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
+        // By bit shifting we get value:
+        // `zeros (32 bits) | dripId (32 bits) | amtPerSec (160 bits) | start (32 bits)`
+        // By casting down we get value:
+        // `start (32 bits)`
         return uint32(DripsConfig.unwrap(config) >> 32);
     }
 
     /// @notice Extracts duration from a `DripsConfig`
     function duration(DripsConfig config) internal pure returns (uint32) {
+        // `config` has value:
+        // `dripId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
+        // By casting down we get value:
+        // `duration (32 bits)`
         return uint32(DripsConfig.unwrap(config));
     }
 
@@ -93,6 +129,9 @@ library DripsConfigImpl {
     /// First compares `dripId`s, then `amtPerSec`s, then `start`s and finally `duration`s.
     /// @return isLower True if `config` is strictly lower than `otherConfig`.
     function lt(DripsConfig config, DripsConfig otherConfig) internal pure returns (bool isLower) {
+        // Both configs have value:
+        // `dripId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
+        // Comparing them as integers is equivalent to comparing their fields from left to right.
         return DripsConfig.unwrap(config) < DripsConfig.unwrap(otherConfig);
     }
 }
@@ -176,17 +215,16 @@ abstract contract Drips {
 
     struct DripsStorage {
         /// @notice User drips states.
-        /// The keys are the asset ID and the user ID.
-        mapping(uint256 => mapping(uint256 => DripsState)) states;
+        mapping(uint256 assetId => mapping(uint256 userId => DripsState)) states;
     }
 
     struct DripsState {
         /// @notice The drips history hash, see `_hashDripsHistory`.
         bytes32 dripsHistoryHash;
-        /// @notice The next squeezable timestamps. The key is the sender's user ID.
+        /// @notice The next squeezable timestamps.
         /// Each `N`th element of the array is the next squeezable timestamp
         /// of the `N`th sender's drips configuration in effect in the current cycle.
-        mapping(uint256 => uint32[2 ** 32]) nextSqueezed;
+        mapping(uint256 userId => uint32[2 ** 32]) nextSqueezed;
         /// @notice The drips receivers list hash, see `_hashDrips`.
         bytes32 dripsHash;
         /// @notice The next cycle to be received
@@ -204,7 +242,7 @@ abstract contract Drips {
         /// Values for cycles before `nextReceivableCycle` are guaranteed to be zeroed.
         /// This means that the value of `amtDeltas[nextReceivableCycle].thisCycle` is always
         /// relative to 0 or in other words it's an absolute value independent from other cycles.
-        mapping(uint32 => AmtDelta) amtDeltas;
+        mapping(uint32 cycle => AmtDelta) amtDeltas;
     }
 
     struct AmtDelta {
@@ -248,7 +286,7 @@ abstract contract Drips {
         if (fromCycle != toCycle) {
             DripsState storage state = _dripsStorage().states[assetId][userId];
             state.nextReceivableCycle = toCycle;
-            mapping(uint32 => AmtDelta) storage amtDeltas = state.amtDeltas;
+            mapping(uint32 cycle => AmtDelta) storage amtDeltas = state.amtDeltas;
             unchecked {
                 for (uint32 cycle = fromCycle; cycle < toCycle; cycle++) {
                     delete amtDeltas[cycle];
@@ -291,7 +329,7 @@ abstract contract Drips {
                 receivableCycles = toCycle - fromCycle - maxCycles;
                 toCycle -= receivableCycles;
             }
-            mapping(uint32 => AmtDelta) storage amtDeltas =
+            mapping(uint32 cycle => AmtDelta) storage amtDeltas =
                 _dripsStorage().states[assetId][userId].amtDeltas;
             for (uint32 cycle = fromCycle; cycle < toCycle; cycle++) {
                 AmtDelta memory amtDelta = amtDeltas[cycle];
@@ -833,15 +871,28 @@ abstract contract Drips {
         view
         returns (uint256 newConfigsLen)
     {
-        uint256 amtPerSec = receiver.config.amtPerSec();
+        uint160 amtPerSec = receiver.config.amtPerSec();
         require(amtPerSec >= _minAmtPerSec, "Drips receiver amtPerSec too low");
-        (uint256 start, uint256 end) =
+        (uint32 start, uint32 end) =
             _dripsRangeInFuture(receiver, _currTimestamp(), type(uint32).max);
         // slither-disable-next-line incorrect-equality,timestamp
         if (start == end) {
             return configsLen;
         }
-        configs[configsLen] = (amtPerSec << 64) | (start << 32) | end;
+        // By assignment we get `config` value:
+        // `zeros (96 bits) | amtPerSec (160 bits)`
+        uint256 config = amtPerSec;
+        // By bit shifting we get `config` value:
+        // `zeros (64 bits) | amtPerSec (160 bits) | zeros (32 bits)`
+        // By bit masking we get `config` value:
+        // `zeros (64 bits) | amtPerSec (160 bits) | start (32 bits)`
+        config = (config << 32) | start;
+        // By bit shifting we get `config` value:
+        // `zeros (32 bits) | amtPerSec (160 bits) | start (32 bits) | zeros (32 bits)`
+        // By bit masking we get `config` value:
+        // `zeros (32 bits) | amtPerSec (160 bits) | start (32 bits) | end (32 bits)`
+        config = (config << 32) | end;
+        configs[configsLen] = config;
         unchecked {
             return configsLen + 1;
         }
@@ -858,12 +909,24 @@ abstract contract Drips {
         pure
         returns (uint256 amtPerSec, uint256 start, uint256 end)
     {
-        uint256 val;
+        uint256 config;
+        // `config` has value:
+        // `zeros (32 bits) | amtPerSec (160 bits) | start (32 bits) | end (32 bits)`
         // slither-disable-next-line assembly
         assembly ("memory-safe") {
-            val := mload(add(32, add(configs, shl(5, idx))))
+            config := mload(add(32, add(configs, shl(5, idx))))
         }
-        return (val >> 64, uint32(val >> 32), uint32(val));
+        // By bit shifting we get value:
+        // `zeros (96 bits) | amtPerSec (160 bits)`
+        amtPerSec = config >> 64;
+        // By bit shifting we get value:
+        // `zeros (64 bits) | amtPerSec (160 bits) | start (32 bits)`
+        // By casting down we get value:
+        // `start (32 bits)`
+        start = uint32(config >> 32);
+        // By casting down we get value:
+        // `end (32 bits)`
+        end = uint32(config);
     }
 
     /// @notice Calculates the hash of the drips configuration.
@@ -911,7 +974,7 @@ abstract contract Drips {
     /// Must be sorted, deduplicated and without 0 amtPerSecs.
     /// @param newMaxEnd The maximum end time of drips according to the new drips configuration.
     function _updateReceiverStates(
-        mapping(uint256 => DripsState) storage states,
+        mapping(uint256 userId => DripsState) storage states,
         DripsReceiver[] memory currReceivers,
         uint32 lastUpdate,
         uint32 currMaxEnd,
@@ -1071,7 +1134,7 @@ abstract contract Drips {
         if (start == end) {
             return;
         }
-        mapping(uint32 => AmtDelta) storage amtDeltas = state.amtDeltas;
+        mapping(uint32 cycle => AmtDelta) storage amtDeltas = state.amtDeltas;
         _addDelta(amtDeltas, start, amtPerSec);
         _addDelta(amtDeltas, end, -amtPerSec);
     }
@@ -1081,7 +1144,7 @@ abstract contract Drips {
     /// @param timestamp The timestamp when the deltas need to be added
     /// @param amtPerSec The dripping rate
     function _addDelta(
-        mapping(uint32 => AmtDelta) storage amtDeltas,
+        mapping(uint32 cycle => AmtDelta) storage amtDeltas,
         uint256 timestamp,
         int256 amtPerSec
     ) private {

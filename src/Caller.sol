@@ -87,17 +87,17 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
 
     /// @notice Each sender's set of address authorized to make calls on its behalf.
     // slither-disable-next-line naming-convention
-    mapping(address => AddressSetClearable) internal _authorized;
+    mapping(address sender => AddressSetClearable) internal _authorized;
     /// @notice The nonce which needs to be used in the next EIP-712 message signed by the address.
-    mapping(address => uint256) public nonce;
+    mapping(address sender => uint256) public nonce;
 
     /// @notice A clearable set of addresses.
     /// @param clears Number of performed clears. Increase to clear.
-    /// @param addressSets The key is the number of performed clears and the value is the set.
+    /// @param addressSets The set of addresses.
     /// Always use the set under the key equal to the current value of `clears`.
     struct AddressSetClearable {
         uint256 clears;
-        mapping(uint256 => EnumerableSet.AddressSet) addressSets;
+        mapping(uint256 clears => EnumerableSet.AddressSet) addressSets;
     }
 
     /// @notice Emitted when `authorized` makes a call on behalf of `sender`.

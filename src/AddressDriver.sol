@@ -33,11 +33,20 @@ contract AddressDriver is Managed, ERC2771Context {
         driverId = _driverId;
     }
 
-    /// @notice Calculates the user ID for an address
+    /// @notice Calculates the user ID for an address.
+    /// Every user ID is a 256-bit integer constructed by concatenating:
+    /// `driverId (32 bits) | zeros (64 bits) | userAddr (160 bits)`.
     /// @param userAddr The user address
     /// @return userId The user ID
     function calcUserId(address userAddr) public view returns (uint256 userId) {
-        return (uint256(driverId) << 224) | uint160(userAddr);
+        // By assignment we get `userId` value:
+        // `zeros (224 bits) | driverId (32 bits)`
+        userId = driverId;
+        // By bit shifting we get `userId` value:
+        // `driverId (32 bits) | zeros (224 bits)`
+        // By bit masking we get `userId` value:
+        // `driverId (32 bits) | zeros (64 bits) | userAddr (160 bits)`
+        userId = (userId << 224) | uint160(userAddr);
     }
 
     /// @notice Calculates the user ID for the message sender

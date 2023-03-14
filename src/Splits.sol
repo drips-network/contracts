@@ -72,15 +72,14 @@ abstract contract Splits {
 
     struct SplitsStorage {
         /// @notice User splits states.
-        /// The key is the user ID.
-        mapping(uint256 => SplitsState) splitsStates;
+        mapping(uint256 userId => SplitsState) splitsStates;
     }
 
     struct SplitsState {
         /// @notice The user's splits configuration hash, see `hashSplits`.
         bytes32 splitsHash;
-        /// @notice The user's splits balance. The key is the asset ID.
-        mapping(uint256 => SplitsBalance) balances;
+        /// @notice The user's splits balances.
+        mapping(uint256 assetId => SplitsBalance) balances;
     }
 
     struct SplitsBalance {

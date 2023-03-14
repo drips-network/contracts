@@ -37,8 +37,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
         /// @notice The number of tokens minted without salt.
         uint64 mintedTokens;
         /// @notice The salts already used for minting tokens.
-        /// The keys are the minter address and the salt, the value is true if the salt is used.
-        mapping(address => mapping(uint64 => bool)) isSaltUsed;
+        mapping(address minter => mapping(uint64 salt => bool)) isSaltUsed;
     }
 
     /// @param _dripsHub The drips hub to use.
@@ -61,22 +60,36 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
     }
 
     /// @notice Get the ID of the next minted token.
-    /// @return tokenId The token ID.
+    /// Every token ID is a 256-bit integer constructed by concatenating:
+    /// `driverId (32 bits) | zeros (160 bits) | mintedTokensCounter (64 bits)`.
+    /// @return tokenId The token ID. It's equal to the user ID controlled by it.
     function nextTokenId() public view returns (uint256 tokenId) {
         return calcTokenIdWithSalt(address(0), _nftDriverStorage().mintedTokens);
     }
 
     /// @notice Calculate the ID of the token minted with salt.
+    /// Every token ID is a 256-bit integer constructed by concatenating:
+    /// `driverId (32 bits) | minter (160 bits) | salt (64 bits)`.
     /// @param minter The minter of the token.
     /// @param salt The salt used for minting the token.
-    /// @return tokenId The token ID.
+    /// @return tokenId The token ID. It's equal to the user ID controlled by it.
     function calcTokenIdWithSalt(address minter, uint64 salt)
         public
         view
         returns (uint256 tokenId)
     {
+        // By assignment we get `tokenId` value:
+        // `zeros (224 bits) | driverId (32 bits)`
         tokenId = driverId;
+        // By bit shifting we get `tokenId` value:
+        // `zeros (64 bits) | driverId (32 bits) | zeros (160 bits)`
+        // By bit masking we get `tokenId` value:
+        // `zeros (64 bits) | driverId (32 bits) | minter (160 bits)`
         tokenId = (tokenId << 160) | uint160(minter);
+        // By bit shifting we get `tokenId` value:
+        // `driverId (32 bits) | minter (160 bits) | zeros (64 bits)`
+        // By bit masking we get `tokenId` value:
+        // `driverId (32 bits) | minter (160 bits) | salt (64 bits)`
         tokenId = (tokenId << 64) | salt;
     }
 

@@ -63,6 +63,8 @@ contract DripsHub is Managed, Drips, Splits {
     uint32 public constant TOTAL_SPLITS_WEIGHT = _TOTAL_SPLITS_WEIGHT;
     /// @notice The offset of the controlling driver ID in the user ID.
     /// In other words the controlling driver ID is the highest 32 bits of the user ID.
+    /// Every user ID is a 256-bit integer constructed by concatenating:
+    /// `driverId (32 bits) | driverCustomData (224 bits)`.
     uint256 public constant DRIVER_ID_OFFSET = 224;
     /// @notice The total amount the contract can store of each token.
     /// It's the minimum of _MAX_TOTAL_DRIPS_BALANCE and _MAX_TOTAL_SPLITS_BALANCE.
@@ -106,10 +108,10 @@ contract DripsHub is Managed, Drips, Splits {
     struct DripsHubStorage {
         /// @notice The next driver ID that will be used when registering.
         uint32 nextDriverId;
-        /// @notice Driver addresses. The key is the driver ID, the value is the driver address.
-        mapping(uint32 => address) driverAddresses;
+        /// @notice Driver addresses.
+        mapping(uint32 driverId => address) driverAddresses;
         /// @notice The total amount currently stored in DripsHub of each token.
-        mapping(IERC20 => uint256) totalBalances;
+        mapping(IERC20 erc20 => uint256) totalBalances;
     }
 
     /// @param cycleSecs_ The length of cycleSecs to be used in the contract instance.
@@ -128,11 +130,19 @@ contract DripsHub is Managed, Drips, Splits {
     /// @notice A modifier making functions callable only by the driver controlling the user ID.
     /// @param userId The user ID.
     modifier onlyDriver(uint256 userId) {
+        // `userId` has value:
+        // `driverId (32 bits) | driverCustomData (224 bits)`
+        // By bit shifting we get value:
+        // `zeros (224 bits) | driverId (32 bits)`
+        // By casting down we get value:
+        // `driverId (32 bits)`
         uint32 driverId = uint32(userId >> DRIVER_ID_OFFSET);
         _assertCallerIsDriver(driverId);
         _;
     }
 
+    /// @notice Verifies that the caller controls the given driver ID and reverts otherwise.
+    /// @param driverId The driver ID.
     function _assertCallerIsDriver(uint32 driverId) internal view {
         require(driverAddress(driverId) == msg.sender, "Callable only by the driver");
     }
@@ -140,6 +150,8 @@ contract DripsHub is Managed, Drips, Splits {
     /// @notice Registers a driver.
     /// The driver is assigned a unique ID and a range of user IDs it can control.
     /// That range consists of all 2^224 user IDs with highest 32 bits equal to the driver ID.
+    /// Every user ID is a 256-bit integer constructed by concatenating:
+    /// `driverId (32 bits) | driverCustomData (224 bits)`.
     /// Every driver ID is assigned only to a single address,
     /// but a single address can have multiple driver IDs assigned to it.
     /// @param driverAddr The address of the driver. Must not be zero address.
@@ -214,6 +226,12 @@ contract DripsHub is Managed, Drips, Splits {
         erc20.safeTransfer(receiver, amt);
     }
 
+    /// @notice Increases the total amount currently stored in DripsHub of the given token.
+    /// No funds are transferred, all the tokens are expected to be already held by DripsHub.
+    /// The new total balance is verified to have coverage in the held tokens
+    /// and to be within the limit of `MAX_TOTAL_BALANCE`.
+    /// @param erc20 The used ERC-20 token.
+    /// @param amt The amount to increase the total balance by.
     function _increaseTotalBalance(IERC20 erc20, uint128 amt) internal {
         if (amt == 0) return;
         uint256 newBalance = _dripsHubStorage().totalBalances[erc20] += amt;
@@ -221,6 +239,11 @@ contract DripsHub is Managed, Drips, Splits {
         require(newBalance <= erc20.balanceOf(address(this)), "ERC-20 balance too low");
     }
 
+    /// @notice Decreases the total amount currently stored in DripsHub of the given token.
+    /// No funds are transferred, but the tokens held by DripsHub
+    /// above the total balance become withdrawable.
+    /// @param erc20 The used ERC-20 token.
+    /// @param amt The amount to decrease the total balance by.
     function _decreaseTotalBalance(IERC20 erc20, uint128 amt) internal {
         if (amt == 0) return;
         _dripsHubStorage().totalBalances[erc20] -= amt;

@@ -35,9 +35,20 @@ contract ImmutableSplitsDriver is Managed {
     }
 
     /// @notice The ID of the next user to be created.
+    /// Every user ID is a 256-bit integer constructed by concatenating:
+    /// `driverId (32 bits) | userIdsCounter (224 bits)`.
     /// @return userId The user ID.
     function nextUserId() public view returns (uint256 userId) {
-        return (uint256(driverId) << 224) + StorageSlot.getUint256Slot(_counterSlot).value;
+        // By assignment we get `userId` value:
+        // `zeros (224 bits) | driverId (32 bits)`
+        userId = driverId;
+        // By bit shifting we get `userId` value:
+        // `driverId (32 bits) | zeros (224 bits)`
+        // By bit masking we get `userId` value:
+        // `driverId (32 bits) | userIdsCounter (224 bits)`
+        // We can treat that the counter is a 224 bit value without explicit casting
+        // because there will never be 2^224 user IDs registered.
+        userId = (userId << 224) | StorageSlot.getUint256Slot(_counterSlot).value;
     }
 
     /// @notice Creates a new user ID, configures its splits configuration and emits its metadata.
