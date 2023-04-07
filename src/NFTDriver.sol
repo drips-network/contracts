@@ -11,7 +11,6 @@ import {
 } from "./DripsHub.sol";
 import {Managed} from "./Managed.sol";
 import {Context, ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
-import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 import {
     ERC721,
     ERC721Burnable,
