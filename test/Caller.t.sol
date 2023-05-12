@@ -42,7 +42,7 @@ contract CallerTest is Test {
 
     function testCallSigned() public {
         uint256 input = 1234567890;
-        bytes memory data = abi.encodeWithSelector(target.run.selector, input);
+        bytes memory data = abi.encodeCall(target.run, (input));
         uint256 value = 4321;
         uint256 deadline = block.timestamp;
         (bytes32 r, bytes32 sv) = signCall(senderKey, target, data, value, 0, deadline);
@@ -55,7 +55,7 @@ contract CallerTest is Test {
     }
 
     function testCallSignedRejectsExpiredDeadline() public {
-        bytes memory data = abi.encodeWithSelector(target.run.selector, 1);
+        bytes memory data = abi.encodeCall(target.run, (1));
         uint256 deadline = block.timestamp;
         skip(1);
         (bytes32 r, bytes32 sv) = signCall(senderKey, target, data, 0, 0, deadline);
@@ -65,7 +65,7 @@ contract CallerTest is Test {
     }
 
     function testCallSignedRejectsInvalidNonce() public {
-        bytes memory data = abi.encodeWithSelector(target.run.selector, 1);
+        bytes memory data = abi.encodeCall(target.run, (1));
         uint256 deadline = block.timestamp;
         (bytes32 r, bytes32 sv) = signCall(senderKey, target, data, 0, 0, deadline);
         caller.callSigned(sender, address(target), data, deadline, r, sv);
@@ -76,7 +76,7 @@ contract CallerTest is Test {
     }
 
     function testCallSignedRejectsInvalidSigner() public {
-        bytes memory data = abi.encodeWithSelector(target.run.selector, 1);
+        bytes memory data = abi.encodeCall(target.run, (1));
         uint256 deadline = block.timestamp;
         (bytes32 r, bytes32 sv) = signCall(senderKey + 1, target, data, 0, 0, deadline);
 
@@ -86,7 +86,7 @@ contract CallerTest is Test {
 
     function testCallSignedBubblesErrors() public {
         // Zero input triggers a revert in Target
-        bytes memory data = abi.encodeWithSelector(target.run.selector, 0);
+        bytes memory data = abi.encodeCall(target.run, (0));
         uint256 deadline = block.timestamp;
         (bytes32 r, bytes32 sv) = signCall(senderKey, target, data, 0, 0, deadline);
 
@@ -127,7 +127,7 @@ contract CallerTest is Test {
 
     function testCallAs() public {
         uint256 input = 1234567890;
-        bytes memory data = abi.encodeWithSelector(target.run.selector, input);
+        bytes memory data = abi.encodeCall(target.run, (input));
         uint256 value = 4321;
         authorize(sender, address(this));
         address[] memory allAuthorized = new address[](1);
@@ -141,14 +141,14 @@ contract CallerTest is Test {
     }
 
     function testCallAsRejectsWhenNotAuthorized() public {
-        bytes memory data = abi.encodeWithSelector(target.run.selector, 1);
+        bytes memory data = abi.encodeCall(target.run, (1));
 
         vm.expectRevert(ERROR_UNAUTHORIZED);
         caller.callAs(sender, address(target), data);
     }
 
     function testCallAsRejectsWhenUnauthorized() public {
-        bytes memory data = abi.encodeWithSelector(target.run.selector, 1);
+        bytes memory data = abi.encodeCall(target.run, (1));
         authorize(sender, address(this));
         unauthorize(sender, address(this));
         assertEq(caller.allAuthorized(sender), new address[](0), "Invalid all authorized");
@@ -191,7 +191,7 @@ contract CallerTest is Test {
 
     function testCallAsBubblesErrors() public {
         // Zero input triggers a revert in Target
-        bytes memory data = abi.encodeWithSelector(target.run.selector, 0);
+        bytes memory data = abi.encodeCall(target.run, (0));
         authorize(sender, address(this));
 
         vm.expectRevert(ERROR_ZERO_INPUT);
@@ -206,12 +206,12 @@ contract CallerTest is Test {
         Call[] memory calls = new Call[](2);
         calls[0] = Call({
             target: address(target),
-            data: abi.encodeWithSelector(target.run.selector, input1),
+            data: abi.encodeCall(target.run, (input1)),
             value: value1
         });
         calls[1] = Call({
             target: address(targetOtherForwarder),
-            data: abi.encodeWithSelector(target.run.selector, input2),
+            data: abi.encodeCall(target.run, (input2)),
             value: value2
         });
 
@@ -227,13 +227,13 @@ contract CallerTest is Test {
         Call[] memory calls = new Call[](2);
         calls[0] = Call({
             target: address(target),
-            data: abi.encodeWithSelector(target.run.selector, 1234567890),
+            data: abi.encodeCall(target.run, (1234567890)),
             value: 0
         });
         // Zero input triggers a revert in Target
         calls[1] = Call({
             target: address(targetOtherForwarder),
-            data: abi.encodeWithSelector(target.run.selector, 0),
+            data: abi.encodeCall(target.run, (0)),
             value: 0
         });
 
@@ -246,10 +246,10 @@ contract CallerTest is Test {
 
     function testCallerCanCallOnItselfCallAs() public {
         Call[] memory calls = new Call[](1);
-        bytes memory data = abi.encodeWithSelector(target.run.selector, 1);
+        bytes memory data = abi.encodeCall(target.run, (1));
         calls[0] = Call({
             target: address(caller),
-            data: abi.encodeWithSelector(caller.callAs.selector, sender, address(target), data),
+            data: abi.encodeCall(caller.callAs, (sender, address(target), data)),
             value: 0
         });
         authorize(sender, address(this));
@@ -263,7 +263,7 @@ contract CallerTest is Test {
         Call[] memory calls = new Call[](1);
         calls[0] = Call({
             target: address(caller),
-            data: abi.encodeWithSelector(caller.authorize.selector, sender),
+            data: abi.encodeCall(caller.authorize, (sender)),
             value: 0
         });
 
@@ -276,7 +276,7 @@ contract CallerTest is Test {
         Call[] memory calls = new Call[](1);
         calls[0] = Call({
             target: address(caller),
-            data: abi.encodeWithSelector(caller.unauthorize.selector, sender),
+            data: abi.encodeCall(caller.unauthorize, (sender)),
             value: 0
         });
         caller.authorize(sender);
@@ -290,7 +290,7 @@ contract CallerTest is Test {
         Call[] memory calls = new Call[](1);
         calls[0] = Call({
             target: address(caller),
-            data: abi.encodeWithSelector(caller.unauthorizeAll.selector),
+            data: abi.encodeCall(caller.unauthorizeAll, ()),
             value: 0
         });
         caller.authorize(sender);
@@ -302,11 +302,8 @@ contract CallerTest is Test {
 
     function testCallerCanCallOnItselfSetNonce() public {
         Call[] memory calls = new Call[](1);
-        calls[0] = Call({
-            target: address(caller),
-            data: abi.encodeWithSelector(caller.setNonce.selector, 1),
-            value: 0
-        });
+        calls[0] =
+            Call({target: address(caller), data: abi.encodeCall(caller.setNonce, (1)), value: 0});
         caller.authorize(sender);
 
         caller.callBatched(calls);
@@ -316,13 +313,9 @@ contract CallerTest is Test {
 
     function testCallerCanCallOnItselfCallBatched() public {
         Call[] memory calls = new Call[](1);
-        calls[0] = Call({
-            target: address(target),
-            data: abi.encodeWithSelector(target.run.selector, 1),
-            value: 0
-        });
+        calls[0] = Call({target: address(target), data: abi.encodeCall(target.run, (1)), value: 0});
         authorize(sender, address(this));
-        bytes memory data = abi.encodeWithSelector(caller.callBatched.selector, calls);
+        bytes memory data = abi.encodeCall(caller.callBatched, (calls));
 
         caller.callAs(sender, address(caller), data);
 

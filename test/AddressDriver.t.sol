@@ -166,7 +166,7 @@ contract AddressDriverTest is Test {
         assertEq(dripsHub.splittable(userId, erc20), 0, "Invalid splittable before give");
         uint128 amt = 10;
 
-        bytes memory giveData = abi.encodeWithSelector(driver.give.selector, userId, erc20, amt);
+        bytes memory giveData = abi.encodeCall(driver.give, (userId, erc20, amt));
         caller.callAs(user, address(driver), giveData);
 
         assertEq(dripsHub.splittable(userId, erc20), amt, "Invalid splittable after give");

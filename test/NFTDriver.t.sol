@@ -291,16 +291,12 @@ contract NFTDriverTest is Test {
     }
 
     function testEmitUserMetadata() public {
-        UserMetadata[] memory userMetadata = new UserMetadata[](1);
-        userMetadata[0] = UserMetadata("key", "value");
-        driver.emitUserMetadata(tokenId, userMetadata);
+        driver.emitUserMetadata(tokenId, someMetadata());
     }
 
     function testEmitUserMetadataRevertsWhenNotTokenHolder() public {
-        UserMetadata[] memory userMetadata = new UserMetadata[](1);
-        userMetadata[0] = UserMetadata("key", "value");
         vm.expectRevert(ERROR_NOT_OWNER);
-        driver.emitUserMetadata(tokenIdUser, userMetadata);
+        driver.emitUserMetadata(tokenIdUser, someMetadata());
     }
 
     function testForwarderIsTrustedInErc721Calls() public {
@@ -309,7 +305,7 @@ contract NFTDriverTest is Test {
         assertEq(driver.ownerOf(tokenIdUser), user, "Invalid token owner before transfer");
 
         bytes memory transferFromData =
-            abi.encodeWithSelector(driver.transferFrom.selector, user, address(this), tokenIdUser);
+            abi.encodeCall(driver.transferFrom, (user, address(this), tokenIdUser));
         caller.callAs(user, address(driver), transferFromData);
 
         assertEq(driver.ownerOf(tokenIdUser), address(this), "Invalid token owner after transfer");
@@ -321,8 +317,7 @@ contract NFTDriverTest is Test {
         assertEq(dripsHub.splittable(tokenId, erc20), 0, "Invalid splittable before give");
         uint128 amt = 10;
 
-        bytes memory giveData =
-            abi.encodeWithSelector(driver.give.selector, tokenIdUser, tokenId, erc20, amt);
+        bytes memory giveData = abi.encodeCall(driver.give, (tokenIdUser, tokenId, erc20, amt));
         caller.callAs(user, address(driver), giveData);
 
         assertEq(dripsHub.splittable(tokenId, erc20), amt, "Invalid splittable after give");
