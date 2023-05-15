@@ -148,8 +148,8 @@ abstract contract Drips {
     uint8 internal constant _AMT_PER_SEC_EXTRA_DECIMALS = 9;
     /// @notice The multiplier for all amtPerSec values. It's `10 ** _AMT_PER_SEC_EXTRA_DECIMALS`.
     uint160 internal constant _AMT_PER_SEC_MULTIPLIER = 1_000_000_000;
-    /// @notice The total amount the contract can keep track of each asset.
-    uint256 internal constant _MAX_TOTAL_DRIPS_BALANCE = uint128(type(int128).max);
+    /// @notice The amount the contract can keep track of each asset.
+    uint128 internal constant _MAX_DRIPS_BALANCE = uint128(type(int128).max);
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
     /// gain access to drips received during `T - cycleSecs` to `T - 1`.
     /// Always higher than 1.

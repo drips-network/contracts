@@ -1562,7 +1562,7 @@ contract DripsTest is Test, PseudoRandomUtils, Drips {
     }
 
     function sanitizeDripBalance(uint256 balanceRaw) internal view returns (uint128 balance) {
-        return uint128(bound(balanceRaw, 0, _MAX_TOTAL_DRIPS_BALANCE));
+        return uint128(bound(balanceRaw, 0, _MAX_DRIPS_BALANCE));
     }
 
     function testFundsDrippedToReceiversAddUp(

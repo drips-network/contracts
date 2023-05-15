@@ -20,9 +20,9 @@ abstract contract Splits {
     uint256 internal constant _MAX_SPLITS_RECEIVERS = 200;
     /// @notice The total splits weight of a user
     uint32 internal constant _TOTAL_SPLITS_WEIGHT = 1_000_000;
-    /// @notice The total amount the contract can keep track of each asset.
+    /// @notice The amount the contract can keep track of each asset.
     // slither-disable-next-line unused-state
-    uint256 internal constant _MAX_TOTAL_SPLITS_BALANCE = type(uint128).max;
+    uint128 internal constant _MAX_SPLITS_BALANCE = type(uint128).max;
     /// @notice The storage slot holding a single `SplitsStorage` structure.
     bytes32 private immutable _splitsStorageSlot;
 

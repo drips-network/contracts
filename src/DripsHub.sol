@@ -65,10 +65,10 @@ contract DripsHub is Managed, Drips, Splits {
     /// In other words the controlling driver ID is the highest 32 bits of the user ID.
     /// Every user ID is a 256-bit integer constructed by concatenating:
     /// `driverId (32 bits) | driverCustomData (224 bits)`.
-    uint256 public constant DRIVER_ID_OFFSET = 224;
-    /// @notice The total amount the contract can store of each token.
-    /// It's the minimum of _MAX_TOTAL_DRIPS_BALANCE and _MAX_TOTAL_SPLITS_BALANCE.
-    uint256 public constant MAX_TOTAL_BALANCE = _MAX_TOTAL_DRIPS_BALANCE;
+    uint8 public constant DRIVER_ID_OFFSET = 224;
+    /// @notice The total amount the protocol can store of each token.
+    /// It's the minimum of _MAX_DRIPS_BALANCE and _MAX_SPLITS_BALANCE.
+    uint128 public constant MAX_TOTAL_BALANCE = _MAX_DRIPS_BALANCE;
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
     /// gain access to drips received during `T - cycleSecs` to `T - 1`.
     /// Always higher than 1.
@@ -110,8 +110,16 @@ contract DripsHub is Managed, Drips, Splits {
         uint32 nextDriverId;
         /// @notice Driver addresses.
         mapping(uint32 driverId => address) driverAddresses;
-        /// @notice The total amount currently stored in DripsHub of each token.
-        mapping(IERC20 erc20 => uint256) totalBalances;
+        /// @notice The balance of each token currently stored in the protocol.
+        mapping(IERC20 erc20 => Balance) balances;
+    }
+
+    /// @notice The balance currently stored in the protocol.
+    struct Balance {
+        /// @notice The balance currently stored in dripping.
+        uint128 drips;
+        /// @notice The balance currently stored in splitting.
+        uint128 splits;
     }
 
     /// @param cycleSecs_ The length of cycleSecs to be used in the contract instance.
@@ -191,16 +199,87 @@ contract DripsHub is Managed, Drips, Splits {
         return _dripsHubStorage().nextDriverId;
     }
 
-    /// @notice Returns the total amount currently stored in DripsHub of the given token.
+    /// @notice Returns the amount currently stored in the protocol of the given token.
+    /// The sum of dripping and splitting balances can never exceed `MAX_TOTAL_BALANCE`.
+    /// The amount of tokens held by the DripsHub contract exceeding the sum of
+    /// dripping and splitting balances can be `withdraw`n.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
     /// Tokens which rebase the holders' balances, collect taxes on transfers,
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
-    /// @return balance The balance of the token.
-    function totalBalance(IERC20 erc20) public view returns (uint256 balance) {
-        return _dripsHubStorage().totalBalances[erc20];
+    /// @return dripsBalance The balance currently stored in dripping.
+    /// @return splitsBalance The balance currently stored in splitting.
+    function balances(IERC20 erc20)
+        public
+        view
+        returns (uint128 dripsBalance, uint128 splitsBalance)
+    {
+        Balance storage balance = _dripsHubStorage().balances[erc20];
+        return (balance.drips, balance.splits);
+    }
+
+    /// @notice Increases the balance of the given token currently stored in drips.
+    /// No funds are transferred, all the tokens are expected to be already held by DripsHub.
+    /// The new total balance is verified to have coverage in the held tokens
+    /// and to be within the limit of `MAX_TOTAL_BALANCE`.
+    /// @param erc20 The used ERC-20 token.
+    /// @param amt The amount to increase the drips balance by.
+    function _increaseDripsBalance(IERC20 erc20, uint128 amt) internal {
+        _verifyBalanceIncrease(erc20, amt);
+        _dripsHubStorage().balances[erc20].drips += amt;
+    }
+
+    /// @notice Decreases the balance of the given token currently stored in drips.
+    /// No funds are transferred, but the tokens held by DripsHub
+    /// above the total balance become withdrawable.
+    /// @param erc20 The used ERC-20 token.
+    /// @param amt The amount to decrease the drips balance by.
+    function _decreaseDripsBalance(IERC20 erc20, uint128 amt) internal {
+        _dripsHubStorage().balances[erc20].drips -= amt;
+    }
+
+    /// @notice Increases the balance of the given token currently stored in drips.
+    /// No funds are transferred, all the tokens are expected to be already held by DripsHub.
+    /// The new total balance is verified to have coverage in the held tokens
+    /// and to be within the limit of `MAX_TOTAL_BALANCE`.
+    /// @param erc20 The used ERC-20 token.
+    /// @param amt The amount to increase the drips balance by.
+    function _increaseSplitsBalance(IERC20 erc20, uint128 amt) internal {
+        _verifyBalanceIncrease(erc20, amt);
+        _dripsHubStorage().balances[erc20].splits += amt;
+    }
+
+    /// @notice Decreases the balance of the given token currently stored in splits.
+    /// No funds are transferred, but the tokens held by DripsHub
+    /// above the total balance become withdrawable.
+    /// @param erc20 The used ERC-20 token.
+    /// @param amt The amount to decrease the splits balance by.
+    function _decreaseSplitsBalance(IERC20 erc20, uint128 amt) internal {
+        _dripsHubStorage().balances[erc20].splits -= amt;
+    }
+
+    /// @notice Moves a part of the balance of the given token currently stored in splits to drips.
+    /// No funds are transferred, all the tokens are already held by DripsHub.
+    /// @param erc20 The used ERC-20 token.
+    /// @param amt The amount to decrease the splits balance by.
+    function _moveBalanceFromDripsToSplits(IERC20 erc20, uint128 amt) internal {
+        Balance storage balance = _dripsHubStorage().balances[erc20];
+        balance.drips -= amt;
+        balance.splits += amt;
+    }
+
+    /// @notice Verifies that the balance of drips or splits can be increased by the given amount.
+    /// The sum of dripping and splitting balances is checked to not exceed
+    /// `MAX_TOTAL_BALANCE` or the amount of tokens held by the DripsHub.
+    /// @param erc20 The used ERC-20 token.
+    /// @param amt The amount to increase the drips or splits balance by.
+    function _verifyBalanceIncrease(IERC20 erc20, uint128 amt) internal view {
+        (uint256 dripsBalance, uint128 splitsBalance) = balances(erc20);
+        uint256 newTotalBalance = dripsBalance + splitsBalance + amt;
+        require(newTotalBalance <= MAX_TOTAL_BALANCE, "Total balance too high");
+        require(newTotalBalance <= _tokenBalance(erc20), "Token balance too low");
     }
 
     /// @notice Transfers withdrawable funds to an address.
@@ -216,37 +295,18 @@ contract DripsHub is Managed, Drips, Splits {
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param receiver The address to send withdrawn funds to.
     /// @param amt The withdrawn amount.
-    /// It must be at most the difference between the balance of the token
-    /// held by the DripsHub contract address and the total balance managed by the protocol,
-    /// or in other words `erc20.balanceOf(address(dripsHub)) - dripsHub.totalBalance(erc20)`.
+    /// It must be at most the difference between the balance of the token held by the DripsHub
+    /// contract address and the sum of balances managed by the protocol as indicated by `balances`.
     function withdraw(IERC20 erc20, address receiver, uint256 amt) public {
-        uint256 withdrawable = erc20.balanceOf(address(this)) - totalBalance(erc20);
+        (uint128 dripsBalance, uint128 splitsBalance) = balances(erc20);
+        uint256 withdrawable = _tokenBalance(erc20) - dripsBalance - splitsBalance;
         require(amt <= withdrawable, "Withdrawal amount too high");
         emit Withdrawn(erc20, receiver, amt);
         erc20.safeTransfer(receiver, amt);
     }
 
-    /// @notice Increases the total amount currently stored in DripsHub of the given token.
-    /// No funds are transferred, all the tokens are expected to be already held by DripsHub.
-    /// The new total balance is verified to have coverage in the held tokens
-    /// and to be within the limit of `MAX_TOTAL_BALANCE`.
-    /// @param erc20 The used ERC-20 token.
-    /// @param amt The amount to increase the total balance by.
-    function _increaseTotalBalance(IERC20 erc20, uint128 amt) internal {
-        if (amt == 0) return;
-        uint256 newBalance = _dripsHubStorage().totalBalances[erc20] += amt;
-        require(newBalance <= MAX_TOTAL_BALANCE, "Total balance too high");
-        require(newBalance <= erc20.balanceOf(address(this)), "ERC-20 balance too low");
-    }
-
-    /// @notice Decreases the total amount currently stored in DripsHub of the given token.
-    /// No funds are transferred, but the tokens held by DripsHub
-    /// above the total balance become withdrawable.
-    /// @param erc20 The used ERC-20 token.
-    /// @param amt The amount to decrease the total balance by.
-    function _decreaseTotalBalance(IERC20 erc20, uint128 amt) internal {
-        if (amt == 0) return;
-        _dripsHubStorage().totalBalances[erc20] -= amt;
+    function _tokenBalance(IERC20 erc20) internal view returns (uint256) {
+        return erc20.balanceOf(address(this));
     }
 
     /// @notice Counts cycles from which drips can be collected.
@@ -309,7 +369,10 @@ contract DripsHub is Managed, Drips, Splits {
     {
         uint256 assetId = _assetId(erc20);
         receivedAmt = Drips._receiveDrips(userId, assetId, maxCycles);
-        if (receivedAmt > 0) Splits._addSplittable(userId, assetId, receivedAmt);
+        if (receivedAmt != 0) {
+            _moveBalanceFromDripsToSplits(erc20, receivedAmt);
+            Splits._addSplittable(userId, assetId, receivedAmt);
+        }
     }
 
     /// @notice Receive drips from the currently running cycle from a single sender.
@@ -341,7 +404,10 @@ contract DripsHub is Managed, Drips, Splits {
     ) public whenNotPaused returns (uint128 amt) {
         uint256 assetId = _assetId(erc20);
         amt = Drips._squeezeDrips(userId, assetId, senderId, historyHash, dripsHistory);
-        if (amt > 0) Splits._addSplittable(userId, assetId, amt);
+        if (amt != 0) {
+            _moveBalanceFromDripsToSplits(erc20, amt);
+            Splits._addSplittable(userId, assetId, amt);
+        }
     }
 
     /// @notice Calculate effects of calling `squeezeDrips` with the given parameters.
@@ -456,7 +522,7 @@ contract DripsHub is Managed, Drips, Splits {
         returns (uint128 amt)
     {
         amt = Splits._collect(userId, _assetId(erc20));
-        _decreaseTotalBalance(erc20, amt);
+        if (amt != 0) _decreaseSplitsBalance(erc20, amt);
     }
 
     /// @notice Gives funds from the user to the receiver.
@@ -478,7 +544,7 @@ contract DripsHub is Managed, Drips, Splits {
         whenNotPaused
         onlyDriver(userId)
     {
-        _increaseTotalBalance(erc20, amt);
+        if (amt != 0) _increaseSplitsBalance(erc20, amt);
         Splits._give(userId, receiver, _assetId(erc20), amt);
     }
 
@@ -588,7 +654,7 @@ contract DripsHub is Managed, Drips, Splits {
         uint32 maxEndHint1,
         uint32 maxEndHint2
     ) public whenNotPaused onlyDriver(userId) returns (int128 realBalanceDelta) {
-        if (balanceDelta > 0) _increaseTotalBalance(erc20, uint128(balanceDelta));
+        if (balanceDelta > 0) _increaseDripsBalance(erc20, uint128(balanceDelta));
         realBalanceDelta = Drips._setDrips(
             userId,
             _assetId(erc20),
@@ -598,7 +664,7 @@ contract DripsHub is Managed, Drips, Splits {
             maxEndHint1,
             maxEndHint2
         );
-        if (realBalanceDelta < 0) _decreaseTotalBalance(erc20, uint128(-realBalanceDelta));
+        if (realBalanceDelta < 0) _decreaseDripsBalance(erc20, uint128(-realBalanceDelta));
     }
 
     /// @notice Calculates the hash of the drips configuration.

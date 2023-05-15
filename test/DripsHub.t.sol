@@ -43,7 +43,7 @@ contract DripsHubTest is Test {
 
     bytes internal constant ERROR_NOT_DRIVER = "Callable only by the driver";
     bytes internal constant ERROR_BALANCE_TOO_HIGH = "Total balance too high";
-    bytes internal constant ERROR_ERC_20_BALANCE_TOO_LOW = "ERC-20 balance too low";
+    bytes internal constant ERROR_ERC_20_BALANCE_TOO_LOW = "Token balance too low";
 
     function setUp() public {
         defaultErc20 = new ERC20PresetFixedSupply("default", "default", 2 ** 128, address(this));
@@ -127,9 +127,9 @@ contract DripsHubTest is Test {
         DripsReceiver[] memory newReceivers
     ) internal {
         int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
-        uint256 balanceBefore = balance();
+        uint256 ownBalanceBefore = ownBalance();
         uint256 dripsHubBalanceBefore = dripsHubBalance();
-        uint256 totalBalanceBefore = totalBalance();
+        (uint256 dripsBalanceBefore, uint256 splitsBalanceBefore) = balances();
         DripsReceiver[] memory currReceivers = loadDrips(forUser);
 
         if (balanceDelta > 0) transferToDripsHub(uint128(balanceDelta));
@@ -143,9 +143,9 @@ contract DripsHubTest is Test {
         (,, uint32 updateTime, uint128 actualBalance,) = dripsHub.dripsState(forUser, erc20);
         assertEq(updateTime, block.timestamp, "Invalid new last update time");
         assertEq(balanceTo, actualBalance, "Invalid drips balance");
-        assertBalance(uint256(int256(balanceBefore) - balanceDelta));
+        assertOwnBalance(uint256(int256(ownBalanceBefore) - balanceDelta));
         assertDripsHubBalance(uint256(int256(dripsHubBalanceBefore) + balanceDelta));
-        assertTotalBalance(uint256(int256(totalBalanceBefore) + balanceDelta));
+        assertBalances(uint256(int256(dripsBalanceBefore) + balanceDelta), splitsBalanceBefore);
     }
 
     function assertDrips(uint256 forUser, DripsReceiver[] memory currReceivers) internal {
@@ -155,18 +155,18 @@ contract DripsHubTest is Test {
     }
 
     function give(uint256 fromUser, uint256 toUser, uint128 amt) internal {
-        uint256 balanceBefore = balance();
+        uint256 ownBalanceBefore = ownBalance();
         uint256 dripsHubBalanceBefore = dripsHubBalance();
-        uint256 totalBalanceBefore = totalBalance();
+        (uint256 dripsBalanceBefore, uint256 splitsBalanceBefore) = balances();
         uint128 expectedSplittable = splittable(toUser) + amt;
 
         transferToDripsHub(amt);
         vm.prank(driver);
         dripsHub.give(fromUser, toUser, erc20, amt);
 
-        assertBalance(balanceBefore - amt);
+        assertOwnBalance(ownBalanceBefore - amt);
         assertDripsHubBalance(dripsHubBalanceBefore + amt);
-        assertTotalBalance(totalBalanceBefore + amt);
+        assertBalances(dripsBalanceBefore, splitsBalanceBefore + amt);
         assertSplittable(toUser, expectedSplittable);
     }
 
@@ -311,9 +311,9 @@ contract DripsHubTest is Test {
 
     function collect(uint256 forUser, uint128 expectedAmt) internal {
         assertCollectable(forUser, expectedAmt);
-        uint256 balanceBefore = balance();
+        uint256 ownBalanceBefore = ownBalance();
         uint256 dripsHubBalanceBefore = dripsHubBalance();
-        uint256 totalBalanceBefore = totalBalance();
+        (uint256 dripsBalanceBefore, uint256 splitsBalanceBefore) = balances();
 
         vm.prank(driver);
         uint128 actualAmt = dripsHub.collect(forUser, erc20);
@@ -321,9 +321,9 @@ contract DripsHubTest is Test {
 
         assertEq(actualAmt, expectedAmt, "Invalid collected amount");
         assertCollectable(forUser, 0);
-        assertBalance(balanceBefore + expectedAmt);
+        assertOwnBalance(ownBalanceBefore + expectedAmt);
         assertDripsHubBalance(dripsHubBalanceBefore - expectedAmt);
-        assertTotalBalance(totalBalanceBefore - expectedAmt);
+        assertBalances(dripsBalanceBefore, splitsBalanceBefore - expectedAmt);
     }
 
     function collectable(uint256 forUser) internal view returns (uint128 amt) {
@@ -334,37 +334,40 @@ contract DripsHubTest is Test {
         assertEq(collectable(forUser), expected, "Invalid collectable");
     }
 
-    function totalBalance() internal view returns (uint256) {
-        return dripsHub.totalBalance(erc20);
+    function balances() internal view returns (uint256 dripsBalance, uint256 splitsBalance) {
+        return dripsHub.balances(erc20);
     }
 
-    function assertTotalBalance(uint256 expected) internal {
-        assertEq(totalBalance(), expected, "Invalid total balance");
+    function assertBalances(uint256 expectedDripsBalance, uint256 expectedSplitsBalance) internal {
+        (uint256 dripsBalance, uint256 splitsBalance) = balances();
+        assertEq(dripsBalance, expectedDripsBalance, "Invalid drips balance");
+        assertEq(splitsBalance, expectedSplitsBalance, "Invalid splits balance");
     }
 
     function transferToDripsHub(uint256 amt) internal {
-        assertDripsHubBalance(totalBalance());
+        (uint256 dripsBalance, uint256 splitsBalance) = balances();
+        assertDripsHubBalance(dripsBalance + splitsBalance);
         erc20.transfer(address(dripsHub), amt);
     }
 
     function withdraw(uint256 amt) internal {
-        uint256 balanceBefore = balance();
-        uint256 totalBalanceBefore = totalBalance();
-        assertDripsHubBalance(totalBalanceBefore + amt);
+        uint256 ownBalanceBefore = ownBalance();
+        (uint256 dripsBalance, uint256 splitsBalance) = balances();
+        assertDripsHubBalance(dripsBalance + splitsBalance + amt);
 
         dripsHub.withdraw(erc20, address(this), amt);
 
-        assertBalance(balanceBefore + amt);
-        assertTotalBalance(totalBalanceBefore);
-        assertDripsHubBalance(totalBalanceBefore);
+        assertOwnBalance(ownBalanceBefore + amt);
+        assertDripsHubBalance(dripsBalance + splitsBalance);
+        assertBalances(dripsBalance, splitsBalance);
     }
 
-    function balance() internal view returns (uint256) {
+    function ownBalance() internal view returns (uint256) {
         return erc20.balanceOf(address(this));
     }
 
-    function assertBalance(uint256 expected) internal {
-        assertEq(balance(), expected, "Invalid balance");
+    function assertOwnBalance(uint256 expected) internal {
+        assertEq(ownBalance(), expected, "Invalid own balance");
     }
 
     function dripsHubBalance() internal view returns (uint256) {
@@ -384,7 +387,7 @@ contract DripsHubTest is Test {
     function testSetDripsLimitsWithdrawalToDripsBalance() public {
         uint128 dripsBalance = 10;
         DripsReceiver[] memory receivers = dripsReceivers();
-        uint256 balanceBefore = balance();
+        uint256 ownBalanceBefore = ownBalance();
         setDrips(user, 0, dripsBalance, receivers);
 
         vm.prank(driver);
@@ -395,9 +398,9 @@ contract DripsHubTest is Test {
         assertEq(realBalanceDelta, -int128(dripsBalance), "Invalid real balance delta");
         (,,, uint128 actualBalance,) = dripsHub.dripsState(user, erc20);
         assertEq(actualBalance, 0, "Invalid drips balance");
-        assertBalance(balanceBefore);
+        assertOwnBalance(ownBalanceBefore);
         assertDripsHubBalance(0);
-        assertTotalBalance(0);
+        assertBalances(0, 0);
     }
 
     function testUncollectedFundsAreSplitUsingCurrentConfig() public {
@@ -621,10 +624,12 @@ contract DripsHubTest is Test {
     }
 
     function testSetDripsLimitsTotalBalance() public {
-        uint128 maxBalance = uint128(dripsHub.MAX_TOTAL_BALANCE());
-        assertTotalBalance(0);
+        uint128 splitsBalance = uint128(dripsHub.MAX_TOTAL_BALANCE()) / 10;
+        give(user, receiver, splitsBalance);
+        uint128 maxBalance = uint128(dripsHub.MAX_TOTAL_BALANCE()) - splitsBalance;
+        assertBalances(0, splitsBalance);
         setDrips(user1, 0, maxBalance, dripsReceivers());
-        assertTotalBalance(maxBalance);
+        assertBalances(maxBalance, splitsBalance);
 
         transferToDripsHub(1);
         vm.prank(driver);
@@ -633,9 +638,9 @@ contract DripsHubTest is Test {
         withdraw(1);
 
         setDrips(user1, maxBalance, maxBalance - 1, dripsReceivers());
-        assertTotalBalance(maxBalance - 1);
+        assertBalances(maxBalance - 1, splitsBalance);
         setDrips(user2, 0, 1, dripsReceivers());
-        assertTotalBalance(maxBalance);
+        assertBalances(maxBalance, splitsBalance);
     }
 
     function testSetDripsRequiresTransferredTokens() public {
@@ -649,12 +654,14 @@ contract DripsHubTest is Test {
     }
 
     function testGiveLimitsTotalBalance() public {
-        uint128 maxBalance = uint128(dripsHub.MAX_TOTAL_BALANCE());
-        assertTotalBalance(0);
+        uint128 dripsBalance = uint128(dripsHub.MAX_TOTAL_BALANCE()) / 10;
+        setDrips(user, 0, dripsBalance, dripsReceivers());
+        uint128 maxBalance = uint128(dripsHub.MAX_TOTAL_BALANCE()) - dripsBalance;
+        assertBalances(dripsBalance, 0);
         give(user, receiver1, maxBalance - 1);
-        assertTotalBalance(maxBalance - 1);
+        assertBalances(dripsBalance, maxBalance - 1);
         give(user, receiver2, 1);
-        assertTotalBalance(maxBalance);
+        assertBalances(dripsBalance, maxBalance);
 
         transferToDripsHub(1);
         vm.prank(driver);
@@ -663,9 +670,9 @@ contract DripsHubTest is Test {
         withdraw(1);
 
         collectAll(receiver2, 1);
-        assertTotalBalance(maxBalance - 1);
+        assertBalances(dripsBalance, maxBalance - 1);
         give(user, receiver3, 1);
-        assertTotalBalance(maxBalance);
+        assertBalances(dripsBalance, maxBalance);
     }
 
     function testGiveRequiresTransferredTokens() public {
@@ -679,6 +686,7 @@ contract DripsHubTest is Test {
     }
 
     function testWithdrawalBelowTotalBalanceReverts() public {
+        setDrips(user, 0, 2, dripsReceivers());
         give(user, receiver, 2);
         transferToDripsHub(1);
 
