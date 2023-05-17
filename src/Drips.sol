@@ -973,6 +973,7 @@ abstract contract Drips {
     /// @param newReceivers  The list of the drips receivers of the user to be set.
     /// Must be sorted, deduplicated and without 0 amtPerSecs.
     /// @param newMaxEnd The maximum end time of drips according to the new drips configuration.
+    // slither-disable-next-line cyclomatic-complexity
     function _updateReceiverStates(
         mapping(uint256 userId => DripsState) storage states,
         DripsReceiver[] memory currReceivers,

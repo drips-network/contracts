@@ -1,4 +1,4 @@
 {
     "filter_paths": "(lib/|test/)",
-    "detectors_to_exclude": "solc-version,variable-scope"
+    "detectors_to_exclude": "solc-version"
 }
