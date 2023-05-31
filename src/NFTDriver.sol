@@ -1,14 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.19;
 
-import {
-    DripsHub,
-    StreamReceiver,
-    IERC20,
-    SafeERC20,
-    SplitsReceiver,
-    UserMetadata
-} from "./DripsHub.sol";
+import {Drips, StreamReceiver, IERC20, SafeERC20, SplitsReceiver, UserMetadata} from "./Drips.sol";
 import {Managed} from "./Managed.sol";
 import {Context, ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
 import {
@@ -18,16 +11,16 @@ import {
     IERC721Metadata
 } from "openzeppelin-contracts/token/ERC721/extensions/ERC721Burnable.sol";
 
-/// @notice A DripsHub driver implementing token-based user identification.
+/// @notice A Drips driver implementing token-based user identification.
 /// Anybody can mint a new token and create a new identity.
 /// Only the current holder of the token can control its user ID.
 /// The token ID and the user ID controlled by it are always equal.
 contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
     using SafeERC20 for IERC20;
 
-    /// @notice The DripsHub address used by this driver.
-    DripsHub public immutable dripsHub;
-    /// @notice The driver ID which this driver uses when calling DripsHub.
+    /// @notice The Drips address used by this driver.
+    Drips public immutable drips;
+    /// @notice The driver ID which this driver uses when calling Drips.
     uint32 public immutable driverId;
     /// @notice The ERC-1967 storage slot holding a single `NFTDriverStorage` structure.
     bytes32 private immutable _nftDriverStorageSlot = _erc1967Slot("eip1967.nftDriver.storage");
@@ -39,14 +32,14 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
         mapping(address minter => mapping(uint64 salt => bool)) isSaltUsed;
     }
 
-    /// @param _dripsHub The DripsHub contract to use.
+    /// @param _drips The Drips contract to use.
     /// @param forwarder The ERC-2771 forwarder to trust. May be the zero address.
-    /// @param _driverId The driver ID to use when calling DripsHub.
-    constructor(DripsHub _dripsHub, address forwarder, uint32 _driverId)
+    /// @param _driverId The driver ID to use when calling Drips.
+    constructor(Drips _drips, address forwarder, uint32 _driverId)
         ERC2771Context(forwarder)
         ERC721("", "")
     {
-        dripsHub = _dripsHub;
+        drips = _drips;
         driverId = _driverId;
     }
 
@@ -195,7 +188,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
     }
 
     /// @notice Collects the user's received already split funds
-    /// and transfers them out of the DripsHub contract.
+    /// and transfers them out of the Drips contract.
     /// @param tokenId The ID of the token representing the collecting user ID.
     /// The caller must be the owner of the token or be approved to use it.
     /// The token ID is equal to the user ID controlled by it.
@@ -213,13 +206,13 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
         onlyHolder(tokenId)
         returns (uint128 amt)
     {
-        amt = dripsHub.collect(tokenId, erc20);
-        if (amt > 0) dripsHub.withdraw(erc20, transferTo, amt);
+        amt = drips.collect(tokenId, erc20);
+        if (amt > 0) drips.withdraw(erc20, transferTo, amt);
     }
 
     /// @notice Gives funds from the user to the receiver.
     /// The receiver can split and collect them immediately.
-    /// Transfers the funds to be given from the message sender's wallet to the DripsHub contract.
+    /// Transfers the funds to be given from the message sender's wallet to the Drips contract.
     /// @param tokenId The ID of the token representing the giving user ID.
     /// The caller must be the owner of the token or be approved to use it.
     /// The token ID is equal to the user ID controlled by it.
@@ -237,11 +230,11 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
         onlyHolder(tokenId)
     {
         if (amt > 0) _transferFromCaller(erc20, amt);
-        dripsHub.give(tokenId, receiver, erc20, amt);
+        drips.give(tokenId, receiver, erc20, amt);
     }
 
     /// @notice Sets the user's streams configuration.
-    /// Transfers funds between the message sender's wallet and the DripsHub contract
+    /// Transfers funds between the message sender's wallet and the Drips contract
     /// to fulfil the change of the streams balance.
     /// @param tokenId The ID of the token representing the configured user ID.
     /// The caller must be the owner of the token or be approved to use it.
@@ -296,16 +289,16 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
         address transferTo
     ) public whenNotPaused onlyHolder(tokenId) returns (int128 realBalanceDelta) {
         if (balanceDelta > 0) _transferFromCaller(erc20, uint128(balanceDelta));
-        realBalanceDelta = dripsHub.setStreams(
+        realBalanceDelta = drips.setStreams(
             tokenId, erc20, currReceivers, balanceDelta, newReceivers, maxEndHint1, maxEndHint2
         );
-        if (realBalanceDelta < 0) dripsHub.withdraw(erc20, transferTo, uint128(-realBalanceDelta));
+        if (realBalanceDelta < 0) drips.withdraw(erc20, transferTo, uint128(-realBalanceDelta));
     }
 
     /// @notice Sets user splits configuration. The configuration is common for all assets.
     /// Nothing happens to the currently splittable funds, but when they are split
     /// after this function finishes, the new splits configuration will be used.
-    /// Because anybody can call `split` on `DripsHub`, calling this function may be frontrun
+    /// Because anybody can call `split` on `Drips`, calling this function may be frontrun
     /// and all the currently splittable funds will be split using the old splits configuration.
     /// @param tokenId The ID of the token representing the configured user ID.
     /// The caller must be the owner of the token or be approved to use it.
@@ -326,7 +319,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
         whenNotPaused
         onlyHolder(tokenId)
     {
-        dripsHub.setSplits(tokenId, receivers);
+        drips.setSplits(tokenId, receivers);
     }
 
     /// @notice Emits the user metadata for the given token.
@@ -352,12 +345,12 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
     /// @param userMetadata The list of user metadata.
     function _emitUserMetadata(uint256 tokenId, UserMetadata[] calldata userMetadata) internal {
         if (userMetadata.length == 0) return;
-        dripsHub.emitUserMetadata(tokenId, userMetadata);
+        drips.emitUserMetadata(tokenId, userMetadata);
     }
 
     /// @inheritdoc IERC721Metadata
     function name() public pure override returns (string memory) {
-        return "DripsHub identity";
+        return "Drips identity";
     }
 
     /// @inheritdoc IERC721Metadata
@@ -408,7 +401,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
     }
 
     function _transferFromCaller(IERC20 erc20, uint128 amt) internal {
-        erc20.safeTransferFrom(_msgSender(), address(dripsHub), amt);
+        erc20.safeTransferFrom(_msgSender(), address(drips), amt);
     }
 
     // Workaround for https://github.com/ethereum/solidity/issues/12554

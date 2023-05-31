@@ -875,7 +875,9 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         receiveStreams(receiver, amt);
     }
 
-    function testAllowsStreamsConfigurationWithOverflowingAmtPerCycleAcrossCycleBoundaries() public {
+    function testAllowsStreamsConfigurationWithOverflowingAmtPerCycleAcrossCycleBoundaries()
+        public
+    {
         // amtPerSec is valid, but amtPerCycle is over 2 times higher than int128.max.
         // The multiplier is chosen to prevent the amounts from being "clean" binary numbers
         // which could make the overflowing behavior correct by coincidence.

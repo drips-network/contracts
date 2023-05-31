@@ -20,7 +20,7 @@ struct UserMetadata {
     bytes value;
 }
 
-/// @notice DripsHub protocol contract. Automatically strams and splits funds between users.
+/// @notice Drips protocol contract. Automatically strams and splits funds between users.
 ///
 /// The user can transfer some funds to their streams balance in the contract
 /// and configure a list of receivers, to whom they want to stream these funds.
@@ -33,7 +33,7 @@ struct UserMetadata {
 /// The streamed funds are added to the receiver balances in global cycles.
 /// Every `cycleSecs` seconds the protocol adds streamed funds to the receivers' balances,
 /// so recently streamed funds may not be receivable immediately.
-/// `cycleSecs` is a constant configured when the DripsHub contract is deployed.
+/// `cycleSecs` is a constant configured when the Drips contract is deployed.
 /// The receiver balance is independent from the streams balance,
 /// to stream received funds they need to be first collected and then added to the streams balance.
 ///
@@ -51,7 +51,7 @@ struct UserMetadata {
 /// events based on how many seconds have passed and only when the user needs their outcomes.
 ///
 /// The contract can store at most `type(int128).max` which is `2 ^ 127 - 1` units of each token.
-contract DripsHub is Managed, Streams, Splits {
+contract Drips is Managed, Streams, Splits {
     /// @notice Maximum number of streams receivers of a single user.
     /// Limits cost of changes in streams configuration.
     uint256 public constant MAX_STREAMS_RECEIVERS = _MAX_STREAMS_RECEIVERS;
@@ -77,8 +77,8 @@ contract DripsHub is Managed, Streams, Splits {
     uint32 public immutable cycleSecs;
     /// @notice The minimum amtPerSec of a stream. It's 1 token per cycle.
     uint160 public immutable minAmtPerSec;
-    /// @notice The ERC-1967 storage slot holding a single `DripsHubStorage` structure.
-    bytes32 private immutable _dripsHubStorageSlot = _erc1967Slot("eip1967.dripsHub.storage");
+    /// @notice The ERC-1967 storage slot holding a single `DripsStorage` structure.
+    bytes32 private immutable _dripsStorageSlot = _erc1967Slot("eip1967.drips.storage");
 
     /// @notice Emitted when a driver is registered
     /// @param driverId The driver ID
@@ -107,7 +107,7 @@ contract DripsHub is Managed, Streams, Splits {
     /// @param value The metadata value
     event UserMetadataEmitted(uint256 indexed userId, bytes32 indexed key, bytes value);
 
-    struct DripsHubStorage {
+    struct DripsStorage {
         /// @notice The next driver ID that will be used when registering.
         uint32 nextDriverId;
         /// @notice Driver addresses.
@@ -165,14 +165,14 @@ contract DripsHub is Managed, Streams, Splits {
     /// Every driver ID is assigned only to a single address,
     /// but a single address can have multiple driver IDs assigned to it.
     /// @param driverAddr The address of the driver. Must not be zero address.
-    /// It should be a smart contract capable of dealing with the DripsHub API.
+    /// It should be a smart contract capable of dealing with the Drips API.
     /// It shouldn't be an EOA because the API requires making multiple calls per transaction.
     /// @return driverId The registered driver ID.
     function registerDriver(address driverAddr) public whenNotPaused returns (uint32 driverId) {
         require(driverAddr != address(0), "Driver registered for 0 address");
-        DripsHubStorage storage dripsHubStorage = _dripsHubStorage();
-        driverId = dripsHubStorage.nextDriverId++;
-        dripsHubStorage.driverAddresses[driverId] = driverAddr;
+        DripsStorage storage dripsStorage = _dripsStorage();
+        driverId = dripsStorage.nextDriverId++;
+        dripsStorage.driverAddresses[driverId] = driverAddr;
         emit DriverRegistered(driverId, driverAddr);
     }
 
@@ -181,29 +181,29 @@ contract DripsHub is Managed, Streams, Splits {
     /// @return driverAddr The address of the driver.
     /// If the driver hasn't been registered yet, returns address 0.
     function driverAddress(uint32 driverId) public view returns (address driverAddr) {
-        return _dripsHubStorage().driverAddresses[driverId];
+        return _dripsStorage().driverAddresses[driverId];
     }
 
     /// @notice Updates the driver address. Must be called from the current driver address.
     /// @param driverId The driver ID.
     /// @param newDriverAddr The new address of the driver.
-    /// It should be a smart contract capable of dealing with the DripsHub API.
+    /// It should be a smart contract capable of dealing with the Drips API.
     /// It shouldn't be an EOA because the API requires making multiple calls per transaction.
     function updateDriverAddress(uint32 driverId, address newDriverAddr) public whenNotPaused {
         _assertCallerIsDriver(driverId);
-        _dripsHubStorage().driverAddresses[driverId] = newDriverAddr;
+        _dripsStorage().driverAddresses[driverId] = newDriverAddr;
         emit DriverAddressUpdated(driverId, msg.sender, newDriverAddr);
     }
 
     /// @notice Returns the driver ID which will be assigned for the next registered driver.
     /// @return driverId The next driver ID.
     function nextDriverId() public view returns (uint32 driverId) {
-        return _dripsHubStorage().nextDriverId;
+        return _dripsStorage().nextDriverId;
     }
 
     /// @notice Returns the amount currently stored in the protocol of the given token.
     /// The sum of streaming and splitting balances can never exceed `MAX_TOTAL_BALANCE`.
-    /// The amount of tokens held by the DripsHub contract exceeding the sum of
+    /// The amount of tokens held by the Drips contract exceeding the sum of
     /// streaming and splitting balances can be `withdraw`n.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
@@ -218,63 +218,63 @@ contract DripsHub is Managed, Streams, Splits {
         view
         returns (uint128 streamsBalance, uint128 splitsBalance)
     {
-        Balance storage balance = _dripsHubStorage().balances[erc20];
+        Balance storage balance = _dripsStorage().balances[erc20];
         return (balance.streams, balance.splits);
     }
 
     /// @notice Increases the balance of the given token currently stored in streams.
-    /// No funds are transferred, all the tokens are expected to be already held by DripsHub.
+    /// No funds are transferred, all the tokens are expected to be already held by Drips.
     /// The new total balance is verified to have coverage in the held tokens
     /// and to be within the limit of `MAX_TOTAL_BALANCE`.
     /// @param erc20 The used ERC-20 token.
     /// @param amt The amount to increase the streams balance by.
     function _increaseStreamsBalance(IERC20 erc20, uint128 amt) internal {
         _verifyBalanceIncrease(erc20, amt);
-        _dripsHubStorage().balances[erc20].streams += amt;
+        _dripsStorage().balances[erc20].streams += amt;
     }
 
     /// @notice Decreases the balance of the given token currently stored in streams.
-    /// No funds are transferred, but the tokens held by DripsHub
+    /// No funds are transferred, but the tokens held by Drips
     /// above the total balance become withdrawable.
     /// @param erc20 The used ERC-20 token.
     /// @param amt The amount to decrease the streams balance by.
     function _decreaseStreamsBalance(IERC20 erc20, uint128 amt) internal {
-        _dripsHubStorage().balances[erc20].streams -= amt;
+        _dripsStorage().balances[erc20].streams -= amt;
     }
 
     /// @notice Increases the balance of the given token currently stored in streams.
-    /// No funds are transferred, all the tokens are expected to be already held by DripsHub.
+    /// No funds are transferred, all the tokens are expected to be already held by Drips.
     /// The new total balance is verified to have coverage in the held tokens
     /// and to be within the limit of `MAX_TOTAL_BALANCE`.
     /// @param erc20 The used ERC-20 token.
     /// @param amt The amount to increase the streams balance by.
     function _increaseSplitsBalance(IERC20 erc20, uint128 amt) internal {
         _verifyBalanceIncrease(erc20, amt);
-        _dripsHubStorage().balances[erc20].splits += amt;
+        _dripsStorage().balances[erc20].splits += amt;
     }
 
     /// @notice Decreases the balance of the given token currently stored in splits.
-    /// No funds are transferred, but the tokens held by DripsHub
+    /// No funds are transferred, but the tokens held by Drips
     /// above the total balance become withdrawable.
     /// @param erc20 The used ERC-20 token.
     /// @param amt The amount to decrease the splits balance by.
     function _decreaseSplitsBalance(IERC20 erc20, uint128 amt) internal {
-        _dripsHubStorage().balances[erc20].splits -= amt;
+        _dripsStorage().balances[erc20].splits -= amt;
     }
 
     /// @notice Moves the balance of the given token currently stored in streams to splits.
-    /// No funds are transferred, all the tokens are already held by DripsHub.
+    /// No funds are transferred, all the tokens are already held by Drips.
     /// @param erc20 The used ERC-20 token.
     /// @param amt The amount to decrease the splits balance by.
     function _moveBalanceFromStreamsToSplits(IERC20 erc20, uint128 amt) internal {
-        Balance storage balance = _dripsHubStorage().balances[erc20];
+        Balance storage balance = _dripsStorage().balances[erc20];
         balance.streams -= amt;
         balance.splits += amt;
     }
 
     /// @notice Verifies that the balance of streams or splits can be increased by the given amount.
     /// The sum of streaming and splitting balances is checked to not exceed
-    /// `MAX_TOTAL_BALANCE` or the amount of tokens held by the DripsHub.
+    /// `MAX_TOTAL_BALANCE` or the amount of tokens held by the Drips.
     /// @param erc20 The used ERC-20 token.
     /// @param amt The amount to increase the streams or splits balance by.
     function _verifyBalanceIncrease(IERC20 erc20, uint128 amt) internal view {
@@ -285,7 +285,7 @@ contract DripsHub is Managed, Streams, Splits {
     }
 
     /// @notice Transfers withdrawable funds to an address.
-    /// The withdrawable funds are held by the DripsHub contract,
+    /// The withdrawable funds are held by the Drips contract,
     /// but not used in the protocol, so they are free to be transferred out.
     /// Anybody can call `withdraw`, so all withdrawable funds should be withdrawn
     /// or used in the protocol before any 3rd parties have a chance to do that.
@@ -297,7 +297,7 @@ contract DripsHub is Managed, Streams, Splits {
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param receiver The address to send withdrawn funds to.
     /// @param amt The withdrawn amount.
-    /// It must be at most the difference between the balance of the token held by the DripsHub
+    /// It must be at most the difference between the balance of the token held by the Drips
     /// contract address and the sum of balances managed by the protocol as indicated by `balances`.
     function withdraw(IERC20 erc20, address receiver, uint256 amt) public {
         (uint128 streamsBalance, uint128 splitsBalance) = balances(erc20);
@@ -530,7 +530,7 @@ contract DripsHub is Managed, Streams, Splits {
 
     /// @notice Gives funds from the user to the receiver.
     /// The receiver can split and collect them immediately.
-    /// Requires that the tokens used to give are already sent to DripsHub and are withdrawable.
+    /// Requires that the tokens used to give are already sent to Drips and are withdrawable.
     /// Anybody can call `withdraw`, so all withdrawable funds should be withdrawn
     /// or used in the protocol before any 3rd parties have a chance to do that.
     /// @param userId The user ID.
@@ -604,7 +604,7 @@ contract DripsHub is Managed, Streams, Splits {
 
     /// @notice Sets the user's streams configuration.
     /// Requires that the tokens used to increase the streams balance
-    /// are already sent to DripsHub and are withdrawable.
+    /// are already sent to Drips and are withdrawable.
     /// If the streams balance is decreased, the released tokens become withdrawable.
     /// Anybody can call `withdraw`, so all withdrawable funds should be withdrawn
     /// or used in the protocol before any 3rd parties have a chance to do that.
@@ -764,10 +764,10 @@ contract DripsHub is Managed, Streams, Splits {
         }
     }
 
-    /// @notice Returns the DripsHub storage.
+    /// @notice Returns the Drips storage.
     /// @return storageRef The storage.
-    function _dripsHubStorage() internal view returns (DripsHubStorage storage storageRef) {
-        bytes32 slot = _dripsHubStorageSlot;
+    function _dripsStorage() internal view returns (DripsStorage storage storageRef) {
+        bytes32 slot = _dripsStorageSlot;
         // slither-disable-next-line assembly
         assembly {
             storageRef.slot := slot

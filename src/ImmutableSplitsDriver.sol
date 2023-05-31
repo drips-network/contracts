@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.19;
 
-import {DripsHub, SplitsReceiver, UserMetadata} from "./DripsHub.sol";
+import {Drips, SplitsReceiver, UserMetadata} from "./Drips.sol";
 import {Managed} from "./Managed.sol";
 import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 
-/// @notice A DripsHub driver implementing immutable splits configurations.
+/// @notice A Drips driver implementing immutable splits configurations.
 /// Anybody can create a new user ID and configure its splits configuration,
 /// but nobody can update its configuration afterwards, it's immutable.
 /// This driver doesn't allow collecting funds for user IDs it manages, but anybody
-/// can receive streams and split for them on DripsHub, which is enough because the splits
+/// can receive streams and split for them on Drips, which is enough because the splits
 /// configurations always give away 100% funds, so there's never anything left to collect.
 contract ImmutableSplitsDriver is Managed {
-    /// @notice The DripsHub address used by this driver.
-    DripsHub public immutable dripsHub;
-    /// @notice The driver ID which this driver uses when calling DripsHub.
+    /// @notice The Drips address used by this driver.
+    Drips public immutable drips;
+    /// @notice The driver ID which this driver uses when calling Drips.
     uint32 public immutable driverId;
     /// @notice The required total splits weight of each splits configuration
     uint32 public immutable totalSplitsWeight;
@@ -26,12 +26,12 @@ contract ImmutableSplitsDriver is Managed {
     /// @param receiversHash The splits receivers list hash
     event CreatedSplits(uint256 indexed userId, bytes32 indexed receiversHash);
 
-    /// @param _dripsHub The DripsHub contract to use.
-    /// @param _driverId The driver ID to use when calling DripsHub.
-    constructor(DripsHub _dripsHub, uint32 _driverId) {
-        dripsHub = _dripsHub;
+    /// @param _drips The Drips contract to use.
+    /// @param _driverId The driver ID to use when calling Drips.
+    constructor(Drips _drips, uint32 _driverId) {
+        drips = _drips;
         driverId = _driverId;
-        totalSplitsWeight = _dripsHub.TOTAL_SPLITS_WEIGHT();
+        totalSplitsWeight = _drips.TOTAL_SPLITS_WEIGHT();
     }
 
     /// @notice The ID of the next user to be created.
@@ -78,8 +78,8 @@ contract ImmutableSplitsDriver is Managed {
             }
         }
         require(weightSum == totalSplitsWeight, "Invalid total receivers weight");
-        emit CreatedSplits(userId, dripsHub.hashSplits(receivers));
-        dripsHub.setSplits(userId, receivers);
-        if (userMetadata.length > 0) dripsHub.emitUserMetadata(userId, userMetadata);
+        emit CreatedSplits(userId, drips.hashSplits(receivers));
+        drips.setSplits(userId, receivers);
+        if (userMetadata.length > 0) drips.emitUserMetadata(userId, userMetadata);
     }
 }

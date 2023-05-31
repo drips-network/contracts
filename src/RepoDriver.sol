@@ -1,14 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.19;
 
-import {
-    DripsHub,
-    StreamReceiver,
-    IERC20,
-    SafeERC20,
-    SplitsReceiver,
-    UserMetadata
-} from "./DripsHub.sol";
+import {Drips, StreamReceiver, IERC20, SafeERC20, SplitsReceiver, UserMetadata} from "./Drips.sol";
 import {Managed} from "./Managed.sol";
 import {ERC677ReceiverInterface} from "chainlink/interfaces/ERC677ReceiverInterface.sol";
 import {LinkTokenInterface} from "chainlink/interfaces/LinkTokenInterface.sol";
@@ -22,7 +15,7 @@ enum Forge {
     GitLab
 }
 
-/// @notice A DripsHub driver implementing repository-based user identification.
+/// @notice A Drips driver implementing repository-based user identification.
 /// Each repository stored in one of the supported forges has a deterministic user ID assigned.
 /// By default the repositories have no owner and their users can't be controlled by anybody,
 /// use `requestUpdateOwner` to update the owner.
@@ -42,9 +35,9 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
     string internal constant CHAIN_NAME_SEPOLIA = "sepolia";
     address internal constant LINK_TOKEN_SEPOLIA = 0x779877A7B0D9E8603169DdbD7836e478b4624789;
 
-    /// @notice The DripsHub address used by this driver.
-    DripsHub public immutable dripsHub;
-    /// @notice The driver ID which this driver uses when calling DripsHub.
+    /// @notice The Drips address used by this driver.
+    Drips public immutable drips;
+    /// @notice The driver ID which this driver uses when calling Drips.
     uint32 public immutable driverId;
     /// @notice The Link token used for paying the operators.
     LinkTokenInterface public immutable linkToken;
@@ -94,13 +87,11 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
         uint256 nonce;
     }
 
-    /// @param _dripsHub The DripsHub contract to use.
+    /// @param _drips The Drips contract to use.
     /// @param forwarder The ERC-2771 forwarder to trust. May be the zero address.
-    /// @param _driverId The driver ID to use when calling DripsHub.
-    constructor(DripsHub _dripsHub, address forwarder, uint32 _driverId)
-        ERC2771Context(forwarder)
-    {
-        dripsHub = _dripsHub;
+    /// @param _driverId The driver ID to use when calling Drips.
+    constructor(Drips _drips, address forwarder, uint32 _driverId) ERC2771Context(forwarder) {
+        drips = _drips;
         driverId = _driverId;
         // slither-disable-next-line uninitialized-local
         address _linkToken;
@@ -366,7 +357,7 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
     }
 
     /// @notice Collects the user's received already split funds
-    /// and transfers them out of the DripsHub contract.
+    /// and transfers them out of the Drips contract.
     /// @param userId The ID of the collecting user. The caller must be the owner of the user.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
@@ -382,13 +373,13 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
         onlyOwner(userId)
         returns (uint128 amt)
     {
-        amt = dripsHub.collect(userId, erc20);
-        if (amt > 0) dripsHub.withdraw(erc20, transferTo, amt);
+        amt = drips.collect(userId, erc20);
+        if (amt > 0) drips.withdraw(erc20, transferTo, amt);
     }
 
     /// @notice Gives funds from the user to the receiver.
     /// The receiver can split and collect them immediately.
-    /// Transfers the funds to be given from the message sender's wallet to the DripsHub contract.
+    /// Transfers the funds to be given from the message sender's wallet to the Drips contract.
     /// @param userId The ID of the giving user. The caller must be the owner of the user.
     /// @param receiver The receiver user ID.
     /// @param erc20 The used ERC-20 token.
@@ -404,11 +395,11 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
         onlyOwner(userId)
     {
         if (amt > 0) _transferFromCaller(erc20, amt);
-        dripsHub.give(userId, receiver, erc20, amt);
+        drips.give(userId, receiver, erc20, amt);
     }
 
     /// @notice Sets the user's streams configuration.
-    /// Transfers funds between the message sender's wallet and the DripsHub contract
+    /// Transfers funds between the message sender's wallet and the Drips contract
     /// to fulfil the change of the streams balance.
     /// @param userId The ID of the configured user. The caller must be the owner of the user.
     /// @param erc20 The used ERC-20 token.
@@ -461,16 +452,16 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
         address transferTo
     ) public whenNotPaused onlyOwner(userId) returns (int128 realBalanceDelta) {
         if (balanceDelta > 0) _transferFromCaller(erc20, uint128(balanceDelta));
-        realBalanceDelta = dripsHub.setStreams(
+        realBalanceDelta = drips.setStreams(
             userId, erc20, currReceivers, balanceDelta, newReceivers, maxEndHint1, maxEndHint2
         );
-        if (realBalanceDelta < 0) dripsHub.withdraw(erc20, transferTo, uint128(-realBalanceDelta));
+        if (realBalanceDelta < 0) drips.withdraw(erc20, transferTo, uint128(-realBalanceDelta));
     }
 
     /// @notice Sets the user's splits configuration. The configuration is common for all assets.
     /// Nothing happens to the currently splittable funds, but when they are split
     /// after this function finishes, the new splits configuration will be used.
-    /// Because anybody can call `split` on `DripsHub`, calling this function may be frontrun
+    /// Because anybody can call `split` on `Drips`, calling this function may be frontrun
     /// and all the currently splittable funds will be split using the old splits configuration.
     /// @param userId The ID of the configured user. The caller must be the owner of the user.
     /// @param receivers The list of the user's splits receivers to be set.
@@ -489,7 +480,7 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
         whenNotPaused
         onlyOwner(userId)
     {
-        dripsHub.setSplits(userId, receivers);
+        drips.setSplits(userId, receivers);
     }
 
     /// @notice Emits the user's metadata.
@@ -503,11 +494,11 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
         onlyOwner(userId)
     {
         if (userMetadata.length == 0) return;
-        dripsHub.emitUserMetadata(userId, userMetadata);
+        drips.emitUserMetadata(userId, userMetadata);
     }
 
     function _transferFromCaller(IERC20 erc20, uint128 amt) internal {
-        erc20.safeTransferFrom(_msgSender(), address(dripsHub), amt);
+        erc20.safeTransferFrom(_msgSender(), address(drips), amt);
     }
 
     /// @notice Returns the RepoDriver storage.

@@ -1,35 +1,26 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.19;
 
-import {
-    DripsHub,
-    StreamReceiver,
-    IERC20,
-    SafeERC20,
-    SplitsReceiver,
-    UserMetadata
-} from "./DripsHub.sol";
+import {Drips, StreamReceiver, IERC20, SafeERC20, SplitsReceiver, UserMetadata} from "./Drips.sol";
 import {Managed} from "./Managed.sol";
 import {ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
 
-/// @notice A DripsHub driver implementing address-based user identification.
+/// @notice A Drips driver implementing address-based user identification.
 /// Each address can use `AddressDriver` to control a single user ID derived from that address.
 /// No registration is required, an `AddressDriver`-based user ID for each address is known upfront.
 contract AddressDriver is Managed, ERC2771Context {
     using SafeERC20 for IERC20;
 
-    /// @notice The DripsHub address used by this driver.
-    DripsHub public immutable dripsHub;
-    /// @notice The driver ID which this driver uses when calling DripsHub.
+    /// @notice The Drips address used by this driver.
+    Drips public immutable drips;
+    /// @notice The driver ID which this driver uses when calling Drips.
     uint32 public immutable driverId;
 
-    /// @param _dripsHub The DripsHub contract to use.
+    /// @param _drips The Drips contract to use.
     /// @param forwarder The ERC-2771 forwarder to trust. May be the zero address.
-    /// @param _driverId The driver ID to use when calling DripsHub.
-    constructor(DripsHub _dripsHub, address forwarder, uint32 _driverId)
-        ERC2771Context(forwarder)
-    {
-        dripsHub = _dripsHub;
+    /// @param _driverId The driver ID to use when calling Drips.
+    constructor(Drips _drips, address forwarder, uint32 _driverId) ERC2771Context(forwarder) {
+        drips = _drips;
         driverId = _driverId;
     }
 
@@ -56,7 +47,7 @@ contract AddressDriver is Managed, ERC2771Context {
     }
 
     /// @notice Collects the user's received already split funds
-    /// and transfers them out of the DripsHub contract.
+    /// and transfers them out of the Drips contract.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
@@ -66,13 +57,13 @@ contract AddressDriver is Managed, ERC2771Context {
     /// @param transferTo The address to send collected funds to
     /// @return amt The collected amount
     function collect(IERC20 erc20, address transferTo) public whenNotPaused returns (uint128 amt) {
-        amt = dripsHub.collect(_callerUserId(), erc20);
-        if (amt > 0) dripsHub.withdraw(erc20, transferTo, amt);
+        amt = drips.collect(_callerUserId(), erc20);
+        if (amt > 0) drips.withdraw(erc20, transferTo, amt);
     }
 
     /// @notice Gives funds from the message sender to the receiver.
     /// The receiver can split and collect them immediately.
-    /// Transfers the funds to be given from the message sender's wallet to the DripsHub contract.
+    /// Transfers the funds to be given from the message sender's wallet to the Drips contract.
     /// @param receiver The receiver user ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
@@ -83,11 +74,11 @@ contract AddressDriver is Managed, ERC2771Context {
     /// @param amt The given amount
     function give(uint256 receiver, IERC20 erc20, uint128 amt) public whenNotPaused {
         if (amt > 0) _transferFromCaller(erc20, amt);
-        dripsHub.give(_callerUserId(), receiver, erc20, amt);
+        drips.give(_callerUserId(), receiver, erc20, amt);
     }
 
     /// @notice Sets the message sender's streams configuration.
-    /// Transfers funds between the message sender's wallet and the DripsHub contract
+    /// Transfers funds between the message sender's wallet and the Drips contract
     /// to fulfil the change of the streams balance.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
@@ -138,7 +129,7 @@ contract AddressDriver is Managed, ERC2771Context {
         address transferTo
     ) public whenNotPaused returns (int128 realBalanceDelta) {
         if (balanceDelta > 0) _transferFromCaller(erc20, uint128(balanceDelta));
-        realBalanceDelta = dripsHub.setStreams(
+        realBalanceDelta = drips.setStreams(
             _callerUserId(),
             erc20,
             currReceivers,
@@ -147,13 +138,13 @@ contract AddressDriver is Managed, ERC2771Context {
             maxEndHint1,
             maxEndHint2
         );
-        if (realBalanceDelta < 0) dripsHub.withdraw(erc20, transferTo, uint128(-realBalanceDelta));
+        if (realBalanceDelta < 0) drips.withdraw(erc20, transferTo, uint128(-realBalanceDelta));
     }
 
     /// @notice Sets user splits configuration. The configuration is common for all assets.
     /// Nothing happens to the currently splittable funds, but when they are split
     /// after this function finishes, the new splits configuration will be used.
-    /// Because anybody can call `split` on `DripsHub`, calling this function may be frontrun
+    /// Because anybody can call `split` on `Drips`, calling this function may be frontrun
     /// and all the currently splittable funds will be split using the old splits configuration.
     /// @param receivers The list of the user's splits receivers to be set.
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
@@ -167,7 +158,7 @@ contract AddressDriver is Managed, ERC2771Context {
     /// funds split to themselves will be again split using the current configuration.
     /// Splitting 100% to self effectively blocks splitting unless the configuration is updated.
     function setSplits(SplitsReceiver[] calldata receivers) public whenNotPaused {
-        dripsHub.setSplits(_callerUserId(), receivers);
+        drips.setSplits(_callerUserId(), receivers);
     }
 
     /// @notice Emits the user metadata for the message sender.
@@ -175,10 +166,10 @@ contract AddressDriver is Managed, ERC2771Context {
     /// to establish and follow conventions to ensure compatibility with the consumers.
     /// @param userMetadata The list of user metadata.
     function emitUserMetadata(UserMetadata[] calldata userMetadata) public whenNotPaused {
-        dripsHub.emitUserMetadata(_callerUserId(), userMetadata);
+        drips.emitUserMetadata(_callerUserId(), userMetadata);
     }
 
     function _transferFromCaller(IERC20 erc20, uint128 amt) internal {
-        erc20.safeTransferFrom(_msgSender(), address(dripsHub), amt);
+        erc20.safeTransferFrom(_msgSender(), address(drips), amt);
     }
 }

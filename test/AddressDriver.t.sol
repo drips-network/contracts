@@ -5,12 +5,12 @@ import {Caller} from "src/Caller.sol";
 import {AddressDriver} from "src/AddressDriver.sol";
 import {
     StreamConfigImpl,
-    DripsHub,
+    Drips,
     StreamsHistory,
     StreamReceiver,
     SplitsReceiver,
     UserMetadata
-} from "src/DripsHub.sol";
+} from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
 import {
@@ -19,7 +19,7 @@ import {
 } from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
 contract AddressDriverTest is Test {
-    DripsHub internal dripsHub;
+    Drips internal drips;
     Caller internal caller;
     AddressDriver internal driver;
     IERC20 internal erc20;
@@ -30,18 +30,18 @@ contract AddressDriverTest is Test {
     uint256 internal userId;
 
     function setUp() public {
-        DripsHub hubLogic = new DripsHub(10);
-        dripsHub = DripsHub(address(new ManagedProxy(hubLogic, address(this))));
+        Drips dripsLogic = new Drips(10);
+        drips = Drips(address(new ManagedProxy(dripsLogic, address(this))));
 
         caller = new Caller();
 
         // Make AddressDriver's driver ID non-0 to test if it's respected by AddressDriver
-        dripsHub.registerDriver(address(1));
-        dripsHub.registerDriver(address(1));
-        uint32 driverId = dripsHub.registerDriver(address(this));
-        AddressDriver driverLogic = new AddressDriver(dripsHub, address(caller), driverId);
+        drips.registerDriver(address(1));
+        drips.registerDriver(address(1));
+        uint32 driverId = drips.registerDriver(address(this));
+        AddressDriver driverLogic = new AddressDriver(drips, address(caller), driverId);
         driver = AddressDriver(address(new ManagedProxy(driverLogic, admin)));
-        dripsHub.updateDriverAddress(driverId, address(driver));
+        drips.updateDriverAddress(driverId, address(driver));
 
         thisId = driver.calcUserId(address(this));
         userId = driver.calcUserId(user);
@@ -57,28 +57,28 @@ contract AddressDriverTest is Test {
         uint128 amt = 5;
         vm.prank(user);
         driver.give(thisId, erc20, amt);
-        dripsHub.split(thisId, erc20, new SplitsReceiver[](0));
+        drips.split(thisId, erc20, new SplitsReceiver[](0));
         uint256 balance = erc20.balanceOf(address(this));
 
         uint128 collected = driver.collect(erc20, address(this));
 
         assertEq(collected, amt, "Invalid collected");
         assertEq(erc20.balanceOf(address(this)), balance + amt, "Invalid balance");
-        assertEq(erc20.balanceOf(address(dripsHub)), 0, "Invalid DripsHub balance");
+        assertEq(erc20.balanceOf(address(drips)), 0, "Invalid Drips balance");
     }
 
     function testCollectTransfersFundsToTheProvidedAddress() public {
         uint128 amt = 5;
         vm.prank(user);
         driver.give(thisId, erc20, amt);
-        dripsHub.split(thisId, erc20, new SplitsReceiver[](0));
+        drips.split(thisId, erc20, new SplitsReceiver[](0));
         address transferTo = address(1234);
 
         uint128 collected = driver.collect(erc20, transferTo);
 
         assertEq(collected, amt, "Invalid collected");
         assertEq(erc20.balanceOf(transferTo), amt, "Invalid balance");
-        assertEq(erc20.balanceOf(address(dripsHub)), 0, "Invalid DripsHub balance");
+        assertEq(erc20.balanceOf(address(drips)), 0, "Invalid Drips balance");
     }
 
     function testGive() public {
@@ -88,8 +88,8 @@ contract AddressDriverTest is Test {
         driver.give(userId, erc20, amt);
 
         assertEq(erc20.balanceOf(address(this)), balance - amt, "Invalid balance");
-        assertEq(erc20.balanceOf(address(dripsHub)), amt, "Invalid DripsHub balance");
-        assertEq(dripsHub.splittable(userId, erc20), amt, "Invalid received amount");
+        assertEq(erc20.balanceOf(address(drips)), amt, "Invalid Drips balance");
+        assertEq(drips.splittable(userId, erc20), amt, "Invalid received amount");
     }
 
     function testSetStreams() public {
@@ -99,7 +99,7 @@ contract AddressDriverTest is Test {
 
         StreamReceiver[] memory receivers = new StreamReceiver[](1);
         receivers[0] =
-            StreamReceiver(userId, StreamConfigImpl.create(0, dripsHub.minAmtPerSec(), 0, 0));
+            StreamReceiver(userId, StreamConfigImpl.create(0, drips.minAmtPerSec(), 0, 0));
         uint256 balance = erc20.balanceOf(address(this));
 
         int128 realBalanceDelta = driver.setStreams(
@@ -107,12 +107,12 @@ contract AddressDriverTest is Test {
         );
 
         assertEq(erc20.balanceOf(address(this)), balance - amt, "Invalid balance after top-up");
-        assertEq(erc20.balanceOf(address(dripsHub)), amt, "Invalid DripsHub balance after top-up");
-        (,,, uint128 streamsBalance,) = dripsHub.streamsState(thisId, erc20);
+        assertEq(erc20.balanceOf(address(drips)), amt, "Invalid Drips balance after top-up");
+        (,,, uint128 streamsBalance,) = drips.streamsState(thisId, erc20);
         assertEq(streamsBalance, amt, "Invalid streams balance after top-up");
         assertEq(realBalanceDelta, int128(amt), "Invalid streams balance delta after top-up");
-        (bytes32 streamsHash,,,,) = dripsHub.streamsState(thisId, erc20);
-        assertEq(streamsHash, dripsHub.hashStreams(receivers), "Invalid streams hash after top-up");
+        (bytes32 streamsHash,,,,) = drips.streamsState(thisId, erc20);
+        assertEq(streamsHash, drips.hashStreams(receivers), "Invalid streams hash after top-up");
 
         // Withdraw
         balance = erc20.balanceOf(address(user));
@@ -121,8 +121,8 @@ contract AddressDriverTest is Test {
             driver.setStreams(erc20, receivers, -int128(amt), receivers, 0, 0, address(user));
 
         assertEq(erc20.balanceOf(address(user)), balance + amt, "Invalid balance after withdrawal");
-        assertEq(erc20.balanceOf(address(dripsHub)), 0, "Invalid DripsHub balance after withdrawal");
-        (,,, streamsBalance,) = dripsHub.streamsState(thisId, erc20);
+        assertEq(erc20.balanceOf(address(drips)), 0, "Invalid Drips balance after withdrawal");
+        (,,, streamsBalance,) = drips.streamsState(thisId, erc20);
         assertEq(streamsBalance, 0, "Invalid streams balance after withdrawal");
         assertEq(realBalanceDelta, -int128(amt), "Invalid streams balance delta after withdrawal");
     }
@@ -137,8 +137,8 @@ contract AddressDriverTest is Test {
             driver.setStreams(erc20, receivers, -int128(amt), receivers, 0, 0, transferTo);
 
         assertEq(erc20.balanceOf(transferTo), amt, "Invalid balance");
-        assertEq(erc20.balanceOf(address(dripsHub)), 0, "Invalid DripsHub balance");
-        (,,, uint128 streamsBalance,) = dripsHub.streamsState(thisId, erc20);
+        assertEq(erc20.balanceOf(address(drips)), 0, "Invalid Drips balance");
+        (,,, uint128 streamsBalance,) = drips.streamsState(thisId, erc20);
         assertEq(streamsBalance, 0, "Invalid streams balance");
         assertEq(realBalanceDelta, -int128(amt), "Invalid streams balance delta");
     }
@@ -149,8 +149,8 @@ contract AddressDriverTest is Test {
 
         driver.setSplits(receivers);
 
-        bytes32 actual = dripsHub.splitsHash(thisId);
-        bytes32 expected = dripsHub.hashSplits(receivers);
+        bytes32 actual = drips.splitsHash(thisId);
+        bytes32 expected = drips.hashSplits(receivers);
         assertEq(actual, expected, "Invalid splits hash");
     }
 
@@ -163,13 +163,13 @@ contract AddressDriverTest is Test {
     function testForwarderIsTrusted() public {
         vm.prank(user);
         caller.authorize(address(this));
-        assertEq(dripsHub.splittable(userId, erc20), 0, "Invalid splittable before give");
+        assertEq(drips.splittable(userId, erc20), 0, "Invalid splittable before give");
         uint128 amt = 10;
 
         bytes memory giveData = abi.encodeCall(driver.give, (userId, erc20, amt));
         caller.callAs(user, address(driver), giveData);
 
-        assertEq(dripsHub.splittable(userId, erc20), amt, "Invalid splittable after give");
+        assertEq(drips.splittable(userId, erc20), amt, "Invalid splittable after give");
     }
 
     modifier canBePausedTest() {

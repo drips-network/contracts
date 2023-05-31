@@ -2,27 +2,27 @@
 pragma solidity ^0.8.19;
 
 import {ImmutableSplitsDriver} from "src/ImmutableSplitsDriver.sol";
-import {DripsHub, SplitsReceiver, UserMetadata} from "src/DripsHub.sol";
+import {Drips, SplitsReceiver, UserMetadata} from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
 
 contract ImmutableSplitsDriverTest is Test {
-    DripsHub internal dripsHub;
+    Drips internal drips;
     ImmutableSplitsDriver internal driver;
     uint32 internal totalSplitsWeight;
     address internal admin = address(1);
 
     function setUp() public {
-        DripsHub hubLogic = new DripsHub(10);
-        dripsHub = DripsHub(address(new ManagedProxy(hubLogic, address(this))));
+        Drips dripsLogic = new Drips(10);
+        drips = Drips(address(new ManagedProxy(dripsLogic, address(this))));
 
         // Make the driver ID non-0 to test if it's respected by the driver
-        dripsHub.registerDriver(address(1));
-        dripsHub.registerDriver(address(1));
-        uint32 driverId = dripsHub.registerDriver(address(this));
-        ImmutableSplitsDriver driverLogic = new ImmutableSplitsDriver(dripsHub, driverId);
+        drips.registerDriver(address(1));
+        drips.registerDriver(address(1));
+        uint32 driverId = drips.registerDriver(address(this));
+        ImmutableSplitsDriver driverLogic = new ImmutableSplitsDriver(drips, driverId);
         driver = ImmutableSplitsDriver(address(new ManagedProxy(driverLogic, admin)));
-        dripsHub.updateDriverAddress(driverId, address(driver));
+        drips.updateDriverAddress(driverId, address(driver));
         totalSplitsWeight = driver.totalSplitsWeight();
     }
 
@@ -38,8 +38,8 @@ contract ImmutableSplitsDriverTest is Test {
 
         assertEq(userId, nextUserId, "Invalid user ID");
         assertEq(driver.nextUserId(), userId + 1, "Invalid next user ID");
-        bytes32 actual = dripsHub.splitsHash(userId);
-        bytes32 expected = dripsHub.hashSplits(receivers);
+        bytes32 actual = drips.splitsHash(userId);
+        bytes32 expected = drips.hashSplits(receivers);
         assertEq(actual, expected, "Invalid splits hash");
     }
 

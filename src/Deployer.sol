@@ -3,7 +3,7 @@ pragma solidity ^0.8.17;
 
 import {AddressDriver} from "./AddressDriver.sol";
 import {Caller} from "./Caller.sol";
-import {DripsHub} from "./DripsHub.sol";
+import {Drips} from "./Drips.sol";
 import {Managed, ManagedProxy} from "./Managed.sol";
 import {NFTDriver} from "./NFTDriver.sol";
 import {ImmutableSplitsDriver} from "./ImmutableSplitsDriver.sol";
@@ -12,12 +12,12 @@ contract Deployer {
     // slither-disable-next-line immutable-states
     address public creator;
 
-    DripsHub public dripsHub;
-    bytes public dripsHubArgs;
-    uint32 public dripsHubCycleSecs;
-    DripsHub public dripsHubLogic;
-    bytes public dripsHubLogicArgs;
-    address public dripsHubAdmin;
+    Drips public drips;
+    bytes public dripsArgs;
+    uint32 public dripsCycleSecs;
+    Drips public dripsLogic;
+    bytes public dripsLogicArgs;
+    address public dripsAdmin;
 
     Caller public caller;
     bytes public callerArgs;
@@ -44,31 +44,31 @@ contract Deployer {
     uint32 public immutableSplitsDriverId;
 
     constructor(
-        uint32 dripsHubCycleSecs_,
-        address dripsHubAdmin_,
+        uint32 dripsCycleSecs_,
+        address dripsAdmin_,
         address addressDriverAdmin_,
         address nftDriverAdmin_,
         address immutableSplitsDriverAdmin_
     ) {
         creator = msg.sender;
-        _deployDripsHub(dripsHubCycleSecs_, dripsHubAdmin_);
+        _deployDrips(dripsCycleSecs_, dripsAdmin_);
         _deployCaller();
         _deployAddressDriver(addressDriverAdmin_);
         _deployNFTDriver(nftDriverAdmin_);
         _deployImmutableSplitsDriver(immutableSplitsDriverAdmin_);
     }
 
-    function _deployDripsHub(uint32 dripsHubCycleSecs_, address dripsHubAdmin_) internal {
+    function _deployDrips(uint32 dripsCycleSecs_, address dripsAdmin_) internal {
         // Deploy logic
-        dripsHubCycleSecs = dripsHubCycleSecs_;
-        dripsHubLogicArgs = abi.encode(dripsHubCycleSecs);
-        dripsHubLogic = new DripsHub(dripsHubCycleSecs);
+        dripsCycleSecs = dripsCycleSecs_;
+        dripsLogicArgs = abi.encode(dripsCycleSecs);
+        dripsLogic = new Drips(dripsCycleSecs);
         // Deploy proxy
-        dripsHubAdmin = dripsHubAdmin_;
+        dripsAdmin = dripsAdmin_;
         // slither-disable-next-line reentrancy-benign
-        ManagedProxy proxy = new ManagedProxy(dripsHubLogic, dripsHubAdmin);
-        dripsHub = DripsHub(address(proxy));
-        dripsHubArgs = abi.encode(dripsHubLogic, dripsHubAdmin);
+        ManagedProxy proxy = new ManagedProxy(dripsLogic, dripsAdmin);
+        drips = Drips(address(proxy));
+        dripsArgs = abi.encode(dripsLogic, dripsAdmin);
     }
 
     function _deployCaller() internal {
@@ -76,13 +76,13 @@ contract Deployer {
         callerArgs = abi.encode();
     }
 
-    /// @dev Requires DripsHub and Caller to be deployed
+    /// @dev Requires Drips and Caller to be deployed
     function _deployAddressDriver(address addressDriverAdmin_) internal {
         // Deploy logic
         address forwarder = address(caller);
-        uint32 driverId = dripsHub.nextDriverId();
-        addressDriverLogicArgs = abi.encode(dripsHub, forwarder, driverId);
-        addressDriverLogic = new AddressDriver(dripsHub, forwarder, driverId);
+        uint32 driverId = drips.nextDriverId();
+        addressDriverLogicArgs = abi.encode(drips, forwarder, driverId);
+        addressDriverLogic = new AddressDriver(drips, forwarder, driverId);
         // Deploy proxy
         addressDriverAdmin = addressDriverAdmin_;
         // slither-disable-next-line reentrancy-benign
@@ -90,16 +90,16 @@ contract Deployer {
         addressDriver = AddressDriver(address(proxy));
         addressDriverArgs = abi.encode(addressDriverLogic, addressDriverAdmin);
         // Register as a driver
-        addressDriverId = dripsHub.registerDriver(address(addressDriver));
+        addressDriverId = drips.registerDriver(address(addressDriver));
     }
 
-    /// @dev Requires DripsHub and Caller to be deployed
+    /// @dev Requires Drips and Caller to be deployed
     function _deployNFTDriver(address nftDriverAdmin_) internal {
         // Deploy logic
         address forwarder = address(caller);
-        uint32 driverId = dripsHub.nextDriverId();
-        nftDriverLogicArgs = abi.encode(dripsHub, forwarder, driverId);
-        nftDriverLogic = new NFTDriver(dripsHub, forwarder, driverId);
+        uint32 driverId = drips.nextDriverId();
+        nftDriverLogicArgs = abi.encode(drips, forwarder, driverId);
+        nftDriverLogic = new NFTDriver(drips, forwarder, driverId);
         // Deploy proxy
         nftDriverAdmin = nftDriverAdmin_;
         // slither-disable-next-line reentrancy-benign
@@ -107,15 +107,15 @@ contract Deployer {
         nftDriver = NFTDriver(address(proxy));
         nftDriverArgs = abi.encode(nftDriverLogic, nftDriverAdmin);
         // Register as a driver
-        nftDriverId = dripsHub.registerDriver(address(nftDriver));
+        nftDriverId = drips.registerDriver(address(nftDriver));
     }
 
-    /// @dev Requires DripsHub to be deployed
+    /// @dev Requires Drips to be deployed
     function _deployImmutableSplitsDriver(address immutableSplitsDriverAdmin_) internal {
         // Deploy logic
-        uint32 driverId = dripsHub.nextDriverId();
-        immutableSplitsDriverLogicArgs = abi.encode(dripsHub, driverId);
-        immutableSplitsDriverLogic = new ImmutableSplitsDriver(dripsHub, driverId);
+        uint32 driverId = drips.nextDriverId();
+        immutableSplitsDriverLogicArgs = abi.encode(drips, driverId);
+        immutableSplitsDriverLogic = new ImmutableSplitsDriver(drips, driverId);
         // Deploy proxy
         immutableSplitsDriverAdmin = immutableSplitsDriverAdmin_;
         // slither-disable-next-line reentrancy-benign
@@ -125,6 +125,6 @@ contract Deployer {
         immutableSplitsDriverArgs =
             abi.encode(immutableSplitsDriverLogic, immutableSplitsDriverAdmin);
         // Register as a driver
-        immutableSplitsDriverId = dripsHub.registerDriver(address(immutableSplitsDriver));
+        immutableSplitsDriverId = drips.registerDriver(address(immutableSplitsDriver));
     }
 }

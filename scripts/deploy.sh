@@ -26,11 +26,11 @@ DEPLOYMENT_JSON=${DEPLOYMENT_JSON:-./deployment_$CHAIN.json}
 WALLET=$(cast wallet address $WALLET_ARGS | cut -d " " -f 2)
 WALLET_NONCE=$(cast nonce "$WALLET")
 ADMIN=${ADMIN:-$WALLET}
-DRIPS_HUB_ADMIN=$(cast --to-checksum-address "${DRIPS_HUB_ADMIN:-$ADMIN}")
+DRIPS_ADMIN=$(cast --to-checksum-address "${DRIPS_ADMIN:-$ADMIN}")
 ADDRESS_DRIVER_ADMIN=$(cast --to-checksum-address "${ADDRESS_DRIVER_ADMIN:-$ADMIN}")
 NFT_DRIVER_ADMIN=$(cast --to-checksum-address "${NFT_DRIVER_ADMIN:-$ADMIN}")
 SPLITS_DRIVER_ADMIN=$(cast --to-checksum-address "${SPLITS_DRIVER_ADMIN:-$ADMIN}")
-DRIPS_HUB_CYCLE_SECS=${DRIPS_HUB_CYCLE_SECS:-$(( 7 * 24 * 60 * 60 ))} # 1 week
+DRIPS_CYCLE_SECS=${DRIPS_CYCLE_SECS:-$(( 7 * 24 * 60 * 60 ))} # 1 week
 
 # Print the configuration
 print_title Deployment configuration
@@ -43,8 +43,8 @@ if [ -n "$ETHERSCAN_API_KEY" ]; then
 fi
 echo "Etherscan API key:            $ETHERSCAN_API_KEY_PROVIDED"
 echo "Deployment JSON:              $DEPLOYMENT_JSON"
-echo "DripsHub cycle seconds:       $DRIPS_HUB_CYCLE_SECS"
-echo "DripsHub admin:               $DRIPS_HUB_ADMIN"
+echo "Drips cycle seconds:          $DRIPS_CYCLE_SECS"
+echo "Drips admin:                  $DRIPS_ADMIN"
 echo "AddressDriver admin:          $ADDRESS_DRIVER_ADMIN"
 echo "NFTDriver admin:              $NFT_DRIVER_ADMIN"
 echo "ImmutableSplitsDriver admin:  $SPLITS_DRIVER_ADMIN"
@@ -66,8 +66,8 @@ if [ -n "$ETHERSCAN_API_KEY" ]; then
 fi
 DEPLOYER=$( \
     forge create $VERIFY $WALLET_ARGS "src/Deployer.sol:Deployer" --constructor-args \
-        "$DRIPS_HUB_CYCLE_SECS" \
-        "$DRIPS_HUB_ADMIN" \
+        "$DRIPS_CYCLE_SECS" \
+        "$DRIPS_ADMIN" \
         "$ADDRESS_DRIVER_ADMIN" \
         "$NFT_DRIVER_ADMIN" \
         "$SPLITS_DRIVER_ADMIN" \
@@ -88,7 +88,7 @@ if [ -n "$ETHERSCAN_API_KEY" ]; then
         verify "$1Logic" "$2"
         verify "$1" "src/Managed.sol:ManagedProxy"
     }
-    verifyWithProxy dripsHub src/DripsHub.sol:DripsHub
+    verifyWithProxy drips src/Drips.sol:Drips
     verify caller src/Caller.sol:Caller
     verifyWithProxy addressDriver src/AddressDriver.sol:AddressDriver
     verifyWithProxy nftDriver src/NFTDriver.sol:NFTDriver
@@ -105,10 +105,10 @@ tee "$DEPLOYMENT_JSON" <<EOF
     "Wallet":                       "$WALLET",
     "Wallet nonce":                 "$WALLET_NONCE",
     "Deployer":                     "$DEPLOYER",
-    "DripsHub":                     "$(deployment_detail dripsHub address)",
-    "DripsHub cycle seconds":       "$(deployment_detail dripsHubCycleSecs uint32)",
-    "DripsHub logic":               "$(deployment_detail dripsHubLogic address)",
-    "DripsHub admin":               "$(deployment_detail dripsHubAdmin address)",
+    "Drips":                        "$(deployment_detail drips address)",
+    "Drips cycle seconds":          "$(deployment_detail dripsCycleSecs uint32)",
+    "Drips logic":                  "$(deployment_detail dripsLogic address)",
+    "Drips admin":                  "$(deployment_detail dripsAdmin address)",
     "Caller":                       "$(deployment_detail caller address)",
     "AddressDriver":                "$(deployment_detail addressDriver address)",
     "AddressDriver logic":          "$(deployment_detail addressDriverLogic address)",

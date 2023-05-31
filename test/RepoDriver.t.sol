@@ -5,12 +5,12 @@ import {Caller} from "src/Caller.sol";
 import {Forge, RepoDriver} from "src/RepoDriver.sol";
 import {
     StreamConfigImpl,
-    DripsHub,
+    Drips,
     StreamsHistory,
     StreamReceiver,
     SplitsReceiver,
     UserMetadata
-} from "src/DripsHub.sol";
+} from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {BufferChainlink, CBORChainlink} from "chainlink/Chainlink.sol";
 import {ERC677ReceiverInterface} from "chainlink/interfaces/ERC677ReceiverInterface.sol";
@@ -47,7 +47,7 @@ contract MockDummy {
 }
 
 contract RepoDriverTest is Test {
-    DripsHub internal dripsHub;
+    Drips internal drips;
     Caller internal caller;
     RepoDriver internal driver;
     uint256 internal driverNonce;
@@ -67,14 +67,14 @@ contract RepoDriverTest is Test {
     uint256 internal constant CHAIN_ID_SEPOLIA = 11155111;
 
     function setUp() public {
-        DripsHub hubLogic = new DripsHub(10);
-        dripsHub = DripsHub(address(new ManagedProxy(hubLogic, address(this))));
+        Drips dripsLogic = new Drips(10);
+        drips = Drips(address(new ManagedProxy(dripsLogic, address(this))));
 
         caller = new Caller();
 
         // Make RepoDriver's driver ID non-0 to test if it's respected by RepoDriver
-        dripsHub.registerDriver(address(1));
-        dripsHub.registerDriver(address(1));
+        drips.registerDriver(address(1));
+        drips.registerDriver(address(1));
         deployDriver(CHAIN_ID_MAINNET);
 
         userId = initialUpdateOwner(address(this), "this/repo1");
@@ -91,10 +91,10 @@ contract RepoDriverTest is Test {
 
     function deployDriver(uint256 chainId) public {
         vm.chainId(chainId);
-        uint32 driverId = dripsHub.registerDriver(address(this));
-        RepoDriver driverLogic = new RepoDriver(dripsHub, address(caller), driverId);
+        uint32 driverId = drips.registerDriver(address(this));
+        RepoDriver driverLogic = new RepoDriver(drips, address(caller), driverId);
         driver = RepoDriver(address(new ManagedProxy(driverLogic, admin)));
-        dripsHub.updateDriverAddress(driverId, address(driver));
+        drips.updateDriverAddress(driverId, address(driver));
         driverNonce = 0;
         updateAnyApiOperator(OperatorInterface(address(new MockDummy())), keccak256("job ID"), 2);
 
@@ -296,7 +296,7 @@ contract RepoDriverTest is Test {
     function testDeploymentOnUnknownChainReverts() public {
         vm.chainId(1234567890);
         vm.expectRevert("Unsupported chain");
-        new RepoDriver(dripsHub, address(caller), 0);
+        new RepoDriver(drips, address(caller), 0);
     }
 
     function testUpdateOwnerGitHubMainnet() public {
@@ -471,23 +471,23 @@ contract RepoDriverTest is Test {
     function testCollect() public {
         uint128 amt = 5;
         driver.give(userId1, userId2, erc20, amt);
-        dripsHub.split(userId2, erc20, new SplitsReceiver[](0));
+        drips.split(userId2, erc20, new SplitsReceiver[](0));
         uint256 balance = erc20.balanceOf(address(this));
         uint128 collected = driver.collect(userId2, erc20, address(this));
         assertEq(collected, amt, "Invalid collected");
         assertEq(erc20.balanceOf(address(this)), balance + amt, "Invalid balance");
-        assertEq(erc20.balanceOf(address(dripsHub)), 0, "Invalid DripsHub balance");
+        assertEq(erc20.balanceOf(address(drips)), 0, "Invalid Drips balance");
     }
 
     function testCollectTransfersFundsToTheProvidedAddress() public {
         uint128 amt = 5;
         driver.give(userId1, userId2, erc20, amt);
-        dripsHub.split(userId2, erc20, new SplitsReceiver[](0));
+        drips.split(userId2, erc20, new SplitsReceiver[](0));
         address transferTo = address(1234);
         uint128 collected = driver.collect(userId2, erc20, transferTo);
         assertEq(collected, amt, "Invalid collected");
         assertEq(erc20.balanceOf(transferTo), amt, "Invalid balance");
-        assertEq(erc20.balanceOf(address(dripsHub)), 0, "Invalid DripsHub balance");
+        assertEq(erc20.balanceOf(address(drips)), 0, "Invalid Drips balance");
     }
 
     function testCollectRevertsWhenNotUserOwner() public {
@@ -500,8 +500,8 @@ contract RepoDriverTest is Test {
         uint256 balance = erc20.balanceOf(address(this));
         driver.give(userId1, userId2, erc20, amt);
         assertEq(erc20.balanceOf(address(this)), balance - amt, "Invalid balance");
-        assertEq(erc20.balanceOf(address(dripsHub)), amt, "Invalid DripsHub balance");
-        assertEq(dripsHub.splittable(userId2, erc20), amt, "Invalid received amount");
+        assertEq(erc20.balanceOf(address(drips)), amt, "Invalid Drips balance");
+        assertEq(drips.splittable(userId2, erc20), amt, "Invalid received amount");
     }
 
     function testGiveRevertsWhenNotUserOwner() public {
@@ -514,26 +514,26 @@ contract RepoDriverTest is Test {
         // Top-up
         StreamReceiver[] memory receivers = new StreamReceiver[](1);
         receivers[0] =
-            StreamReceiver(userId2, StreamConfigImpl.create(0, dripsHub.minAmtPerSec(), 0, 0));
+            StreamReceiver(userId2, StreamConfigImpl.create(0, drips.minAmtPerSec(), 0, 0));
         uint256 balance = erc20.balanceOf(address(this));
         int128 realBalanceDelta = driver.setStreams(
             userId1, erc20, new StreamReceiver[](0), int128(amt), receivers, 0, 0, address(this)
         );
         assertEq(erc20.balanceOf(address(this)), balance - amt, "Invalid balance after top-up");
-        assertEq(erc20.balanceOf(address(dripsHub)), amt, "Invalid DripsHub balance after top-up");
-        (,,, uint128 streamsBalance,) = dripsHub.streamsState(userId1, erc20);
+        assertEq(erc20.balanceOf(address(drips)), amt, "Invalid Drips balance after top-up");
+        (,,, uint128 streamsBalance,) = drips.streamsState(userId1, erc20);
         assertEq(streamsBalance, amt, "Invalid streams balance after top-up");
         assertEq(realBalanceDelta, int128(amt), "Invalid streams balance delta after top-up");
-        (bytes32 streamsHash,,,,) = dripsHub.streamsState(userId1, erc20);
-        assertEq(streamsHash, dripsHub.hashStreams(receivers), "Invalid streams hash after top-up");
+        (bytes32 streamsHash,,,,) = drips.streamsState(userId1, erc20);
+        assertEq(streamsHash, drips.hashStreams(receivers), "Invalid streams hash after top-up");
         // Withdraw
         balance = erc20.balanceOf(address(user));
         realBalanceDelta = driver.setStreams(
             userId1, erc20, receivers, -int128(amt), receivers, 0, 0, address(user)
         );
         assertEq(erc20.balanceOf(address(user)), balance + amt, "Invalid balance after withdrawal");
-        assertEq(erc20.balanceOf(address(dripsHub)), 0, "Invalid DripsHub balance after withdrawal");
-        (,,, streamsBalance,) = dripsHub.streamsState(userId1, erc20);
+        assertEq(erc20.balanceOf(address(drips)), 0, "Invalid Drips balance after withdrawal");
+        (,,, streamsBalance,) = drips.streamsState(userId1, erc20);
         assertEq(streamsBalance, 0, "Invalid streams balance after withdrawal");
         assertEq(realBalanceDelta, -int128(amt), "Invalid streams balance delta after withdrawal");
     }
@@ -546,8 +546,8 @@ contract RepoDriverTest is Test {
         int128 realBalanceDelta =
             driver.setStreams(userId, erc20, receivers, -int128(amt), receivers, 0, 0, transferTo);
         assertEq(erc20.balanceOf(transferTo), amt, "Invalid balance");
-        assertEq(erc20.balanceOf(address(dripsHub)), 0, "Invalid DripsHub balance");
-        (,,, uint128 streamsBalance,) = dripsHub.streamsState(userId1, erc20);
+        assertEq(erc20.balanceOf(address(drips)), 0, "Invalid Drips balance");
+        (,,, uint128 streamsBalance,) = drips.streamsState(userId1, erc20);
         assertEq(streamsBalance, 0, "Invalid streams balance");
         assertEq(realBalanceDelta, -int128(amt), "Invalid streams balance delta");
     }
@@ -562,8 +562,8 @@ contract RepoDriverTest is Test {
         SplitsReceiver[] memory receivers = new SplitsReceiver[](1);
         receivers[0] = SplitsReceiver(userId2, 1);
         driver.setSplits(userId, receivers);
-        bytes32 actual = dripsHub.splitsHash(userId);
-        bytes32 expected = dripsHub.hashSplits(receivers);
+        bytes32 actual = drips.splitsHash(userId);
+        bytes32 expected = drips.hashSplits(receivers);
         assertEq(actual, expected, "Invalid splits hash");
     }
 
@@ -584,12 +584,12 @@ contract RepoDriverTest is Test {
     function testForwarderIsTrusted() public {
         vm.prank(user);
         caller.authorize(address(this));
-        assertEq(dripsHub.splittable(userId, erc20), 0, "Invalid splittable before give");
+        assertEq(drips.splittable(userId, erc20), 0, "Invalid splittable before give");
         uint128 amt = 10;
         bytes memory giveData =
             abi.encodeWithSelector(driver.give.selector, userIdUser, userId, erc20, amt);
         caller.callAs(user, address(driver), giveData);
-        assertEq(dripsHub.splittable(userId, erc20), amt, "Invalid splittable after give");
+        assertEq(drips.splittable(userId, erc20), amt, "Invalid splittable after give");
     }
 
     modifier canBePausedTest() {

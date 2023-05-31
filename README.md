@@ -4,7 +4,7 @@ Radicle Drips is an EVM blockchain protocol for streaming and splitting ERC-20 t
 See [docs](https://docs.drips.network) for a high-level introduction and documentation.
 
 # Development
-Radicle Drips Hub uses [Foundry](https://github.com/foundry-rs/foundry) for development.
+Radicle Drips uses [Foundry](https://github.com/foundry-rs/foundry) for development.
 You can install it using [foundryup](https://github.com/foundry-rs/foundry#installation).
 
 The codebase is statically checked with [Slither](https://github.com/crytic/slither) version 0.9.2.
@@ -88,12 +88,12 @@ Set up environment variables configuring the deployed contracts:
 export ADMIN="<ADDRESS>"
 
 # OPTIONAL
-# Cycle length  to use in `DRIPS_HUB_LOGIC` when it's deployed. If not set, 1 week is used.
-export DRIPS_HUB_CYCLE_SECS="<SECONDS>"
+# Cycle length  to use in `DRIPS_LOGIC` when it's deployed. If not set, 1 week is used.
+export DRIPS_CYCLE_SECS="<SECONDS>"
 
 # OPTIONAL
-# Address of the DripsHub admin to set. If not set, `ADMIN` is used.
-export DRIPS_HUB_ADMIN="<ADDRESS>"
+# Address of the Drips admin to set. If not set, `ADMIN` is used.
+export DRIPS_ADMIN="<ADDRESS>"
 
 # OPTIONAL
 # Address of the AddressDriver admin to set. If not set, `ADMIN` is used.
