@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.19;
 
-import {Drips, DripsConfig, DripsHistory, DripsConfigImpl, DripsReceiver} from "./Drips.sol";
+import {
+    Streams, StreamConfig, StreamsHistory, StreamConfigImpl, StreamReceiver
+} from "./Streams.sol";
 import {Managed} from "./Managed.sol";
 import {Splits, SplitsReceiver} from "./Splits.sol";
 import {IERC20, SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
@@ -18,22 +20,22 @@ struct UserMetadata {
     bytes value;
 }
 
-/// @notice Drips hub contract. Automatically drips and splits funds between users.
+/// @notice DripsHub protocol contract. Automatically strams and splits funds between users.
 ///
-/// The user can transfer some funds to their drips balance in the contract
-/// and configure a list of receivers, to whom they want to drip these funds.
-/// As soon as the drips balance is enough to cover at least 1 second of dripping
-/// to the configured receivers, the funds start dripping automatically.
-/// Every second funds are deducted from the drips balance and moved to their receivers.
-/// The process stops automatically when the drips balance is not enough to cover another second.
+/// The user can transfer some funds to their streams balance in the contract
+/// and configure a list of receivers, to whom they want to stream these funds.
+/// As soon as the streams balance is enough to cover at least 1 second of streaming
+/// to the configured receivers, the funds start streaming automatically.
+/// Every second funds are deducted from the streams balance and moved to their receivers.
+/// The process stops automatically when the streams balance is not enough to cover another second.
 ///
 /// Every user has a receiver balance, in which they have funds received from other users.
-/// The dripped funds are added to the receiver balances in global cycles.
-/// Every `cycleSecs` seconds the drips hub adds dripped funds to the receivers' balances,
-/// so recently dripped funds may not be receivable immediately.
-/// `cycleSecs` is a constant configured when the drips hub is deployed.
-/// The receiver balance is independent from the drips balance,
-/// to drip received funds they need to be first collected and then added to the drips balance.
+/// The streamed funds are added to the receiver balances in global cycles.
+/// Every `cycleSecs` seconds the protocol adds streamed funds to the receivers' balances,
+/// so recently streamed funds may not be receivable immediately.
+/// `cycleSecs` is a constant configured when the DripsHub contract is deployed.
+/// The receiver balance is independent from the streams balance,
+/// to stream received funds they need to be first collected and then added to the streams balance.
 ///
 /// The user can share collected funds with other users by using splits.
 /// When collecting, the user gives each of their splits receivers a fraction of the received funds.
@@ -49,10 +51,10 @@ struct UserMetadata {
 /// events based on how many seconds have passed and only when the user needs their outcomes.
 ///
 /// The contract can store at most `type(int128).max` which is `2 ^ 127 - 1` units of each token.
-contract DripsHub is Managed, Drips, Splits {
-    /// @notice Maximum number of drips receivers of a single user.
-    /// Limits cost of changes in drips configuration.
-    uint256 public constant MAX_DRIPS_RECEIVERS = _MAX_DRIPS_RECEIVERS;
+contract DripsHub is Managed, Streams, Splits {
+    /// @notice Maximum number of streams receivers of a single user.
+    /// Limits cost of changes in streams configuration.
+    uint256 public constant MAX_STREAMS_RECEIVERS = _MAX_STREAMS_RECEIVERS;
     /// @notice The additional decimals for all amtPerSec values.
     uint8 public constant AMT_PER_SEC_EXTRA_DECIMALS = _AMT_PER_SEC_EXTRA_DECIMALS;
     /// @notice The multiplier for all amtPerSec values.
@@ -67,13 +69,13 @@ contract DripsHub is Managed, Drips, Splits {
     /// `driverId (32 bits) | driverCustomData (224 bits)`.
     uint8 public constant DRIVER_ID_OFFSET = 224;
     /// @notice The total amount the protocol can store of each token.
-    /// It's the minimum of _MAX_DRIPS_BALANCE and _MAX_SPLITS_BALANCE.
-    uint128 public constant MAX_TOTAL_BALANCE = _MAX_DRIPS_BALANCE;
+    /// It's the minimum of _MAX_STREAMS_BALANCE and _MAX_SPLITS_BALANCE.
+    uint128 public constant MAX_TOTAL_BALANCE = _MAX_STREAMS_BALANCE;
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
-    /// gain access to drips received during `T - cycleSecs` to `T - 1`.
+    /// gain access to steams received during `T - cycleSecs` to `T - 1`.
     /// Always higher than 1.
     uint32 public immutable cycleSecs;
-    /// @notice The minimum amtPerSec of a drip. It's 1 token per cycle.
+    /// @notice The minimum amtPerSec of a stream. It's 1 token per cycle.
     uint160 public immutable minAmtPerSec;
     /// @notice The ERC-1967 storage slot holding a single `DripsHubStorage` structure.
     bytes32 private immutable _dripsHubStorageSlot = _erc1967Slot("eip1967.dripsHub.storage");
@@ -116,23 +118,23 @@ contract DripsHub is Managed, Drips, Splits {
 
     /// @notice The balance currently stored in the protocol.
     struct Balance {
-        /// @notice The balance currently stored in dripping.
-        uint128 drips;
+        /// @notice The balance currently stored in streaming.
+        uint128 streams;
         /// @notice The balance currently stored in splitting.
         uint128 splits;
     }
 
     /// @param cycleSecs_ The length of cycleSecs to be used in the contract instance.
     /// Low value makes funds more available by shortening the average time of funds being frozen
-    /// between being taken from the users' drips balances and being receivable by their receivers.
+    /// between being taken from the users' streams balance and being receivable by their receivers.
     /// High value makes receiving cheaper by making it process less cycles for a given time range.
     /// Must be higher than 1.
     constructor(uint32 cycleSecs_)
-        Drips(cycleSecs_, _erc1967Slot("eip1967.drips.storage"))
+        Streams(cycleSecs_, _erc1967Slot("eip1967.streams.storage"))
         Splits(_erc1967Slot("eip1967.splits.storage"))
     {
-        cycleSecs = Drips._cycleSecs;
-        minAmtPerSec = Drips._minAmtPerSec;
+        cycleSecs = Streams._cycleSecs;
+        minAmtPerSec = Streams._minAmtPerSec;
     }
 
     /// @notice A modifier making functions callable only by the driver controlling the user ID.
@@ -200,52 +202,52 @@ contract DripsHub is Managed, Drips, Splits {
     }
 
     /// @notice Returns the amount currently stored in the protocol of the given token.
-    /// The sum of dripping and splitting balances can never exceed `MAX_TOTAL_BALANCE`.
+    /// The sum of streaming and splitting balances can never exceed `MAX_TOTAL_BALANCE`.
     /// The amount of tokens held by the DripsHub contract exceeding the sum of
-    /// dripping and splitting balances can be `withdraw`n.
+    /// streaming and splitting balances can be `withdraw`n.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
     /// Tokens which rebase the holders' balances, collect taxes on transfers,
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
-    /// @return dripsBalance The balance currently stored in dripping.
+    /// @return streamsBalance The balance currently stored in streaming.
     /// @return splitsBalance The balance currently stored in splitting.
     function balances(IERC20 erc20)
         public
         view
-        returns (uint128 dripsBalance, uint128 splitsBalance)
+        returns (uint128 streamsBalance, uint128 splitsBalance)
     {
         Balance storage balance = _dripsHubStorage().balances[erc20];
-        return (balance.drips, balance.splits);
+        return (balance.streams, balance.splits);
     }
 
-    /// @notice Increases the balance of the given token currently stored in drips.
+    /// @notice Increases the balance of the given token currently stored in streams.
     /// No funds are transferred, all the tokens are expected to be already held by DripsHub.
     /// The new total balance is verified to have coverage in the held tokens
     /// and to be within the limit of `MAX_TOTAL_BALANCE`.
     /// @param erc20 The used ERC-20 token.
-    /// @param amt The amount to increase the drips balance by.
-    function _increaseDripsBalance(IERC20 erc20, uint128 amt) internal {
+    /// @param amt The amount to increase the streams balance by.
+    function _increaseStreamsBalance(IERC20 erc20, uint128 amt) internal {
         _verifyBalanceIncrease(erc20, amt);
-        _dripsHubStorage().balances[erc20].drips += amt;
+        _dripsHubStorage().balances[erc20].streams += amt;
     }
 
-    /// @notice Decreases the balance of the given token currently stored in drips.
+    /// @notice Decreases the balance of the given token currently stored in streams.
     /// No funds are transferred, but the tokens held by DripsHub
     /// above the total balance become withdrawable.
     /// @param erc20 The used ERC-20 token.
-    /// @param amt The amount to decrease the drips balance by.
-    function _decreaseDripsBalance(IERC20 erc20, uint128 amt) internal {
-        _dripsHubStorage().balances[erc20].drips -= amt;
+    /// @param amt The amount to decrease the streams balance by.
+    function _decreaseStreamsBalance(IERC20 erc20, uint128 amt) internal {
+        _dripsHubStorage().balances[erc20].streams -= amt;
     }
 
-    /// @notice Increases the balance of the given token currently stored in drips.
+    /// @notice Increases the balance of the given token currently stored in streams.
     /// No funds are transferred, all the tokens are expected to be already held by DripsHub.
     /// The new total balance is verified to have coverage in the held tokens
     /// and to be within the limit of `MAX_TOTAL_BALANCE`.
     /// @param erc20 The used ERC-20 token.
-    /// @param amt The amount to increase the drips balance by.
+    /// @param amt The amount to increase the streams balance by.
     function _increaseSplitsBalance(IERC20 erc20, uint128 amt) internal {
         _verifyBalanceIncrease(erc20, amt);
         _dripsHubStorage().balances[erc20].splits += amt;
@@ -260,24 +262,24 @@ contract DripsHub is Managed, Drips, Splits {
         _dripsHubStorage().balances[erc20].splits -= amt;
     }
 
-    /// @notice Moves a part of the balance of the given token currently stored in splits to drips.
+    /// @notice Moves the balance of the given token currently stored in streams to splits.
     /// No funds are transferred, all the tokens are already held by DripsHub.
     /// @param erc20 The used ERC-20 token.
     /// @param amt The amount to decrease the splits balance by.
-    function _moveBalanceFromDripsToSplits(IERC20 erc20, uint128 amt) internal {
+    function _moveBalanceFromStreamsToSplits(IERC20 erc20, uint128 amt) internal {
         Balance storage balance = _dripsHubStorage().balances[erc20];
-        balance.drips -= amt;
+        balance.streams -= amt;
         balance.splits += amt;
     }
 
-    /// @notice Verifies that the balance of drips or splits can be increased by the given amount.
-    /// The sum of dripping and splitting balances is checked to not exceed
+    /// @notice Verifies that the balance of streams or splits can be increased by the given amount.
+    /// The sum of streaming and splitting balances is checked to not exceed
     /// `MAX_TOTAL_BALANCE` or the amount of tokens held by the DripsHub.
     /// @param erc20 The used ERC-20 token.
-    /// @param amt The amount to increase the drips or splits balance by.
+    /// @param amt The amount to increase the streams or splits balance by.
     function _verifyBalanceIncrease(IERC20 erc20, uint128 amt) internal view {
-        (uint256 dripsBalance, uint128 splitsBalance) = balances(erc20);
-        uint256 newTotalBalance = dripsBalance + splitsBalance + amt;
+        (uint256 streamsBalance, uint128 splitsBalance) = balances(erc20);
+        uint256 newTotalBalance = streamsBalance + splitsBalance + amt;
         require(newTotalBalance <= MAX_TOTAL_BALANCE, "Total balance too high");
         require(newTotalBalance <= _tokenBalance(erc20), "Token balance too low");
     }
@@ -298,8 +300,8 @@ contract DripsHub is Managed, Drips, Splits {
     /// It must be at most the difference between the balance of the token held by the DripsHub
     /// contract address and the sum of balances managed by the protocol as indicated by `balances`.
     function withdraw(IERC20 erc20, address receiver, uint256 amt) public {
-        (uint128 dripsBalance, uint128 splitsBalance) = balances(erc20);
-        uint256 withdrawable = _tokenBalance(erc20) - dripsBalance - splitsBalance;
+        (uint128 streamsBalance, uint128 splitsBalance) = balances(erc20);
+        uint256 withdrawable = _tokenBalance(erc20) - streamsBalance - splitsBalance;
         require(amt <= withdrawable, "Withdrawal amount too high");
         emit Withdrawn(erc20, receiver, amt);
         erc20.safeTransfer(receiver, amt);
@@ -309,10 +311,10 @@ contract DripsHub is Managed, Drips, Splits {
         return erc20.balanceOf(address(this));
     }
 
-    /// @notice Counts cycles from which drips can be collected.
+    /// @notice Counts cycles from which streams can be collected.
     /// This function can be used to detect that there are
     /// too many cycles to analyze in a single transaction.
-    /// @param userId The user ID
+    /// @param userId The user ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
@@ -320,122 +322,123 @@ contract DripsHub is Managed, Drips, Splits {
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @return cycles The number of cycles which can be flushed
-    function receivableDripsCycles(uint256 userId, IERC20 erc20)
+    function receivableStreamsCycles(uint256 userId, IERC20 erc20)
         public
         view
         returns (uint32 cycles)
     {
-        return Drips._receivableDripsCycles(userId, _assetId(erc20));
+        return Streams._receivableStreamsCycles(userId, _assetId(erc20));
     }
 
-    /// @notice Calculate effects of calling `receiveDrips` with the given parameters.
-    /// @param userId The user ID
+    /// @notice Calculate effects of calling `receiveStreams` with the given parameters.
+    /// @param userId The user ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
     /// Tokens which rebase the holders' balances, collect taxes on transfers,
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
-    /// @param maxCycles The maximum number of received drips cycles.
+    /// @param maxCycles The maximum number of received streams cycles.
     /// If too low, receiving will be cheap, but may not cover many cycles.
     /// If too high, receiving may become too expensive to fit in a single transaction.
     /// @return receivableAmt The amount which would be received
-    function receiveDripsResult(uint256 userId, IERC20 erc20, uint32 maxCycles)
+    function receiveStreamsResult(uint256 userId, IERC20 erc20, uint32 maxCycles)
         public
         view
         returns (uint128 receivableAmt)
     {
-        (receivableAmt,,,,) = Drips._receiveDripsResult(userId, _assetId(erc20), maxCycles);
+        (receivableAmt,,,,) = Streams._receiveStreamsResult(userId, _assetId(erc20), maxCycles);
     }
 
-    /// @notice Receive drips for the user.
-    /// Received drips cycles won't need to be analyzed ever again.
+    /// @notice Receive streams for the user.
+    /// Received streams cycles won't need to be analyzed ever again.
     /// Calling this function does not collect but makes the funds ready to be split and collected.
-    /// @param userId The user ID
+    /// @param userId The user ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
     /// Tokens which rebase the holders' balances, collect taxes on transfers,
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
-    /// @param maxCycles The maximum number of received drips cycles.
+    /// @param maxCycles The maximum number of received streams cycles.
     /// If too low, receiving will be cheap, but may not cover many cycles.
     /// If too high, receiving may become too expensive to fit in a single transaction.
     /// @return receivedAmt The received amount
-    function receiveDrips(uint256 userId, IERC20 erc20, uint32 maxCycles)
+    function receiveStreams(uint256 userId, IERC20 erc20, uint32 maxCycles)
         public
         whenNotPaused
         returns (uint128 receivedAmt)
     {
         uint256 assetId = _assetId(erc20);
-        receivedAmt = Drips._receiveDrips(userId, assetId, maxCycles);
+        receivedAmt = Streams._receiveStreams(userId, assetId, maxCycles);
         if (receivedAmt != 0) {
-            _moveBalanceFromDripsToSplits(erc20, receivedAmt);
+            _moveBalanceFromStreamsToSplits(erc20, receivedAmt);
             Splits._addSplittable(userId, assetId, receivedAmt);
         }
     }
 
-    /// @notice Receive drips from the currently running cycle from a single sender.
-    /// It doesn't receive drips from the previous, finished cycles, to do that use `receiveDrips`.
-    /// Squeezed funds won't be received in the next calls to `squeezeDrips` or `receiveDrips`.
-    /// Only funds dripped before `block.timestamp` can be squeezed.
-    /// @param userId The ID of the user receiving drips to squeeze funds for.
+    /// @notice Receive streams from the currently running cycle from a single sender.
+    /// It doesn't receive streams from the finished cycles, to do that use `receiveStreams`.
+    /// Squeezed funds won't be received in the next calls to `squeezeStreams` or `receiveStreams`.
+    /// Only funds streamed before `block.timestamp` can be squeezed.
+    /// @param userId The ID of the user receiving streams to squeeze funds for.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
     /// Tokens which rebase the holders' balances, collect taxes on transfers,
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
-    /// @param senderId The ID of the user sending drips to squeeze funds from.
-    /// @param historyHash The sender's history hash which was valid right before
-    /// they set up the sequence of configurations described by `dripsHistory`.
-    /// @param dripsHistory The sequence of the sender's drips configurations.
+    /// @param senderId The ID of the streaming user to squeeze funds from.
+    /// @param historyHash The sender's history hash that was valid right before
+    /// they set up the sequence of configurations described by `streamsHistory`.
+    /// @param streamsHistory The sequence of the sender's streams configurations.
     /// It can start at an arbitrary past configuration, but must describe all the configurations
     /// which have been used since then including the current one, in the chronological order.
-    /// Only drips described by `dripsHistory` will be squeezed.
-    /// If `dripsHistory` entries have no receivers, they won't be squeezed.
+    /// Only streams described by `streamsHistory` will be squeezed.
+    /// If `streamsHistory` entries have no receivers, they won't be squeezed.
     /// @return amt The squeezed amount.
-    function squeezeDrips(
+    function squeezeStreams(
         uint256 userId,
         IERC20 erc20,
         uint256 senderId,
         bytes32 historyHash,
-        DripsHistory[] memory dripsHistory
+        StreamsHistory[] memory streamsHistory
     ) public whenNotPaused returns (uint128 amt) {
         uint256 assetId = _assetId(erc20);
-        amt = Drips._squeezeDrips(userId, assetId, senderId, historyHash, dripsHistory);
+        amt = Streams._squeezeStreams(userId, assetId, senderId, historyHash, streamsHistory);
         if (amt != 0) {
-            _moveBalanceFromDripsToSplits(erc20, amt);
+            _moveBalanceFromStreamsToSplits(erc20, amt);
             Splits._addSplittable(userId, assetId, amt);
         }
     }
 
-    /// @notice Calculate effects of calling `squeezeDrips` with the given parameters.
+    /// @notice Calculate effects of calling `squeezeStreams` with the given parameters.
     /// See its documentation for more details.
-    /// @param userId The ID of the user receiving drips to squeeze funds for.
+    /// @param userId The ID of the user receiving streams to squeeze funds for.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
     /// Tokens which rebase the holders' balances, collect taxes on transfers,
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
-    /// @param senderId The ID of the user sending drips to squeeze funds from.
-    /// @param historyHash The sender's history hash which was valid right before `dripsHistory`.
-    /// @param dripsHistory The sequence of the sender's drips configurations.
+    /// @param senderId The ID of the streaming user to squeeze funds from.
+    /// @param historyHash The sender's history hash that was valid right before `streamsHistory`.
+    /// @param streamsHistory The sequence of the sender's streams configurations.
     /// @return amt The squeezed amount.
-    function squeezeDripsResult(
+    function squeezeStreamsResult(
         uint256 userId,
         IERC20 erc20,
         uint256 senderId,
         bytes32 historyHash,
-        DripsHistory[] memory dripsHistory
+        StreamsHistory[] memory streamsHistory
     ) public view returns (uint128 amt) {
-        (amt,,,,) =
-            Drips._squeezeDripsResult(userId, _assetId(erc20), senderId, historyHash, dripsHistory);
+        (amt,,,,) = Streams._squeezeStreamsResult(
+            userId, _assetId(erc20), senderId, historyHash, streamsHistory
+        );
     }
 
     /// @notice Returns user's received but not split yet funds.
-    /// @param userId The user ID
+    /// @param userId The user ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
@@ -448,7 +451,7 @@ contract DripsHub is Managed, Drips, Splits {
     }
 
     /// @notice Calculate the result of splitting an amount using the current splits configuration.
-    /// @param userId The user ID
+    /// @param userId The user ID.
     /// @param currReceivers The list of the user's current splits receivers.
     /// It must be exactly the same as the last list set for the user with `setSplits`.
     /// @param amount The amount being split.
@@ -471,7 +474,7 @@ contract DripsHub is Managed, Drips, Splits {
     /// and all the splittable funds will become splittable only using the new configuration.
     /// The user must be trusted with how funds sent to them will be splits,
     /// in the end they can do with their funds whatever they want by changing the configuration.
-    /// @param userId The user ID
+    /// @param userId The user ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
@@ -492,7 +495,7 @@ contract DripsHub is Managed, Drips, Splits {
     }
 
     /// @notice Returns user's received funds already split and ready to be collected.
-    /// @param userId The user ID
+    /// @param userId The user ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
@@ -507,7 +510,7 @@ contract DripsHub is Managed, Drips, Splits {
     /// @notice Collects user's received already split funds and makes them withdrawable.
     /// Anybody can call `withdraw`, so all withdrawable funds should be withdrawn
     /// or used in the protocol before any 3rd parties have a chance to do that.
-    /// @param userId The user ID
+    /// @param userId The user ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
@@ -530,8 +533,8 @@ contract DripsHub is Managed, Drips, Splits {
     /// Requires that the tokens used to give are already sent to DripsHub and are withdrawable.
     /// Anybody can call `withdraw`, so all withdrawable funds should be withdrawn
     /// or used in the protocol before any 3rd parties have a chance to do that.
-    /// @param userId The user ID
-    /// @param receiver The receiver
+    /// @param userId The user ID.
+    /// @param receiver The receiver user ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
@@ -548,79 +551,79 @@ contract DripsHub is Managed, Drips, Splits {
         Splits._give(userId, receiver, _assetId(erc20), amt);
     }
 
-    /// @notice Current user drips state.
-    /// @param userId The user ID
+    /// @notice Current user streams state.
+    /// @param userId The user ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
     /// Tokens which rebase the holders' balances, collect taxes on transfers,
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
-    /// @return dripsHash The current drips receivers list hash, see `hashDrips`
-    /// @return dripsHistoryHash The current drips history hash, see `hashDripsHistory`.
-    /// @return updateTime The time when drips have been configured for the last time
-    /// @return balance The balance when drips have been configured for the last time
-    /// @return maxEnd The current maximum end time of drips
-    function dripsState(uint256 userId, IERC20 erc20)
+    /// @return streamsHash The current streams receivers list hash, see `hashStreams`
+    /// @return streamsHistoryHash The current streams history hash, see `hashStreamsHistory`.
+    /// @return updateTime The time when streams have been configured for the last time.
+    /// @return balance The balance when streams have been configured for the last time.
+    /// @return maxEnd The current maximum end time of streaming.
+    function streamsState(uint256 userId, IERC20 erc20)
         public
         view
         returns (
-            bytes32 dripsHash,
-            bytes32 dripsHistoryHash,
+            bytes32 streamsHash,
+            bytes32 streamsHistoryHash,
             uint32 updateTime,
             uint128 balance,
             uint32 maxEnd
         )
     {
-        return Drips._dripsState(userId, _assetId(erc20));
+        return Streams._streamsState(userId, _assetId(erc20));
     }
 
-    /// @notice User's drips balance at a given timestamp
-    /// @param userId The user ID
+    /// @notice The user's streams balance at the given timestamp.
+    /// @param userId The user ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
     /// Tokens which rebase the holders' balances, collect taxes on transfers,
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
-    /// @param currReceivers The current drips receivers list.
-    /// It must be exactly the same as the last list set for the user with `setDrips`.
+    /// @param currReceivers The current streams receivers list.
+    /// It must be exactly the same as the last list set for the user with `setStreams`.
     /// @param timestamp The timestamps for which balance should be calculated.
-    /// It can't be lower than the timestamp of the last call to `setDrips`.
+    /// It can't be lower than the timestamp of the last call to `setStreams`.
     /// If it's bigger than `block.timestamp`, then it's a prediction assuming
-    /// that `setDrips` won't be called before `timestamp`.
+    /// that `setStreams` won't be called before `timestamp`.
     /// @return balance The user balance on `timestamp`
     function balanceAt(
         uint256 userId,
         IERC20 erc20,
-        DripsReceiver[] memory currReceivers,
+        StreamReceiver[] memory currReceivers,
         uint32 timestamp
     ) public view returns (uint128 balance) {
-        return Drips._balanceAt(userId, _assetId(erc20), currReceivers, timestamp);
+        return Streams._balanceAt(userId, _assetId(erc20), currReceivers, timestamp);
     }
 
-    /// @notice Sets the user's drips configuration.
-    /// Requires that the tokens used to increase the drips balance
+    /// @notice Sets the user's streams configuration.
+    /// Requires that the tokens used to increase the streams balance
     /// are already sent to DripsHub and are withdrawable.
-    /// If the drips balance is decreased, the released tokens become withdrawable.
+    /// If the streams balance is decreased, the released tokens become withdrawable.
     /// Anybody can call `withdraw`, so all withdrawable funds should be withdrawn
     /// or used in the protocol before any 3rd parties have a chance to do that.
-    /// @param userId The user ID
+    /// @param userId The user ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
     /// Tokens which rebase the holders' balances, collect taxes on transfers,
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
-    /// @param currReceivers The current drips receivers list.
-    /// It must be exactly the same as the last list set for the user with `setDrips`.
+    /// @param currReceivers The current streams receivers list.
+    /// It must be exactly the same as the last list set for the user with `setStreams`.
     /// If this is the first update, pass an empty array.
-    /// @param balanceDelta The drips balance change to be applied.
-    /// Positive to add funds to the drips balance, negative to remove them.
-    /// @param newReceivers The list of the drips receivers of the user to be set.
+    /// @param balanceDelta The streams balance change to be applied.
+    /// Positive to add funds to the streams balance, negative to remove them.
+    /// @param newReceivers The list of the streams receivers of the user to be set.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
     /// @param maxEndHint1 An optional parameter allowing gas optimization, pass `0` to ignore it.
-    /// The first hint for finding the maximum end time when all drips stop due to funds
+    /// The first hint for finding the maximum end time when all streams stop due to funds
     /// running out after the balance is updated and the new receivers list is applied.
     /// Hints have no effect on the results of calling this function, except potentially saving gas.
     /// Hints are Unix timestamps used as the starting points for binary search for the time
@@ -628,34 +631,34 @@ contract DripsHub is Managed, Drips, Splits {
     /// Hints lower than the current timestamp are ignored.
     /// You can provide zero, one or two hints. The order of hints doesn't matter.
     /// Hints are the most effective when one of them is lower than or equal to
-    /// the last timestamp when funds are still dripping, and the other one is strictly larger
+    /// the last timestamp when funds are still streamed, and the other one is strictly larger
     /// than that timestamp,the smaller the difference between such hints, the higher gas savings.
     /// The savings are the highest possible when one of the hints is equal to
-    /// the last timestamp when funds are still dripping, and the other one is larger by 1.
+    /// the last timestamp when funds are still streamed, and the other one is larger by 1.
     /// It's worth noting that the exact timestamp of the block in which this function is executed
     /// may affect correctness of the hints, especially if they're precise.
     /// Hints don't provide any benefits when balance is not enough to cover
-    /// a single second of dripping or is enough to cover all drips until timestamp `2^32`.
+    /// a single second of streaming or is enough to cover all streams until timestamp `2^32`.
     /// Even inaccurate hints can be useful, and providing a single hint
     /// or two hints that don't enclose the time when funds run out can still save some gas.
     /// Providing poor hints that don't reduce the number of binary search steps
     /// may cause slightly higher gas usage than not providing any hints.
     /// @param maxEndHint2 An optional parameter allowing gas optimization, pass `0` to ignore it.
     /// The second hint for finding the maximum end time, see `maxEndHint1` docs for more details.
-    /// @return realBalanceDelta The actually applied drips balance change.
+    /// @return realBalanceDelta The actually applied streams balance change.
     /// If it's lower than zero, it's the negative of the amount that became withdrawable.
-    function setDrips(
+    function setStreams(
         uint256 userId,
         IERC20 erc20,
-        DripsReceiver[] memory currReceivers,
+        StreamReceiver[] memory currReceivers,
         int128 balanceDelta,
-        DripsReceiver[] memory newReceivers,
+        StreamReceiver[] memory newReceivers,
         // slither-disable-next-line similar-names
         uint32 maxEndHint1,
         uint32 maxEndHint2
     ) public whenNotPaused onlyDriver(userId) returns (int128 realBalanceDelta) {
-        if (balanceDelta > 0) _increaseDripsBalance(erc20, uint128(balanceDelta));
-        realBalanceDelta = Drips._setDrips(
+        if (balanceDelta > 0) _increaseStreamsBalance(erc20, uint128(balanceDelta));
+        realBalanceDelta = Streams._setStreams(
             userId,
             _assetId(erc20),
             currReceivers,
@@ -664,33 +667,39 @@ contract DripsHub is Managed, Drips, Splits {
             maxEndHint1,
             maxEndHint2
         );
-        if (realBalanceDelta < 0) _decreaseDripsBalance(erc20, uint128(-realBalanceDelta));
+        if (realBalanceDelta < 0) _decreaseStreamsBalance(erc20, uint128(-realBalanceDelta));
     }
 
-    /// @notice Calculates the hash of the drips configuration.
-    /// It's used to verify if drips configuration is the previously set one.
-    /// @param receivers The list of the drips receivers.
+    /// @notice Calculates the hash of the streams configuration.
+    /// It's used to verify if streams configuration is the previously set one.
+    /// @param receivers The list of the streams receivers.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
-    /// If the drips have never been updated, pass an empty array.
-    /// @return dripsHash The hash of the drips configuration
-    function hashDrips(DripsReceiver[] memory receivers) public pure returns (bytes32 dripsHash) {
-        return Drips._hashDrips(receivers);
+    /// If the streams have never been updated, pass an empty array.
+    /// @return streamsHash The hash of the streams configuration
+    function hashStreams(StreamReceiver[] memory receivers)
+        public
+        pure
+        returns (bytes32 streamsHash)
+    {
+        return Streams._hashStreams(receivers);
     }
 
-    /// @notice Calculates the hash of the drips history after the drips configuration is updated.
-    /// @param oldDripsHistoryHash The history hash which was valid before the drips were updated.
-    /// The `dripsHistoryHash` of a user before they set drips for the first time is `0`.
-    /// @param dripsHash The hash of the drips receivers being set.
-    /// @param updateTime The timestamp when the drips are updated.
-    /// @param maxEnd The maximum end of the drips being set.
-    /// @return dripsHistoryHash The hash of the updated drips history.
-    function hashDripsHistory(
-        bytes32 oldDripsHistoryHash,
-        bytes32 dripsHash,
+    /// @notice Calculates the hash of the streams history
+    /// after the streams configuration is updated.
+    /// @param oldStreamsHistoryHash The history hash
+    /// that was valid before the streams were updated.
+    /// The `streamsHistoryHash` of a user before they set streams for the first time is `0`.
+    /// @param streamsHash The hash of the streams receivers being set.
+    /// @param updateTime The timestamp when the streams were updated.
+    /// @param maxEnd The maximum end of the streams being set.
+    /// @return streamsHistoryHash The hash of the updated streams history.
+    function hashStreamsHistory(
+        bytes32 oldStreamsHistoryHash,
+        bytes32 streamsHash,
         uint32 updateTime,
         uint32 maxEnd
-    ) public pure returns (bytes32 dripsHistoryHash) {
-        return Drips._hashDripsHistory(oldDripsHistoryHash, dripsHash, updateTime, maxEnd);
+    ) public pure returns (bytes32 streamsHistoryHash) {
+        return Streams._hashStreamsHistory(oldStreamsHistoryHash, streamsHash, updateTime, maxEnd);
     }
 
     /// @notice Sets user splits configuration. The configuration is common for all assets.
@@ -698,7 +707,7 @@ contract DripsHub is Managed, Drips, Splits {
     /// after this function finishes, the new splits configuration will be used.
     /// Because anybody can call `split`, calling this function may be frontrun
     /// and all the currently splittable funds will be split using the old splits configuration.
-    /// @param userId The user ID
+    /// @param userId The user ID.
     /// @param receivers The list of the user's splits receivers to be set.
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
     /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
@@ -719,7 +728,7 @@ contract DripsHub is Managed, Drips, Splits {
     }
 
     /// @notice Current user's splits hash, see `hashSplits`.
-    /// @param userId The user ID
+    /// @param userId The user ID.
     /// @return currSplitsHash The current user's splits hash
     function splitsHash(uint256 userId) public view returns (bytes32 currSplitsHash) {
         return Splits._splitsHash(userId);

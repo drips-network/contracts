@@ -9,7 +9,7 @@ import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 /// Anybody can create a new user ID and configure its splits configuration,
 /// but nobody can update its configuration afterwards, it's immutable.
 /// This driver doesn't allow collecting funds for user IDs it manages, but anybody
-/// can receive drips and split for them on DripsHub, which is enough because the splits
+/// can receive streams and split for them on DripsHub, which is enough because the splits
 /// configurations always give away 100% funds, so there's never anything left to collect.
 contract ImmutableSplitsDriver is Managed {
     /// @notice The DripsHub address used by this driver.
@@ -22,11 +22,11 @@ contract ImmutableSplitsDriver is Managed {
     bytes32 private immutable _counterSlot = _erc1967Slot("eip1967.immutableSplitsDriver.storage");
 
     /// @notice Emitted when an immutable splits configuration is created.
-    /// @param userId The user ID
+    /// @param userId The user ID.
     /// @param receiversHash The splits receivers list hash
     event CreatedSplits(uint256 indexed userId, bytes32 indexed receiversHash);
 
-    /// @param _dripsHub The drips hub to use.
+    /// @param _dripsHub The DripsHub contract to use.
     /// @param _driverId The driver ID to use when calling DripsHub.
     constructor(DripsHub _dripsHub, uint32 _driverId) {
         dripsHub = _dripsHub;

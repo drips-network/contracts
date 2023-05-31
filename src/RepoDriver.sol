@@ -3,7 +3,7 @@ pragma solidity ^0.8.19;
 
 import {
     DripsHub,
-    DripsReceiver,
+    StreamReceiver,
     IERC20,
     SafeERC20,
     SplitsReceiver,
@@ -94,7 +94,7 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
         uint256 nonce;
     }
 
-    /// @param _dripsHub The drips hub to use.
+    /// @param _dripsHub The DripsHub contract to use.
     /// @param forwarder The ERC-2771 forwarder to trust. May be the zero address.
     /// @param _driverId The driver ID to use when calling DripsHub.
     constructor(DripsHub _dripsHub, address forwarder, uint32 _driverId)
@@ -282,7 +282,7 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
         bytes memory callData = abi.encodeCall(
             OperatorInterface.operatorRequest,
             (
-                address(0), // ignored, will be replaced in the operator with this contract's address
+                address(0), // ignored, will be replaced in the operator with this contract address
                 0, // ignored, will be replaced in the operator with the fee
                 storageRef.jobId,
                 this.updateOwnerByAnyApi.selector,
@@ -366,7 +366,7 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
     }
 
     /// @notice Collects the user's received already split funds
-    /// and transfers them out of the drips hub contract.
+    /// and transfers them out of the DripsHub contract.
     /// @param userId The ID of the collecting user. The caller must be the owner of the user.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
@@ -388,9 +388,9 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
 
     /// @notice Gives funds from the user to the receiver.
     /// The receiver can split and collect them immediately.
-    /// Transfers the funds to be given from the message sender's wallet to the drips hub contract.
+    /// Transfers the funds to be given from the message sender's wallet to the DripsHub contract.
     /// @param userId The ID of the giving user. The caller must be the owner of the user.
-    /// @param receiver The receiver
+    /// @param receiver The receiver user ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
@@ -407,9 +407,9 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
         dripsHub.give(userId, receiver, erc20, amt);
     }
 
-    /// @notice Sets the user's drips configuration.
-    /// Transfers funds between the message sender's wallet and the drips hub contract
-    /// to fulfil the change of the drips balance.
+    /// @notice Sets the user's streams configuration.
+    /// Transfers funds between the message sender's wallet and the DripsHub contract
+    /// to fulfil the change of the streams balance.
     /// @param userId The ID of the configured user. The caller must be the owner of the user.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
@@ -417,15 +417,15 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
     /// Tokens which rebase the holders' balances, collect taxes on transfers,
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
-    /// @param currReceivers The current drips receivers list.
-    /// It must be exactly the same as the last list set for the user with `setDrips`.
+    /// @param currReceivers The current streams receivers list.
+    /// It must be exactly the same as the last list set for the user with `setStreams`.
     /// If this is the first update, pass an empty array.
-    /// @param balanceDelta The drips balance change to be applied.
-    /// Positive to add funds to the drips balance, negative to remove them.
-    /// @param newReceivers The list of the drips receivers of the sender to be set.
+    /// @param balanceDelta The streams balance change to be applied.
+    /// Positive to add funds to the streams balance, negative to remove them.
+    /// @param newReceivers The list of the streams receivers of the sender to be set.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
     /// @param maxEndHint1 An optional parameter allowing gas optimization, pass `0` to ignore it.
-    /// The first hint for finding the maximum end time when all drips stop due to funds
+    /// The first hint for finding the maximum end time when all streams stop due to funds
     /// running out after the balance is updated and the new receivers list is applied.
     /// Hints have no effect on the results of calling this function, except potentially saving gas.
     /// Hints are Unix timestamps used as the starting points for binary search for the time
@@ -433,14 +433,14 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
     /// Hints lower than the current timestamp are ignored.
     /// You can provide zero, one or two hints. The order of hints doesn't matter.
     /// Hints are the most effective when one of them is lower than or equal to
-    /// the last timestamp when funds are still dripping, and the other one is strictly larger
+    /// the last timestamp when funds are still streamed, and the other one is strictly larger
     /// than that timestamp,the smaller the difference between such hints, the higher gas savings.
     /// The savings are the highest possible when one of the hints is equal to
-    /// the last timestamp when funds are still dripping, and the other one is larger by 1.
+    /// the last timestamp when funds are still streamed, and the other one is larger by 1.
     /// It's worth noting that the exact timestamp of the block in which this function is executed
     /// may affect correctness of the hints, especially if they're precise.
     /// Hints don't provide any benefits when balance is not enough to cover
-    /// a single second of dripping or is enough to cover all drips until timestamp `2^32`.
+    /// a single second of streaming or is enough to cover all streams until timestamp `2^32`.
     /// Even inaccurate hints can be useful, and providing a single hint
     /// or two hints that don't enclose the time when funds run out can still save some gas.
     /// Providing poor hints that don't reduce the number of binary search steps
@@ -448,20 +448,20 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
     /// @param maxEndHint2 An optional parameter allowing gas optimization, pass `0` to ignore it.
     /// The second hint for finding the maximum end time, see `maxEndHint1` docs for more details.
     /// @param transferTo The address to send funds to in case of decreasing balance
-    /// @return realBalanceDelta The actually applied drips balance change.
-    function setDrips(
+    /// @return realBalanceDelta The actually applied streams balance change.
+    function setStreams(
         uint256 userId,
         IERC20 erc20,
-        DripsReceiver[] calldata currReceivers,
+        StreamReceiver[] calldata currReceivers,
         int128 balanceDelta,
-        DripsReceiver[] calldata newReceivers,
+        StreamReceiver[] calldata newReceivers,
         // slither-disable-next-line similar-names
         uint32 maxEndHint1,
         uint32 maxEndHint2,
         address transferTo
     ) public whenNotPaused onlyOwner(userId) returns (int128 realBalanceDelta) {
         if (balanceDelta > 0) _transferFromCaller(erc20, uint128(balanceDelta));
-        realBalanceDelta = dripsHub.setDrips(
+        realBalanceDelta = dripsHub.setStreams(
             userId, erc20, currReceivers, balanceDelta, newReceivers, maxEndHint1, maxEndHint2
         );
         if (realBalanceDelta < 0) dripsHub.withdraw(erc20, transferTo, uint128(-realBalanceDelta));

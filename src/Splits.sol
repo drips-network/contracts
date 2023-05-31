@@ -27,14 +27,14 @@ abstract contract Splits {
     bytes32 private immutable _splitsStorageSlot;
 
     /// @notice Emitted when a user collects funds
-    /// @param userId The user ID
+    /// @param userId The user ID.
     /// @param assetId The used asset ID
     /// @param collected The collected amount
     event Collected(uint256 indexed userId, uint256 indexed assetId, uint128 collected);
 
     /// @notice Emitted when funds are split from a user to a receiver.
     /// This is caused by the user collecting received funds.
-    /// @param userId The user ID
+    /// @param userId The user ID.
     /// @param receiver The splits receiver user ID
     /// @param assetId The used asset ID
     /// @param amt The amount split to the receiver
@@ -43,14 +43,14 @@ abstract contract Splits {
     );
 
     /// @notice Emitted when funds are made collectable after splitting.
-    /// @param userId The user ID
+    /// @param userId The user ID.
     /// @param assetId The used asset ID
     /// @param amt The amount made collectable for the user on top of what was collectable before.
     event Collectable(uint256 indexed userId, uint256 indexed assetId, uint128 amt);
 
     /// @notice Emitted when funds are given from the user to the receiver.
-    /// @param userId The user ID
-    /// @param receiver The receiver user ID
+    /// @param userId The user ID.
+    /// @param receiver The receiver user ID.
     /// @param assetId The used asset ID
     /// @param amt The given amount
     event Given(
@@ -58,7 +58,7 @@ abstract contract Splits {
     );
 
     /// @notice Emitted when the user's splits are updated.
-    /// @param userId The user ID
+    /// @param userId The user ID.
     /// @param receiversHash The splits receivers list hash
     event SplitsSet(uint256 indexed userId, bytes32 indexed receiversHash);
 
@@ -99,7 +99,7 @@ abstract contract Splits {
     }
 
     /// @notice Returns user's received but not split yet funds.
-    /// @param userId The user ID
+    /// @param userId The user ID.
     /// @param assetId The used asset ID.
     /// @return amt The amount received but not split yet.
     function _splittable(uint256 userId, uint256 assetId) internal view returns (uint128 amt) {
@@ -107,7 +107,7 @@ abstract contract Splits {
     }
 
     /// @notice Calculate the result of splitting an amount using the current splits configuration.
-    /// @param userId The user ID
+    /// @param userId The user ID.
     /// @param currReceivers The list of the user's current splits receivers.
     /// It must be exactly the same as the last list set for the user with `_setSplits`.
     /// @param amount The amount being split.
@@ -136,7 +136,7 @@ abstract contract Splits {
     /// @notice Splits the user's splittable funds among receivers.
     /// The entire splittable balance of the given asset is split.
     /// All split funds are split using the current splits configuration.
-    /// @param userId The user ID
+    /// @param userId The user ID.
     /// @param assetId The used asset ID
     /// @param currReceivers The list of the user's current splits receivers.
     /// It must be exactly the same as the last list set for the user with `_setSplits`.
@@ -174,16 +174,15 @@ abstract contract Splits {
     }
 
     /// @notice Returns user's received funds already split and ready to be collected.
-    /// @param userId The user ID
+    /// @param userId The user ID.
     /// @param assetId The used asset ID.
     /// @return amt The collectable amount.
     function _collectable(uint256 userId, uint256 assetId) internal view returns (uint128 amt) {
         return _splitsStorage().splitsStates[userId].balances[assetId].collectable;
     }
 
-    /// @notice Collects user's received already split funds
-    /// and transfers them out of the drips hub contract to msg.sender.
-    /// @param userId The user ID
+    /// @notice Collects user's received already split funds.
+    /// @param userId The user ID.
     /// @param assetId The used asset ID
     /// @return amt The collected amount
     function _collect(uint256 userId, uint256 assetId) internal returns (uint128 amt) {
@@ -195,9 +194,8 @@ abstract contract Splits {
 
     /// @notice Gives funds from the user to the receiver.
     /// The receiver can split and collect them immediately.
-    /// Transfers the funds to be given from the user's wallet to the drips hub contract.
-    /// @param userId The user ID
-    /// @param receiver The receiver
+    /// @param userId The user ID.
+    /// @param receiver The receiver user ID.
     /// @param assetId The used asset ID
     /// @param amt The given amount
     function _give(uint256 userId, uint256 receiver, uint256 assetId, uint128 amt) internal {
@@ -208,7 +206,7 @@ abstract contract Splits {
     /// @notice Sets user splits configuration. The configuration is common for all assets.
     /// Nothing happens to the currently splittable funds, but when they are split
     /// after this function finishes, the new splits configuration will be used.
-    /// @param userId The user ID
+    /// @param userId The user ID.
     /// @param receivers The list of the user's splits receivers to be set.
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
     /// Each splits receiver will be getting `weight / _TOTAL_SPLITS_WEIGHT`
@@ -255,7 +253,7 @@ abstract contract Splits {
     }
 
     /// @notice Asserts that the list of splits receivers is the user's currently used one.
-    /// @param userId The user ID
+    /// @param userId The user ID.
     /// @param currReceivers The list of the user's current splits receivers.
     function _assertCurrSplits(uint256 userId, SplitsReceiver[] memory currReceivers)
         internal
@@ -267,7 +265,7 @@ abstract contract Splits {
     }
 
     /// @notice Current user's splits hash, see `hashSplits`.
-    /// @param userId The user ID
+    /// @param userId The user ID.
     /// @return currSplitsHash The current user's splits hash
     function _splitsHash(uint256 userId) internal view returns (bytes32 currSplitsHash) {
         return _splitsStorage().splitsStates[userId].splitsHash;

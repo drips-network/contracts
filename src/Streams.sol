@@ -1,241 +1,245 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.19;
 
-/// @notice A drips receiver
-struct DripsReceiver {
+/// @notice A stream receiver
+struct StreamReceiver {
     /// @notice The user ID.
     uint256 userId;
-    /// @notice The drips configuration.
-    DripsConfig config;
+    /// @notice The stream configuration.
+    StreamConfig config;
 }
 
-/// @notice The sender drips history entry, used when squeezing drips.
-struct DripsHistory {
-    /// @notice Drips receivers list hash, see `_hashDrips`.
+/// @notice The sender streams history entry, used when squeezing streams.
+struct StreamsHistory {
+    /// @notice Streams receivers list hash, see `_hashStreams`.
     /// If it's non-zero, `receivers` must be empty.
-    bytes32 dripsHash;
-    /// @notice The drips receivers. If it's non-empty, `dripsHash` must be `0`.
-    /// If it's empty, this history entry will be skipped when squeezing drips
-    /// and `dripsHash` will be used when verifying the drips history validity.
+    bytes32 streamsHash;
+    /// @notice The streams receivers. If it's non-empty, `streamsHash` must be `0`.
+    /// If it's empty, this history entry will be skipped when squeezing streams
+    /// and `streamsHash` will be used when verifying the streams history validity.
     /// Skipping a history entry allows cutting gas usage on analysis
-    /// of parts of the drips history which are not worth squeezing.
+    /// of parts of the streams history which are not worth squeezing.
     /// The hash of an empty receivers list is `0`, so when the sender updates
-    /// their receivers list to be empty, the new `DripsHistory` entry will have
-    /// both the `dripsHash` equal to `0` and the `receivers` empty making it always skipped.
+    /// their receivers list to be empty, the new `StreamsHistory` entry will have
+    /// both the `streamsHash` equal to `0` and the `receivers` empty making it always skipped.
     /// This is fine, because there can't be any funds to squeeze from that entry anyway.
-    DripsReceiver[] receivers;
-    /// @notice The time when drips have been configured
+    StreamReceiver[] receivers;
+    /// @notice The time when streams have been configured
     uint32 updateTime;
-    /// @notice The maximum end time of drips
+    /// @notice The maximum end time of streaming.
     uint32 maxEnd;
 }
 
-/// @notice Describes a drips configuration.
+/// @notice Describes a streams configuration.
 /// It's a 256-bit integer constructed by concatenating the configuration parameters:
-/// `dripId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`.
-/// `dripId` is an arbitrary number used to identify a drip.
+/// `streamId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`.
+/// `streamId` is an arbitrary number used to identify a stream.
 /// It's a part of the configuration but the protocol doesn't use it.
-/// `amtPerSec` is the amount per second being dripped. Must never be zero.
-/// It must have additional `Drips._AMT_PER_SEC_EXTRA_DECIMALS` decimals and can have fractions.
-/// To achieve that its value must be multiplied by `Drips._AMT_PER_SEC_MULTIPLIER`.
-/// `start` is the timestamp when dripping should start.
-/// If zero, use the timestamp when drips are configured.
-/// `duration` is the duration of dripping.
-/// If zero, drip until balance runs out.
-type DripsConfig is uint256;
+/// `amtPerSec` is the amount per second being streamed. Must never be zero.
+/// It must have additional `Streams._AMT_PER_SEC_EXTRA_DECIMALS` decimals and can have fractions.
+/// To achieve that its value must be multiplied by `Streams._AMT_PER_SEC_MULTIPLIER`.
+/// `start` is the timestamp when streaming should start.
+/// If zero, use the timestamp when the stream is configured.
+/// `duration` is the duration of streaming.
+/// If zero, stream until balance runs out.
+type StreamConfig is uint256;
 
-using DripsConfigImpl for DripsConfig global;
+using StreamConfigImpl for StreamConfig global;
 
-library DripsConfigImpl {
-    /// @notice Create a new DripsConfig.
-    /// @param dripId_ An arbitrary number used to identify a drip.
+library StreamConfigImpl {
+    /// @notice Create a new StreamConfig.
+    /// @param streamId_ An arbitrary number used to identify a stream.
     /// It's a part of the configuration but the protocol doesn't use it.
-    /// @param amtPerSec_ The amount per second being dripped. Must never be zero.
-    /// It must have additional `Drips._AMT_PER_SEC_EXTRA_DECIMALS` decimals and can have fractions.
-    /// To achieve that the passed value must be multiplied by `Drips._AMT_PER_SEC_MULTIPLIER`.
-    /// @param start_ The timestamp when dripping should start.
-    /// If zero, use the timestamp when drips are configured.
-    /// @param duration_ The duration of dripping.
-    /// If zero, drip until balance runs out.
-    function create(uint32 dripId_, uint160 amtPerSec_, uint32 start_, uint32 duration_)
+    /// @param amtPerSec_ The amount per second being streamed. Must never be zero.
+    /// It must have additional `Streams._AMT_PER_SEC_EXTRA_DECIMALS`
+    /// decimals and can have fractions.
+    /// To achieve that the passed value must be multiplied by `Streams._AMT_PER_SEC_MULTIPLIER`.
+    /// @param start_ The timestamp when streaming should start.
+    /// If zero, use the timestamp when the stream is configured.
+    /// @param duration_ The duration of streaming. If zero, stream until the balance runs out.
+    function create(uint32 streamId_, uint160 amtPerSec_, uint32 start_, uint32 duration_)
         internal
         pure
-        returns (DripsConfig)
+        returns (StreamConfig)
     {
         // By assignment we get `config` value:
-        // `zeros (224 bits) | dripId (32 bits)`
-        uint256 config = dripId_;
+        // `zeros (224 bits) | streamId (32 bits)`
+        uint256 config = streamId_;
         // By bit shifting we get `config` value:
-        // `zeros (64 bits) | dripId (32 bits) | zeros (160 bits)`
+        // `zeros (64 bits) | streamId (32 bits) | zeros (160 bits)`
         // By bit masking we get `config` value:
-        // `zeros (64 bits) | dripId (32 bits) | amtPerSec (160 bits)`
+        // `zeros (64 bits) | streamId (32 bits) | amtPerSec (160 bits)`
         config = (config << 160) | amtPerSec_;
         // By bit shifting we get `config` value:
-        // `zeros (32 bits) | dripId (32 bits) | amtPerSec (160 bits) | zeros (32 bits)`
+        // `zeros (32 bits) | streamId (32 bits) | amtPerSec (160 bits) | zeros (32 bits)`
         // By bit masking we get `config` value:
-        // `zeros (32 bits) | dripId (32 bits) | amtPerSec (160 bits) | start (32 bits)`
+        // `zeros (32 bits) | streamId (32 bits) | amtPerSec (160 bits) | start (32 bits)`
         config = (config << 32) | start_;
         // By bit shifting we get `config` value:
-        // `dripId (32 bits) | amtPerSec (160 bits) | start (32 bits) | zeros (32 bits)`
+        // `streamId (32 bits) | amtPerSec (160 bits) | start (32 bits) | zeros (32 bits)`
         // By bit masking we get `config` value:
-        // `dripId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
+        // `streamId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
         config = (config << 32) | duration_;
-        return DripsConfig.wrap(config);
+        return StreamConfig.wrap(config);
     }
 
-    /// @notice Extracts dripId from a `DripsConfig`
-    function dripId(DripsConfig config) internal pure returns (uint32) {
+    /// @notice Extracts streamId from a `StreamConfig`
+    function streamId(StreamConfig config) internal pure returns (uint32) {
         // `config` has value:
-        // `dripId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
+        // `streamId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
         // By bit shifting we get value:
-        // `zeros (224 bits) | dripId (32 bits)`
+        // `zeros (224 bits) | streamId (32 bits)`
         // By casting down we get value:
-        // `dripId (32 bits)`
-        return uint32(DripsConfig.unwrap(config) >> 224);
+        // `streamId (32 bits)`
+        return uint32(StreamConfig.unwrap(config) >> 224);
     }
 
-    /// @notice Extracts amtPerSec from a `DripsConfig`
-    function amtPerSec(DripsConfig config) internal pure returns (uint160) {
+    /// @notice Extracts amtPerSec from a `StreamConfig`
+    function amtPerSec(StreamConfig config) internal pure returns (uint160) {
         // `config` has value:
-        // `dripId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
+        // `streamId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
         // By bit shifting we get value:
-        // `zeros (64 bits) | dripId (32 bits) | amtPerSec (160 bits)`
+        // `zeros (64 bits) | streamId (32 bits) | amtPerSec (160 bits)`
         // By casting down we get value:
         // `amtPerSec (160 bits)`
-        return uint160(DripsConfig.unwrap(config) >> 64);
+        return uint160(StreamConfig.unwrap(config) >> 64);
     }
 
-    /// @notice Extracts start from a `DripsConfig`
-    function start(DripsConfig config) internal pure returns (uint32) {
+    /// @notice Extracts start from a `StreamConfig`
+    function start(StreamConfig config) internal pure returns (uint32) {
         // `config` has value:
-        // `dripId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
+        // `streamId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
         // By bit shifting we get value:
-        // `zeros (32 bits) | dripId (32 bits) | amtPerSec (160 bits) | start (32 bits)`
+        // `zeros (32 bits) | streamId (32 bits) | amtPerSec (160 bits) | start (32 bits)`
         // By casting down we get value:
         // `start (32 bits)`
-        return uint32(DripsConfig.unwrap(config) >> 32);
+        return uint32(StreamConfig.unwrap(config) >> 32);
     }
 
-    /// @notice Extracts duration from a `DripsConfig`
-    function duration(DripsConfig config) internal pure returns (uint32) {
+    /// @notice Extracts duration from a `StreamConfig`
+    function duration(StreamConfig config) internal pure returns (uint32) {
         // `config` has value:
-        // `dripId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
+        // `streamId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
         // By casting down we get value:
         // `duration (32 bits)`
-        return uint32(DripsConfig.unwrap(config));
+        return uint32(StreamConfig.unwrap(config));
     }
 
-    /// @notice Compares two `DripsConfig`s.
-    /// First compares `dripId`s, then `amtPerSec`s, then `start`s and finally `duration`s.
+    /// @notice Compares two `StreamConfig`s.
+    /// First compares `streamId`s, then `amtPerSec`s, then `start`s and finally `duration`s.
     /// @return isLower True if `config` is strictly lower than `otherConfig`.
-    function lt(DripsConfig config, DripsConfig otherConfig) internal pure returns (bool isLower) {
+    function lt(StreamConfig config, StreamConfig otherConfig)
+        internal
+        pure
+        returns (bool isLower)
+    {
         // Both configs have value:
-        // `dripId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
+        // `streamId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
         // Comparing them as integers is equivalent to comparing their fields from left to right.
-        return DripsConfig.unwrap(config) < DripsConfig.unwrap(otherConfig);
+        return StreamConfig.unwrap(config) < StreamConfig.unwrap(otherConfig);
     }
 }
 
-/// @notice Drips can keep track of at most `type(int128).max`
+/// @notice Streams can keep track of at most `type(int128).max`
 /// which is `2 ^ 127 - 1` units of each asset.
 /// It's up to the caller to guarantee that this limit is never exceeded,
 /// failing to do so may result in a total protocol collapse.
-abstract contract Drips {
-    /// @notice Maximum number of drips receivers of a single user.
-    /// Limits cost of changes in drips configuration.
-    uint256 internal constant _MAX_DRIPS_RECEIVERS = 100;
+abstract contract Streams {
+    /// @notice Maximum number of streams receivers of a single user.
+    /// Limits cost of changes in streams configuration.
+    uint256 internal constant _MAX_STREAMS_RECEIVERS = 100;
     /// @notice The additional decimals for all amtPerSec values.
     uint8 internal constant _AMT_PER_SEC_EXTRA_DECIMALS = 9;
     /// @notice The multiplier for all amtPerSec values. It's `10 ** _AMT_PER_SEC_EXTRA_DECIMALS`.
     uint160 internal constant _AMT_PER_SEC_MULTIPLIER = 1_000_000_000;
     /// @notice The amount the contract can keep track of each asset.
-    uint128 internal constant _MAX_DRIPS_BALANCE = uint128(type(int128).max);
+    uint128 internal constant _MAX_STREAMS_BALANCE = uint128(type(int128).max);
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
-    /// gain access to drips received during `T - cycleSecs` to `T - 1`.
+    /// gain access to streams received during `T - cycleSecs` to `T - 1`.
     /// Always higher than 1.
     // slither-disable-next-line naming-convention
     uint32 internal immutable _cycleSecs;
-    /// @notice The minimum amtPerSec of a drip. It's 1 token per cycle.
+    /// @notice The minimum amtPerSec of a stream. It's 1 token per cycle.
     // slither-disable-next-line naming-convention
     uint160 internal immutable _minAmtPerSec;
-    /// @notice The storage slot holding a single `DripsStorage` structure.
-    bytes32 private immutable _dripsStorageSlot;
+    /// @notice The storage slot holding a single `StreamsStorage` structure.
+    bytes32 private immutable _streamsStorageSlot;
 
-    /// @notice Emitted when the drips configuration of a user is updated.
+    /// @notice Emitted when the streams configuration of a user is updated.
     /// @param userId The user ID.
     /// @param assetId The used asset ID
-    /// @param receiversHash The drips receivers list hash
-    /// @param dripsHistoryHash The drips history hash which was valid right before the update.
-    /// @param balance The new drips balance. These funds will be dripped to the receivers.
-    /// @param maxEnd The maximum end time of drips, when funds run out.
+    /// @param receiversHash The streams receivers list hash
+    /// @param streamsHistoryHash The streams history hash that was valid right before the update.
+    /// @param balance The user's streams balance. These funds will be streamed to the receivers.
+    /// @param maxEnd The maximum end time of streaming, when funds run out.
     /// If funds run out after the timestamp `type(uint32).max`, it's set to `type(uint32).max`.
     /// If the balance is 0 or there are no receivers, it's set to the current timestamp.
-    event DripsSet(
+    event StreamsSet(
         uint256 indexed userId,
         uint256 indexed assetId,
         bytes32 indexed receiversHash,
-        bytes32 dripsHistoryHash,
+        bytes32 streamsHistoryHash,
         uint128 balance,
         uint32 maxEnd
     );
 
-    /// @notice Emitted when a user is seen in a drips receivers list.
-    /// @param receiversHash The drips receivers list hash
+    /// @notice Emitted when a user is seen in a streams receivers list.
+    /// @param receiversHash The streams receivers list hash
     /// @param userId The user ID.
-    /// @param config The drips configuration.
-    event DripsReceiverSeen(
-        bytes32 indexed receiversHash, uint256 indexed userId, DripsConfig config
+    /// @param config The streams configuration.
+    event StreamReceiverSeen(
+        bytes32 indexed receiversHash, uint256 indexed userId, StreamConfig config
     );
 
-    /// @notice Emitted when drips are received.
-    /// @param userId The user ID
+    /// @notice Emitted when streams are received.
+    /// @param userId The user ID.
     /// @param assetId The used asset ID
     /// @param amt The received amount.
     /// @param receivableCycles The number of cycles which still can be received.
-    event ReceivedDrips(
+    event ReceivedStreams(
         uint256 indexed userId, uint256 indexed assetId, uint128 amt, uint32 receivableCycles
     );
 
-    /// @notice Emitted when drips are squeezed.
+    /// @notice Emitted when streams are squeezed.
     /// @param userId The squeezing user ID.
     /// @param assetId The used asset ID.
-    /// @param senderId The ID of the user sending drips which are squeezed.
+    /// @param senderId The ID of the streaming user from whom funds are squeezed.
     /// @param amt The squeezed amount.
-    /// @param dripsHistoryHashes The history hashes of all squeezed drips history entries.
-    /// Each history hash matches `dripsHistoryHash` emitted in its `DripsSet`
-    /// when the squeezed drips configuration was set.
-    /// Sorted in the oldest drips configuration to the newest.
-    event SqueezedDrips(
+    /// @param streamsHistoryHashes The history hashes of all squeezed streams history entries.
+    /// Each history hash matches `streamsHistoryHash` emitted in its `StreamsSet`
+    /// when the squeezed streams configuration was set.
+    /// Sorted in the oldest streams configuration to the newest.
+    event SqueezedStreams(
         uint256 indexed userId,
         uint256 indexed assetId,
         uint256 indexed senderId,
         uint128 amt,
-        bytes32[] dripsHistoryHashes
+        bytes32[] streamsHistoryHashes
     );
 
-    struct DripsStorage {
-        /// @notice User drips states.
-        mapping(uint256 assetId => mapping(uint256 userId => DripsState)) states;
+    struct StreamsStorage {
+        /// @notice User streams states.
+        mapping(uint256 assetId => mapping(uint256 userId => StreamsState)) states;
     }
 
-    struct DripsState {
-        /// @notice The drips history hash, see `_hashDripsHistory`.
-        bytes32 dripsHistoryHash;
+    struct StreamsState {
+        /// @notice The streams history hash, see `_hashStreamsHistory`.
+        bytes32 streamsHistoryHash;
         /// @notice The next squeezable timestamps.
         /// Each `N`th element of the array is the next squeezable timestamp
-        /// of the `N`th sender's drips configuration in effect in the current cycle.
+        /// of the `N`th sender's streams configuration in effect in the current cycle.
         mapping(uint256 userId => uint32[2 ** 32]) nextSqueezed;
-        /// @notice The drips receivers list hash, see `_hashDrips`.
-        bytes32 dripsHash;
+        /// @notice The streams receivers list hash, see `_hashStreams`.
+        bytes32 streamsHash;
         /// @notice The next cycle to be received
         uint32 nextReceivableCycle;
-        /// @notice The time when drips have been configured for the last time
+        /// @notice The time when streams have been configured for the last time.
         uint32 updateTime;
-        /// @notice The maximum end time of drips
+        /// @notice The maximum end time of streaming.
         uint32 maxEnd;
-        /// @notice The balance when drips have been configured for the last time
+        /// @notice The balance when streams have been configured for the last time.
         uint128 balance;
-        /// @notice The number of drips configurations seen in the current cycle
+        /// @notice The number of streams configurations seen in the current cycle
         uint32 currCycleConfigs;
         /// @notice The changes of received amounts on specific cycle.
         /// The keys are cycles, each cycle `C` becomes receivable on timestamp `C * cycleSecs`.
@@ -254,26 +258,26 @@ abstract contract Drips {
 
     /// @param cycleSecs The length of cycleSecs to be used in the contract instance.
     /// Low value makes funds more available by shortening the average time of funds being frozen
-    /// between being taken from the users' drips balances and being receivable by their receivers.
+    /// between being taken from the users' streams balance and being receivable by their receivers.
     /// High value makes receiving cheaper by making it process less cycles for a given time range.
     /// Must be higher than 1.
-    /// @param dripsStorageSlot The storage slot to holding a single `DripsStorage` structure.
-    constructor(uint32 cycleSecs, bytes32 dripsStorageSlot) {
+    /// @param streamsStorageSlot The storage slot to holding a single `StreamsStorage` structure.
+    constructor(uint32 cycleSecs, bytes32 streamsStorageSlot) {
         require(cycleSecs > 1, "Cycle length too low");
         _cycleSecs = cycleSecs;
         _minAmtPerSec = (_AMT_PER_SEC_MULTIPLIER + cycleSecs - 1) / cycleSecs;
-        _dripsStorageSlot = dripsStorageSlot;
+        _streamsStorageSlot = streamsStorageSlot;
     }
 
-    /// @notice Receive drips from unreceived cycles of the user.
-    /// Received drips cycles won't need to be analyzed ever again.
-    /// @param userId The user ID
+    /// @notice Receive streams from unreceived cycles of the user.
+    /// Received streams cycles won't need to be analyzed ever again.
+    /// @param userId The user ID.
     /// @param assetId The used asset ID
-    /// @param maxCycles The maximum number of received drips cycles.
+    /// @param maxCycles The maximum number of received streams cycles.
     /// If too low, receiving will be cheap, but may not cover many cycles.
     /// If too high, receiving may become too expensive to fit in a single transaction.
     /// @return receivedAmt The received amount
-    function _receiveDrips(uint256 userId, uint256 assetId, uint32 maxCycles)
+    function _receiveStreams(uint256 userId, uint256 assetId, uint32 maxCycles)
         internal
         returns (uint128 receivedAmt)
     {
@@ -282,9 +286,9 @@ abstract contract Drips {
         uint32 toCycle;
         int128 finalAmtPerCycle;
         (receivedAmt, receivableCycles, fromCycle, toCycle, finalAmtPerCycle) =
-            _receiveDripsResult(userId, assetId, maxCycles);
+            _receiveStreamsResult(userId, assetId, maxCycles);
         if (fromCycle != toCycle) {
-            DripsState storage state = _dripsStorage().states[assetId][userId];
+            StreamsState storage state = _streamsStorage().states[assetId][userId];
             state.nextReceivableCycle = toCycle;
             mapping(uint32 cycle => AmtDelta) storage amtDeltas = state.amtDeltas;
             unchecked {
@@ -298,13 +302,13 @@ abstract contract Drips {
                 }
             }
         }
-        emit ReceivedDrips(userId, assetId, receivedAmt, receivableCycles);
+        emit ReceivedStreams(userId, assetId, receivedAmt, receivableCycles);
     }
 
-    /// @notice Calculate effects of calling `_receiveDrips` with the given parameters.
-    /// @param userId The user ID
+    /// @notice Calculate effects of calling `_receiveStreams` with the given parameters.
+    /// @param userId The user ID.
     /// @param assetId The used asset ID
-    /// @param maxCycles The maximum number of received drips cycles.
+    /// @param maxCycles The maximum number of received streams cycles.
     /// If too low, receiving will be cheap, but may not cover many cycles.
     /// If too high, receiving may become too expensive to fit in a single transaction.
     /// @return receivedAmt The amount which would be received
@@ -312,7 +316,7 @@ abstract contract Drips {
     /// @return fromCycle The cycle from which funds would be received
     /// @return toCycle The cycle to which funds would be received
     /// @return amtPerCycle The amount per cycle when `toCycle` starts.
-    function _receiveDripsResult(uint256 userId, uint256 assetId, uint32 maxCycles)
+    function _receiveStreamsResult(uint256 userId, uint256 assetId, uint32 maxCycles)
         internal
         view
         returns (
@@ -324,13 +328,13 @@ abstract contract Drips {
         )
     {
         unchecked {
-            (fromCycle, toCycle) = _receivableDripsCyclesRange(userId, assetId);
+            (fromCycle, toCycle) = _receivableStreamsCyclesRange(userId, assetId);
             if (toCycle - fromCycle > maxCycles) {
                 receivableCycles = toCycle - fromCycle - maxCycles;
                 toCycle -= receivableCycles;
             }
             mapping(uint32 cycle => AmtDelta) storage amtDeltas =
-                _dripsStorage().states[assetId][userId].amtDeltas;
+                _streamsStorage().states[assetId][userId].amtDeltas;
             for (uint32 cycle = fromCycle; cycle < toCycle; cycle++) {
                 AmtDelta memory amtDelta = amtDeltas[cycle];
                 amtPerCycle += amtDelta.thisCycle;
@@ -340,34 +344,34 @@ abstract contract Drips {
         }
     }
 
-    /// @notice Counts cycles from which drips can be received.
+    /// @notice Counts cycles from which streams can be received.
     /// This function can be used to detect that there are
     /// too many cycles to analyze in a single transaction.
-    /// @param userId The user ID
+    /// @param userId The user ID.
     /// @param assetId The used asset ID
     /// @return cycles The number of cycles which can be flushed
-    function _receivableDripsCycles(uint256 userId, uint256 assetId)
+    function _receivableStreamsCycles(uint256 userId, uint256 assetId)
         internal
         view
         returns (uint32 cycles)
     {
         unchecked {
-            (uint32 fromCycle, uint32 toCycle) = _receivableDripsCyclesRange(userId, assetId);
+            (uint32 fromCycle, uint32 toCycle) = _receivableStreamsCyclesRange(userId, assetId);
             return toCycle - fromCycle;
         }
     }
 
-    /// @notice Calculates the cycles range from which drips can be received.
-    /// @param userId The user ID
+    /// @notice Calculates the cycles range from which streams can be received.
+    /// @param userId The user ID.
     /// @param assetId The used asset ID
     /// @return fromCycle The cycle from which funds can be received
     /// @return toCycle The cycle to which funds can be received
-    function _receivableDripsCyclesRange(uint256 userId, uint256 assetId)
+    function _receivableStreamsCyclesRange(uint256 userId, uint256 assetId)
         private
         view
         returns (uint32 fromCycle, uint32 toCycle)
     {
-        fromCycle = _dripsStorage().states[assetId][userId].nextReceivableCycle;
+        fromCycle = _streamsStorage().states[assetId][userId].nextReceivableCycle;
         toCycle = _cycleOf(_currTimestamp());
         // slither-disable-next-line timestamp
         if (fromCycle == 0 || toCycle < fromCycle) {
@@ -375,27 +379,28 @@ abstract contract Drips {
         }
     }
 
-    /// @notice Receive drips from the currently running cycle from a single sender.
-    /// It doesn't receive drips from the previous, finished cycles, to do that use `_receiveDrips`.
-    /// Squeezed funds won't be received in the next calls to `_squeezeDrips` or `_receiveDrips`.
-    /// Only funds dripped before `block.timestamp` can be squeezed.
-    /// @param userId The ID of the user receiving drips to squeeze funds for.
+    /// @notice Receive streams from the currently running cycle from a single sender.
+    /// It doesn't receive streams from the finished cycles, to do that use `_receiveStreams`.
+    /// Squeezed funds won't be received in the next calls
+    /// to `_squeezeStreams` or `_receiveStreams`.
+    /// Only funds streamed before `block.timestamp` can be squeezed.
+    /// @param userId The ID of the user receiving streams to squeeze funds for.
     /// @param assetId The used asset ID.
-    /// @param senderId The ID of the user sending drips to squeeze funds from.
-    /// @param historyHash The sender's history hash which was valid right before
-    /// they set up the sequence of configurations described by `dripsHistory`.
-    /// @param dripsHistory The sequence of the sender's drips configurations.
+    /// @param senderId The ID of the streaming user to squeeze funds from.
+    /// @param historyHash The sender's history hash that was valid right before
+    /// they set up the sequence of configurations described by `streamsHistory`.
+    /// @param streamsHistory The sequence of the sender's streams configurations.
     /// It can start at an arbitrary past configuration, but must describe all the configurations
     /// which have been used since then including the current one, in the chronological order.
-    /// Only drips described by `dripsHistory` will be squeezed.
-    /// If `dripsHistory` entries have no receivers, they won't be squeezed.
+    /// Only streams described by `streamsHistory` will be squeezed.
+    /// If `streamsHistory` entries have no receivers, they won't be squeezed.
     /// @return amt The squeezed amount.
-    function _squeezeDrips(
+    function _squeezeStreams(
         uint256 userId,
         uint256 assetId,
         uint256 senderId,
         bytes32 historyHash,
-        DripsHistory[] memory dripsHistory
+        StreamsHistory[] memory streamsHistory
     ) internal returns (uint128 amt) {
         unchecked {
             uint256 squeezedNum;
@@ -403,9 +408,9 @@ abstract contract Drips {
             bytes32[] memory historyHashes;
             uint256 currCycleConfigs;
             (amt, squeezedNum, squeezedRevIdxs, historyHashes, currCycleConfigs) =
-                _squeezeDripsResult(userId, assetId, senderId, historyHash, dripsHistory);
+                _squeezeStreamsResult(userId, assetId, senderId, historyHash, streamsHistory);
             bytes32[] memory squeezedHistoryHashes = new bytes32[](squeezedNum);
-            DripsState storage state = _dripsStorage().states[assetId][userId];
+            StreamsState storage state = _streamsStorage().states[assetId][userId];
             uint32[2 ** 32] storage nextSqueezed = state.nextSqueezed[senderId];
             for (uint256 i = 0; i < squeezedNum; i++) {
                 // `squeezedRevIdxs` are sorted from the newest configuration to the oldest,
@@ -418,38 +423,39 @@ abstract contract Drips {
             _addDeltaRange(
                 state, cycleStart, cycleStart + 1, -int160(amt * _AMT_PER_SEC_MULTIPLIER)
             );
-            emit SqueezedDrips(userId, assetId, senderId, amt, squeezedHistoryHashes);
+            emit SqueezedStreams(userId, assetId, senderId, amt, squeezedHistoryHashes);
         }
     }
 
-    /// @notice Calculate effects of calling `_squeezeDrips` with the given parameters.
+    /// @notice Calculate effects of calling `_squeezeStreams` with the given parameters.
     /// See its documentation for more details.
-    /// @param userId The ID of the user receiving drips to squeeze funds for.
+    /// @param userId The ID of the user receiving streams to squeeze funds for.
     /// @param assetId The used asset ID.
-    /// @param senderId The ID of the user sending drips to squeeze funds from.
-    /// @param historyHash The sender's history hash which was valid right before `dripsHistory`.
-    /// @param dripsHistory The sequence of the sender's drips configurations.
+    /// @param senderId The ID of the streaming user to squeeze funds from.
+    /// @param historyHash The sender's history hash that was valid right before `streamsHistory`.
+    /// @param streamsHistory The sequence of the sender's streams configurations.
     /// @return amt The squeezed amount.
     /// @return squeezedNum The number of squeezed history entries.
     /// @return squeezedRevIdxs The indexes of the squeezed history entries.
     /// The indexes are reversed, meaning that to get the actual index in an array,
     /// they must counted from the end of arrays, as in `arrayLength - squeezedRevIdxs[i]`.
-    /// These indexes can be safely used to access `dripsHistory`, `historyHashes`
+    /// These indexes can be safely used to access `streamsHistory`, `historyHashes`
     /// and `nextSqueezed` regardless of their lengths.
     /// `squeezeRevIdxs` is sorted ascending, from pointing at the most recent entry to the oldest.
-    /// @return historyHashes The history hashes valid for squeezing each of `dripsHistory` entries.
-    /// In other words history hashes which had been valid right before each drips
-    /// configuration was set, matching `dripsHistoryHash` emitted in its `DripsSet`.
+    /// @return historyHashes The history hashes valid
+    /// for squeezing each of `streamsHistory` entries.
+    /// In other words history hashes which had been valid right before each streams
+    /// configuration was set, matching `streamsHistoryHash` emitted in its `StreamsSet`.
     /// The first item is always equal to `historyHash`.
     /// @return currCycleConfigs The number of the sender's
-    /// drips configurations which have been seen in the current cycle.
+    /// streams configurations which have been seen in the current cycle.
     /// This is also the number of used entries in each of the sender's `nextSqueezed` arrays.
-    function _squeezeDripsResult(
+    function _squeezeStreamsResult(
         uint256 userId,
         uint256 assetId,
         uint256 senderId,
         bytes32 historyHash,
-        DripsHistory[] memory dripsHistory
+        StreamsHistory[] memory streamsHistory
     )
         internal
         view
@@ -462,77 +468,83 @@ abstract contract Drips {
         )
     {
         {
-            DripsState storage sender = _dripsStorage().states[assetId][senderId];
-            historyHashes = _verifyDripsHistory(historyHash, dripsHistory, sender.dripsHistoryHash);
+            StreamsState storage sender = _streamsStorage().states[assetId][senderId];
+            historyHashes =
+                _verifyStreamsHistory(historyHash, streamsHistory, sender.streamsHistoryHash);
             // If the last update was not in the current cycle,
             // there's only the single latest history entry to squeeze in the current cycle.
             currCycleConfigs = 1;
             // slither-disable-next-line timestamp
             if (sender.updateTime >= _currCycleStart()) currCycleConfigs = sender.currCycleConfigs;
         }
-        squeezedRevIdxs = new uint256[](dripsHistory.length);
+        squeezedRevIdxs = new uint256[](streamsHistory.length);
         uint32[2 ** 32] storage nextSqueezed =
-            _dripsStorage().states[assetId][userId].nextSqueezed[senderId];
+            _streamsStorage().states[assetId][userId].nextSqueezed[senderId];
         uint32 squeezeEndCap = _currTimestamp();
         unchecked {
-            for (uint256 i = 1; i <= dripsHistory.length && i <= currCycleConfigs; i++) {
-                DripsHistory memory drips = dripsHistory[dripsHistory.length - i];
-                if (drips.receivers.length != 0) {
+            for (uint256 i = 1; i <= streamsHistory.length && i <= currCycleConfigs; i++) {
+                StreamsHistory memory historyEntry = streamsHistory[streamsHistory.length - i];
+                if (historyEntry.receivers.length != 0) {
                     uint32 squeezeStartCap = nextSqueezed[currCycleConfigs - i];
                     if (squeezeStartCap < _currCycleStart()) squeezeStartCap = _currCycleStart();
-                    if (squeezeStartCap < drips.updateTime) squeezeStartCap = drips.updateTime;
+                    if (squeezeStartCap < historyEntry.updateTime) {
+                        squeezeStartCap = historyEntry.updateTime;
+                    }
                     if (squeezeStartCap < squeezeEndCap) {
                         squeezedRevIdxs[squeezedNum++] = i;
-                        amt += _squeezedAmt(userId, drips, squeezeStartCap, squeezeEndCap);
+                        amt += _squeezedAmt(userId, historyEntry, squeezeStartCap, squeezeEndCap);
                     }
                 }
-                squeezeEndCap = drips.updateTime;
+                squeezeEndCap = historyEntry.updateTime;
             }
         }
     }
 
-    /// @notice Verify a drips history and revert if it's invalid.
-    /// @param historyHash The user's history hash which was valid right before `dripsHistory`.
-    /// @param dripsHistory The sequence of the user's drips configurations.
-    /// @param finalHistoryHash The history hash at the end of `dripsHistory`.
-    /// @return historyHashes The history hashes valid for squeezing each of `dripsHistory` entries.
-    /// In other words history hashes which had been valid right before each drips
-    /// configuration was set, matching `dripsHistoryHash`es emitted in `DripsSet`.
+    /// @notice Verify a streams history and revert if it's invalid.
+    /// @param historyHash The user's history hash that was valid right before `streamsHistory`.
+    /// @param streamsHistory The sequence of the user's streams configurations.
+    /// @param finalHistoryHash The history hash at the end of `streamsHistory`.
+    /// @return historyHashes The history hashes valid
+    /// for squeezing each of `streamsHistory` entries.
+    /// In other words history hashes which had been valid right before each streams
+    /// configuration was set, matching `streamsHistoryHash`es emitted in `StreamsSet`.
     /// The first item is always equal to `historyHash` and `finalHistoryHash` is never included.
-    function _verifyDripsHistory(
+    function _verifyStreamsHistory(
         bytes32 historyHash,
-        DripsHistory[] memory dripsHistory,
+        StreamsHistory[] memory streamsHistory,
         bytes32 finalHistoryHash
     ) private pure returns (bytes32[] memory historyHashes) {
-        historyHashes = new bytes32[](dripsHistory.length);
-        for (uint256 i = 0; i < dripsHistory.length; i++) {
-            DripsHistory memory drips = dripsHistory[i];
-            bytes32 dripsHash = drips.dripsHash;
-            if (drips.receivers.length != 0) {
-                require(dripsHash == 0, "Entry with hash and receivers");
-                dripsHash = _hashDrips(drips.receivers);
+        historyHashes = new bytes32[](streamsHistory.length);
+        for (uint256 i = 0; i < streamsHistory.length; i++) {
+            StreamsHistory memory historyEntry = streamsHistory[i];
+            bytes32 streamsHash = historyEntry.streamsHash;
+            if (historyEntry.receivers.length != 0) {
+                require(streamsHash == 0, "Entry with hash and receivers");
+                streamsHash = _hashStreams(historyEntry.receivers);
             }
             historyHashes[i] = historyHash;
-            historyHash = _hashDripsHistory(historyHash, dripsHash, drips.updateTime, drips.maxEnd);
+            historyHash = _hashStreamsHistory(
+                historyHash, streamsHash, historyEntry.updateTime, historyEntry.maxEnd
+            );
         }
         // slither-disable-next-line incorrect-equality,timestamp
-        require(historyHash == finalHistoryHash, "Invalid drips history");
+        require(historyHash == finalHistoryHash, "Invalid streams history");
     }
 
-    /// @notice Calculate the amount squeezable by a user from a single drips history entry.
-    /// @param userId The ID of the user to squeeze drips for.
-    /// @param dripsHistory The squeezed history entry.
+    /// @notice Calculate the amount squeezable by a user from a single streams history entry.
+    /// @param userId The ID of the user to squeeze streams for.
+    /// @param historyEntry The squeezed history entry.
     /// @param squeezeStartCap The squeezed time range start.
     /// @param squeezeEndCap The squeezed time range end.
     /// @return squeezedAmt The squeezed amount.
     function _squeezedAmt(
         uint256 userId,
-        DripsHistory memory dripsHistory,
+        StreamsHistory memory historyEntry,
         uint32 squeezeStartCap,
         uint32 squeezeEndCap
     ) private view returns (uint128 squeezedAmt) {
         unchecked {
-            DripsReceiver[] memory receivers = dripsHistory.receivers;
+            StreamReceiver[] memory receivers = historyEntry.receivers;
             // Binary search for the `idx` of the first occurrence of `userId`
             uint256 idx = 0;
             for (uint256 idxCap = receivers.length; idx < idxCap;) {
@@ -543,111 +555,116 @@ abstract contract Drips {
                     idxCap = idxMid;
                 }
             }
-            uint32 updateTime = dripsHistory.updateTime;
-            uint32 maxEnd = dripsHistory.maxEnd;
+            uint32 updateTime = historyEntry.updateTime;
+            uint32 maxEnd = historyEntry.maxEnd;
             uint256 amt = 0;
             for (; idx < receivers.length; idx++) {
-                DripsReceiver memory receiver = receivers[idx];
+                StreamReceiver memory receiver = receivers[idx];
                 if (receiver.userId != userId) break;
                 (uint32 start, uint32 end) =
-                    _dripsRange(receiver, updateTime, maxEnd, squeezeStartCap, squeezeEndCap);
-                amt += _drippedAmt(receiver.config.amtPerSec(), start, end);
+                    _streamRange(receiver, updateTime, maxEnd, squeezeStartCap, squeezeEndCap);
+                amt += _streamedAmt(receiver.config.amtPerSec(), start, end);
             }
             return uint128(amt);
         }
     }
 
-    /// @notice Current user drips state.
-    /// @param userId The user ID
+    /// @notice Current user streams state.
+    /// @param userId The user ID.
     /// @param assetId The used asset ID
-    /// @return dripsHash The current drips receivers list hash, see `_hashDrips`
-    /// @return dripsHistoryHash The current drips history hash, see `_hashDripsHistory`.
-    /// @return updateTime The time when drips have been configured for the last time
-    /// @return balance The balance when drips have been configured for the last time
-    /// @return maxEnd The current maximum end time of drips
-    function _dripsState(uint256 userId, uint256 assetId)
+    /// @return streamsHash The current streams receivers list hash, see `_hashStreams`
+    /// @return streamsHistoryHash The current streams history hash, see `_hashStreamsHistory`.
+    /// @return updateTime The time when streams have been configured for the last time.
+    /// @return balance The balance when streams have been configured for the last time.
+    /// @return maxEnd The current maximum end time of streaming.
+    function _streamsState(uint256 userId, uint256 assetId)
         internal
         view
         returns (
-            bytes32 dripsHash,
-            bytes32 dripsHistoryHash,
+            bytes32 streamsHash,
+            bytes32 streamsHistoryHash,
             uint32 updateTime,
             uint128 balance,
             uint32 maxEnd
         )
     {
-        DripsState storage state = _dripsStorage().states[assetId][userId];
-        return
-            (state.dripsHash, state.dripsHistoryHash, state.updateTime, state.balance, state.maxEnd);
+        StreamsState storage state = _streamsStorage().states[assetId][userId];
+        return (
+            state.streamsHash,
+            state.streamsHistoryHash,
+            state.updateTime,
+            state.balance,
+            state.maxEnd
+        );
     }
 
-    /// @notice User's drips balance at a given timestamp
-    /// @param userId The user ID
+    /// @notice The user's streams balance at the given timestamp.
+    /// @param userId The user ID.
     /// @param assetId The used asset ID
-    /// @param currReceivers The current drips receivers list.
-    /// It must be exactly the same as the last list set for the user with `_setDrips`.
+    /// @param currReceivers The current streams receivers list.
+    /// It must be exactly the same as the last list set for the user with `_setStreams`.
     /// @param timestamp The timestamps for which balance should be calculated.
-    /// It can't be lower than the timestamp of the last call to `setDrips`.
+    /// It can't be lower than the timestamp of the last call to `_setStreams`.
     /// If it's bigger than `block.timestamp`, then it's a prediction assuming
-    /// that `setDrips` won't be called before `timestamp`.
+    /// that `_setStreams` won't be called before `timestamp`.
     /// @return balance The user balance on `timestamp`
     function _balanceAt(
         uint256 userId,
         uint256 assetId,
-        DripsReceiver[] memory currReceivers,
+        StreamReceiver[] memory currReceivers,
         uint32 timestamp
     ) internal view returns (uint128 balance) {
-        DripsState storage state = _dripsStorage().states[assetId][userId];
+        StreamsState storage state = _streamsStorage().states[assetId][userId];
         require(timestamp >= state.updateTime, "Timestamp before the last update");
-        _verifyDripsReceivers(currReceivers, state);
+        _verifyStreamsReceivers(currReceivers, state);
         return _calcBalance(state.balance, state.updateTime, state.maxEnd, currReceivers, timestamp);
     }
 
-    /// @notice Calculates the drips balance at a given timestamp.
-    /// @param lastBalance The balance when drips have started
-    /// @param lastUpdate The timestamp when drips have started.
-    /// @param maxEnd The maximum end time of drips
-    /// @param receivers The list of drips receivers.
+    /// @notice Calculates the streams balance at a given timestamp.
+    /// @param lastBalance The balance when streaming started.
+    /// @param lastUpdate The timestamp when streaming started.
+    /// @param maxEnd The maximum end time of streaming.
+    /// @param receivers The list of streams receivers.
     /// @param timestamp The timestamps for which balance should be calculated.
     /// It can't be lower than `lastUpdate`.
     /// If it's bigger than `block.timestamp`, then it's a prediction assuming
-    /// that `setDrips` won't be called before `timestamp`.
+    /// that `_setStreams` won't be called before `timestamp`.
     /// @return balance The user balance on `timestamp`
     function _calcBalance(
         uint128 lastBalance,
         uint32 lastUpdate,
         uint32 maxEnd,
-        DripsReceiver[] memory receivers,
+        StreamReceiver[] memory receivers,
         uint32 timestamp
     ) private view returns (uint128 balance) {
         unchecked {
             balance = lastBalance;
             for (uint256 i = 0; i < receivers.length; i++) {
-                DripsReceiver memory receiver = receivers[i];
-                (uint32 start, uint32 end) = _dripsRange({
+                StreamReceiver memory receiver = receivers[i];
+                (uint32 start, uint32 end) = _streamRange({
                     receiver: receiver,
                     updateTime: lastUpdate,
                     maxEnd: maxEnd,
                     startCap: lastUpdate,
                     endCap: timestamp
                 });
-                balance -= uint128(_drippedAmt(receiver.config.amtPerSec(), start, end));
+                balance -= uint128(_streamedAmt(receiver.config.amtPerSec(), start, end));
             }
         }
     }
 
-    /// @notice Sets the user's drips configuration.
-    /// @param userId The user ID
+    /// @notice Sets the user's streams configuration.
+    /// @param userId The user ID.
     /// @param assetId The used asset ID
-    /// @param currReceivers The current drips receivers list.
-    /// It must be exactly the same as the last list set for the user with `_setDrips`.
+    /// @param currReceivers The current streams receivers list.
+    /// It must be exactly the same as the last list set for the user with `_setStreams`.
     /// If this is the first update, pass an empty array.
-    /// @param balanceDelta The drips balance change being applied.
-    /// Positive when adding funds to the drips balance, negative to removing them.
-    /// @param newReceivers The list of the drips receivers of the user to be set.
+    /// @param balanceDelta The streams balance change being applied.
+    /// Positive when adding funds to the streams balance, negative to removing them.
+    /// @param newReceivers The list of the streams receivers of the user to be set.
     /// Must be sorted, deduplicated and without 0 amtPerSecs.
     /// @param maxEndHint1 An optional parameter allowing gas optimization, pass `0` to ignore it.
-    /// The first hint for finding the maximum end time when all drips stop due to funds
+    /// The first hint for finding the maximum end time when all streams stop due to funds
     /// running out after the balance is updated and the new receivers list is applied.
     /// Hints have no effect on the results of calling this function, except potentially saving gas.
     /// Hints are Unix timestamps used as the starting points for binary search for the time
@@ -655,34 +672,34 @@ abstract contract Drips {
     /// Hints lower than the current timestamp are ignored.
     /// You can provide zero, one or two hints. The order of hints doesn't matter.
     /// Hints are the most effective when one of them is lower than or equal to
-    /// the last timestamp when funds are still dripping, and the other one is strictly larger
+    /// the last timestamp when funds are still streamed, and the other one is strictly larger
     /// than that timestamp,the smaller the difference between such hints, the higher gas savings.
     /// The savings are the highest possible when one of the hints is equal to
-    /// the last timestamp when funds are still dripping, and the other one is larger by 1.
+    /// the last timestamp when funds are still streamed, and the other one is larger by 1.
     /// It's worth noting that the exact timestamp of the block in which this function is executed
     /// may affect correctness of the hints, especially if they're precise.
     /// Hints don't provide any benefits when balance is not enough to cover
-    /// a single second of dripping or is enough to cover all drips until timestamp `2^32`.
+    /// a single second of streaming or is enough to cover all streams until timestamp `2^32`.
     /// Even inaccurate hints can be useful, and providing a single hint
     /// or two hints that don't enclose the time when funds run out can still save some gas.
     /// Providing poor hints that don't reduce the number of binary search steps
     /// may cause slightly higher gas usage than not providing any hints.
     /// @param maxEndHint2 An optional parameter allowing gas optimization, pass `0` to ignore it.
     /// The second hint for finding the maximum end time, see `maxEndHint1` docs for more details.
-    /// @return realBalanceDelta The actually applied drips balance change.
-    function _setDrips(
+    /// @return realBalanceDelta The actually applied streams balance change.
+    function _setStreams(
         uint256 userId,
         uint256 assetId,
-        DripsReceiver[] memory currReceivers,
+        StreamReceiver[] memory currReceivers,
         int128 balanceDelta,
-        DripsReceiver[] memory newReceivers,
+        StreamReceiver[] memory newReceivers,
         // slither-disable-next-line similar-names
         uint32 maxEndHint1,
         uint32 maxEndHint2
     ) internal returns (int128 realBalanceDelta) {
         unchecked {
-            DripsState storage state = _dripsStorage().states[assetId][userId];
-            _verifyDripsReceivers(currReceivers, state);
+            StreamsState storage state = _streamsStorage().states[assetId][userId];
+            _verifyStreamsReceivers(currReceivers, state);
             uint32 lastUpdate = state.updateTime;
             uint128 newBalance;
             uint32 newMaxEnd;
@@ -701,7 +718,7 @@ abstract contract Drips {
                 newBalance = uint128(currBalance + realBalanceDelta);
                 newMaxEnd = _calcMaxEnd(newBalance, newReceivers, maxEndHint1, maxEndHint2);
                 _updateReceiverStates(
-                    _dripsStorage().states[assetId],
+                    _streamsStorage().states[assetId],
                     currReceivers,
                     lastUpdate,
                     currMaxEnd,
@@ -712,23 +729,23 @@ abstract contract Drips {
             state.updateTime = _currTimestamp();
             state.maxEnd = newMaxEnd;
             state.balance = newBalance;
-            bytes32 dripsHistory = state.dripsHistoryHash;
+            bytes32 streamsHistory = state.streamsHistoryHash;
             // slither-disable-next-line timestamp
-            if (dripsHistory != 0 && _cycleOf(lastUpdate) != _cycleOf(_currTimestamp())) {
+            if (streamsHistory != 0 && _cycleOf(lastUpdate) != _cycleOf(_currTimestamp())) {
                 state.currCycleConfigs = 2;
             } else {
                 state.currCycleConfigs++;
             }
-            bytes32 newDripsHash = _hashDrips(newReceivers);
-            state.dripsHistoryHash =
-                _hashDripsHistory(dripsHistory, newDripsHash, _currTimestamp(), newMaxEnd);
-            emit DripsSet(userId, assetId, newDripsHash, dripsHistory, newBalance, newMaxEnd);
+            bytes32 newStreamsHash = _hashStreams(newReceivers);
+            state.streamsHistoryHash =
+                _hashStreamsHistory(streamsHistory, newStreamsHash, _currTimestamp(), newMaxEnd);
+            emit StreamsSet(userId, assetId, newStreamsHash, streamsHistory, newBalance, newMaxEnd);
             // slither-disable-next-line timestamp
-            if (newDripsHash != state.dripsHash) {
-                state.dripsHash = newDripsHash;
+            if (newStreamsHash != state.streamsHash) {
+                state.streamsHash = newStreamsHash;
                 for (uint256 i = 0; i < newReceivers.length; i++) {
-                    DripsReceiver memory receiver = newReceivers[i];
-                    emit DripsReceiverSeen(newDripsHash, receiver.userId, receiver.config);
+                    StreamReceiver memory receiver = newReceivers[i];
+                    emit StreamReceiverSeen(newStreamsHash, receiver.userId, receiver.config);
                 }
             }
         }
@@ -737,25 +754,25 @@ abstract contract Drips {
     /// @notice Verifies that the provided list of receivers is currently active for the user.
     /// @param currReceivers The verified list of receivers.
     /// @param state The user's state.
-    function _verifyDripsReceivers(DripsReceiver[] memory currReceivers, DripsState storage state)
-        private
-        view
-    {
-        require(_hashDrips(currReceivers) == state.dripsHash, "Invalid current drips list");
+    function _verifyStreamsReceivers(
+        StreamReceiver[] memory currReceivers,
+        StreamsState storage state
+    ) private view {
+        require(_hashStreams(currReceivers) == state.streamsHash, "Invalid streams receivers list");
     }
 
-    /// @notice Calculates the maximum end time of drips.
-    /// @param balance The balance when drips have started
-    /// @param receivers The list of drips receivers.
+    /// @notice Calculates the maximum end time of all streams.
+    /// @param balance The balance when streaming starts.
+    /// @param receivers The list of streams receivers.
     /// Must be sorted, deduplicated and without 0 amtPerSecs.
     /// @param hint1 The first hint for finding the maximum end time.
-    /// See `_setDrips` docs for `maxEndHint1` for more details.
+    /// See `_setStreams` docs for `maxEndHint1` for more details.
     /// @param hint2 The second hint for finding the maximum end time.
-    /// See `_setDrips` docs for `maxEndHint2` for more details.
-    /// @return maxEnd The maximum end time of drips
+    /// See `_setStreams` docs for `maxEndHint2` for more details.
+    /// @return maxEnd The maximum end time of streaming.
     function _calcMaxEnd(
         uint128 balance,
-        DripsReceiver[] memory receivers,
+        StreamReceiver[] memory receivers,
         uint32 hint1,
         uint32 hint2
     ) private view returns (uint32 maxEnd) {
@@ -805,12 +822,12 @@ abstract contract Drips {
         // slither-disable-end incorrect-equality,timestamp
     }
 
-    /// @notice Check if a given balance is enough to cover drips with the given `maxEnd`.
-    /// @param balance The balance when drips have started
-    /// @param configs The list of drips configurations
-    /// @param configsLen The length of `configs`
-    /// @param maxEnd The maximum end time of drips
-    /// @return isEnough `true` if the balance is enough, `false` otherwise
+    /// @notice Check if a given balance is enough to cover all streams with the given `maxEnd`.
+    /// @param balance The balance when streaming starts.
+    /// @param configs The list of streams configurations.
+    /// @param configsLen The length of `configs`.
+    /// @param maxEnd The maximum end time of streaming.
+    /// @return isEnough `true` if the balance is enough, `false` otherwise.
     function _isBalanceEnough(
         uint256 balance,
         uint256[] memory configs,
@@ -829,7 +846,7 @@ abstract contract Drips {
                 if (end > maxEnd) {
                     end = maxEnd;
                 }
-                spent += _drippedAmt(amtPerSec, start, end);
+                spent += _streamedAmt(amtPerSec, start, end);
                 if (spent > balance) {
                     return false;
                 }
@@ -838,43 +855,43 @@ abstract contract Drips {
         }
     }
 
-    /// @notice Build a preprocessed list of drips configurations from receivers.
-    /// @param receivers The list of drips receivers.
+    /// @notice Build a preprocessed list of streams configurations from receivers.
+    /// @param receivers The list of streams receivers.
     /// Must be sorted, deduplicated and without 0 amtPerSecs.
-    /// @return configs The list of drips configurations
+    /// @return configs The list of streams configurations
     /// @return configsLen The length of `configs`
-    function _buildConfigs(DripsReceiver[] memory receivers)
+    function _buildConfigs(StreamReceiver[] memory receivers)
         private
         view
         returns (uint256[] memory configs, uint256 configsLen)
     {
         unchecked {
-            require(receivers.length <= _MAX_DRIPS_RECEIVERS, "Too many drips receivers");
+            require(receivers.length <= _MAX_STREAMS_RECEIVERS, "Too many streams receivers");
             configs = new uint256[](receivers.length);
             for (uint256 i = 0; i < receivers.length; i++) {
-                DripsReceiver memory receiver = receivers[i];
+                StreamReceiver memory receiver = receivers[i];
                 if (i > 0) {
-                    require(_isOrdered(receivers[i - 1], receiver), "Drips receivers not sorted");
+                    require(_isOrdered(receivers[i - 1], receiver), "Streams receivers not sorted");
                 }
                 configsLen = _addConfig(configs, configsLen, receiver);
             }
         }
     }
 
-    /// @notice Preprocess and add a drips receiver to the list of configurations.
-    /// @param configs The list of drips configurations
+    /// @notice Preprocess and add a stream receiver to the list of configurations.
+    /// @param configs The list of streams configurations
     /// @param configsLen The length of `configs`
-    /// @param receiver The added drips receiver.
+    /// @param receiver The added stream receiver.
     /// @return newConfigsLen The new length of `configs`
-    function _addConfig(uint256[] memory configs, uint256 configsLen, DripsReceiver memory receiver)
-        private
-        view
-        returns (uint256 newConfigsLen)
-    {
+    function _addConfig(
+        uint256[] memory configs,
+        uint256 configsLen,
+        StreamReceiver memory receiver
+    ) private view returns (uint256 newConfigsLen) {
         uint160 amtPerSec = receiver.config.amtPerSec();
-        require(amtPerSec >= _minAmtPerSec, "Drips receiver amtPerSec too low");
+        require(amtPerSec >= _minAmtPerSec, "Stream receiver amtPerSec too low");
         (uint32 start, uint32 end) =
-            _dripsRangeInFuture(receiver, _currTimestamp(), type(uint32).max);
+            _streamRangeInFuture(receiver, _currTimestamp(), type(uint32).max);
         // slither-disable-next-line incorrect-equality,timestamp
         if (start == end) {
             return configsLen;
@@ -898,12 +915,12 @@ abstract contract Drips {
         }
     }
 
-    /// @notice Load a drips configuration from the list.
-    /// @param configs The list of drips configurations
+    /// @notice Load a streams configuration from the list.
+    /// @param configs The list of streams configurations
     /// @param idx The loaded configuration index. It must be smaller than the `configs` length.
-    /// @return amtPerSec The amount per second being dripped.
-    /// @return start The timestamp when dripping starts.
-    /// @return end The maximum timestamp when dripping ends.
+    /// @return amtPerSec The amount per second being streamed.
+    /// @return start The timestamp when streaming starts.
+    /// @return end The maximum timestamp when streaming ends.
     function _getConfig(uint256[] memory configs, uint256 idx)
         private
         pure
@@ -929,16 +946,16 @@ abstract contract Drips {
         end = uint32(config);
     }
 
-    /// @notice Calculates the hash of the drips configuration.
-    /// It's used to verify if drips configuration is the previously set one.
-    /// @param receivers The list of the drips receivers.
+    /// @notice Calculates the hash of the streams configuration.
+    /// It's used to verify if streams configuration is the previously set one.
+    /// @param receivers The list of the streams receivers.
     /// Must be sorted, deduplicated and without 0 amtPerSecs.
-    /// If the drips have never been updated, pass an empty array.
-    /// @return dripsHash The hash of the drips configuration
-    function _hashDrips(DripsReceiver[] memory receivers)
+    /// If the streams have never been updated, pass an empty array.
+    /// @return streamsHash The hash of the streams configuration
+    function _hashStreams(StreamReceiver[] memory receivers)
         internal
         pure
-        returns (bytes32 dripsHash)
+        returns (bytes32 streamsHash)
     {
         if (receivers.length == 0) {
             return bytes32(0);
@@ -946,40 +963,42 @@ abstract contract Drips {
         return keccak256(abi.encode(receivers));
     }
 
-    /// @notice Calculates the hash of the drips history after the drips configuration is updated.
-    /// @param oldDripsHistoryHash The history hash which was valid before the drips were updated.
-    /// The `dripsHistoryHash` of a user before they set drips for the first time is `0`.
-    /// @param dripsHash The hash of the drips receivers being set.
-    /// @param updateTime The timestamp when the drips are updated.
-    /// @param maxEnd The maximum end of the drips being set.
-    /// @return dripsHistoryHash The hash of the updated drips history.
-    function _hashDripsHistory(
-        bytes32 oldDripsHistoryHash,
-        bytes32 dripsHash,
+    /// @notice Calculates the hash of the streams history
+    /// after the streams configuration is updated.
+    /// @param oldStreamsHistoryHash The history hash
+    /// that was valid before the streams were updated.
+    /// The `streamsHistoryHash` of a user before they set streams for the first time is `0`.
+    /// @param streamsHash The hash of the streams receivers being set.
+    /// @param updateTime The timestamp when the streams were updated.
+    /// @param maxEnd The maximum end of the streams being set.
+    /// @return streamsHistoryHash The hash of the updated streams history.
+    function _hashStreamsHistory(
+        bytes32 oldStreamsHistoryHash,
+        bytes32 streamsHash,
         uint32 updateTime,
         uint32 maxEnd
-    ) internal pure returns (bytes32 dripsHistoryHash) {
-        return keccak256(abi.encode(oldDripsHistoryHash, dripsHash, updateTime, maxEnd));
+    ) internal pure returns (bytes32 streamsHistoryHash) {
+        return keccak256(abi.encode(oldStreamsHistoryHash, streamsHash, updateTime, maxEnd));
     }
 
-    /// @notice Applies the effects of the change of the drips on the receivers' drips states.
-    /// @param states The drips states for the used asset.
-    /// @param currReceivers The list of the drips receivers set in the last drips update
+    /// @notice Applies the effects of the change of the streams on the receivers' streams state.
+    /// @param states The streams states for the used asset.
+    /// @param currReceivers The list of the streams receivers set in the last streams update
     /// of the user.
     /// If this is the first update, pass an empty array.
-    /// @param lastUpdate the last time the sender updated the drips.
+    /// @param lastUpdate the last time the sender updated the streams.
     /// If this is the first update, pass zero.
-    /// @param currMaxEnd The maximum end time of drips according to the last drips update.
-    /// @param newReceivers  The list of the drips receivers of the user to be set.
+    /// @param currMaxEnd The maximum end time of streaming according to the last streams update.
+    /// @param newReceivers  The list of the streams receivers of the user to be set.
     /// Must be sorted, deduplicated and without 0 amtPerSecs.
-    /// @param newMaxEnd The maximum end time of drips according to the new drips configuration.
+    /// @param newMaxEnd The maximum end time of streaming according to the new configuration.
     // slither-disable-next-line cyclomatic-complexity
     function _updateReceiverStates(
-        mapping(uint256 userId => DripsState) storage states,
-        DripsReceiver[] memory currReceivers,
+        mapping(uint256 userId => StreamsState) storage states,
+        StreamReceiver[] memory currReceivers,
         uint32 lastUpdate,
         uint32 currMaxEnd,
-        DripsReceiver[] memory newReceivers,
+        StreamReceiver[] memory newReceivers,
         uint32 newMaxEnd
     ) private {
         uint256 currIdx = 0;
@@ -987,14 +1006,14 @@ abstract contract Drips {
         while (true) {
             bool pickCurr = currIdx < currReceivers.length;
             // slither-disable-next-line uninitialized-local
-            DripsReceiver memory currRecv;
+            StreamReceiver memory currRecv;
             if (pickCurr) {
                 currRecv = currReceivers[currIdx];
             }
 
             bool pickNew = newIdx < newReceivers.length;
             // slither-disable-next-line uninitialized-local
-            DripsReceiver memory newRecv;
+            StreamReceiver memory newRecv;
             if (pickNew) {
                 newRecv = newReceivers[newIdx];
             }
@@ -1011,12 +1030,12 @@ abstract contract Drips {
             }
 
             if (pickCurr && pickNew) {
-                // Shift the existing drip to fulfil the new configuration
-                DripsState storage state = states[currRecv.userId];
+                // Shift the existing stream to fulfil the new configuration
+                StreamsState storage state = states[currRecv.userId];
                 (uint32 currStart, uint32 currEnd) =
-                    _dripsRangeInFuture(currRecv, lastUpdate, currMaxEnd);
+                    _streamRangeInFuture(currRecv, lastUpdate, currMaxEnd);
                 (uint32 newStart, uint32 newEnd) =
-                    _dripsRangeInFuture(newRecv, _currTimestamp(), newMaxEnd);
+                    _streamRangeInFuture(newRecv, _currTimestamp(), newMaxEnd);
                 int256 amtPerSec = int256(uint256(currRecv.config.amtPerSec()));
                 // Move the start and end times if updated. This has the same effects as calling
                 // _addDeltaRange(state, currStart, currEnd, -amtPerSec);
@@ -1035,19 +1054,19 @@ abstract contract Drips {
                     state.nextReceivableCycle = newStartCycle;
                 }
             } else if (pickCurr) {
-                // Remove an existing drip
+                // Remove an existing stream
                 // slither-disable-next-line similar-names
-                DripsState storage state = states[currRecv.userId];
-                (uint32 start, uint32 end) = _dripsRangeInFuture(currRecv, lastUpdate, currMaxEnd);
+                StreamsState storage state = states[currRecv.userId];
+                (uint32 start, uint32 end) = _streamRangeInFuture(currRecv, lastUpdate, currMaxEnd);
                 // slither-disable-next-line similar-names
                 int256 amtPerSec = int256(uint256(currRecv.config.amtPerSec()));
                 _addDeltaRange(state, start, end, -amtPerSec);
             } else if (pickNew) {
-                // Create a new drip
-                DripsState storage state = states[newRecv.userId];
+                // Create a new stream
+                StreamsState storage state = states[newRecv.userId];
                 // slither-disable-next-line uninitialized-local
                 (uint32 start, uint32 end) =
-                    _dripsRangeInFuture(newRecv, _currTimestamp(), newMaxEnd);
+                    _streamRangeInFuture(newRecv, _currTimestamp(), newMaxEnd);
                 int256 amtPerSec = int256(uint256(newRecv.config.amtPerSec()));
                 _addDeltaRange(state, start, end, amtPerSec);
                 // Ensure that the user receives the updated cycles
@@ -1072,26 +1091,26 @@ abstract contract Drips {
         }
     }
 
-    /// @notice Calculates the time range in the future in which a receiver will be dripped to.
-    /// @param receiver The drips receiver
-    /// @param maxEnd The maximum end time of drips
-    function _dripsRangeInFuture(DripsReceiver memory receiver, uint32 updateTime, uint32 maxEnd)
+    /// @notice Calculates the time range in the future in which a receiver will be streamed to.
+    /// @param receiver The stream receiver.
+    /// @param maxEnd The maximum end time of streaming.
+    function _streamRangeInFuture(StreamReceiver memory receiver, uint32 updateTime, uint32 maxEnd)
         private
         view
         returns (uint32 start, uint32 end)
     {
-        return _dripsRange(receiver, updateTime, maxEnd, _currTimestamp(), type(uint32).max);
+        return _streamRange(receiver, updateTime, maxEnd, _currTimestamp(), type(uint32).max);
     }
 
-    /// @notice Calculates the time range in which a receiver is to be dripped to.
-    /// This range is capped to provide a view on drips through a specific time window.
-    /// @param receiver The drips receiver
-    /// @param updateTime The time when drips are configured
-    /// @param maxEnd The maximum end time of drips
-    /// @param startCap The timestamp the drips range start should be capped to
-    /// @param endCap The timestamp the drips range end should be capped to
-    function _dripsRange(
-        DripsReceiver memory receiver,
+    /// @notice Calculates the time range in which a receiver is to be streamed to.
+    /// This range is capped to provide a view on the stream through a specific time window.
+    /// @param receiver The stream receiver.
+    /// @param updateTime The time when the stream is configured.
+    /// @param maxEnd The maximum end time of streaming.
+    /// @param startCap The timestamp the streaming range start should be capped to.
+    /// @param endCap The timestamp the streaming range end should be capped to.
+    function _streamRange(
+        StreamReceiver memory receiver,
         uint32 updateTime,
         uint32 maxEnd,
         uint32 startCap,
@@ -1127,8 +1146,8 @@ abstract contract Drips {
     /// @param state The user state
     /// @param start The timestamp from which the delta takes effect
     /// @param end The timestamp until which the delta takes effect
-    /// @param amtPerSec The dripping rate
-    function _addDeltaRange(DripsState storage state, uint32 start, uint32 end, int256 amtPerSec)
+    /// @param amtPerSec The streaming rate
+    function _addDeltaRange(StreamsState storage state, uint32 start, uint32 end, int256 amtPerSec)
         private
     {
         // slither-disable-next-line incorrect-equality,timestamp
@@ -1143,7 +1162,7 @@ abstract contract Drips {
     /// @notice Adds delta of funds received by a user at a given time
     /// @param amtDeltas The user amount deltas
     /// @param timestamp The timestamp when the deltas need to be added
-    /// @param amtPerSec The dripping rate
+    /// @param amtPerSec The streaming rate
     function _addDelta(
         mapping(uint32 cycle => AmtDelta) storage amtDeltas,
         uint256 timestamp,
@@ -1151,7 +1170,7 @@ abstract contract Drips {
     ) private {
         unchecked {
             // In order to set a delta on a specific timestamp it must be introduced in two cycles.
-            // These formulas follow the logic from `_drippedAmt`, see it for more details.
+            // These formulas follow the logic from `_streamedAmt`, see it for more details.
             int256 amtPerSecMultiplier = int160(_AMT_PER_SEC_MULTIPLIER);
             int256 fullCycle = (int256(uint256(_cycleSecs)) * amtPerSec) / amtPerSecMultiplier;
             // slither-disable-next-line weak-prng
@@ -1159,7 +1178,7 @@ abstract contract Drips {
             AmtDelta storage amtDelta = amtDeltas[_cycleOf(uint32(timestamp))];
             // Any over- or under-flows are fine, they're guaranteed to be fixed by a matching
             // under- or over-flow from the other call to `_addDelta` made by `_addDeltaRange`.
-            // This is because the total balance of `Drips` can never exceed `type(int128).max`,
+            // This is because the total balance of `Streams` can never exceed `type(int128).max`,
             // so in the end no amtDelta can have delta higher than `type(int128).max`.
             amtDelta.thisCycle += int128(fullCycle - nextCycle);
             amtDelta.nextCycle += int128(nextCycle);
@@ -1169,7 +1188,7 @@ abstract contract Drips {
     /// @notice Checks if two receivers fulfil the sortedness requirement of the receivers list.
     /// @param prev The previous receiver
     /// @param next The next receiver
-    function _isOrdered(DripsReceiver memory prev, DripsReceiver memory next)
+    function _isOrdered(StreamReceiver memory prev, StreamReceiver memory next)
         private
         pure
         returns (bool)
@@ -1180,28 +1199,29 @@ abstract contract Drips {
         return prev.config.lt(next.config);
     }
 
-    /// @notice Calculates the amount dripped over a time range.
-    /// The amount dripped in the `N`th second of each cycle is:
+    /// @notice Calculates the amount streamed over a time range.
+    /// The amount streamed in the `N`th second of each cycle is:
     /// `(N + 1) * amtPerSec / AMT_PER_SEC_MULTIPLIER - N * amtPerSec / AMT_PER_SEC_MULTIPLIER`.
-    /// For a range of `N`s from `0` to `M` the sum of the dripped amounts is calculated as:
+    /// For a range of `N`s from `0` to `M` the sum of the streamed amounts is calculated as:
     /// `M * amtPerSec / AMT_PER_SEC_MULTIPLIER` assuming that `M <= cycleSecs`.
-    /// For an arbitrary time range across multiple cycles the amount is calculated as the sum of
-    /// the amount dripped in the start cycle, each of the full cycles in between and the end cycle.
+    /// For an arbitrary time range across multiple cycles the amount
+    /// is calculated as the sum of the amount streamed in the start cycle,
+    /// each of the full cycles in between and the end cycle.
     /// This algorithm has the following properties:
-    /// - During every second full units are dripped, there are no partially dripped units.
-    /// - Undripped fractions are dripped when they add up into full units.
-    /// - Undripped fractions don't add up across cycle end boundaries.
-    /// - Some seconds drip more units and some less.
-    /// - Every `N`th second of each cycle drips the same amount.
-    /// - Every full cycle drips the same amount.
-    /// - The amount dripped in a given second is independent from the dripping start and end.
-    /// - Dripping over time ranges `A:B` and then `B:C` is equivalent to dripping over `A:C`.
-    /// - Different drips existing in the system don't interfere with each other.
-    /// @param amtPerSec The dripping rate
-    /// @param start The dripping start time
-    /// @param end The dripping end time
-    /// @return amt The dripped amount
-    function _drippedAmt(uint256 amtPerSec, uint256 start, uint256 end)
+    /// - During every second full units are streamed, there are no partially streamed units.
+    /// - Unstreamed fractions are streamed when they add up into full units.
+    /// - Unstreamed fractions don't add up across cycle end boundaries.
+    /// - Some seconds stream more units and some less.
+    /// - Every `N`th second of each cycle streams the same amount.
+    /// - Every full cycle streams the same amount.
+    /// - The amount streamed in a given second is independent from the streaming start and end.
+    /// - Streaming over time ranges `A:B` and then `B:C` is equivalent to streaming over `A:C`.
+    /// - Different streams existing in the system don't interfere with each other.
+    /// @param amtPerSec The streaming rate
+    /// @param start The streaming start time
+    /// @param end The streaming end time
+    /// @return amt The streamed amount
+    function _streamedAmt(uint256 amtPerSec, uint256 start, uint256 end)
         private
         view
         returns (uint256 amt)
@@ -1250,13 +1270,13 @@ abstract contract Drips {
         }
     }
 
-    /// @notice Returns the Drips storage.
-    /// @return dripsStorage The storage.
-    function _dripsStorage() private view returns (DripsStorage storage dripsStorage) {
-        bytes32 slot = _dripsStorageSlot;
+    /// @notice Returns the Streams storage.
+    /// @return streamsStorage The storage.
+    function _streamsStorage() private view returns (StreamsStorage storage streamsStorage) {
+        bytes32 slot = _streamsStorageSlot;
         // slither-disable-next-line assembly
         assembly {
-            dripsStorage.slot := slot
+            streamsStorage.slot := slot
         }
     }
 }

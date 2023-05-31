@@ -4,10 +4,10 @@ pragma solidity ^0.8.19;
 import {Caller} from "src/Caller.sol";
 import {AddressDriver} from "src/AddressDriver.sol";
 import {
-    DripsConfigImpl,
+    StreamConfigImpl,
     DripsHub,
-    DripsHistory,
-    DripsReceiver,
+    StreamsHistory,
+    StreamReceiver,
     SplitsReceiver,
     UserMetadata
 } from "src/DripsHub.sol";
@@ -92,55 +92,55 @@ contract AddressDriverTest is Test {
         assertEq(dripsHub.splittable(userId, erc20), amt, "Invalid received amount");
     }
 
-    function testSetDrips() public {
+    function testSetStreams() public {
         uint128 amt = 5;
 
         // Top-up
 
-        DripsReceiver[] memory receivers = new DripsReceiver[](1);
+        StreamReceiver[] memory receivers = new StreamReceiver[](1);
         receivers[0] =
-            DripsReceiver(userId, DripsConfigImpl.create(0, dripsHub.minAmtPerSec(), 0, 0));
+            StreamReceiver(userId, StreamConfigImpl.create(0, dripsHub.minAmtPerSec(), 0, 0));
         uint256 balance = erc20.balanceOf(address(this));
 
-        int128 realBalanceDelta = driver.setDrips(
-            erc20, new DripsReceiver[](0), int128(amt), receivers, 0, 0, address(this)
+        int128 realBalanceDelta = driver.setStreams(
+            erc20, new StreamReceiver[](0), int128(amt), receivers, 0, 0, address(this)
         );
 
         assertEq(erc20.balanceOf(address(this)), balance - amt, "Invalid balance after top-up");
         assertEq(erc20.balanceOf(address(dripsHub)), amt, "Invalid DripsHub balance after top-up");
-        (,,, uint128 dripsBalance,) = dripsHub.dripsState(thisId, erc20);
-        assertEq(dripsBalance, amt, "Invalid drips balance after top-up");
-        assertEq(realBalanceDelta, int128(amt), "Invalid drips balance delta after top-up");
-        (bytes32 dripsHash,,,,) = dripsHub.dripsState(thisId, erc20);
-        assertEq(dripsHash, dripsHub.hashDrips(receivers), "Invalid drips hash after top-up");
+        (,,, uint128 streamsBalance,) = dripsHub.streamsState(thisId, erc20);
+        assertEq(streamsBalance, amt, "Invalid streams balance after top-up");
+        assertEq(realBalanceDelta, int128(amt), "Invalid streams balance delta after top-up");
+        (bytes32 streamsHash,,,,) = dripsHub.streamsState(thisId, erc20);
+        assertEq(streamsHash, dripsHub.hashStreams(receivers), "Invalid streams hash after top-up");
 
         // Withdraw
         balance = erc20.balanceOf(address(user));
 
         realBalanceDelta =
-            driver.setDrips(erc20, receivers, -int128(amt), receivers, 0, 0, address(user));
+            driver.setStreams(erc20, receivers, -int128(amt), receivers, 0, 0, address(user));
 
         assertEq(erc20.balanceOf(address(user)), balance + amt, "Invalid balance after withdrawal");
         assertEq(erc20.balanceOf(address(dripsHub)), 0, "Invalid DripsHub balance after withdrawal");
-        (,,, dripsBalance,) = dripsHub.dripsState(thisId, erc20);
-        assertEq(dripsBalance, 0, "Invalid drips balance after withdrawal");
-        assertEq(realBalanceDelta, -int128(amt), "Invalid drips balance delta after withdrawal");
+        (,,, streamsBalance,) = dripsHub.streamsState(thisId, erc20);
+        assertEq(streamsBalance, 0, "Invalid streams balance after withdrawal");
+        assertEq(realBalanceDelta, -int128(amt), "Invalid streams balance delta after withdrawal");
     }
 
-    function testSetDripsDecreasingBalanceTransfersFundsToTheProvidedAddress() public {
+    function testSetStreamsDecreasingBalanceTransfersFundsToTheProvidedAddress() public {
         uint128 amt = 5;
-        DripsReceiver[] memory receivers = new DripsReceiver[](0);
-        driver.setDrips(erc20, receivers, int128(amt), receivers, 0, 0, address(this));
+        StreamReceiver[] memory receivers = new StreamReceiver[](0);
+        driver.setStreams(erc20, receivers, int128(amt), receivers, 0, 0, address(this));
         address transferTo = address(1234);
 
         int128 realBalanceDelta =
-            driver.setDrips(erc20, receivers, -int128(amt), receivers, 0, 0, transferTo);
+            driver.setStreams(erc20, receivers, -int128(amt), receivers, 0, 0, transferTo);
 
         assertEq(erc20.balanceOf(transferTo), amt, "Invalid balance");
         assertEq(erc20.balanceOf(address(dripsHub)), 0, "Invalid DripsHub balance");
-        (,,, uint128 dripsBalance,) = dripsHub.dripsState(thisId, erc20);
-        assertEq(dripsBalance, 0, "Invalid drips balance");
-        assertEq(realBalanceDelta, -int128(amt), "Invalid drips balance delta");
+        (,,, uint128 streamsBalance,) = dripsHub.streamsState(thisId, erc20);
+        assertEq(streamsBalance, 0, "Invalid streams balance");
+        assertEq(realBalanceDelta, -int128(amt), "Invalid streams balance delta");
     }
 
     function testSetSplits() public {
@@ -187,8 +187,8 @@ contract AddressDriverTest is Test {
         driver.give(userId, erc20, 0);
     }
 
-    function testSetDripsCanBePaused() public canBePausedTest {
-        driver.setDrips(erc20, new DripsReceiver[](0), 0, new DripsReceiver[](0), 0, 0, user);
+    function testSetStreamsCanBePaused() public canBePausedTest {
+        driver.setStreams(erc20, new StreamReceiver[](0), 0, new StreamReceiver[](0), 0, 0, user);
     }
 
     function testSetSplitsCanBePaused() public canBePausedTest {
