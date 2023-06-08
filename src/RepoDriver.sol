@@ -35,6 +35,9 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
     string internal constant CHAIN_NAME_SEPOLIA = "sepolia";
     address internal constant LINK_TOKEN_SEPOLIA = 0x779877A7B0D9E8603169DdbD7836e478b4624789;
 
+    string internal constant CHAIN_NAME_OTHER = "other";
+    address internal constant LINK_TOKEN_OTHER = address(bytes20("dummy link token"));
+
     /// @notice The Drips address used by this driver.
     Drips public immutable drips;
     /// @notice The driver ID which this driver uses when calling Drips.
@@ -93,12 +96,11 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
     constructor(Drips _drips, address forwarder, uint32 _driverId) ERC2771Context(forwarder) {
         drips = _drips;
         driverId = _driverId;
-        // slither-disable-next-line uninitialized-local
         address _linkToken;
         if (block.chainid == CHAIN_ID_ETHEREUM) _linkToken = LINK_TOKEN_ETHEREUM;
         else if (block.chainid == CHAIN_ID_GOERLI) _linkToken = LINK_TOKEN_GOERLI;
         else if (block.chainid == CHAIN_ID_SEPOLIA) _linkToken = LINK_TOKEN_SEPOLIA;
-        else revert("Unsupported chain");
+        else _linkToken = LINK_TOKEN_OTHER;
         linkToken = LinkTokenInterface(_linkToken);
     }
 
@@ -335,7 +337,7 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
         if (block.chainid == CHAIN_ID_ETHEREUM) chainName = CHAIN_NAME_ETHEREUM;
         else if (block.chainid == CHAIN_ID_GOERLI) chainName = CHAIN_NAME_GOERLI;
         else if (block.chainid == CHAIN_ID_SEPOLIA) chainName = CHAIN_NAME_SEPOLIA;
-        else revert("Unsupported chain");
+        else chainName = CHAIN_NAME_OTHER;
         return string.concat("drips,", chainName, ",ownedBy");
     }
 

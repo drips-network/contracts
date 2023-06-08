@@ -293,12 +293,6 @@ contract RepoDriverTest is Test {
         assertEq(bytes32(actualUserId), bytes32(expectedUserId), "Invalid user ID");
     }
 
-    function testDeploymentOnUnknownChainReverts() public {
-        vm.chainId(1234567890);
-        vm.expectRevert("Unsupported chain");
-        new RepoDriver(drips, address(caller), 0);
-    }
-
     function testUpdateOwnerGitHubMainnet() public {
         updateOwner(
             Forge.GitHub,
@@ -338,6 +332,17 @@ contract RepoDriverTest is Test {
             user,
             "https://raw.githubusercontent.com/me/repo/HEAD/FUNDING.json",
             "drips,sepolia,ownedBy"
+        );
+    }
+
+    function testUpdateOwnerGitHubOtherChain() public {
+        deployDriver(1234567890);
+        updateOwner(
+            Forge.GitHub,
+            "me/repo",
+            user,
+            "https://raw.githubusercontent.com/me/repo/HEAD/FUNDING.json",
+            "drips,other,ownedBy"
         );
     }
 
