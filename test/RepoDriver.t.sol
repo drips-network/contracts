@@ -61,6 +61,7 @@ contract RepoDriverTest is Test {
     uint256 internal userIdUser;
 
     bytes internal constant ERROR_NOT_OWNER = "Caller is not the user owner";
+    bytes internal constant ERROR_ALREADY_INITIALIZED = "Already initialized";
 
     uint256 internal constant CHAIN_ID_MAINNET = 1;
     uint256 internal constant CHAIN_ID_GOERLI = 5;
@@ -89,19 +90,24 @@ contract RepoDriverTest is Test {
         erc20.approve(address(driver), type(uint256).max);
     }
 
-    function deployDriver(uint256 chainId) public {
+    function deployDriver(uint256 chainId) internal {
         vm.chainId(chainId);
+        deployDriverUninitialized();
+        initializeAnyApiOperator(
+            OperatorInterface(address(new MockDummy())), keccak256("job ID"), 2
+        );
+        TestLinkToken linkToken = TestLinkToken(address(driver.linkToken()));
+        vm.etch(address(linkToken), address(new TestLinkToken()).code);
+        linkToken.mint(address(this), 100);
+        linkToken.mint(address(driver), 100);
+    }
+
+    function deployDriverUninitialized() internal {
         uint32 driverId = drips.registerDriver(address(this));
         RepoDriver driverLogic = new RepoDriver(drips, address(caller), driverId);
         driver = RepoDriver(address(new ManagedProxy(driverLogic, admin)));
         drips.updateDriverAddress(driverId, address(driver));
         driverNonce = 0;
-        updateAnyApiOperator(OperatorInterface(address(new MockDummy())), keccak256("job ID"), 2);
-
-        TestLinkToken linkToken = TestLinkToken(address(driver.linkToken()));
-        vm.etch(address(linkToken), address(new TestLinkToken()).code);
-        linkToken.mint(address(this), 100);
-        linkToken.mint(address(driver), 100);
     }
 
     function noMetadata() internal pure returns (UserMetadata[] memory userMetadata) {
@@ -113,16 +119,30 @@ contract RepoDriverTest is Test {
         userMetadata[0] = UserMetadata("key", "value");
     }
 
+    function assertAnyApiOperator(
+        OperatorInterface expectedOperator,
+        bytes32 expectedJobId,
+        uint96 expectedDefaultFee
+    ) internal {
+        (OperatorInterface operator, bytes32 jobId, uint96 defaultFee) = driver.anyApiOperator();
+        assertEq(address(operator), address(expectedOperator), "Invalid operator after the update");
+        assertEq(jobId, expectedJobId, "Invalid job ID after the update");
+        assertEq(defaultFee, expectedDefaultFee, "Invalid default fee after the update");
+    }
+
+    function initializeAnyApiOperator(OperatorInterface operator, bytes32 jobId, uint96 defaultFee)
+        internal
+    {
+        driver.initializeAnyApiOperator(operator, jobId, defaultFee);
+        assertAnyApiOperator(operator, jobId, defaultFee);
+    }
+
     function updateAnyApiOperator(OperatorInterface operator, bytes32 jobId, uint96 defaultFee)
         internal
     {
         vm.prank(admin);
         driver.updateAnyApiOperator(operator, jobId, defaultFee);
-        (OperatorInterface newOperator, bytes32 newJobId, uint96 newDefaultFee) =
-            driver.anyApiOperator();
-        require(newOperator == operator, "Invalid operator after the update");
-        require(newJobId == jobId, "Invalid job ID after the update");
-        require(newDefaultFee == defaultFee, "Invalid default fee after the update");
+        assertAnyApiOperator(operator, jobId, defaultFee);
     }
 
     function initialUpdateOwner(address owner, string memory name)
@@ -291,6 +311,38 @@ contract RepoDriverTest is Test {
     function assertUserId(Forge forge, bytes memory name, uint256 expectedUserId) internal {
         uint256 actualUserId = driver.calcUserId(forge, name);
         assertEq(bytes32(actualUserId), bytes32(expectedUserId), "Invalid user ID");
+    }
+
+    function testUpdateAnyApiOperator() public {
+        (OperatorInterface operator, bytes32 jobId, uint96 defaultFee) = driver.anyApiOperator();
+        OperatorInterface newOperator = OperatorInterface(address(~uint160(address(operator))));
+        updateAnyApiOperator(newOperator, ~jobId, ~defaultFee);
+    }
+
+    function testUpdateAnyApiOperatorRevertsIfNotCalledByAdmin() public {
+        vm.expectRevert("Caller not the admin");
+        driver.updateAnyApiOperator(OperatorInterface(address(1234)), keccak256("job ID"), 123);
+    }
+
+    function testInitializeAnyApiOperator() public {
+        deployDriverUninitialized();
+        initializeAnyApiOperator(OperatorInterface(address(1234)), keccak256("job ID"), 123);
+    }
+
+    function testInitializeAnyApiOperatorRevertsIfCalledTwice() public {
+        deployDriverUninitialized();
+        initializeAnyApiOperator(OperatorInterface(address(1234)), keccak256("job ID"), 123);
+
+        vm.expectRevert(ERROR_ALREADY_INITIALIZED);
+        driver.initializeAnyApiOperator(OperatorInterface(address(1234)), keccak256("job ID"), 123);
+    }
+
+    function testInitializeAnyApiOperatorRevertsIfCalledAfterUpdate() public {
+        deployDriverUninitialized();
+        updateAnyApiOperator(OperatorInterface(address(1234)), keccak256("job ID"), 123);
+
+        vm.expectRevert(ERROR_ALREADY_INITIALIZED);
+        driver.initializeAnyApiOperator(OperatorInterface(address(1234)), keccak256("job ID"), 123);
     }
 
     function testUpdateOwnerGitHubMainnet() public {
@@ -602,6 +654,10 @@ contract RepoDriverTest is Test {
         driver.pause();
         vm.expectRevert("Contract paused");
         _;
+    }
+
+    function testInitializeAnyApiOperatorCanBePaused() public canBePausedTest {
+        driver.initializeAnyApiOperator(OperatorInterface(address(0)), 0, 0);
     }
 
     function testUpdateAnyApiOperatorCanBePaused() public canBePausedTest {

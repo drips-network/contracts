@@ -54,7 +54,7 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
     /// @notice Emitted when the AnyApi operator configuration is updated.
     /// @param operator The new address of the AnyApi operator.
     /// @param jobId The new AnyApi job ID used for requesting user owner updates.
-    /// @param defaultFee The new fee in Link for each user owner
+    /// @param defaultFee The new fee in Link for each user owner.
     /// update request when the driver is covering the cost.
     event AnyApiOperatorUpdated(
         OperatorInterface indexed operator, bytes32 indexed jobId, uint96 defaultFee
@@ -81,13 +81,15 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
         mapping(bytes32 requestId => uint256 userId) requestedUpdates;
         /// @notice The new address of the AnyApi operator.
         OperatorInterface operator;
-        /// @notice The fee in Link for each user owner
+        /// @notice The fee in Link for each user owner.
         /// update request when the driver is covering the cost.
         uint96 defaultFee;
         /// @notice The AnyApi job ID used for requesting user owner updates.
         bytes32 jobId;
+        /// @notice If false, the initial operator configuration is possible.
+        bool isInitialized;
         /// @notice The AnyApi requests counter used as a nonce when calculating the request ID.
-        uint256 nonce;
+        uint248 nonce;
     }
 
     /// @param _drips The Drips contract to use.
@@ -163,17 +165,43 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
         userId = (userId << 216) | nameEncoded;
     }
 
+    /// @notice Initializes the AnyApi operator configuration.
+    /// Callable only once, and only before any calls to `updateAnyApiOperator`.
+    /// @param operator The initial address of the AnyApi operator.
+    /// @param jobId The initial AnyApi job ID used for requesting user owner updates.
+    /// @param defaultFee The initial fee in Link for each user owner.
+    /// update request when the driver is covering the cost.
+    function initializeAnyApiOperator(OperatorInterface operator, bytes32 jobId, uint96 defaultFee)
+        public
+        whenNotPaused
+    {
+        require(!_repoDriverAnyApiStorage().isInitialized, "Already initialized");
+        _updateAnyApiOperator(operator, jobId, defaultFee);
+    }
+
     /// @notice Updates the AnyApi operator configuration. Callable only by the admin.
     /// @param operator The new address of the AnyApi operator.
     /// @param jobId The new AnyApi job ID used for requesting user owner updates.
-    /// @param defaultFee The new fee in Link for each user owner
+    /// @param defaultFee The new fee in Link for each user owner.
     /// update request when the driver is covering the cost.
     function updateAnyApiOperator(OperatorInterface operator, bytes32 jobId, uint96 defaultFee)
         public
         whenNotPaused
         onlyAdmin
     {
+        _updateAnyApiOperator(operator, jobId, defaultFee);
+    }
+
+    /// @notice Updates the AnyApi operator configuration. Callable only by the admin.
+    /// @param operator The new address of the AnyApi operator.
+    /// @param jobId The new AnyApi job ID used for requesting user owner updates.
+    /// @param defaultFee The new fee in Link for each user owner.
+    /// update request when the driver is covering the cost.
+    function _updateAnyApiOperator(OperatorInterface operator, bytes32 jobId, uint96 defaultFee)
+        internal
+    {
         RepoDriverAnyApiStorage storage storageRef = _repoDriverAnyApiStorage();
+        storageRef.isInitialized = true;
         storageRef.operator = operator;
         storageRef.jobId = jobId;
         storageRef.defaultFee = defaultFee;
@@ -183,7 +211,7 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
     /// @notice Gets the current AnyApi operator configuration.
     /// @return operator The address of the AnyApi operator.
     /// @return jobId The AnyApi job ID used for requesting user owner updates.
-    /// @return defaultFee The fee in Link for each user owner
+    /// @return defaultFee The fee in Link for each user owner.
     /// update request when the driver is covering the cost.
     function anyApiOperator()
         public
