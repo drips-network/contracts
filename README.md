@@ -76,6 +76,18 @@ export WALLET_ARGS="<ARGS>"
 export ETHERSCAN_API_KEY="<KEY>"
 
 # OPTIONAL
+# If set, submits contracts' code to Sourcify.
+# In case of deployments to networks other than Ethereum an appropriate equivalent service is used.
+# If not set, contracts won't be verified.
+export VERIFY_SOURCIFY=1
+
+# OPTIONAL
+# If set, submits contracts' code to Blockscout.
+# In case of deployments to networks other than Ethereum an appropriate equivalent service is used.
+# If not set, contracts won't be verified.
+export VERIFY_BLOCKSCOUT=1
+
+# OPTIONAL
 # The JSON file to write deployment addresses to. Default is `./deployment_<NETWORK_NAME>.json`.
 export DEPLOYMENT_JSON="<PATH>"
 ```
@@ -86,6 +98,14 @@ Set up environment variables configuring the deployed contracts:
 # OPTIONAL
 # Address of the deployed contracts admin to set. If not set, the deployer's wallet address is used.
 export ADMIN="<ADDRESS>"
+
+# OPTIONAL
+# Address of the DripsDeployer to use. If not set, a new instance will be deployed.
+export DRIPS_DEPLOYER="<ADDRESS>"
+
+# OPTIONAL
+# The salt used for the deployment of a DripsDeployer instance. If not set, `DripsDeployer` is used.
+export DRIPS_DEPLOYER_SALT="<SALT>"
 
 # OPTIONAL
 # Cycle length  to use in `DRIPS_LOGIC` when it's deployed. If not set, 1 week is used.
@@ -105,7 +125,23 @@ export NFT_DRIVER_ADMIN="<ADDRESS>"
 
 # OPTIONAL
 # Address of the ImmutableSplitsDriver admin to set. If not set, `ADMIN` is used.
-export SPLITS_DRIVER_ADMIN="<ADDRESS>"
+export IMMUTABLE_SPLITS_DRIVER_ADMIN="<ADDRESS>"
+
+# OPTIONAL
+# The address of the AnyApi operator. If not set, zero address is used.
+export REPO_DRIVER_OPERATOR="<ADDRESS>"
+
+# OPTIONAL
+# The AnyApi job ID used for requesting user owner updates. If not set, a string of zeros is used.
+export REPO_DRIVER_JOB_ID="<JOB_ID>"
+
+# OPTIONAL
+# The fee in Link for each user owner. If not set, `0` is used.
+export REPO_DRIVER_FEE="<FEE>"
+
+# OPTIONAL
+# Address of the RepoDriver admin to set. If not set, `ADMIN` is used.
+export REPO_DRIVER_ADMIN="<ADDRESS>"
 ```
 
 Run deployment:
