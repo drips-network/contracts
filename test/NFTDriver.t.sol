@@ -4,12 +4,12 @@ pragma solidity ^0.8.19;
 import {Caller} from "src/Caller.sol";
 import {NFTDriver} from "src/NFTDriver.sol";
 import {
+    AccountMetadata,
     StreamConfigImpl,
     Drips,
     StreamsHistory,
     StreamReceiver,
-    SplitsReceiver,
-    UserMetadata
+    SplitsReceiver
 } from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
@@ -60,13 +60,13 @@ contract NFTDriverTest is Test {
         erc20.approve(address(driver), type(uint256).max);
     }
 
-    function noMetadata() internal pure returns (UserMetadata[] memory userMetadata) {
-        userMetadata = new UserMetadata[](0);
+    function noMetadata() internal pure returns (AccountMetadata[] memory accountMetadata) {
+        accountMetadata = new AccountMetadata[](0);
     }
 
-    function someMetadata() internal pure returns (UserMetadata[] memory userMetadata) {
-        userMetadata = new UserMetadata[](1);
-        userMetadata[0] = UserMetadata("key", "value");
+    function someMetadata() internal pure returns (AccountMetadata[] memory accountMetadata) {
+        accountMetadata = new AccountMetadata[](1);
+        accountMetadata[0] = AccountMetadata("key", "value");
     }
 
     function assertTokenDoesNotExist(uint256 nonExistentTokenId) internal {
@@ -290,13 +290,13 @@ contract NFTDriverTest is Test {
         driver.setSplits(tokenIdUser, new SplitsReceiver[](0));
     }
 
-    function testEmitUserMetadata() public {
-        driver.emitUserMetadata(tokenId, someMetadata());
+    function testEmitAccountMetadata() public {
+        driver.emitAccountMetadata(tokenId, someMetadata());
     }
 
-    function testEmitUserMetadataRevertsWhenNotTokenHolder() public {
+    function testEmitAccountMetadataRevertsWhenNotTokenHolder() public {
         vm.expectRevert(ERROR_NOT_OWNER);
-        driver.emitUserMetadata(tokenIdUser, someMetadata());
+        driver.emitAccountMetadata(tokenIdUser, someMetadata());
     }
 
     function testForwarderIsTrustedInErc721Calls() public {
@@ -354,8 +354,8 @@ contract NFTDriverTest is Test {
         driver.setSplits(0, new SplitsReceiver[](0));
     }
 
-    function testEmitUserMetadataCanBePaused() public canBePausedTest {
-        driver.emitUserMetadata(0, noMetadata());
+    function testEmitAccountMetadataCanBePaused() public canBePausedTest {
+        driver.emitAccountMetadata(0, noMetadata());
     }
 
     function testBurnCanBePaused() public canBePausedTest {

@@ -4,12 +4,12 @@ pragma solidity ^0.8.19;
 import {Caller} from "src/Caller.sol";
 import {AddressDriver} from "src/AddressDriver.sol";
 import {
-    StreamConfigImpl,
+    AccountMetadata,
     Drips,
+    StreamConfigImpl,
     StreamsHistory,
     StreamReceiver,
-    SplitsReceiver,
-    UserMetadata
+    SplitsReceiver
 } from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
@@ -27,7 +27,7 @@ contract AddressDriverTest is Test {
     address internal admin = address(1);
     uint256 internal thisId;
     address internal user = address(2);
-    uint256 internal userId;
+    uint256 internal accountId;
 
     function setUp() public {
         Drips dripsLogic = new Drips(10);
@@ -43,8 +43,8 @@ contract AddressDriverTest is Test {
         driver = AddressDriver(address(new ManagedProxy(driverLogic, admin)));
         drips.updateDriverAddress(driverId, address(driver));
 
-        thisId = driver.calcUserId(address(this));
-        userId = driver.calcUserId(user);
+        thisId = driver.calcAccountId(address(this));
+        accountId = driver.calcAccountId(user);
 
         erc20 = new ERC20PresetFixedSupply("test", "test", type(uint136).max, address(this));
         erc20.approve(address(driver), type(uint256).max);
@@ -85,11 +85,11 @@ contract AddressDriverTest is Test {
         uint128 amt = 5;
         uint256 balance = erc20.balanceOf(address(this));
 
-        driver.give(userId, erc20, amt);
+        driver.give(accountId, erc20, amt);
 
         assertEq(erc20.balanceOf(address(this)), balance - amt, "Invalid balance");
         assertEq(erc20.balanceOf(address(drips)), amt, "Invalid Drips balance");
-        assertEq(drips.splittable(userId, erc20), amt, "Invalid received amount");
+        assertEq(drips.splittable(accountId, erc20), amt, "Invalid received amount");
     }
 
     function testSetStreams() public {
@@ -99,7 +99,7 @@ contract AddressDriverTest is Test {
 
         StreamReceiver[] memory receivers = new StreamReceiver[](1);
         receivers[0] =
-            StreamReceiver(userId, StreamConfigImpl.create(0, drips.minAmtPerSec(), 0, 0));
+            StreamReceiver(accountId, StreamConfigImpl.create(0, drips.minAmtPerSec(), 0, 0));
         uint256 balance = erc20.balanceOf(address(this));
 
         int128 realBalanceDelta = driver.setStreams(
@@ -145,7 +145,7 @@ contract AddressDriverTest is Test {
 
     function testSetSplits() public {
         SplitsReceiver[] memory receivers = new SplitsReceiver[](1);
-        receivers[0] = SplitsReceiver(userId, 1);
+        receivers[0] = SplitsReceiver(accountId, 1);
 
         driver.setSplits(receivers);
 
@@ -154,22 +154,22 @@ contract AddressDriverTest is Test {
         assertEq(actual, expected, "Invalid splits hash");
     }
 
-    function testEmitUserMetadata() public {
-        UserMetadata[] memory userMetadata = new UserMetadata[](1);
-        userMetadata[0] = UserMetadata("key", "value");
-        driver.emitUserMetadata(userMetadata);
+    function testEmitAccountMetadata() public {
+        AccountMetadata[] memory accountMetadata = new AccountMetadata[](1);
+        accountMetadata[0] = AccountMetadata("key", "value");
+        driver.emitAccountMetadata(accountMetadata);
     }
 
     function testForwarderIsTrusted() public {
         vm.prank(user);
         caller.authorize(address(this));
-        assertEq(drips.splittable(userId, erc20), 0, "Invalid splittable before give");
+        assertEq(drips.splittable(accountId, erc20), 0, "Invalid splittable before give");
         uint128 amt = 10;
 
-        bytes memory giveData = abi.encodeCall(driver.give, (userId, erc20, amt));
+        bytes memory giveData = abi.encodeCall(driver.give, (accountId, erc20, amt));
         caller.callAs(user, address(driver), giveData);
 
-        assertEq(drips.splittable(userId, erc20), amt, "Invalid splittable after give");
+        assertEq(drips.splittable(accountId, erc20), amt, "Invalid splittable after give");
     }
 
     modifier canBePausedTest() {
@@ -184,7 +184,7 @@ contract AddressDriverTest is Test {
     }
 
     function testGiveCanBePaused() public canBePausedTest {
-        driver.give(userId, erc20, 0);
+        driver.give(accountId, erc20, 0);
     }
 
     function testSetStreamsCanBePaused() public canBePausedTest {
@@ -195,7 +195,7 @@ contract AddressDriverTest is Test {
         driver.setSplits(new SplitsReceiver[](0));
     }
 
-    function testEmitUserMetadataCanBePaused() public canBePausedTest {
-        driver.emitUserMetadata(new UserMetadata[](0));
+    function testEmitAccountMetadataCanBePaused() public canBePausedTest {
+        driver.emitAccountMetadata(new AccountMetadata[](0));
     }
 }

@@ -43,7 +43,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     bytes internal constant ERROR_HISTORY_INVALID = "Invalid streams history";
     bytes internal constant ERROR_HISTORY_UNCLEAR = "Entry with hash and receivers";
 
-    // Keys are assetId and userId
+    // Keys are assetId and accountId
     mapping(uint256 => mapping(uint256 => StreamReceiver[])) internal currReceiversStore;
     uint256 internal defaultAssetId = 1;
     uint256 internal otherAssetId = 2;
@@ -74,19 +74,19 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         vm.warp(timestamp);
     }
 
-    function loadCurrReceivers(uint256 userId)
+    function loadCurrReceivers(uint256 accountId)
         internal
         returns (StreamReceiver[] memory currReceivers)
     {
-        currReceivers = currReceiversStore[assetId][userId];
-        assertStreams(userId, currReceivers);
+        currReceivers = currReceiversStore[assetId][accountId];
+        assertStreams(accountId, currReceivers);
     }
 
-    function storeCurrReceivers(uint256 userId, StreamReceiver[] memory newReceivers) internal {
-        assertStreams(userId, newReceivers);
-        delete currReceiversStore[assetId][userId];
+    function storeCurrReceivers(uint256 accountId, StreamReceiver[] memory newReceivers) internal {
+        assertStreams(accountId, newReceivers);
+        delete currReceiversStore[assetId][accountId];
         for (uint256 i = 0; i < newReceivers.length; i++) {
-            currReceiversStore[assetId][userId].push(newReceivers[i]);
+            currReceiversStore[assetId][accountId].push(newReceivers[i]);
         }
     }
 
@@ -94,42 +94,42 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         return new StreamReceiver[](0);
     }
 
-    function recv(uint256 userId, uint256 amtPerSec)
+    function recv(uint256 accountId, uint256 amtPerSec)
         internal
         pure
         returns (StreamReceiver[] memory receivers)
     {
-        return recv(userId, amtPerSec, 0);
+        return recv(accountId, amtPerSec, 0);
     }
 
-    function recv(uint256 userId, uint256 amtPerSec, uint256 amtPerSecFrac)
+    function recv(uint256 accountId, uint256 amtPerSec, uint256 amtPerSecFrac)
         internal
         pure
         returns (StreamReceiver[] memory receivers)
     {
-        return recv(userId, amtPerSec, amtPerSecFrac, 0, 0);
+        return recv(accountId, amtPerSec, amtPerSecFrac, 0, 0);
     }
 
-    function recv(uint256 userId, uint256 amtPerSec, uint256 start, uint256 duration)
+    function recv(uint256 accountId, uint256 amtPerSec, uint256 start, uint256 duration)
         internal
         pure
         returns (StreamReceiver[] memory receivers)
     {
-        return recv(userId, amtPerSec, 0, start, duration);
+        return recv(accountId, amtPerSec, 0, start, duration);
     }
 
     function recv(
-        uint256 userId,
+        uint256 accountId,
         uint256 amtPerSec,
         uint256 amtPerSecFrac,
         uint256 start,
         uint256 duration
     ) internal pure returns (StreamReceiver[] memory receivers) {
-        return recv(userId, 0, amtPerSec, amtPerSecFrac, start, duration);
+        return recv(accountId, 0, amtPerSec, amtPerSecFrac, start, duration);
     }
 
     function recv(
-        uint256 userId,
+        uint256 accountId,
         uint256 streamId,
         uint256 amtPerSec,
         uint256 amtPerSecFrac,
@@ -141,7 +141,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         StreamConfig config = StreamConfigImpl.create(
             uint32(streamId), uint160(amtPerSecFull), uint32(start), uint32(duration)
         );
-        receivers[0] = StreamReceiver(userId, config);
+        receivers[0] = StreamReceiver(accountId, config);
     }
 
     function recv(StreamReceiver[] memory recv1, StreamReceiver[] memory recv2)
@@ -236,31 +236,31 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         history[0].streamsHash = streamsHash;
     }
 
-    function hist(uint256 userId) internal returns (StreamsHistory[] memory history) {
-        StreamReceiver[] memory receivers = loadCurrReceivers(userId);
-        (,, uint32 updateTime,, uint32 maxEnd) = Streams._streamsState(userId, assetId);
+    function hist(uint256 accountId) internal returns (StreamsHistory[] memory history) {
+        StreamReceiver[] memory receivers = loadCurrReceivers(accountId);
+        (,, uint32 updateTime,, uint32 maxEnd) = Streams._streamsState(accountId, assetId);
         return hist(receivers, updateTime, maxEnd);
     }
 
-    function histSkip(uint256 userId) internal view returns (StreamsHistory[] memory history) {
+    function histSkip(uint256 accountId) internal view returns (StreamsHistory[] memory history) {
         (bytes32 streamsHash,, uint32 updateTime,, uint32 maxEnd) =
-            Streams._streamsState(userId, assetId);
+            Streams._streamsState(accountId, assetId);
         return histSkip(streamsHash, updateTime, maxEnd);
     }
 
-    function hist(StreamsHistory[] memory history, uint256 userId)
+    function hist(StreamsHistory[] memory history, uint256 accountId)
         internal
         returns (StreamsHistory[] memory)
     {
-        return hist(history, hist(userId));
+        return hist(history, hist(accountId));
     }
 
-    function histSkip(StreamsHistory[] memory history, uint256 userId)
+    function histSkip(StreamsHistory[] memory history, uint256 accountId)
         internal
         view
         returns (StreamsHistory[] memory)
     {
-        return hist(history, histSkip(userId));
+        return hist(history, histSkip(accountId));
     }
 
     function hist(StreamsHistory[] memory history1, StreamsHistory[] memory history2)
@@ -277,22 +277,22 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         }
     }
 
-    function drainBalance(uint256 userId, uint128 balanceFrom) internal {
-        setStreams(userId, balanceFrom, 0, loadCurrReceivers(userId), 0);
+    function drainBalance(uint256 accountId, uint128 balanceFrom) internal {
+        setStreams(accountId, balanceFrom, 0, loadCurrReceivers(accountId), 0);
     }
 
     function setStreams(
-        uint256 userId,
+        uint256 accountId,
         uint128 balanceFrom,
         uint128 balanceTo,
         StreamReceiver[] memory newReceivers,
         uint256 expectedMaxEndFromNow
     ) internal {
-        setStreams(userId, balanceFrom, balanceTo, newReceivers, 0, 0, expectedMaxEndFromNow);
+        setStreams(accountId, balanceFrom, balanceTo, newReceivers, 0, 0, expectedMaxEndFromNow);
     }
 
     function setStreams(
-        uint256 userId,
+        uint256 accountId,
         uint128 balanceFrom,
         uint128 balanceTo,
         StreamReceiver[] memory newReceivers,
@@ -300,13 +300,13 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         uint32 maxEndHint2,
         uint256 expectedMaxEndFromNow
     ) internal {
-        (, bytes32 oldHistoryHash,,,) = Streams._streamsState(userId, assetId);
+        (, bytes32 oldHistoryHash,,,) = Streams._streamsState(accountId, assetId);
         int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
 
         int128 realBalanceDelta = Streams._setStreams(
-            userId,
+            accountId,
             assetId,
-            loadCurrReceivers(userId),
+            loadCurrReceivers(accountId),
             balanceDelta,
             newReceivers,
             maxEndHint1,
@@ -314,14 +314,14 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         );
 
         assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
-        storeCurrReceivers(userId, newReceivers);
+        storeCurrReceivers(accountId, newReceivers);
         (
             bytes32 streamsHash,
             bytes32 historyHash,
             uint32 updateTime,
             uint128 balance,
             uint32 maxEnd
-        ) = Streams._streamsState(userId, assetId);
+        ) = Streams._streamsState(accountId, assetId);
         assertEq(
             Streams._hashStreamsHistory(oldHistoryHash, streamsHash, updateTime, maxEnd),
             historyHash,
@@ -336,58 +336,64 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         return type(uint32).max - uint32(block.timestamp);
     }
 
-    function assertStreams(uint256 userId, StreamReceiver[] memory currReceivers) internal {
-        (bytes32 actual,,,,) = Streams._streamsState(userId, assetId);
+    function assertStreams(uint256 accountId, StreamReceiver[] memory currReceivers) internal {
+        (bytes32 actual,,,,) = Streams._streamsState(accountId, assetId);
         bytes32 expected = Streams._hashStreams(currReceivers);
         assertEq(actual, expected, "Invalid streams configuration");
     }
 
-    function assertBalance(uint256 userId, uint128 expected) internal {
-        assertBalanceAt(userId, expected, block.timestamp);
+    function assertBalance(uint256 accountId, uint128 expected) internal {
+        assertBalanceAt(accountId, expected, block.timestamp);
     }
 
-    function assertBalanceAt(uint256 userId, uint128 expected, uint256 timestamp) internal {
+    function assertBalanceAt(uint256 accountId, uint128 expected, uint256 timestamp) internal {
         uint128 balance =
-            Streams._balanceAt(userId, assetId, loadCurrReceivers(userId), uint32(timestamp));
+            Streams._balanceAt(accountId, assetId, loadCurrReceivers(accountId), uint32(timestamp));
         assertEq(balance, expected, "Invalid streams balance");
     }
 
     function assertBalanceAtReverts(
-        uint256 userId,
+        uint256 accountId,
         StreamReceiver[] memory receivers,
         uint256 timestamp,
         bytes memory expectedReason
     ) internal {
         vm.expectRevert(expectedReason);
-        this.balanceAtExternal(userId, receivers, timestamp);
+        this.balanceAtExternal(accountId, receivers, timestamp);
     }
 
-    function balanceAtExternal(uint256 userId, StreamReceiver[] memory receivers, uint256 timestamp)
-        external
-        view
-    {
-        Streams._balanceAt(userId, assetId, receivers, uint32(timestamp));
+    function balanceAtExternal(
+        uint256 accountId,
+        StreamReceiver[] memory receivers,
+        uint256 timestamp
+    ) external view {
+        Streams._balanceAt(accountId, assetId, receivers, uint32(timestamp));
     }
 
-    function assetMaxEnd(uint256 userId, uint256 expected) public {
-        (,,,, uint32 maxEnd) = Streams._streamsState(userId, assetId);
+    function assetMaxEnd(uint256 accountId, uint256 expected) public {
+        (,,,, uint32 maxEnd) = Streams._streamsState(accountId, assetId);
         assertEq(maxEnd, expected, "Invalid max end");
     }
 
     function assertSetStreamsReverts(
-        uint256 userId,
+        uint256 accountId,
         uint128 balanceFrom,
         uint128 balanceTo,
         StreamReceiver[] memory newReceivers,
         bytes memory expectedReason
     ) internal {
         assertSetStreamsReverts(
-            userId, loadCurrReceivers(userId), balanceFrom, balanceTo, newReceivers, expectedReason
+            accountId,
+            loadCurrReceivers(accountId),
+            balanceFrom,
+            balanceTo,
+            newReceivers,
+            expectedReason
         );
     }
 
     function assertSetStreamsReverts(
-        uint256 userId,
+        uint256 accountId,
         StreamReceiver[] memory currReceivers,
         uint128 balanceFrom,
         uint128 balanceTo,
@@ -396,25 +402,25 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     ) internal {
         vm.expectRevert(expectedReason);
         int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
-        this.setStreamsExternal(userId, currReceivers, balanceDelta, newReceivers);
+        this.setStreamsExternal(accountId, currReceivers, balanceDelta, newReceivers);
     }
 
     function setStreamsExternal(
-        uint256 userId,
+        uint256 accountId,
         StreamReceiver[] memory currReceivers,
         int128 balanceDelta,
         StreamReceiver[] memory newReceivers
     ) external {
-        Streams._setStreams(userId, assetId, currReceivers, balanceDelta, newReceivers, 0, 0);
+        Streams._setStreams(accountId, assetId, currReceivers, balanceDelta, newReceivers, 0, 0);
     }
 
-    function receiveStreams(uint256 userId, uint128 expectedAmt) internal {
-        uint128 actualAmt = Streams._receiveStreams(userId, assetId, type(uint32).max);
+    function receiveStreams(uint256 accountId, uint128 expectedAmt) internal {
+        uint128 actualAmt = Streams._receiveStreams(accountId, assetId, type(uint32).max);
         assertEq(actualAmt, expectedAmt, "Invalid amount received from streams");
     }
 
     function receiveStreams(
-        uint256 userId,
+        uint256 accountId,
         uint32 maxCycles,
         uint128 expectedReceivedAmt,
         uint32 expectedReceivedCycles,
@@ -423,15 +429,15 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     ) internal {
         uint128 expectedTotalAmt = expectedReceivedAmt + expectedAmtAfter;
         uint32 expectedTotalCycles = expectedReceivedCycles + expectedCyclesAfter;
-        assertReceivableStreamsCycles(userId, expectedTotalCycles);
-        assertReceiveStreamsResult(userId, type(uint32).max, expectedTotalAmt, 0);
-        assertReceiveStreamsResult(userId, maxCycles, expectedReceivedAmt, expectedCyclesAfter);
+        assertReceivableStreamsCycles(accountId, expectedTotalCycles);
+        assertReceiveStreamsResult(accountId, type(uint32).max, expectedTotalAmt, 0);
+        assertReceiveStreamsResult(accountId, maxCycles, expectedReceivedAmt, expectedCyclesAfter);
 
-        uint128 receivedAmt = Streams._receiveStreams(userId, assetId, maxCycles);
+        uint128 receivedAmt = Streams._receiveStreams(accountId, assetId, maxCycles);
 
         assertEq(receivedAmt, expectedReceivedAmt, "Invalid amount received from streams");
-        assertReceivableStreamsCycles(userId, expectedCyclesAfter);
-        assertReceiveStreamsResult(userId, type(uint32).max, expectedAmtAfter, 0);
+        assertReceivableStreamsCycles(accountId, expectedCyclesAfter);
+        assertReceiveStreamsResult(accountId, type(uint32).max, expectedAmtAfter, 0);
     }
 
     function receiveStreams(StreamReceiver[] memory receivers, uint32 maxEnd, uint32 updateTime)
@@ -456,10 +462,10 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
             }
 
             uint256 expectedAmt = (duration * r.config.amtPerSec()) >> 64;
-            uint128 actualAmt = Streams._receiveStreams(r.userId, assetId, type(uint32).max);
+            uint128 actualAmt = Streams._receiveStreams(r.accountId, assetId, type(uint32).max);
             // only log if actualAmt doesn't match expectedAmt
             if (expectedAmt != actualAmt) {
-                emit log_named_uint("userId:", r.userId);
+                emit log_named_uint("accountId:", r.accountId);
                 emit log_named_uint("start:", r.config.start());
                 emit log_named_uint("duration:", r.config.duration());
                 emit log_named_uint("amtPerSec:", r.config.amtPerSec());
@@ -468,86 +474,87 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         }
     }
 
-    function assertReceivableStreamsCycles(uint256 userId, uint32 expectedCycles) internal {
-        uint32 actualCycles = Streams._receivableStreamsCycles(userId, assetId);
+    function assertReceivableStreamsCycles(uint256 accountId, uint32 expectedCycles) internal {
+        uint32 actualCycles = Streams._receivableStreamsCycles(accountId, assetId);
         assertEq(actualCycles, expectedCycles, "Invalid total receivable streams cycles");
     }
 
-    function assertReceiveStreamsResult(uint256 userId, uint128 expectedAmt) internal {
-        (uint128 actualAmt,,,,) = Streams._receiveStreamsResult(userId, assetId, type(uint32).max);
+    function assertReceiveStreamsResult(uint256 accountId, uint128 expectedAmt) internal {
+        (uint128 actualAmt,,,,) =
+            Streams._receiveStreamsResult(accountId, assetId, type(uint32).max);
         assertEq(actualAmt, expectedAmt, "Invalid receivable amount");
     }
 
     function assertReceiveStreamsResult(
-        uint256 userId,
+        uint256 accountId,
         uint32 maxCycles,
         uint128 expectedAmt,
         uint32 expectedCycles
     ) internal {
         (uint128 actualAmt, uint32 actualCycles,,,) =
-            Streams._receiveStreamsResult(userId, assetId, maxCycles);
+            Streams._receiveStreamsResult(accountId, assetId, maxCycles);
         assertEq(actualAmt, expectedAmt, "Invalid receivable amount");
         assertEq(actualCycles, expectedCycles, "Invalid receivable streams cycles");
     }
 
     function squeezeStreams(
-        uint256 userId,
+        uint256 accountId,
         uint256 senderId,
         StreamsHistory[] memory streamsHistory,
         uint256 expectedAmt
     ) internal {
-        squeezeStreams(userId, senderId, 0, streamsHistory, expectedAmt);
+        squeezeStreams(accountId, senderId, 0, streamsHistory, expectedAmt);
     }
 
     function squeezeStreams(
-        uint256 userId,
+        uint256 accountId,
         uint256 senderId,
         bytes32 historyHash,
         StreamsHistory[] memory streamsHistory,
         uint256 expectedAmt
     ) internal {
         (uint128 amtBefore,,,,) =
-            Streams._squeezeStreamsResult(userId, assetId, senderId, historyHash, streamsHistory);
+            Streams._squeezeStreamsResult(accountId, assetId, senderId, historyHash, streamsHistory);
         assertEq(amtBefore, expectedAmt, "Invalid squeezable amount before squeezing");
 
         uint128 amt =
-            Streams._squeezeStreams(userId, assetId, senderId, historyHash, streamsHistory);
+            Streams._squeezeStreams(accountId, assetId, senderId, historyHash, streamsHistory);
 
         assertEq(amt, expectedAmt, "Invalid squeezed amount");
         (uint128 amtAfter,,,,) =
-            Streams._squeezeStreamsResult(userId, assetId, senderId, historyHash, streamsHistory);
+            Streams._squeezeStreamsResult(accountId, assetId, senderId, historyHash, streamsHistory);
         assertEq(amtAfter, 0, "Squeezable amount after squeezing non-zero");
     }
 
     function assertSqueezeStreamsReverts(
-        uint256 userId,
+        uint256 accountId,
         uint256 senderId,
         bytes32 historyHash,
         StreamsHistory[] memory streamsHistory,
         bytes memory expectedReason
     ) internal {
         vm.expectRevert(expectedReason);
-        this.squeezeStreamsExternal(userId, senderId, historyHash, streamsHistory);
+        this.squeezeStreamsExternal(accountId, senderId, historyHash, streamsHistory);
         vm.expectRevert(expectedReason);
-        this.squeezeStreamsResultExternal(userId, senderId, historyHash, streamsHistory);
+        this.squeezeStreamsResultExternal(accountId, senderId, historyHash, streamsHistory);
     }
 
     function squeezeStreamsExternal(
-        uint256 userId,
+        uint256 accountId,
         uint256 senderId,
         bytes32 historyHash,
         StreamsHistory[] memory streamsHistory
     ) external {
-        Streams._squeezeStreams(userId, assetId, senderId, historyHash, streamsHistory);
+        Streams._squeezeStreams(accountId, assetId, senderId, historyHash, streamsHistory);
     }
 
     function squeezeStreamsResultExternal(
-        uint256 userId,
+        uint256 accountId,
         uint256 senderId,
         bytes32 historyHash,
         StreamsHistory[] memory streamsHistory
     ) external view {
-        Streams._squeezeStreamsResult(userId, assetId, senderId, historyHash, streamsHistory);
+        Streams._squeezeStreamsResult(accountId, assetId, senderId, historyHash, streamsHistory);
     }
 
     function testStreamsConfigStoresParameters() public {
@@ -1360,7 +1367,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         skipToCycleEnd();
         skipToCycleEnd();
         receiveStreams({
-            userId: receiver,
+            accountId: receiver,
             maxCycles: 2,
             expectedReceivedAmt: _cycleSecs * 2,
             expectedReceivedCycles: 2,
@@ -1508,7 +1515,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         }
         for (uint32 i = 0; i < receivers.length; i++) {
             for (uint256 j = i + 1; j < receivers.length; j++) {
-                if (receivers[j].userId < receivers[i].userId) {
+                if (receivers[j].accountId < receivers[i].accountId) {
                     (receivers[j], receivers[i]) = (receivers[i], receivers[j]);
                 }
             }
@@ -1520,7 +1527,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     }
 
     struct Sender {
-        uint256 userId;
+        uint256 accountId;
         uint128 balance;
         StreamReceiver[] receivers;
     }
@@ -1536,11 +1543,11 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         uint256 totalBalanceWeight = 0;
         for (uint32 i = 0; i < sendersLen; i++) {
             StreamConfig cfg = sendersRaw[i].config;
-            senders[i].userId = sendersRaw[i].userId;
+            senders[i].accountId = sendersRaw[i].accountId;
             senders[i].balance = cfg.streamId();
             totalBalanceWeight += cfg.streamId();
             senders[i].receivers = new StreamReceiver[](1);
-            senders[i].receivers[0].userId = receiverId;
+            senders[i].receivers[0].accountId = receiverId;
             uint160 amtPerSec = cfg.amtPerSec();
             if (amtPerSec < _minAmtPerSec) amtPerSec = _minAmtPerSec;
             senders[i].receivers[0].config =
@@ -1560,7 +1567,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
             usedBalance = newUsedBalance;
             senders[uniqueSenders++] = senders[i];
             for (uint256 j = 0; j + 1 < uniqueSenders; j++) {
-                if (senders[i].userId == senders[j].userId) {
+                if (senders[i].accountId == senders[j].accountId) {
                     senders[j].balance += senders[i].balance;
                     senders[j].receivers = recv(senders[j].receivers, senders[i].receivers);
                     uniqueSenders--;
@@ -1606,7 +1613,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         skipToCycleEnd();
         uint256 balanceAfter = uint128(-realBalanceDelta);
         for (uint256 i = 0; i < receivers.length; i++) {
-            balanceAfter += Streams._receiveStreams(receivers[i].userId, asset, type(uint32).max);
+            balanceAfter += Streams._receiveStreams(receivers[i].accountId, asset, type(uint32).max);
         }
         assertEq(balanceAfter, balanceBefore, "Streamed funds don't add up");
     }
@@ -1639,10 +1646,12 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         skipToCycleEnd();
         uint256 balanceAfter = uint128(-realBalanceDelta);
         for (uint256 i = 0; i < receivers1.length; i++) {
-            balanceAfter += Streams._receiveStreams(receivers1[i].userId, asset, type(uint32).max);
+            balanceAfter +=
+                Streams._receiveStreams(receivers1[i].accountId, asset, type(uint32).max);
         }
         for (uint256 i = 0; i < receivers2.length; i++) {
-            balanceAfter += Streams._receiveStreams(receivers2[i].userId, asset, type(uint32).max);
+            balanceAfter +=
+                Streams._receiveStreams(receivers2[i].accountId, asset, type(uint32).max);
         }
         assertEq(balanceAfter, balanceBefore, "Streamed funds don't add up");
     }
@@ -1660,7 +1669,9 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
             sanitizeSenders(receiverId, balanceBefore, sendersRaw, sendersLenRaw);
         for (uint256 i = 0; i < senders.length; i++) {
             Sender memory snd = senders[i];
-            Streams._setStreams(snd.userId, asset, recv(), int128(snd.balance), snd.receivers, 0, 0);
+            Streams._setStreams(
+                snd.accountId, asset, recv(), int128(snd.balance), snd.receivers, 0, 0
+            );
         }
 
         skip(sanitizeStreamingTime(streamingTimeRaw, 1000));
@@ -1668,7 +1679,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         for (uint256 i = 0; i < senders.length; i++) {
             Sender memory snd = senders[i];
             int128 realBalanceDelta = Streams._setStreams(
-                snd.userId, asset, snd.receivers, type(int128).min, snd.receivers, 0, 0
+                snd.accountId, asset, snd.receivers, type(int128).min, snd.receivers, 0, 0
             );
             balanceAfter += uint128(-realBalanceDelta);
         }

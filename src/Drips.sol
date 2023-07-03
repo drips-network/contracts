@@ -10,26 +10,26 @@ import {IERC20, SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeER
 
 using SafeERC20 for IERC20;
 
-/// @notice The user metadata.
-/// The key and the value are not standardized by the protocol, it's up to the user
+/// @notice The account metadata.
+/// The key and the value are not standardized by the protocol, it's up to the users
 /// to establish and follow conventions to ensure compatibility with the consumers.
-struct UserMetadata {
+struct AccountMetadata {
     /// @param key The metadata key
     bytes32 key;
     /// @param value The metadata value
     bytes value;
 }
 
-/// @notice Drips protocol contract. Automatically strams and splits funds between users.
+/// @notice Drips protocol contract. Automatically streams and splits funds between accounts.
 ///
-/// The user can transfer some funds to their streams balance in the contract
+/// The account can transfer some funds to their streams balance in the contract
 /// and configure a list of receivers, to whom they want to stream these funds.
 /// As soon as the streams balance is enough to cover at least 1 second of streaming
 /// to the configured receivers, the funds start streaming automatically.
 /// Every second funds are deducted from the streams balance and moved to their receivers.
 /// The process stops automatically when the streams balance is not enough to cover another second.
 ///
-/// Every user has a receiver balance, in which they have funds received from other users.
+/// Every account has a receiver balance, in which they have funds received from other accounts.
 /// The streamed funds are added to the receiver balances in global cycles.
 /// Every `cycleSecs` seconds the protocol adds streamed funds to the receivers' balances,
 /// so recently streamed funds may not be receivable immediately.
@@ -37,35 +37,37 @@ struct UserMetadata {
 /// The receiver balance is independent from the streams balance,
 /// to stream received funds they need to be first collected and then added to the streams balance.
 ///
-/// The user can share collected funds with other users by using splits.
-/// When collecting, the user gives each of their splits receivers a fraction of the received funds.
+/// The account can share collected funds with other accounts by using splits.
+/// When collecting, the account gives each of their splits receivers
+/// a fraction of the received funds.
 /// Funds received from splits are available for collection immediately regardless of the cycle.
 /// They aren't exempt from being split, so they too can be split when collected.
-/// Users can build chains and networks of splits between each other.
-/// Anybody can request collection of funds for any user,
+/// Accounts can build chains and networks of splits between each other.
+/// Anybody can request collection of funds for any account,
 /// which can be used to enforce the flow of funds in the network of splits.
 ///
 /// The concept of something happening periodically, e.g. every second or every `cycleSecs` are
-/// only high-level abstractions for the user, Ethereum isn't really capable of scheduling work.
+/// only high-level abstractions for the account, Ethereum isn't really capable of scheduling work.
 /// The actual implementation emulates that behavior by calculating the results of the scheduled
-/// events based on how many seconds have passed and only when the user needs their outcomes.
+/// events based on how many seconds have passed and only when the account needs their outcomes.
 ///
 /// The contract can store at most `type(int128).max` which is `2 ^ 127 - 1` units of each token.
 contract Drips is Managed, Streams, Splits {
-    /// @notice Maximum number of streams receivers of a single user.
+    /// @notice Maximum number of streams receivers of a single account.
     /// Limits cost of changes in streams configuration.
     uint256 public constant MAX_STREAMS_RECEIVERS = _MAX_STREAMS_RECEIVERS;
     /// @notice The additional decimals for all amtPerSec values.
     uint8 public constant AMT_PER_SEC_EXTRA_DECIMALS = _AMT_PER_SEC_EXTRA_DECIMALS;
     /// @notice The multiplier for all amtPerSec values.
     uint160 public constant AMT_PER_SEC_MULTIPLIER = _AMT_PER_SEC_MULTIPLIER;
-    /// @notice Maximum number of splits receivers of a single user. Limits the cost of splitting.
+    /// @notice Maximum number of splits receivers of a single account.
+    /// Limits the cost of splitting.
     uint256 public constant MAX_SPLITS_RECEIVERS = _MAX_SPLITS_RECEIVERS;
-    /// @notice The total splits weight of a user
+    /// @notice The total splits weight of an account
     uint32 public constant TOTAL_SPLITS_WEIGHT = _TOTAL_SPLITS_WEIGHT;
-    /// @notice The offset of the controlling driver ID in the user ID.
-    /// In other words the controlling driver ID is the highest 32 bits of the user ID.
-    /// Every user ID is a 256-bit integer constructed by concatenating:
+    /// @notice The offset of the controlling driver ID in the account ID.
+    /// In other words the controlling driver ID is the highest 32 bits of the account ID.
+    /// Every account ID is a 256-bit integer constructed by concatenating:
     /// `driverId (32 bits) | driverCustomData (224 bits)`.
     uint8 public constant DRIVER_ID_OFFSET = 224;
     /// @notice The total amount the protocol can store of each token.
@@ -99,13 +101,13 @@ contract Drips is Managed, Streams, Splits {
     /// @param amt The withdrawn amount.
     event Withdrawn(IERC20 indexed erc20, address indexed receiver, uint256 amt);
 
-    /// @notice Emitted by the user to broadcast metadata.
-    /// The key and the value are not standardized by the protocol, it's up to the user
+    /// @notice Emitted by the account to broadcast metadata.
+    /// The key and the value are not standardized by the protocol, it's up to the users
     /// to establish and follow conventions to ensure compatibility with the consumers.
-    /// @param userId The ID of the user emitting metadata
+    /// @param accountId The ID of the account emitting metadata
     /// @param key The metadata key
     /// @param value The metadata value
-    event UserMetadataEmitted(uint256 indexed userId, bytes32 indexed key, bytes value);
+    event AccountMetadataEmitted(uint256 indexed accountId, bytes32 indexed key, bytes value);
 
     struct DripsStorage {
         /// @notice The next driver ID that will be used when registering.
@@ -125,8 +127,9 @@ contract Drips is Managed, Streams, Splits {
     }
 
     /// @param cycleSecs_ The length of cycleSecs to be used in the contract instance.
-    /// Low value makes funds more available by shortening the average time of funds being frozen
-    /// between being taken from the users' streams balance and being receivable by their receivers.
+    /// Low value makes funds more available by shortening the average time
+    /// of funds being frozen between being taken from the accounts'
+    /// streams balance and being receivable by their receivers.
     /// High value makes receiving cheaper by making it process less cycles for a given time range.
     /// Must be higher than 1.
     constructor(uint32 cycleSecs_)
@@ -137,16 +140,16 @@ contract Drips is Managed, Streams, Splits {
         minAmtPerSec = Streams._minAmtPerSec;
     }
 
-    /// @notice A modifier making functions callable only by the driver controlling the user ID.
-    /// @param userId The user ID.
-    modifier onlyDriver(uint256 userId) {
-        // `userId` has value:
+    /// @notice A modifier making functions callable only by the driver controlling the account.
+    /// @param accountId The account ID.
+    modifier onlyDriver(uint256 accountId) {
+        // `accountId` has value:
         // `driverId (32 bits) | driverCustomData (224 bits)`
         // By bit shifting we get value:
         // `zeros (224 bits) | driverId (32 bits)`
         // By casting down we get value:
         // `driverId (32 bits)`
-        uint32 driverId = uint32(userId >> DRIVER_ID_OFFSET);
+        uint32 driverId = uint32(accountId >> DRIVER_ID_OFFSET);
         _assertCallerIsDriver(driverId);
         _;
     }
@@ -158,9 +161,9 @@ contract Drips is Managed, Streams, Splits {
     }
 
     /// @notice Registers a driver.
-    /// The driver is assigned a unique ID and a range of user IDs it can control.
-    /// That range consists of all 2^224 user IDs with highest 32 bits equal to the driver ID.
-    /// Every user ID is a 256-bit integer constructed by concatenating:
+    /// The driver is assigned a unique ID and a range of account IDs it can control.
+    /// That range consists of all 2^224 account IDs with highest 32 bits equal to the driver ID.
+    /// Every account ID is a 256-bit integer constructed by concatenating:
     /// `driverId (32 bits) | driverCustomData (224 bits)`.
     /// Every driver ID is assigned only to a single address,
     /// but a single address can have multiple driver IDs assigned to it.
@@ -314,7 +317,7 @@ contract Drips is Managed, Streams, Splits {
     /// @notice Counts cycles from which streams can be collected.
     /// This function can be used to detect that there are
     /// too many cycles to analyze in a single transaction.
-    /// @param userId The user ID.
+    /// @param accountId The account ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
@@ -322,16 +325,16 @@ contract Drips is Managed, Streams, Splits {
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @return cycles The number of cycles which can be flushed
-    function receivableStreamsCycles(uint256 userId, IERC20 erc20)
+    function receivableStreamsCycles(uint256 accountId, IERC20 erc20)
         public
         view
         returns (uint32 cycles)
     {
-        return Streams._receivableStreamsCycles(userId, _assetId(erc20));
+        return Streams._receivableStreamsCycles(accountId, _assetId(erc20));
     }
 
     /// @notice Calculate effects of calling `receiveStreams` with the given parameters.
-    /// @param userId The user ID.
+    /// @param accountId The account ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
@@ -342,18 +345,18 @@ contract Drips is Managed, Streams, Splits {
     /// If too low, receiving will be cheap, but may not cover many cycles.
     /// If too high, receiving may become too expensive to fit in a single transaction.
     /// @return receivableAmt The amount which would be received
-    function receiveStreamsResult(uint256 userId, IERC20 erc20, uint32 maxCycles)
+    function receiveStreamsResult(uint256 accountId, IERC20 erc20, uint32 maxCycles)
         public
         view
         returns (uint128 receivableAmt)
     {
-        (receivableAmt,,,,) = Streams._receiveStreamsResult(userId, _assetId(erc20), maxCycles);
+        (receivableAmt,,,,) = Streams._receiveStreamsResult(accountId, _assetId(erc20), maxCycles);
     }
 
-    /// @notice Receive streams for the user.
+    /// @notice Receive streams for the account.
     /// Received streams cycles won't need to be analyzed ever again.
     /// Calling this function does not collect but makes the funds ready to be split and collected.
-    /// @param userId The user ID.
+    /// @param accountId The account ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
@@ -364,16 +367,16 @@ contract Drips is Managed, Streams, Splits {
     /// If too low, receiving will be cheap, but may not cover many cycles.
     /// If too high, receiving may become too expensive to fit in a single transaction.
     /// @return receivedAmt The received amount
-    function receiveStreams(uint256 userId, IERC20 erc20, uint32 maxCycles)
+    function receiveStreams(uint256 accountId, IERC20 erc20, uint32 maxCycles)
         public
         whenNotPaused
         returns (uint128 receivedAmt)
     {
         uint256 assetId = _assetId(erc20);
-        receivedAmt = Streams._receiveStreams(userId, assetId, maxCycles);
+        receivedAmt = Streams._receiveStreams(accountId, assetId, maxCycles);
         if (receivedAmt != 0) {
             _moveBalanceFromStreamsToSplits(erc20, receivedAmt);
-            Splits._addSplittable(userId, assetId, receivedAmt);
+            Splits._addSplittable(accountId, assetId, receivedAmt);
         }
     }
 
@@ -381,14 +384,14 @@ contract Drips is Managed, Streams, Splits {
     /// It doesn't receive streams from the finished cycles, to do that use `receiveStreams`.
     /// Squeezed funds won't be received in the next calls to `squeezeStreams` or `receiveStreams`.
     /// Only funds streamed before `block.timestamp` can be squeezed.
-    /// @param userId The ID of the user receiving streams to squeeze funds for.
+    /// @param accountId The ID of the account receiving streams to squeeze funds for.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
     /// Tokens which rebase the holders' balances, collect taxes on transfers,
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
-    /// @param senderId The ID of the streaming user to squeeze funds from.
+    /// @param senderId The ID of the streaming account to squeeze funds from.
     /// @param historyHash The sender's history hash that was valid right before
     /// they set up the sequence of configurations described by `streamsHistory`.
     /// @param streamsHistory The sequence of the sender's streams configurations.
@@ -398,47 +401,47 @@ contract Drips is Managed, Streams, Splits {
     /// If `streamsHistory` entries have no receivers, they won't be squeezed.
     /// @return amt The squeezed amount.
     function squeezeStreams(
-        uint256 userId,
+        uint256 accountId,
         IERC20 erc20,
         uint256 senderId,
         bytes32 historyHash,
         StreamsHistory[] memory streamsHistory
     ) public whenNotPaused returns (uint128 amt) {
         uint256 assetId = _assetId(erc20);
-        amt = Streams._squeezeStreams(userId, assetId, senderId, historyHash, streamsHistory);
+        amt = Streams._squeezeStreams(accountId, assetId, senderId, historyHash, streamsHistory);
         if (amt != 0) {
             _moveBalanceFromStreamsToSplits(erc20, amt);
-            Splits._addSplittable(userId, assetId, amt);
+            Splits._addSplittable(accountId, assetId, amt);
         }
     }
 
     /// @notice Calculate effects of calling `squeezeStreams` with the given parameters.
     /// See its documentation for more details.
-    /// @param userId The ID of the user receiving streams to squeeze funds for.
+    /// @param accountId The ID of the account receiving streams to squeeze funds for.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
     /// Tokens which rebase the holders' balances, collect taxes on transfers,
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
-    /// @param senderId The ID of the streaming user to squeeze funds from.
+    /// @param senderId The ID of the streaming account to squeeze funds from.
     /// @param historyHash The sender's history hash that was valid right before `streamsHistory`.
     /// @param streamsHistory The sequence of the sender's streams configurations.
     /// @return amt The squeezed amount.
     function squeezeStreamsResult(
-        uint256 userId,
+        uint256 accountId,
         IERC20 erc20,
         uint256 senderId,
         bytes32 historyHash,
         StreamsHistory[] memory streamsHistory
     ) public view returns (uint128 amt) {
         (amt,,,,) = Streams._squeezeStreamsResult(
-            userId, _assetId(erc20), senderId, historyHash, streamsHistory
+            accountId, _assetId(erc20), senderId, historyHash, streamsHistory
         );
     }
 
-    /// @notice Returns user's received but not split yet funds.
-    /// @param userId The user ID.
+    /// @notice Returns account's received but not split yet funds.
+    /// @param accountId The account ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
@@ -446,56 +449,56 @@ contract Drips is Managed, Streams, Splits {
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @return amt The amount received but not split yet.
-    function splittable(uint256 userId, IERC20 erc20) public view returns (uint128 amt) {
-        return Splits._splittable(userId, _assetId(erc20));
+    function splittable(uint256 accountId, IERC20 erc20) public view returns (uint128 amt) {
+        return Splits._splittable(accountId, _assetId(erc20));
     }
 
     /// @notice Calculate the result of splitting an amount using the current splits configuration.
-    /// @param userId The user ID.
-    /// @param currReceivers The list of the user's current splits receivers.
-    /// It must be exactly the same as the last list set for the user with `setSplits`.
+    /// @param accountId The account ID.
+    /// @param currReceivers The list of the account's current splits receivers.
+    /// It must be exactly the same as the last list set for the account with `setSplits`.
     /// @param amount The amount being split.
-    /// @return collectableAmt The amount made collectable for the user
+    /// @return collectableAmt The amount made collectable for the account
     /// on top of what was collectable before.
-    /// @return splitAmt The amount split to the user's splits receivers
-    function splitResult(uint256 userId, SplitsReceiver[] memory currReceivers, uint128 amount)
+    /// @return splitAmt The amount split to the account's splits receivers
+    function splitResult(uint256 accountId, SplitsReceiver[] memory currReceivers, uint128 amount)
         public
         view
         returns (uint128 collectableAmt, uint128 splitAmt)
     {
-        return Splits._splitResult(userId, currReceivers, amount);
+        return Splits._splitResult(accountId, currReceivers, amount);
     }
 
-    /// @notice Splits the user's splittable funds among receivers.
+    /// @notice Splits the account's splittable funds among receivers.
     /// The entire splittable balance of the given asset is split.
     /// All split funds are split using the current splits configuration.
-    /// Because the user can update their splits configuration at any time,
+    /// Because the account can update their splits configuration at any time,
     /// it is possible that calling this function will be frontrun,
     /// and all the splittable funds will become splittable only using the new configuration.
-    /// The user must be trusted with how funds sent to them will be splits,
+    /// The account must be trusted with how funds sent to them will be splits,
     /// in the end they can do with their funds whatever they want by changing the configuration.
-    /// @param userId The user ID.
+    /// @param accountId The account ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
     /// Tokens which rebase the holders' balances, collect taxes on transfers,
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
-    /// @param currReceivers The list of the user's current splits receivers.
-    /// It must be exactly the same as the last list set for the user with `setSplits`.
-    /// @return collectableAmt The amount made collectable for the user
+    /// @param currReceivers The list of the account's current splits receivers.
+    /// It must be exactly the same as the last list set for the account with `setSplits`.
+    /// @return collectableAmt The amount made collectable for the account
     /// on top of what was collectable before.
-    /// @return splitAmt The amount split to the user's splits receivers
-    function split(uint256 userId, IERC20 erc20, SplitsReceiver[] memory currReceivers)
+    /// @return splitAmt The amount split to the account's splits receivers
+    function split(uint256 accountId, IERC20 erc20, SplitsReceiver[] memory currReceivers)
         public
         whenNotPaused
         returns (uint128 collectableAmt, uint128 splitAmt)
     {
-        return Splits._split(userId, _assetId(erc20), currReceivers);
+        return Splits._split(accountId, _assetId(erc20), currReceivers);
     }
 
-    /// @notice Returns user's received funds already split and ready to be collected.
-    /// @param userId The user ID.
+    /// @notice Returns account's received funds already split and ready to be collected.
+    /// @param accountId The account ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
@@ -503,14 +506,14 @@ contract Drips is Managed, Streams, Splits {
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @return amt The collectable amount.
-    function collectable(uint256 userId, IERC20 erc20) public view returns (uint128 amt) {
-        return Splits._collectable(userId, _assetId(erc20));
+    function collectable(uint256 accountId, IERC20 erc20) public view returns (uint128 amt) {
+        return Splits._collectable(accountId, _assetId(erc20));
     }
 
-    /// @notice Collects user's received already split funds and makes them withdrawable.
+    /// @notice Collects account's received already split funds and makes them withdrawable.
     /// Anybody can call `withdraw`, so all withdrawable funds should be withdrawn
     /// or used in the protocol before any 3rd parties have a chance to do that.
-    /// @param userId The user ID.
+    /// @param accountId The account ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
@@ -518,23 +521,23 @@ contract Drips is Managed, Streams, Splits {
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @return amt The collected amount
-    function collect(uint256 userId, IERC20 erc20)
+    function collect(uint256 accountId, IERC20 erc20)
         public
         whenNotPaused
-        onlyDriver(userId)
+        onlyDriver(accountId)
         returns (uint128 amt)
     {
-        amt = Splits._collect(userId, _assetId(erc20));
+        amt = Splits._collect(accountId, _assetId(erc20));
         if (amt != 0) _decreaseSplitsBalance(erc20, amt);
     }
 
-    /// @notice Gives funds from the user to the receiver.
+    /// @notice Gives funds from the account to the receiver.
     /// The receiver can split and collect them immediately.
     /// Requires that the tokens used to give are already sent to Drips and are withdrawable.
     /// Anybody can call `withdraw`, so all withdrawable funds should be withdrawn
     /// or used in the protocol before any 3rd parties have a chance to do that.
-    /// @param userId The user ID.
-    /// @param receiver The receiver user ID.
+    /// @param accountId The account ID.
+    /// @param receiver The receiver account ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
@@ -542,17 +545,17 @@ contract Drips is Managed, Streams, Splits {
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param amt The given amount
-    function give(uint256 userId, uint256 receiver, IERC20 erc20, uint128 amt)
+    function give(uint256 accountId, uint256 receiver, IERC20 erc20, uint128 amt)
         public
         whenNotPaused
-        onlyDriver(userId)
+        onlyDriver(accountId)
     {
         if (amt != 0) _increaseSplitsBalance(erc20, amt);
-        Splits._give(userId, receiver, _assetId(erc20), amt);
+        Splits._give(accountId, receiver, _assetId(erc20), amt);
     }
 
-    /// @notice Current user streams state.
-    /// @param userId The user ID.
+    /// @notice Current account streams state.
+    /// @param accountId The account ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
@@ -564,7 +567,7 @@ contract Drips is Managed, Streams, Splits {
     /// @return updateTime The time when streams have been configured for the last time.
     /// @return balance The balance when streams have been configured for the last time.
     /// @return maxEnd The current maximum end time of streaming.
-    function streamsState(uint256 userId, IERC20 erc20)
+    function streamsState(uint256 accountId, IERC20 erc20)
         public
         view
         returns (
@@ -575,11 +578,11 @@ contract Drips is Managed, Streams, Splits {
             uint32 maxEnd
         )
     {
-        return Streams._streamsState(userId, _assetId(erc20));
+        return Streams._streamsState(accountId, _assetId(erc20));
     }
 
-    /// @notice The user's streams balance at the given timestamp.
-    /// @param userId The user ID.
+    /// @notice The account's streams balance at the given timestamp.
+    /// @param accountId The account ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
@@ -587,28 +590,28 @@ contract Drips is Managed, Streams, Splits {
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param currReceivers The current streams receivers list.
-    /// It must be exactly the same as the last list set for the user with `setStreams`.
+    /// It must be exactly the same as the last list set for the account with `setStreams`.
     /// @param timestamp The timestamps for which balance should be calculated.
     /// It can't be lower than the timestamp of the last call to `setStreams`.
     /// If it's bigger than `block.timestamp`, then it's a prediction assuming
     /// that `setStreams` won't be called before `timestamp`.
-    /// @return balance The user balance on `timestamp`
+    /// @return balance The account balance on `timestamp`
     function balanceAt(
-        uint256 userId,
+        uint256 accountId,
         IERC20 erc20,
         StreamReceiver[] memory currReceivers,
         uint32 timestamp
     ) public view returns (uint128 balance) {
-        return Streams._balanceAt(userId, _assetId(erc20), currReceivers, timestamp);
+        return Streams._balanceAt(accountId, _assetId(erc20), currReceivers, timestamp);
     }
 
-    /// @notice Sets the user's streams configuration.
+    /// @notice Sets the account's streams configuration.
     /// Requires that the tokens used to increase the streams balance
     /// are already sent to Drips and are withdrawable.
     /// If the streams balance is decreased, the released tokens become withdrawable.
     /// Anybody can call `withdraw`, so all withdrawable funds should be withdrawn
     /// or used in the protocol before any 3rd parties have a chance to do that.
-    /// @param userId The user ID.
+    /// @param accountId The account ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
@@ -616,11 +619,11 @@ contract Drips is Managed, Streams, Splits {
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param currReceivers The current streams receivers list.
-    /// It must be exactly the same as the last list set for the user with `setStreams`.
+    /// It must be exactly the same as the last list set for the account with `setStreams`.
     /// If this is the first update, pass an empty array.
     /// @param balanceDelta The streams balance change to be applied.
     /// Positive to add funds to the streams balance, negative to remove them.
-    /// @param newReceivers The list of the streams receivers of the user to be set.
+    /// @param newReceivers The list of the streams receivers of the account to be set.
     /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
     /// @param maxEndHint1 An optional parameter allowing gas optimization, pass `0` to ignore it.
     /// The first hint for finding the maximum end time when all streams stop due to funds
@@ -648,7 +651,7 @@ contract Drips is Managed, Streams, Splits {
     /// @return realBalanceDelta The actually applied streams balance change.
     /// If it's lower than zero, it's the negative of the amount that became withdrawable.
     function setStreams(
-        uint256 userId,
+        uint256 accountId,
         IERC20 erc20,
         StreamReceiver[] memory currReceivers,
         int128 balanceDelta,
@@ -656,10 +659,10 @@ contract Drips is Managed, Streams, Splits {
         // slither-disable-next-line similar-names
         uint32 maxEndHint1,
         uint32 maxEndHint2
-    ) public whenNotPaused onlyDriver(userId) returns (int128 realBalanceDelta) {
+    ) public whenNotPaused onlyDriver(accountId) returns (int128 realBalanceDelta) {
         if (balanceDelta > 0) _increaseStreamsBalance(erc20, uint128(balanceDelta));
         realBalanceDelta = Streams._setStreams(
-            userId,
+            accountId,
             _assetId(erc20),
             currReceivers,
             balanceDelta,
@@ -688,7 +691,7 @@ contract Drips is Managed, Streams, Splits {
     /// after the streams configuration is updated.
     /// @param oldStreamsHistoryHash The history hash
     /// that was valid before the streams were updated.
-    /// The `streamsHistoryHash` of a user before they set streams for the first time is `0`.
+    /// The `streamsHistoryHash` of the account before they set streams for the first time is `0`.
     /// @param streamsHash The hash of the streams receivers being set.
     /// @param updateTime The timestamp when the streams were updated.
     /// @param maxEnd The maximum end of the streams being set.
@@ -702,36 +705,36 @@ contract Drips is Managed, Streams, Splits {
         return Streams._hashStreamsHistory(oldStreamsHistoryHash, streamsHash, updateTime, maxEnd);
     }
 
-    /// @notice Sets user splits configuration. The configuration is common for all assets.
+    /// @notice Sets the account splits configuration. The configuration is common for all assets.
     /// Nothing happens to the currently splittable funds, but when they are split
     /// after this function finishes, the new splits configuration will be used.
     /// Because anybody can call `split`, calling this function may be frontrun
     /// and all the currently splittable funds will be split using the old splits configuration.
-    /// @param userId The user ID.
-    /// @param receivers The list of the user's splits receivers to be set.
+    /// @param accountId The account ID.
+    /// @param receivers The list of the account's splits receivers to be set.
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
     /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
-    /// share of the funds collected by the user.
+    /// share of the funds collected by the account.
     /// If the sum of weights of all receivers is less than `_TOTAL_SPLITS_WEIGHT`,
-    /// some funds won't be split, but they will be left for the user to collect.
-    /// It's valid to include the user's own `userId` in the list of receivers,
+    /// some funds won't be split, but they will be left for the account to collect.
+    /// It's valid to include the account's own `accountId` in the list of receivers,
     /// but funds split to themselves return to their splittable balance and are not collectable.
     /// This is usually unwanted, because if splitting is repeated,
     /// funds split to themselves will be again split using the current configuration.
     /// Splitting 100% to self effectively blocks splitting unless the configuration is updated.
-    function setSplits(uint256 userId, SplitsReceiver[] memory receivers)
+    function setSplits(uint256 accountId, SplitsReceiver[] memory receivers)
         public
         whenNotPaused
-        onlyDriver(userId)
+        onlyDriver(accountId)
     {
-        Splits._setSplits(userId, receivers);
+        Splits._setSplits(accountId, receivers);
     }
 
-    /// @notice Current user's splits hash, see `hashSplits`.
-    /// @param userId The user ID.
-    /// @return currSplitsHash The current user's splits hash
-    function splitsHash(uint256 userId) public view returns (bytes32 currSplitsHash) {
-        return Splits._splitsHash(userId);
+    /// @notice Current account's splits hash, see `hashSplits`.
+    /// @param accountId The account ID.
+    /// @return currSplitsHash The current account's splits hash
+    function splitsHash(uint256 accountId) public view returns (bytes32 currSplitsHash) {
+        return Splits._splitsHash(accountId);
     }
 
     /// @notice Calculates the hash of the list of splits receivers.
@@ -746,20 +749,20 @@ contract Drips is Managed, Streams, Splits {
         return Splits._hashSplits(receivers);
     }
 
-    /// @notice Emits user metadata.
-    /// The keys and the values are not standardized by the protocol, it's up to the user
+    /// @notice Emits account metadata.
+    /// The keys and the values are not standardized by the protocol, it's up to the users
     /// to establish and follow conventions to ensure compatibility with the consumers.
-    /// @param userId The user ID.
-    /// @param userMetadata The list of user metadata.
-    function emitUserMetadata(uint256 userId, UserMetadata[] calldata userMetadata)
+    /// @param accountId The account ID.
+    /// @param accountMetadata The list of account metadata.
+    function emitAccountMetadata(uint256 accountId, AccountMetadata[] calldata accountMetadata)
         public
         whenNotPaused
-        onlyDriver(userId)
+        onlyDriver(accountId)
     {
         unchecked {
-            for (uint256 i = 0; i < userMetadata.length; i++) {
-                UserMetadata calldata metadata = userMetadata[i];
-                emit UserMetadataEmitted(userId, metadata.key, metadata.value);
+            for (uint256 i = 0; i < accountMetadata.length; i++) {
+                AccountMetadata calldata metadata = accountMetadata[i];
+                emit AccountMetadataEmitted(accountId, metadata.key, metadata.value);
             }
         }
     }

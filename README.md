@@ -128,11 +128,12 @@ export IMMUTABLE_SPLITS_DRIVER_ADMIN="<ADDRESS>"
 export REPO_DRIVER_OPERATOR="<ADDRESS>"
 
 # OPTIONAL
-# The AnyApi job ID used for requesting user owner updates. If not set, a string of zeros is used.
+# The AnyApi job ID used for requesting account owner updates.
+# If not set, a string of zeros is used.
 export REPO_DRIVER_JOB_ID="<JOB_ID>"
 
 # OPTIONAL
-# The fee in Link for each user owner. If not set, `0` is used.
+# The fee in Link for each account owner. If not set, `0` is used.
 export REPO_DRIVER_FEE="<FEE>"
 
 # OPTIONAL

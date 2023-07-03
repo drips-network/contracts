@@ -2,7 +2,7 @@
 pragma solidity ^0.8.19;
 
 import {ImmutableSplitsDriver} from "src/ImmutableSplitsDriver.sol";
-import {Drips, SplitsReceiver, UserMetadata} from "src/Drips.sol";
+import {AccountMetadata, Drips, SplitsReceiver} from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
 
@@ -28,34 +28,34 @@ contract ImmutableSplitsDriverTest is Test {
 
     function testCreateSplits() public {
         SplitsReceiver[] memory receivers = new SplitsReceiver[](2);
-        receivers[0] = SplitsReceiver({userId: 1, weight: totalSplitsWeight - 1});
-        receivers[1] = SplitsReceiver({userId: 2, weight: 1});
-        uint256 nextUserId = driver.nextUserId();
-        UserMetadata[] memory metadata = new UserMetadata[](1);
-        metadata[0] = UserMetadata("key", "value");
+        receivers[0] = SplitsReceiver({accountId: 1, weight: totalSplitsWeight - 1});
+        receivers[1] = SplitsReceiver({accountId: 2, weight: 1});
+        uint256 nextAccountId = driver.nextAccountId();
+        AccountMetadata[] memory metadata = new AccountMetadata[](1);
+        metadata[0] = AccountMetadata("key", "value");
 
-        uint256 userId = driver.createSplits(receivers, metadata);
+        uint256 accountId = driver.createSplits(receivers, metadata);
 
-        assertEq(userId, nextUserId, "Invalid user ID");
-        assertEq(driver.nextUserId(), userId + 1, "Invalid next user ID");
-        bytes32 actual = drips.splitsHash(userId);
+        assertEq(accountId, nextAccountId, "Invalid account ID");
+        assertEq(driver.nextAccountId(), accountId + 1, "Invalid next account ID");
+        bytes32 actual = drips.splitsHash(accountId);
         bytes32 expected = drips.hashSplits(receivers);
         assertEq(actual, expected, "Invalid splits hash");
     }
 
     function testCreateSplitsRevertsWhenWeightsSumTooLow() public {
         SplitsReceiver[] memory receivers = new SplitsReceiver[](2);
-        receivers[0] = SplitsReceiver({userId: 1, weight: totalSplitsWeight - 2});
-        receivers[1] = SplitsReceiver({userId: 2, weight: 1});
+        receivers[0] = SplitsReceiver({accountId: 1, weight: totalSplitsWeight - 2});
+        receivers[1] = SplitsReceiver({accountId: 2, weight: 1});
 
         vm.expectRevert("Invalid total receivers weight");
-        driver.createSplits(receivers, new UserMetadata[](0));
+        driver.createSplits(receivers, new AccountMetadata[](0));
     }
 
     function testSetSplitsCanBePaused() public {
         vm.prank(admin);
         driver.pause();
         vm.expectRevert("Contract paused");
-        driver.createSplits(new SplitsReceiver[](0), new UserMetadata[](0));
+        driver.createSplits(new SplitsReceiver[](0), new AccountMetadata[](0));
     }
 }

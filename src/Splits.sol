@@ -3,11 +3,11 @@ pragma solidity ^0.8.19;
 
 /// @notice A splits receiver
 struct SplitsReceiver {
-    /// @notice The user ID.
-    uint256 userId;
+    /// @notice The account ID.
+    uint256 accountId;
     /// @notice The splits weight. Must never be zero.
-    /// The user will be getting `weight / _TOTAL_SPLITS_WEIGHT`
-    /// share of the funds collected by the splitting user.
+    /// The account will be getting `weight / _TOTAL_SPLITS_WEIGHT`
+    /// share of the funds collected by the splitting account.
     uint32 weight;
 }
 
@@ -16,9 +16,10 @@ struct SplitsReceiver {
 /// It's up to the caller to guarantee that this limit is never exceeded,
 /// failing to do so may result in a total protocol collapse.
 abstract contract Splits {
-    /// @notice Maximum number of splits receivers of a single user. Limits the cost of splitting.
+    /// @notice Maximum number of splits receivers of a single account.
+    /// Limits the cost of splitting.
     uint256 internal constant _MAX_SPLITS_RECEIVERS = 200;
-    /// @notice The total splits weight of a user
+    /// @notice The total splits weight of an account.
     uint32 internal constant _TOTAL_SPLITS_WEIGHT = 1_000_000;
     /// @notice The amount the contract can keep track of each asset.
     // slither-disable-next-line unused-state
@@ -26,66 +27,69 @@ abstract contract Splits {
     /// @notice The storage slot holding a single `SplitsStorage` structure.
     bytes32 private immutable _splitsStorageSlot;
 
-    /// @notice Emitted when a user collects funds
-    /// @param userId The user ID.
+    /// @notice Emitted when an account collects funds
+    /// @param accountId The account ID.
     /// @param assetId The used asset ID
     /// @param collected The collected amount
-    event Collected(uint256 indexed userId, uint256 indexed assetId, uint128 collected);
+    event Collected(uint256 indexed accountId, uint256 indexed assetId, uint128 collected);
 
-    /// @notice Emitted when funds are split from a user to a receiver.
-    /// This is caused by the user collecting received funds.
-    /// @param userId The user ID.
-    /// @param receiver The splits receiver user ID
+    /// @notice Emitted when funds are split from an account to a receiver.
+    /// This is caused by the account collecting received funds.
+    /// @param accountId The account ID.
+    /// @param receiver The splits receiver account ID
     /// @param assetId The used asset ID
     /// @param amt The amount split to the receiver
     event Split(
-        uint256 indexed userId, uint256 indexed receiver, uint256 indexed assetId, uint128 amt
+        uint256 indexed accountId, uint256 indexed receiver, uint256 indexed assetId, uint128 amt
     );
 
     /// @notice Emitted when funds are made collectable after splitting.
-    /// @param userId The user ID.
+    /// @param accountId The account ID.
     /// @param assetId The used asset ID
-    /// @param amt The amount made collectable for the user on top of what was collectable before.
-    event Collectable(uint256 indexed userId, uint256 indexed assetId, uint128 amt);
+    /// @param amt The amount made collectable for the account
+    /// on top of what was collectable before.
+    event Collectable(uint256 indexed accountId, uint256 indexed assetId, uint128 amt);
 
-    /// @notice Emitted when funds are given from the user to the receiver.
-    /// @param userId The user ID.
-    /// @param receiver The receiver user ID.
+    /// @notice Emitted when funds are given from the account to the receiver.
+    /// @param accountId The account ID.
+    /// @param receiver The receiver account ID.
     /// @param assetId The used asset ID
     /// @param amt The given amount
     event Given(
-        uint256 indexed userId, uint256 indexed receiver, uint256 indexed assetId, uint128 amt
+        uint256 indexed accountId, uint256 indexed receiver, uint256 indexed assetId, uint128 amt
     );
 
-    /// @notice Emitted when the user's splits are updated.
-    /// @param userId The user ID.
+    /// @notice Emitted when the account's splits are updated.
+    /// @param accountId The account ID.
     /// @param receiversHash The splits receivers list hash
-    event SplitsSet(uint256 indexed userId, bytes32 indexed receiversHash);
+    event SplitsSet(uint256 indexed accountId, bytes32 indexed receiversHash);
 
-    /// @notice Emitted when a user is seen in a splits receivers list.
+    /// @notice Emitted when an account is seen in a splits receivers list.
     /// @param receiversHash The splits receivers list hash
-    /// @param userId The user ID.
+    /// @param accountId The account ID.
     /// @param weight The splits weight. Must never be zero.
-    /// The user will be getting `weight / _TOTAL_SPLITS_WEIGHT`
-    /// share of the funds collected by the splitting user.
-    event SplitsReceiverSeen(bytes32 indexed receiversHash, uint256 indexed userId, uint32 weight);
+    /// The account will be getting `weight / _TOTAL_SPLITS_WEIGHT`
+    /// share of the funds collected by the splitting account.
+    event SplitsReceiverSeen(
+        bytes32 indexed receiversHash, uint256 indexed accountId, uint32 weight
+    );
 
     struct SplitsStorage {
-        /// @notice User splits states.
-        mapping(uint256 userId => SplitsState) splitsStates;
+        /// @notice Account splits states.
+        mapping(uint256 accountId => SplitsState) splitsStates;
     }
 
     struct SplitsState {
-        /// @notice The user's splits configuration hash, see `hashSplits`.
+        /// @notice The account's splits configuration hash, see `hashSplits`.
         bytes32 splitsHash;
-        /// @notice The user's splits balances.
+        /// @notice The account's splits balances.
         mapping(uint256 assetId => SplitsBalance) balances;
     }
 
     struct SplitsBalance {
-        /// @notice The not yet split balance, must be split before collecting by the user.
+        /// @notice The not yet split balance, must be split before collecting by the account.
         uint128 splittable;
-        /// @notice The already split balance, ready to be collected by the user.
+        /// @notice The already split balance, ready to be collected by the account.
         uint128 collectable;
     }
 
@@ -94,32 +98,32 @@ abstract contract Splits {
         _splitsStorageSlot = splitsStorageSlot;
     }
 
-    function _addSplittable(uint256 userId, uint256 assetId, uint128 amt) internal {
-        _splitsStorage().splitsStates[userId].balances[assetId].splittable += amt;
+    function _addSplittable(uint256 accountId, uint256 assetId, uint128 amt) internal {
+        _splitsStorage().splitsStates[accountId].balances[assetId].splittable += amt;
     }
 
-    /// @notice Returns user's received but not split yet funds.
-    /// @param userId The user ID.
+    /// @notice Returns account's received but not split yet funds.
+    /// @param accountId The account ID.
     /// @param assetId The used asset ID.
     /// @return amt The amount received but not split yet.
-    function _splittable(uint256 userId, uint256 assetId) internal view returns (uint128 amt) {
-        return _splitsStorage().splitsStates[userId].balances[assetId].splittable;
+    function _splittable(uint256 accountId, uint256 assetId) internal view returns (uint128 amt) {
+        return _splitsStorage().splitsStates[accountId].balances[assetId].splittable;
     }
 
     /// @notice Calculate the result of splitting an amount using the current splits configuration.
-    /// @param userId The user ID.
-    /// @param currReceivers The list of the user's current splits receivers.
-    /// It must be exactly the same as the last list set for the user with `_setSplits`.
+    /// @param accountId The account ID.
+    /// @param currReceivers The list of the account's current splits receivers.
+    /// It must be exactly the same as the last list set for the account with `_setSplits`.
     /// @param amount The amount being split.
-    /// @return collectableAmt The amount made collectable for the user
+    /// @return collectableAmt The amount made collectable for the account
     /// on top of what was collectable before.
-    /// @return splitAmt The amount split to the user's splits receivers
-    function _splitResult(uint256 userId, SplitsReceiver[] memory currReceivers, uint128 amount)
+    /// @return splitAmt The amount split to the account's splits receivers
+    function _splitResult(uint256 accountId, SplitsReceiver[] memory currReceivers, uint128 amount)
         internal
         view
         returns (uint128 collectableAmt, uint128 splitAmt)
     {
-        _assertCurrSplits(userId, currReceivers);
+        _assertCurrSplits(accountId, currReceivers);
         if (amount == 0) {
             return (0, 0);
         }
@@ -133,22 +137,22 @@ abstract contract Splits {
         }
     }
 
-    /// @notice Splits the user's splittable funds among receivers.
+    /// @notice Splits the account's splittable funds among receivers.
     /// The entire splittable balance of the given asset is split.
     /// All split funds are split using the current splits configuration.
-    /// @param userId The user ID.
+    /// @param accountId The account ID.
     /// @param assetId The used asset ID
-    /// @param currReceivers The list of the user's current splits receivers.
-    /// It must be exactly the same as the last list set for the user with `_setSplits`.
-    /// @return collectableAmt The amount made collectable for the user
+    /// @param currReceivers The list of the account's current splits receivers.
+    /// It must be exactly the same as the last list set for the account with `_setSplits`.
+    /// @return collectableAmt The amount made collectable for the account
     /// on top of what was collectable before.
-    /// @return splitAmt The amount split to the user's splits receivers
-    function _split(uint256 userId, uint256 assetId, SplitsReceiver[] memory currReceivers)
+    /// @return splitAmt The amount split to the account's splits receivers
+    function _split(uint256 accountId, uint256 assetId, SplitsReceiver[] memory currReceivers)
         internal
         returns (uint128 collectableAmt, uint128 splitAmt)
     {
-        _assertCurrSplits(userId, currReceivers);
-        SplitsBalance storage balance = _splitsStorage().splitsStates[userId].balances[assetId];
+        _assertCurrSplits(accountId, currReceivers);
+        SplitsBalance storage balance = _splitsStorage().splitsStates[accountId].balances[assetId];
 
         collectableAmt = balance.splittable;
         if (collectableAmt == 0) {
@@ -163,65 +167,65 @@ abstract contract Splits {
                 uint128 currSplitAmt =
                     uint128(collectableAmt * splitsWeight / _TOTAL_SPLITS_WEIGHT) - splitAmt;
                 splitAmt += currSplitAmt;
-                uint256 receiver = currReceivers[i].userId;
+                uint256 receiver = currReceivers[i].accountId;
                 _addSplittable(receiver, assetId, currSplitAmt);
-                emit Split(userId, receiver, assetId, currSplitAmt);
+                emit Split(accountId, receiver, assetId, currSplitAmt);
             }
             collectableAmt -= splitAmt;
             balance.collectable += collectableAmt;
         }
-        emit Collectable(userId, assetId, collectableAmt);
+        emit Collectable(accountId, assetId, collectableAmt);
     }
 
-    /// @notice Returns user's received funds already split and ready to be collected.
-    /// @param userId The user ID.
+    /// @notice Returns account's received funds already split and ready to be collected.
+    /// @param accountId The account ID.
     /// @param assetId The used asset ID.
     /// @return amt The collectable amount.
-    function _collectable(uint256 userId, uint256 assetId) internal view returns (uint128 amt) {
-        return _splitsStorage().splitsStates[userId].balances[assetId].collectable;
+    function _collectable(uint256 accountId, uint256 assetId) internal view returns (uint128 amt) {
+        return _splitsStorage().splitsStates[accountId].balances[assetId].collectable;
     }
 
-    /// @notice Collects user's received already split funds.
-    /// @param userId The user ID.
+    /// @notice Collects account's received already split funds.
+    /// @param accountId The account ID.
     /// @param assetId The used asset ID
     /// @return amt The collected amount
-    function _collect(uint256 userId, uint256 assetId) internal returns (uint128 amt) {
-        SplitsBalance storage balance = _splitsStorage().splitsStates[userId].balances[assetId];
+    function _collect(uint256 accountId, uint256 assetId) internal returns (uint128 amt) {
+        SplitsBalance storage balance = _splitsStorage().splitsStates[accountId].balances[assetId];
         amt = balance.collectable;
         balance.collectable = 0;
-        emit Collected(userId, assetId, amt);
+        emit Collected(accountId, assetId, amt);
     }
 
-    /// @notice Gives funds from the user to the receiver.
+    /// @notice Gives funds from the account to the receiver.
     /// The receiver can split and collect them immediately.
-    /// @param userId The user ID.
-    /// @param receiver The receiver user ID.
+    /// @param accountId The account ID.
+    /// @param receiver The receiver account ID.
     /// @param assetId The used asset ID
     /// @param amt The given amount
-    function _give(uint256 userId, uint256 receiver, uint256 assetId, uint128 amt) internal {
+    function _give(uint256 accountId, uint256 receiver, uint256 assetId, uint128 amt) internal {
         _addSplittable(receiver, assetId, amt);
-        emit Given(userId, receiver, assetId, amt);
+        emit Given(accountId, receiver, assetId, amt);
     }
 
-    /// @notice Sets user splits configuration. The configuration is common for all assets.
+    /// @notice Sets the account splits configuration. The configuration is common for all assets.
     /// Nothing happens to the currently splittable funds, but when they are split
     /// after this function finishes, the new splits configuration will be used.
-    /// @param userId The user ID.
-    /// @param receivers The list of the user's splits receivers to be set.
+    /// @param accountId The account ID.
+    /// @param receivers The list of the account's splits receivers to be set.
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
     /// Each splits receiver will be getting `weight / _TOTAL_SPLITS_WEIGHT`
-    /// share of the funds collected by the user.
+    /// share of the funds collected by the account.
     /// If the sum of weights of all receivers is less than `_TOTAL_SPLITS_WEIGHT`,
-    /// some funds won't be split, but they will be left for the user to collect.
-    /// It's valid to include the user's own `userId` in the list of receivers,
+    /// some funds won't be split, but they will be left for the account to collect.
+    /// It's valid to include the account's own `accountId` in the list of receivers,
     /// but funds split to themselves return to their splittable balance and are not collectable.
     /// This is usually unwanted, because if splitting is repeated,
     /// funds split to themselves will be again split using the current configuration.
     /// Splitting 100% to self effectively blocks splitting unless the configuration is updated.
-    function _setSplits(uint256 userId, SplitsReceiver[] memory receivers) internal {
-        SplitsState storage state = _splitsStorage().splitsStates[userId];
+    function _setSplits(uint256 accountId, SplitsReceiver[] memory receivers) internal {
+        SplitsState storage state = _splitsStorage().splitsStates[accountId];
         bytes32 newSplitsHash = _hashSplits(receivers);
-        emit SplitsSet(userId, newSplitsHash);
+        emit SplitsSet(accountId, newSplitsHash);
         if (newSplitsHash != state.splitsHash) {
             _assertSplitsValid(receivers, newSplitsHash);
             state.splitsHash = newSplitsHash;
@@ -237,38 +241,38 @@ abstract contract Splits {
             require(receivers.length <= _MAX_SPLITS_RECEIVERS, "Too many splits receivers");
             uint64 totalWeight = 0;
             // slither-disable-next-line uninitialized-local
-            uint256 prevUserId;
+            uint256 prevAccountId;
             for (uint256 i = 0; i < receivers.length; i++) {
                 SplitsReceiver memory receiver = receivers[i];
                 uint32 weight = receiver.weight;
                 require(weight != 0, "Splits receiver weight is zero");
                 totalWeight += weight;
-                uint256 userId = receiver.userId;
-                if (i > 0) require(prevUserId < userId, "Splits receivers not sorted");
-                prevUserId = userId;
-                emit SplitsReceiverSeen(receiversHash, userId, weight);
+                uint256 accountId = receiver.accountId;
+                if (i > 0) require(prevAccountId < accountId, "Splits receivers not sorted");
+                prevAccountId = accountId;
+                emit SplitsReceiverSeen(receiversHash, accountId, weight);
             }
             require(totalWeight <= _TOTAL_SPLITS_WEIGHT, "Splits weights sum too high");
         }
     }
 
-    /// @notice Asserts that the list of splits receivers is the user's currently used one.
-    /// @param userId The user ID.
-    /// @param currReceivers The list of the user's current splits receivers.
-    function _assertCurrSplits(uint256 userId, SplitsReceiver[] memory currReceivers)
+    /// @notice Asserts that the list of splits receivers is the account's currently used one.
+    /// @param accountId The account ID.
+    /// @param currReceivers The list of the account's current splits receivers.
+    function _assertCurrSplits(uint256 accountId, SplitsReceiver[] memory currReceivers)
         internal
         view
     {
         require(
-            _hashSplits(currReceivers) == _splitsHash(userId), "Invalid current splits receivers"
+            _hashSplits(currReceivers) == _splitsHash(accountId), "Invalid current splits receivers"
         );
     }
 
-    /// @notice Current user's splits hash, see `hashSplits`.
-    /// @param userId The user ID.
-    /// @return currSplitsHash The current user's splits hash
-    function _splitsHash(uint256 userId) internal view returns (bytes32 currSplitsHash) {
-        return _splitsStorage().splitsStates[userId].splitsHash;
+    /// @notice Current account's splits hash, see `hashSplits`.
+    /// @param accountId The account ID.
+    /// @return currSplitsHash The current account's splits hash
+    function _splitsHash(uint256 accountId) internal view returns (bytes32 currSplitsHash) {
+        return _splitsStorage().splitsStates[accountId].splitsHash;
     }
 
     /// @notice Calculates the hash of the list of splits receivers.

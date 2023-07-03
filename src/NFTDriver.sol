@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.19;
 
-import {Drips, StreamReceiver, IERC20, SafeERC20, SplitsReceiver, UserMetadata} from "./Drips.sol";
+import {
+    AccountMetadata, Drips, StreamReceiver, IERC20, SafeERC20, SplitsReceiver
+} from "./Drips.sol";
 import {Managed} from "./Managed.sol";
 import {Context, ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
 import {
@@ -11,10 +13,10 @@ import {
     IERC721Metadata
 } from "openzeppelin-contracts/token/ERC721/extensions/ERC721Burnable.sol";
 
-/// @notice A Drips driver implementing token-based user identification.
+/// @notice A Drips driver implementing token-based account identification.
 /// Anybody can mint a new token and create a new identity.
-/// Only the current holder of the token can control its user ID.
-/// The token ID and the user ID controlled by it are always equal.
+/// Only the current holder of the token can control its account ID.
+/// The token ID and the account ID controlled by it are always equal.
 contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
     using SafeERC20 for IERC20;
 
@@ -54,7 +56,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
     /// @notice Get the ID of the next minted token.
     /// Every token ID is a 256-bit integer constructed by concatenating:
     /// `driverId (32 bits) | zeros (160 bits) | mintedTokensCounter (64 bits)`.
-    /// @return tokenId The token ID. It's equal to the user ID controlled by it.
+    /// @return tokenId The token ID. It's equal to the account ID controlled by it.
     function nextTokenId() public view returns (uint256 tokenId) {
         return calcTokenIdWithSalt(address(0), _nftDriverStorage().mintedTokens);
     }
@@ -64,7 +66,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
     /// `driverId (32 bits) | minter (160 bits) | salt (64 bits)`.
     /// @param minter The minter of the token.
     /// @param salt The salt used for minting the token.
-    /// @return tokenId The token ID. It's equal to the user ID controlled by it.
+    /// @return tokenId The token ID. It's equal to the account ID controlled by it.
     function calcTokenIdWithSalt(address minter, uint64 salt)
         public
         view
@@ -94,39 +96,40 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
         return _nftDriverStorage().isSaltUsed[minter][salt];
     }
 
-    /// @notice Mints a new token controlling a new user ID and transfers it to an address.
-    /// Emits user metadata for the new token.
+    /// @notice Mints a new token controlling a new account ID and transfers it to an address.
+    /// Emits account metadata for the new token.
     /// Usage of this method is discouraged, use `safeMint` whenever possible.
     /// @param to The address to transfer the minted token to.
-    /// @param userMetadata The list of user metadata to emit for the minted token.
-    /// The keys and the values are not standardized by the protocol, it's up to the user
+    /// @param accountMetadata The list of account metadata to emit for the minted token.
+    /// The keys and the values are not standardized by the protocol, it's up to the users
     /// to establish and follow conventions to ensure compatibility with the consumers.
-    /// @return tokenId The minted token ID. It's equal to the user ID controlled by it.
-    function mint(address to, UserMetadata[] calldata userMetadata)
+    /// @return tokenId The minted token ID. It's equal to the account ID controlled by it.
+    function mint(address to, AccountMetadata[] calldata accountMetadata)
         public
         whenNotPaused
         returns (uint256 tokenId)
     {
         tokenId = _registerTokenId();
         _mint(to, tokenId);
-        _emitUserMetadata(tokenId, userMetadata);
+        _emitAccountMetadata(tokenId, accountMetadata);
     }
 
-    /// @notice Mints a new token controlling a new user ID and safely transfers it to an address.
-    /// Emits user metadata for the new token.
+    /// @notice Mints a new token controlling a new account ID,
+    /// and safely transfers it to an address.
+    /// Emits account metadata for the new token.
     /// @param to The address to transfer the minted token to.
-    /// @param userMetadata The list of user metadata to emit for the minted token.
-    /// The keys and the values are not standardized by the protocol, it's up to the user
+    /// @param accountMetadata The list of account metadata to emit for the minted token.
+    /// The keys and the values are not standardized by the protocol, it's up to the users
     /// to establish and follow conventions to ensure compatibility with the consumers.
-    /// @return tokenId The minted token ID. It's equal to the user ID controlled by it.
-    function safeMint(address to, UserMetadata[] calldata userMetadata)
+    /// @return tokenId The minted token ID. It's equal to the account ID controlled by it.
+    function safeMint(address to, AccountMetadata[] calldata accountMetadata)
         public
         whenNotPaused
         returns (uint256 tokenId)
     {
         tokenId = _registerTokenId();
         _safeMint(to, tokenId);
-        _emitUserMetadata(tokenId, userMetadata);
+        _emitAccountMetadata(tokenId, accountMetadata);
     }
 
     /// @notice Registers the next token ID when minting.
@@ -136,45 +139,46 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
         _nftDriverStorage().mintedTokens++;
     }
 
-    /// @notice Mints a new token controlling a new user ID and transfers it to an address.
+    /// @notice Mints a new token controlling a new account ID and transfers it to an address.
     /// The token ID is deterministically derived from the caller's address and the salt.
     /// Each caller can use each salt only once, to mint a single token.
-    /// Emits user metadata for the new token.
+    /// Emits account metadata for the new token.
     /// Usage of this method is discouraged, use `safeMint` whenever possible.
     /// @param to The address to transfer the minted token to.
-    /// @param userMetadata The list of user metadata to emit for the minted token.
-    /// The keys and the values are not standardized by the protocol, it's up to the user
+    /// @param accountMetadata The list of account metadata to emit for the minted token.
+    /// The keys and the values are not standardized by the protocol, it's up to the users
     /// to establish and follow conventions to ensure compatibility with the consumers.
-    /// @return tokenId The minted token ID. It's equal to the user ID controlled by it.
+    /// @return tokenId The minted token ID. It's equal to the account ID controlled by it.
     /// The ID is calculated using `calcTokenIdWithSalt` for the caller's address and the used salt.
-    function mintWithSalt(uint64 salt, address to, UserMetadata[] calldata userMetadata)
+    function mintWithSalt(uint64 salt, address to, AccountMetadata[] calldata accountMetadata)
         public
         whenNotPaused
         returns (uint256 tokenId)
     {
         tokenId = _registerTokenIdWithSalt(salt);
         _mint(to, tokenId);
-        _emitUserMetadata(tokenId, userMetadata);
+        _emitAccountMetadata(tokenId, accountMetadata);
     }
 
-    /// @notice Mints a new token controlling a new user ID and safely transfers it to an address.
+    /// @notice Mints a new token controlling a new account ID,
+    /// and safely transfers it to an address.
     /// The token ID is deterministically derived from the caller's address and the salt.
     /// Each caller can use each salt only once, to mint a single token.
-    /// Emits user metadata for the new token.
+    /// Emits account metadata for the new token.
     /// @param to The address to transfer the minted token to.
-    /// @param userMetadata The list of user metadata to emit for the minted token.
-    /// The keys and the values are not standardized by the protocol, it's up to the user
+    /// @param accountMetadata The list of account metadata to emit for the minted token.
+    /// The keys and the values are not standardized by the protocol, it's up to the users
     /// to establish and follow conventions to ensure compatibility with the consumers.
-    /// @return tokenId The minted token ID. It's equal to the user ID controlled by it.
+    /// @return tokenId The minted token ID. It's equal to the account ID controlled by it.
     /// The ID is calculated using `calcTokenIdWithSalt` for the caller's address and the used salt.
-    function safeMintWithSalt(uint64 salt, address to, UserMetadata[] calldata userMetadata)
+    function safeMintWithSalt(uint64 salt, address to, AccountMetadata[] calldata accountMetadata)
         public
         whenNotPaused
         returns (uint256 tokenId)
     {
         tokenId = _registerTokenIdWithSalt(salt);
         _safeMint(to, tokenId);
-        _emitUserMetadata(tokenId, userMetadata);
+        _emitAccountMetadata(tokenId, accountMetadata);
     }
 
     /// @notice Registers the token ID minted with salt by the caller.
@@ -187,11 +191,11 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
         return calcTokenIdWithSalt(minter, salt);
     }
 
-    /// @notice Collects the user's received already split funds
+    /// @notice Collects the account's received already split funds
     /// and transfers them out of the Drips contract.
-    /// @param tokenId The ID of the token representing the collecting user ID.
+    /// @param tokenId The ID of the token representing the collecting account ID.
     /// The caller must be the owner of the token or be approved to use it.
-    /// The token ID is equal to the user ID controlled by it.
+    /// The token ID is equal to the account ID controlled by it.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
@@ -210,13 +214,13 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
         if (amt > 0) drips.withdraw(erc20, transferTo, amt);
     }
 
-    /// @notice Gives funds from the user to the receiver.
+    /// @notice Gives funds from the account to the receiver.
     /// The receiver can split and collect them immediately.
     /// Transfers the funds to be given from the message sender's wallet to the Drips contract.
-    /// @param tokenId The ID of the token representing the giving user ID.
+    /// @param tokenId The ID of the token representing the giving account ID.
     /// The caller must be the owner of the token or be approved to use it.
-    /// The token ID is equal to the user ID controlled by it.
-    /// @param receiver The receiver user ID.
+    /// The token ID is equal to the account ID controlled by it.
+    /// @param receiver The receiver account ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
@@ -233,12 +237,12 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
         drips.give(tokenId, receiver, erc20, amt);
     }
 
-    /// @notice Sets the user's streams configuration.
+    /// @notice Sets the account's streams configuration.
     /// Transfers funds between the message sender's wallet and the Drips contract
     /// to fulfil the change of the streams balance.
-    /// @param tokenId The ID of the token representing the configured user ID.
+    /// @param tokenId The ID of the token representing the configured account ID.
     /// The caller must be the owner of the token or be approved to use it.
-    /// The token ID is equal to the user ID controlled by it.
+    /// The token ID is equal to the account ID controlled by it.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
@@ -246,7 +250,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param currReceivers The current streams receivers list.
-    /// It must be exactly the same as the last list set for the user with `setStreams`.
+    /// It must be exactly the same as the last list set for the account with `setStreams`.
     /// If this is the first update, pass an empty array.
     /// @param balanceDelta The streams balance change to be applied.
     /// Positive to add funds to the streams balance, negative to remove them.
@@ -295,21 +299,21 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
         if (realBalanceDelta < 0) drips.withdraw(erc20, transferTo, uint128(-realBalanceDelta));
     }
 
-    /// @notice Sets user splits configuration. The configuration is common for all assets.
+    /// @notice Sets the account splits configuration. The configuration is common for all assets.
     /// Nothing happens to the currently splittable funds, but when they are split
     /// after this function finishes, the new splits configuration will be used.
     /// Because anybody can call `split` on `Drips`, calling this function may be frontrun
     /// and all the currently splittable funds will be split using the old splits configuration.
-    /// @param tokenId The ID of the token representing the configured user ID.
+    /// @param tokenId The ID of the token representing the configured account ID.
     /// The caller must be the owner of the token or be approved to use it.
-    /// The token ID is equal to the user ID controlled by it.
-    /// @param receivers The list of the user's splits receivers to be set.
+    /// The token ID is equal to the account ID controlled by it.
+    /// @param receivers The list of the account's splits receivers to be set.
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
     /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
-    /// share of the funds collected by the user.
+    /// share of the funds collected by the account.
     /// If the sum of weights of all receivers is less than `_TOTAL_SPLITS_WEIGHT`,
-    /// some funds won't be split, but they will be left for the user to collect.
-    /// It's valid to include the user's own `userId` in the list of receivers,
+    /// some funds won't be split, but they will be left for the account to collect.
+    /// It's valid to include the account's own `accountId` in the list of receivers,
     /// but funds split to themselves return to their splittable balance and are not collectable.
     /// This is usually unwanted, because if splitting is repeated,
     /// funds split to themselves will be again split using the current configuration.
@@ -322,30 +326,32 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
         drips.setSplits(tokenId, receivers);
     }
 
-    /// @notice Emits the user metadata for the given token.
-    /// The keys and the values are not standardized by the protocol, it's up to the user
+    /// @notice Emits the account metadata for the given token.
+    /// The keys and the values are not standardized by the protocol, it's up to the users
     /// to establish and follow conventions to ensure compatibility with the consumers.
-    /// @param tokenId The ID of the token representing the emitting user ID.
+    /// @param tokenId The ID of the token representing the emitting account ID.
     /// The caller must be the owner of the token or be approved to use it.
-    /// The token ID is equal to the user ID controlled by it.
-    /// @param userMetadata The list of user metadata.
-    function emitUserMetadata(uint256 tokenId, UserMetadata[] calldata userMetadata)
+    /// The token ID is equal to the account ID controlled by it.
+    /// @param accountMetadata The list of account metadata.
+    function emitAccountMetadata(uint256 tokenId, AccountMetadata[] calldata accountMetadata)
         public
         whenNotPaused
         onlyHolder(tokenId)
     {
-        _emitUserMetadata(tokenId, userMetadata);
+        _emitAccountMetadata(tokenId, accountMetadata);
     }
 
-    /// @notice Emits the user metadata for the given token.
-    /// The keys and the values are not standardized by the protocol, it's up to the user
+    /// @notice Emits the account metadata for the given token.
+    /// The keys and the values are not standardized by the protocol, it's up to the users
     /// to establish and follow conventions to ensure compatibility with the consumers.
-    /// @param tokenId The ID of the token representing the emitting user ID.
-    /// The token ID is equal to the user ID controlled by it.
-    /// @param userMetadata The list of user metadata.
-    function _emitUserMetadata(uint256 tokenId, UserMetadata[] calldata userMetadata) internal {
-        if (userMetadata.length == 0) return;
-        drips.emitUserMetadata(tokenId, userMetadata);
+    /// @param tokenId The ID of the token representing the emitting account ID.
+    /// The token ID is equal to the account ID controlled by it.
+    /// @param accountMetadata The list of account metadata.
+    function _emitAccountMetadata(uint256 tokenId, AccountMetadata[] calldata accountMetadata)
+        internal
+    {
+        if (accountMetadata.length == 0) return;
+        drips.emitAccountMetadata(tokenId, accountMetadata);
     }
 
     /// @inheritdoc IERC721Metadata

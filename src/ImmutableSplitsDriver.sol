@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.19;
 
-import {Drips, SplitsReceiver, UserMetadata} from "./Drips.sol";
+import {AccountMetadata, Drips, SplitsReceiver} from "./Drips.sol";
 import {Managed} from "./Managed.sol";
 import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 
 /// @notice A Drips driver implementing immutable splits configurations.
-/// Anybody can create a new user ID and configure its splits configuration,
+/// Anybody can create a new account ID and configure its splits configuration,
 /// but nobody can update its configuration afterwards, it's immutable.
-/// This driver doesn't allow collecting funds for user IDs it manages, but anybody
+/// This driver doesn't allow collecting funds for account IDs it manages, but anybody
 /// can receive streams and split for them on Drips, which is enough because the splits
 /// configurations always give away 100% funds, so there's never anything left to collect.
 contract ImmutableSplitsDriver is Managed {
@@ -22,9 +22,9 @@ contract ImmutableSplitsDriver is Managed {
     bytes32 private immutable _counterSlot = _erc1967Slot("eip1967.immutableSplitsDriver.storage");
 
     /// @notice Emitted when an immutable splits configuration is created.
-    /// @param userId The user ID.
+    /// @param accountId The account ID.
     /// @param receiversHash The splits receivers list hash
-    event CreatedSplits(uint256 indexed userId, bytes32 indexed receiversHash);
+    event CreatedSplits(uint256 indexed accountId, bytes32 indexed receiversHash);
 
     /// @param _drips The Drips contract to use.
     /// @param _driverId The driver ID to use when calling Drips.
@@ -34,42 +34,42 @@ contract ImmutableSplitsDriver is Managed {
         totalSplitsWeight = _drips.TOTAL_SPLITS_WEIGHT();
     }
 
-    /// @notice The ID of the next user to be created.
-    /// Every user ID is a 256-bit integer constructed by concatenating:
-    /// `driverId (32 bits) | userIdsCounter (224 bits)`.
-    /// @return userId The user ID.
-    function nextUserId() public view returns (uint256 userId) {
-        // By assignment we get `userId` value:
+    /// @notice The ID of the next account to be created.
+    /// Every account ID is a 256-bit integer constructed by concatenating:
+    /// `driverId (32 bits) | accountIdsCounter (224 bits)`.
+    /// @return accountId The account ID.
+    function nextAccountId() public view returns (uint256 accountId) {
+        // By assignment we get `accountId` value:
         // `zeros (224 bits) | driverId (32 bits)`
-        userId = driverId;
-        // By bit shifting we get `userId` value:
+        accountId = driverId;
+        // By bit shifting we get `accountId` value:
         // `driverId (32 bits) | zeros (224 bits)`
-        // By bit masking we get `userId` value:
-        // `driverId (32 bits) | userIdsCounter (224 bits)`
+        // By bit masking we get `accountId` value:
+        // `driverId (32 bits) | accountIdsCounter (224 bits)`
         // We can treat that the counter is a 224 bit value without explicit casting
-        // because there will never be 2^224 user IDs registered.
-        userId = (userId << 224) | StorageSlot.getUint256Slot(_counterSlot).value;
+        // because there will never be 2^224 account IDs registered.
+        accountId = (accountId << 224) | StorageSlot.getUint256Slot(_counterSlot).value;
     }
 
-    /// @notice Creates a new user ID, configures its splits configuration and emits its metadata.
-    /// The configuration is immutable and nobody can control the user ID after its creation.
-    /// Calling this function is the only way and the only chance to emit metadata for that user.
-    /// @param receivers The list of the user's splits receivers to be set.
+    /// @notice Creates a new account ID, configures its
+    /// splits configuration and emits its metadata.
+    /// The configuration is immutable and nobody can control the account ID after its creation.
+    /// Calling this function is the only way and the only chance to emit metadata for that account.
+    /// @param receivers The list of the account's splits receivers to be set.
     /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
     /// Each splits receiver will be getting `weight / totalSplitsWeight`
-    /// share of the funds collected by the user.
+    /// share of the funds collected by the account.
     /// The sum of the receivers' weights must be equal to `totalSplitsWeight`,
     /// or in other words the configuration must be splitting 100% of received funds.
-    /// @param userMetadata The list of user metadata to emit for the created user.
-    /// The keys and the values are not standardized by the protocol, it's up to the user
+    /// @param accountMetadata The list of account metadata to emit for the created account.
+    /// The keys and the values are not standardized by the protocol, it's up to the users
     /// to establish and follow conventions to ensure compatibility with the consumers.
-    /// @return userId The new user ID with `receivers` configured.
-    function createSplits(SplitsReceiver[] calldata receivers, UserMetadata[] calldata userMetadata)
-        public
-        whenNotPaused
-        returns (uint256 userId)
-    {
-        userId = nextUserId();
+    /// @return accountId The new account ID with `receivers` configured.
+    function createSplits(
+        SplitsReceiver[] calldata receivers,
+        AccountMetadata[] calldata accountMetadata
+    ) public whenNotPaused returns (uint256 accountId) {
+        accountId = nextAccountId();
         StorageSlot.getUint256Slot(_counterSlot).value++;
         uint256 weightSum = 0;
         unchecked {
@@ -78,8 +78,8 @@ contract ImmutableSplitsDriver is Managed {
             }
         }
         require(weightSum == totalSplitsWeight, "Invalid total receivers weight");
-        emit CreatedSplits(userId, drips.hashSplits(receivers));
-        drips.setSplits(userId, receivers);
-        if (userMetadata.length > 0) drips.emitUserMetadata(userId, userMetadata);
+        emit CreatedSplits(accountId, drips.hashSplits(receivers));
+        drips.setSplits(accountId, receivers);
+        if (accountMetadata.length > 0) drips.emitAccountMetadata(accountId, accountMetadata);
     }
 }

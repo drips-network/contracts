@@ -3,8 +3,8 @@ pragma solidity ^0.8.19;
 
 /// @notice A stream receiver
 struct StreamReceiver {
-    /// @notice The user ID.
-    uint256 userId;
+    /// @notice The account ID.
+    uint256 accountId;
     /// @notice The stream configuration.
     StreamConfig config;
 }
@@ -145,7 +145,7 @@ library StreamConfigImpl {
 /// It's up to the caller to guarantee that this limit is never exceeded,
 /// failing to do so may result in a total protocol collapse.
 abstract contract Streams {
-    /// @notice Maximum number of streams receivers of a single user.
+    /// @notice Maximum number of streams receivers of a single account.
     /// Limits cost of changes in streams configuration.
     uint256 internal constant _MAX_STREAMS_RECEIVERS = 100;
     /// @notice The additional decimals for all amtPerSec values.
@@ -165,17 +165,17 @@ abstract contract Streams {
     /// @notice The storage slot holding a single `StreamsStorage` structure.
     bytes32 private immutable _streamsStorageSlot;
 
-    /// @notice Emitted when the streams configuration of a user is updated.
-    /// @param userId The user ID.
+    /// @notice Emitted when the streams configuration of an account is updated.
+    /// @param accountId The account ID.
     /// @param assetId The used asset ID
     /// @param receiversHash The streams receivers list hash
     /// @param streamsHistoryHash The streams history hash that was valid right before the update.
-    /// @param balance The user's streams balance. These funds will be streamed to the receivers.
+    /// @param balance The account's streams balance. These funds will be streamed to the receivers.
     /// @param maxEnd The maximum end time of streaming, when funds run out.
     /// If funds run out after the timestamp `type(uint32).max`, it's set to `type(uint32).max`.
     /// If the balance is 0 or there are no receivers, it's set to the current timestamp.
     event StreamsSet(
-        uint256 indexed userId,
+        uint256 indexed accountId,
         uint256 indexed assetId,
         bytes32 indexed receiversHash,
         bytes32 streamsHistoryHash,
@@ -183,34 +183,34 @@ abstract contract Streams {
         uint32 maxEnd
     );
 
-    /// @notice Emitted when a user is seen in a streams receivers list.
+    /// @notice Emitted when an account is seen in a streams receivers list.
     /// @param receiversHash The streams receivers list hash
-    /// @param userId The user ID.
+    /// @param accountId The account ID.
     /// @param config The streams configuration.
     event StreamReceiverSeen(
-        bytes32 indexed receiversHash, uint256 indexed userId, StreamConfig config
+        bytes32 indexed receiversHash, uint256 indexed accountId, StreamConfig config
     );
 
     /// @notice Emitted when streams are received.
-    /// @param userId The user ID.
+    /// @param accountId The account ID.
     /// @param assetId The used asset ID
     /// @param amt The received amount.
     /// @param receivableCycles The number of cycles which still can be received.
     event ReceivedStreams(
-        uint256 indexed userId, uint256 indexed assetId, uint128 amt, uint32 receivableCycles
+        uint256 indexed accountId, uint256 indexed assetId, uint128 amt, uint32 receivableCycles
     );
 
     /// @notice Emitted when streams are squeezed.
-    /// @param userId The squeezing user ID.
+    /// @param accountId The squeezing account ID.
     /// @param assetId The used asset ID.
-    /// @param senderId The ID of the streaming user from whom funds are squeezed.
+    /// @param senderId The ID of the streaming account from whom funds are squeezed.
     /// @param amt The squeezed amount.
     /// @param streamsHistoryHashes The history hashes of all squeezed streams history entries.
     /// Each history hash matches `streamsHistoryHash` emitted in its `StreamsSet`
     /// when the squeezed streams configuration was set.
     /// Sorted in the oldest streams configuration to the newest.
     event SqueezedStreams(
-        uint256 indexed userId,
+        uint256 indexed accountId,
         uint256 indexed assetId,
         uint256 indexed senderId,
         uint128 amt,
@@ -218,8 +218,8 @@ abstract contract Streams {
     );
 
     struct StreamsStorage {
-        /// @notice User streams states.
-        mapping(uint256 assetId => mapping(uint256 userId => StreamsState)) states;
+        /// @notice Account streams states.
+        mapping(uint256 assetId => mapping(uint256 accountId => StreamsState)) states;
     }
 
     struct StreamsState {
@@ -228,7 +228,7 @@ abstract contract Streams {
         /// @notice The next squeezable timestamps.
         /// Each `N`th element of the array is the next squeezable timestamp
         /// of the `N`th sender's streams configuration in effect in the current cycle.
-        mapping(uint256 userId => uint32[2 ** 32]) nextSqueezed;
+        mapping(uint256 accountId => uint32[2 ** 32]) nextSqueezed;
         /// @notice The streams receivers list hash, see `_hashStreams`.
         bytes32 streamsHash;
         /// @notice The next cycle to be received
@@ -257,8 +257,9 @@ abstract contract Streams {
     }
 
     /// @param cycleSecs The length of cycleSecs to be used in the contract instance.
-    /// Low value makes funds more available by shortening the average time of funds being frozen
-    /// between being taken from the users' streams balance and being receivable by their receivers.
+    /// Low value makes funds more available by shortening the average time
+    /// of funds being frozen between being taken from the accounts'
+    /// streams balance and being receivable by their receivers.
     /// High value makes receiving cheaper by making it process less cycles for a given time range.
     /// Must be higher than 1.
     /// @param streamsStorageSlot The storage slot to holding a single `StreamsStorage` structure.
@@ -269,15 +270,15 @@ abstract contract Streams {
         _streamsStorageSlot = streamsStorageSlot;
     }
 
-    /// @notice Receive streams from unreceived cycles of the user.
+    /// @notice Receive streams from unreceived cycles of the account.
     /// Received streams cycles won't need to be analyzed ever again.
-    /// @param userId The user ID.
+    /// @param accountId The account ID.
     /// @param assetId The used asset ID
     /// @param maxCycles The maximum number of received streams cycles.
     /// If too low, receiving will be cheap, but may not cover many cycles.
     /// If too high, receiving may become too expensive to fit in a single transaction.
     /// @return receivedAmt The received amount
-    function _receiveStreams(uint256 userId, uint256 assetId, uint32 maxCycles)
+    function _receiveStreams(uint256 accountId, uint256 assetId, uint32 maxCycles)
         internal
         returns (uint128 receivedAmt)
     {
@@ -286,9 +287,9 @@ abstract contract Streams {
         uint32 toCycle;
         int128 finalAmtPerCycle;
         (receivedAmt, receivableCycles, fromCycle, toCycle, finalAmtPerCycle) =
-            _receiveStreamsResult(userId, assetId, maxCycles);
+            _receiveStreamsResult(accountId, assetId, maxCycles);
         if (fromCycle != toCycle) {
-            StreamsState storage state = _streamsStorage().states[assetId][userId];
+            StreamsState storage state = _streamsStorage().states[assetId][accountId];
             state.nextReceivableCycle = toCycle;
             mapping(uint32 cycle => AmtDelta) storage amtDeltas = state.amtDeltas;
             unchecked {
@@ -302,11 +303,11 @@ abstract contract Streams {
                 }
             }
         }
-        emit ReceivedStreams(userId, assetId, receivedAmt, receivableCycles);
+        emit ReceivedStreams(accountId, assetId, receivedAmt, receivableCycles);
     }
 
     /// @notice Calculate effects of calling `_receiveStreams` with the given parameters.
-    /// @param userId The user ID.
+    /// @param accountId The account ID.
     /// @param assetId The used asset ID
     /// @param maxCycles The maximum number of received streams cycles.
     /// If too low, receiving will be cheap, but may not cover many cycles.
@@ -316,7 +317,7 @@ abstract contract Streams {
     /// @return fromCycle The cycle from which funds would be received
     /// @return toCycle The cycle to which funds would be received
     /// @return amtPerCycle The amount per cycle when `toCycle` starts.
-    function _receiveStreamsResult(uint256 userId, uint256 assetId, uint32 maxCycles)
+    function _receiveStreamsResult(uint256 accountId, uint256 assetId, uint32 maxCycles)
         internal
         view
         returns (
@@ -328,13 +329,13 @@ abstract contract Streams {
         )
     {
         unchecked {
-            (fromCycle, toCycle) = _receivableStreamsCyclesRange(userId, assetId);
+            (fromCycle, toCycle) = _receivableStreamsCyclesRange(accountId, assetId);
             if (toCycle - fromCycle > maxCycles) {
                 receivableCycles = toCycle - fromCycle - maxCycles;
                 toCycle -= receivableCycles;
             }
             mapping(uint32 cycle => AmtDelta) storage amtDeltas =
-                _streamsStorage().states[assetId][userId].amtDeltas;
+                _streamsStorage().states[assetId][accountId].amtDeltas;
             for (uint32 cycle = fromCycle; cycle < toCycle; cycle++) {
                 AmtDelta memory amtDelta = amtDeltas[cycle];
                 amtPerCycle += amtDelta.thisCycle;
@@ -347,31 +348,31 @@ abstract contract Streams {
     /// @notice Counts cycles from which streams can be received.
     /// This function can be used to detect that there are
     /// too many cycles to analyze in a single transaction.
-    /// @param userId The user ID.
+    /// @param accountId The account ID.
     /// @param assetId The used asset ID
     /// @return cycles The number of cycles which can be flushed
-    function _receivableStreamsCycles(uint256 userId, uint256 assetId)
+    function _receivableStreamsCycles(uint256 accountId, uint256 assetId)
         internal
         view
         returns (uint32 cycles)
     {
         unchecked {
-            (uint32 fromCycle, uint32 toCycle) = _receivableStreamsCyclesRange(userId, assetId);
+            (uint32 fromCycle, uint32 toCycle) = _receivableStreamsCyclesRange(accountId, assetId);
             return toCycle - fromCycle;
         }
     }
 
     /// @notice Calculates the cycles range from which streams can be received.
-    /// @param userId The user ID.
+    /// @param accountId The account ID.
     /// @param assetId The used asset ID
     /// @return fromCycle The cycle from which funds can be received
     /// @return toCycle The cycle to which funds can be received
-    function _receivableStreamsCyclesRange(uint256 userId, uint256 assetId)
+    function _receivableStreamsCyclesRange(uint256 accountId, uint256 assetId)
         private
         view
         returns (uint32 fromCycle, uint32 toCycle)
     {
-        fromCycle = _streamsStorage().states[assetId][userId].nextReceivableCycle;
+        fromCycle = _streamsStorage().states[assetId][accountId].nextReceivableCycle;
         toCycle = _cycleOf(_currTimestamp());
         // slither-disable-next-line timestamp
         if (fromCycle == 0 || toCycle < fromCycle) {
@@ -384,9 +385,9 @@ abstract contract Streams {
     /// Squeezed funds won't be received in the next calls
     /// to `_squeezeStreams` or `_receiveStreams`.
     /// Only funds streamed before `block.timestamp` can be squeezed.
-    /// @param userId The ID of the user receiving streams to squeeze funds for.
+    /// @param accountId The ID of the account receiving streams to squeeze funds for.
     /// @param assetId The used asset ID.
-    /// @param senderId The ID of the streaming user to squeeze funds from.
+    /// @param senderId The ID of the streaming account to squeeze funds from.
     /// @param historyHash The sender's history hash that was valid right before
     /// they set up the sequence of configurations described by `streamsHistory`.
     /// @param streamsHistory The sequence of the sender's streams configurations.
@@ -396,7 +397,7 @@ abstract contract Streams {
     /// If `streamsHistory` entries have no receivers, they won't be squeezed.
     /// @return amt The squeezed amount.
     function _squeezeStreams(
-        uint256 userId,
+        uint256 accountId,
         uint256 assetId,
         uint256 senderId,
         bytes32 historyHash,
@@ -408,9 +409,9 @@ abstract contract Streams {
             bytes32[] memory historyHashes;
             uint256 currCycleConfigs;
             (amt, squeezedNum, squeezedRevIdxs, historyHashes, currCycleConfigs) =
-                _squeezeStreamsResult(userId, assetId, senderId, historyHash, streamsHistory);
+                _squeezeStreamsResult(accountId, assetId, senderId, historyHash, streamsHistory);
             bytes32[] memory squeezedHistoryHashes = new bytes32[](squeezedNum);
-            StreamsState storage state = _streamsStorage().states[assetId][userId];
+            StreamsState storage state = _streamsStorage().states[assetId][accountId];
             uint32[2 ** 32] storage nextSqueezed = state.nextSqueezed[senderId];
             for (uint256 i = 0; i < squeezedNum; i++) {
                 // `squeezedRevIdxs` are sorted from the newest configuration to the oldest,
@@ -423,15 +424,15 @@ abstract contract Streams {
             _addDeltaRange(
                 state, cycleStart, cycleStart + 1, -int160(amt * _AMT_PER_SEC_MULTIPLIER)
             );
-            emit SqueezedStreams(userId, assetId, senderId, amt, squeezedHistoryHashes);
+            emit SqueezedStreams(accountId, assetId, senderId, amt, squeezedHistoryHashes);
         }
     }
 
     /// @notice Calculate effects of calling `_squeezeStreams` with the given parameters.
     /// See its documentation for more details.
-    /// @param userId The ID of the user receiving streams to squeeze funds for.
+    /// @param accountId The ID of the account receiving streams to squeeze funds for.
     /// @param assetId The used asset ID.
-    /// @param senderId The ID of the streaming user to squeeze funds from.
+    /// @param senderId The ID of the streaming account to squeeze funds from.
     /// @param historyHash The sender's history hash that was valid right before `streamsHistory`.
     /// @param streamsHistory The sequence of the sender's streams configurations.
     /// @return amt The squeezed amount.
@@ -451,7 +452,7 @@ abstract contract Streams {
     /// streams configurations which have been seen in the current cycle.
     /// This is also the number of used entries in each of the sender's `nextSqueezed` arrays.
     function _squeezeStreamsResult(
-        uint256 userId,
+        uint256 accountId,
         uint256 assetId,
         uint256 senderId,
         bytes32 historyHash,
@@ -479,7 +480,7 @@ abstract contract Streams {
         }
         squeezedRevIdxs = new uint256[](streamsHistory.length);
         uint32[2 ** 32] storage nextSqueezed =
-            _streamsStorage().states[assetId][userId].nextSqueezed[senderId];
+            _streamsStorage().states[assetId][accountId].nextSqueezed[senderId];
         uint32 squeezeEndCap = _currTimestamp();
         unchecked {
             for (uint256 i = 1; i <= streamsHistory.length && i <= currCycleConfigs; i++) {
@@ -492,7 +493,7 @@ abstract contract Streams {
                     }
                     if (squeezeStartCap < squeezeEndCap) {
                         squeezedRevIdxs[squeezedNum++] = i;
-                        amt += _squeezedAmt(userId, historyEntry, squeezeStartCap, squeezeEndCap);
+                        amt += _squeezedAmt(accountId, historyEntry, squeezeStartCap, squeezeEndCap);
                     }
                 }
                 squeezeEndCap = historyEntry.updateTime;
@@ -501,8 +502,8 @@ abstract contract Streams {
     }
 
     /// @notice Verify a streams history and revert if it's invalid.
-    /// @param historyHash The user's history hash that was valid right before `streamsHistory`.
-    /// @param streamsHistory The sequence of the user's streams configurations.
+    /// @param historyHash The account's history hash that was valid right before `streamsHistory`.
+    /// @param streamsHistory The sequence of the account's streams configurations.
     /// @param finalHistoryHash The history hash at the end of `streamsHistory`.
     /// @return historyHashes The history hashes valid
     /// for squeezing each of `streamsHistory` entries.
@@ -531,25 +532,25 @@ abstract contract Streams {
         require(historyHash == finalHistoryHash, "Invalid streams history");
     }
 
-    /// @notice Calculate the amount squeezable by a user from a single streams history entry.
-    /// @param userId The ID of the user to squeeze streams for.
+    /// @notice Calculate the amount squeezable by an account from a single streams history entry.
+    /// @param accountId The ID of the account to squeeze streams for.
     /// @param historyEntry The squeezed history entry.
     /// @param squeezeStartCap The squeezed time range start.
     /// @param squeezeEndCap The squeezed time range end.
     /// @return squeezedAmt The squeezed amount.
     function _squeezedAmt(
-        uint256 userId,
+        uint256 accountId,
         StreamsHistory memory historyEntry,
         uint32 squeezeStartCap,
         uint32 squeezeEndCap
     ) private view returns (uint128 squeezedAmt) {
         unchecked {
             StreamReceiver[] memory receivers = historyEntry.receivers;
-            // Binary search for the `idx` of the first occurrence of `userId`
+            // Binary search for the `idx` of the first occurrence of `accountId`
             uint256 idx = 0;
             for (uint256 idxCap = receivers.length; idx < idxCap;) {
                 uint256 idxMid = (idx + idxCap) / 2;
-                if (receivers[idxMid].userId < userId) {
+                if (receivers[idxMid].accountId < accountId) {
                     idx = idxMid + 1;
                 } else {
                     idxCap = idxMid;
@@ -560,7 +561,7 @@ abstract contract Streams {
             uint256 amt = 0;
             for (; idx < receivers.length; idx++) {
                 StreamReceiver memory receiver = receivers[idx];
-                if (receiver.userId != userId) break;
+                if (receiver.accountId != accountId) break;
                 (uint32 start, uint32 end) =
                     _streamRange(receiver, updateTime, maxEnd, squeezeStartCap, squeezeEndCap);
                 amt += _streamedAmt(receiver.config.amtPerSec(), start, end);
@@ -569,15 +570,15 @@ abstract contract Streams {
         }
     }
 
-    /// @notice Current user streams state.
-    /// @param userId The user ID.
+    /// @notice Current account streams state.
+    /// @param accountId The account ID.
     /// @param assetId The used asset ID
     /// @return streamsHash The current streams receivers list hash, see `_hashStreams`
     /// @return streamsHistoryHash The current streams history hash, see `_hashStreamsHistory`.
     /// @return updateTime The time when streams have been configured for the last time.
     /// @return balance The balance when streams have been configured for the last time.
     /// @return maxEnd The current maximum end time of streaming.
-    function _streamsState(uint256 userId, uint256 assetId)
+    function _streamsState(uint256 accountId, uint256 assetId)
         internal
         view
         returns (
@@ -588,7 +589,7 @@ abstract contract Streams {
             uint32 maxEnd
         )
     {
-        StreamsState storage state = _streamsStorage().states[assetId][userId];
+        StreamsState storage state = _streamsStorage().states[assetId][accountId];
         return (
             state.streamsHash,
             state.streamsHistoryHash,
@@ -598,23 +599,23 @@ abstract contract Streams {
         );
     }
 
-    /// @notice The user's streams balance at the given timestamp.
-    /// @param userId The user ID.
+    /// @notice The account's streams balance at the given timestamp.
+    /// @param accountId The account ID.
     /// @param assetId The used asset ID
     /// @param currReceivers The current streams receivers list.
-    /// It must be exactly the same as the last list set for the user with `_setStreams`.
+    /// It must be exactly the same as the last list set for the account with `_setStreams`.
     /// @param timestamp The timestamps for which balance should be calculated.
     /// It can't be lower than the timestamp of the last call to `_setStreams`.
     /// If it's bigger than `block.timestamp`, then it's a prediction assuming
     /// that `_setStreams` won't be called before `timestamp`.
-    /// @return balance The user balance on `timestamp`
+    /// @return balance The account balance on `timestamp`
     function _balanceAt(
-        uint256 userId,
+        uint256 accountId,
         uint256 assetId,
         StreamReceiver[] memory currReceivers,
         uint32 timestamp
     ) internal view returns (uint128 balance) {
-        StreamsState storage state = _streamsStorage().states[assetId][userId];
+        StreamsState storage state = _streamsStorage().states[assetId][accountId];
         require(timestamp >= state.updateTime, "Timestamp before the last update");
         _verifyStreamsReceivers(currReceivers, state);
         return _calcBalance(state.balance, state.updateTime, state.maxEnd, currReceivers, timestamp);
@@ -629,7 +630,7 @@ abstract contract Streams {
     /// It can't be lower than `lastUpdate`.
     /// If it's bigger than `block.timestamp`, then it's a prediction assuming
     /// that `_setStreams` won't be called before `timestamp`.
-    /// @return balance The user balance on `timestamp`
+    /// @return balance The account balance on `timestamp`
     function _calcBalance(
         uint128 lastBalance,
         uint32 lastUpdate,
@@ -653,15 +654,15 @@ abstract contract Streams {
         }
     }
 
-    /// @notice Sets the user's streams configuration.
-    /// @param userId The user ID.
+    /// @notice Sets the account's streams configuration.
+    /// @param accountId The account ID.
     /// @param assetId The used asset ID
     /// @param currReceivers The current streams receivers list.
-    /// It must be exactly the same as the last list set for the user with `_setStreams`.
+    /// It must be exactly the same as the last list set for the account with `_setStreams`.
     /// If this is the first update, pass an empty array.
     /// @param balanceDelta The streams balance change being applied.
     /// Positive when adding funds to the streams balance, negative to removing them.
-    /// @param newReceivers The list of the streams receivers of the user to be set.
+    /// @param newReceivers The list of the streams receivers of the account to be set.
     /// Must be sorted, deduplicated and without 0 amtPerSecs.
     /// @param maxEndHint1 An optional parameter allowing gas optimization, pass `0` to ignore it.
     /// The first hint for finding the maximum end time when all streams stop due to funds
@@ -688,7 +689,7 @@ abstract contract Streams {
     /// The second hint for finding the maximum end time, see `maxEndHint1` docs for more details.
     /// @return realBalanceDelta The actually applied streams balance change.
     function _setStreams(
-        uint256 userId,
+        uint256 accountId,
         uint256 assetId,
         StreamReceiver[] memory currReceivers,
         int128 balanceDelta,
@@ -698,7 +699,7 @@ abstract contract Streams {
         uint32 maxEndHint2
     ) internal returns (int128 realBalanceDelta) {
         unchecked {
-            StreamsState storage state = _streamsStorage().states[assetId][userId];
+            StreamsState storage state = _streamsStorage().states[assetId][accountId];
             _verifyStreamsReceivers(currReceivers, state);
             uint32 lastUpdate = state.updateTime;
             uint128 newBalance;
@@ -739,21 +740,23 @@ abstract contract Streams {
             bytes32 newStreamsHash = _hashStreams(newReceivers);
             state.streamsHistoryHash =
                 _hashStreamsHistory(streamsHistory, newStreamsHash, _currTimestamp(), newMaxEnd);
-            emit StreamsSet(userId, assetId, newStreamsHash, streamsHistory, newBalance, newMaxEnd);
+            emit StreamsSet(
+                accountId, assetId, newStreamsHash, streamsHistory, newBalance, newMaxEnd
+            );
             // slither-disable-next-line timestamp
             if (newStreamsHash != state.streamsHash) {
                 state.streamsHash = newStreamsHash;
                 for (uint256 i = 0; i < newReceivers.length; i++) {
                     StreamReceiver memory receiver = newReceivers[i];
-                    emit StreamReceiverSeen(newStreamsHash, receiver.userId, receiver.config);
+                    emit StreamReceiverSeen(newStreamsHash, receiver.accountId, receiver.config);
                 }
             }
         }
     }
 
-    /// @notice Verifies that the provided list of receivers is currently active for the user.
+    /// @notice Verifies that the provided list of receivers is currently active for the account.
     /// @param currReceivers The verified list of receivers.
-    /// @param state The user's state.
+    /// @param state The account's state.
     function _verifyStreamsReceivers(
         StreamReceiver[] memory currReceivers,
         StreamsState storage state
@@ -967,7 +970,7 @@ abstract contract Streams {
     /// after the streams configuration is updated.
     /// @param oldStreamsHistoryHash The history hash
     /// that was valid before the streams were updated.
-    /// The `streamsHistoryHash` of a user before they set streams for the first time is `0`.
+    /// The `streamsHistoryHash` of an account before they set streams for the first time is `0`.
     /// @param streamsHash The hash of the streams receivers being set.
     /// @param updateTime The timestamp when the streams were updated.
     /// @param maxEnd The maximum end of the streams being set.
@@ -983,18 +986,18 @@ abstract contract Streams {
 
     /// @notice Applies the effects of the change of the streams on the receivers' streams state.
     /// @param states The streams states for the used asset.
-    /// @param currReceivers The list of the streams receivers set in the last streams update
-    /// of the user.
+    /// @param currReceivers The list of the streams receivers
+    /// set in the last streams update of the account.
     /// If this is the first update, pass an empty array.
     /// @param lastUpdate the last time the sender updated the streams.
     /// If this is the first update, pass zero.
     /// @param currMaxEnd The maximum end time of streaming according to the last streams update.
-    /// @param newReceivers  The list of the streams receivers of the user to be set.
+    /// @param newReceivers  The list of the streams receivers of the account to be set.
     /// Must be sorted, deduplicated and without 0 amtPerSecs.
     /// @param newMaxEnd The maximum end time of streaming according to the new configuration.
     // slither-disable-next-line cyclomatic-complexity
     function _updateReceiverStates(
-        mapping(uint256 userId => StreamsState) storage states,
+        mapping(uint256 accountId => StreamsState) storage states,
         StreamReceiver[] memory currReceivers,
         uint32 lastUpdate,
         uint32 currMaxEnd,
@@ -1021,7 +1024,7 @@ abstract contract Streams {
             // Limit picking both curr and new to situations when they differ only by time
             if (pickCurr && pickNew) {
                 if (
-                    currRecv.userId != newRecv.userId
+                    currRecv.accountId != newRecv.accountId
                         || currRecv.config.amtPerSec() != newRecv.config.amtPerSec()
                 ) {
                     pickCurr = _isOrdered(currRecv, newRecv);
@@ -1031,7 +1034,7 @@ abstract contract Streams {
 
             if (pickCurr && pickNew) {
                 // Shift the existing stream to fulfil the new configuration
-                StreamsState storage state = states[currRecv.userId];
+                StreamsState storage state = states[currRecv.accountId];
                 (uint32 currStart, uint32 currEnd) =
                     _streamRangeInFuture(currRecv, lastUpdate, currMaxEnd);
                 (uint32 newStart, uint32 newEnd) =
@@ -1043,7 +1046,7 @@ abstract contract Streams {
                 // but it allows skipping storage access if there's no change to the starts or ends.
                 _addDeltaRange(state, currStart, newStart, -amtPerSec);
                 _addDeltaRange(state, currEnd, newEnd, amtPerSec);
-                // Ensure that the user receives the updated cycles
+                // Ensure that the account receives the updated cycles
                 uint32 currStartCycle = _cycleOf(currStart);
                 uint32 newStartCycle = _cycleOf(newStart);
                 // The `currStartCycle > newStartCycle` check is just an optimization.
@@ -1056,20 +1059,20 @@ abstract contract Streams {
             } else if (pickCurr) {
                 // Remove an existing stream
                 // slither-disable-next-line similar-names
-                StreamsState storage state = states[currRecv.userId];
+                StreamsState storage state = states[currRecv.accountId];
                 (uint32 start, uint32 end) = _streamRangeInFuture(currRecv, lastUpdate, currMaxEnd);
                 // slither-disable-next-line similar-names
                 int256 amtPerSec = int256(uint256(currRecv.config.amtPerSec()));
                 _addDeltaRange(state, start, end, -amtPerSec);
             } else if (pickNew) {
                 // Create a new stream
-                StreamsState storage state = states[newRecv.userId];
+                StreamsState storage state = states[newRecv.accountId];
                 // slither-disable-next-line uninitialized-local
                 (uint32 start, uint32 end) =
                     _streamRangeInFuture(newRecv, _currTimestamp(), newMaxEnd);
                 int256 amtPerSec = int256(uint256(newRecv.config.amtPerSec()));
                 _addDeltaRange(state, start, end, amtPerSec);
-                // Ensure that the user receives the updated cycles
+                // Ensure that the account receives the updated cycles
                 uint32 startCycle = _cycleOf(start);
                 // slither-disable-next-line timestamp
                 uint32 nextReceivableCycle = state.nextReceivableCycle;
@@ -1142,8 +1145,8 @@ abstract contract Streams {
         return (start, uint32(end));
     }
 
-    /// @notice Adds funds received by a user in a given time range
-    /// @param state The user state
+    /// @notice Adds funds received by an account in a given time range
+    /// @param state The account state
     /// @param start The timestamp from which the delta takes effect
     /// @param end The timestamp until which the delta takes effect
     /// @param amtPerSec The streaming rate
@@ -1159,8 +1162,8 @@ abstract contract Streams {
         _addDelta(amtDeltas, end, -amtPerSec);
     }
 
-    /// @notice Adds delta of funds received by a user at a given time
-    /// @param amtDeltas The user amount deltas
+    /// @notice Adds delta of funds received by an account at a given time
+    /// @param amtDeltas The account amount deltas
     /// @param timestamp The timestamp when the deltas need to be added
     /// @param amtPerSec The streaming rate
     function _addDelta(
@@ -1193,8 +1196,8 @@ abstract contract Streams {
         pure
         returns (bool)
     {
-        if (prev.userId != next.userId) {
-            return prev.userId < next.userId;
+        if (prev.accountId != next.accountId) {
+            return prev.accountId < next.accountId;
         }
         return prev.config.lt(next.config);
     }
