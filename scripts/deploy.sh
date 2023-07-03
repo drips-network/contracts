@@ -27,17 +27,18 @@ verify_parameter() {
 
 # Args: contract name, constructor argument types, constructor arguments
 create_module() {
-    local SALT="$(cast --format-bytes32-string "$1")"
+    local SALT="$(cast format-bytes32-string "$1")"
     local CREATION_CODE="$(forge inspect "src/DripsDeployer.sol:$1Module" bytecode)"
     local TYPES="$2"
     shift 2
     local ARGS="$(cast abi-encode "constructor($TYPES)" "$@")"
-    echo "($SALT,0,$(cast --concat-hex "$CREATION_CODE" "$ARGS"))"
+    local INIT_CODE="$(cast concat-hex "$CREATION_CODE" "$ARGS")"
+    echo "($SALT,0,$INIT_CODE)"
 }
 
 # Args: module name
 module_address() {
-    local SALT="$(cast --format-bytes32-string "$1")"
+    local SALT="$(cast format-bytes32-string "$1")"
     cast call "$DRIPS_DEPLOYER" "moduleAddress(bytes32)(address)" "$SALT"
 }
 
@@ -54,9 +55,6 @@ verify_single() {
 
 # Args: contract address, contract path, ABI-encoded constructor args
 verify() {
-    echo 1 "$1"
-    echo 2 "$2"
-    echo 3 "$3"
     if [ -n "$ETHERSCAN_API_KEY" ]; then
         verify_single "$1" "$2" "$3" etherscan
         local VERIFIED=1
@@ -116,11 +114,11 @@ fffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58
 
 deploy_drips_deployer() {
     print_title "Deploying DripsDeployer"
-    local SALT="$(cast --format-bytes32-string "$DRIPS_DEPLOYER_SALT")"
+    local SALT="$(cast format-bytes32-string "$DRIPS_DEPLOYER_SALT")"
     local CONTRACT_PATH="src/DripsDeployer.sol:DripsDeployer"
     local CREATION_CODE="$(forge inspect "$CONTRACT_PATH" bytecode)"
     local ARGS="$(cast abi-encode "constructor(address)" "$WALLET")"
-    local INIT_CODE="$(cast --concat-hex "$CREATION_CODE" "$ARGS")"
+    local INIT_CODE="$(cast concat-hex "$CREATION_CODE" "$ARGS")"
     local INIT_CODE_HASH="$(cast keccak "$INIT_CODE")"
     local PAYLOAD="$(cast concat-hex "0xff" "$CREATE2_DEPLOYER" "$SALT" "$INIT_CODE_HASH")"
     local PAYLOAD_HASH="$(cast keccak "$PAYLOAD")"
@@ -158,14 +156,14 @@ main() {
         unset DRIPS_DEPLOYER_SALT
     fi
     ADMIN="${ADMIN:-$WALLET}"
-    DRIPS_ADMIN="$(cast --to-checksum-address "${DRIPS_ADMIN:-$ADMIN}")"
-    ADDRESS_DRIVER_ADMIN="$(cast --to-checksum-address "${ADDRESS_DRIVER_ADMIN:-$ADMIN}")"
-    NFT_DRIVER_ADMIN="$(cast --to-checksum-address "${NFT_DRIVER_ADMIN:-$ADMIN}")"
+    DRIPS_ADMIN="$(cast to-check-sum-address "${DRIPS_ADMIN:-$ADMIN}")"
+    ADDRESS_DRIVER_ADMIN="$(cast to-check-sum-address "${ADDRESS_DRIVER_ADMIN:-$ADMIN}")"
+    NFT_DRIVER_ADMIN="$(cast to-check-sum-address "${NFT_DRIVER_ADMIN:-$ADMIN}")"
     IMMUTABLE_SPLITS_DRIVER_ADMIN="$(\
-        cast --to-checksum-address "${IMMUTABLE_SPLITS_DRIVER_ADMIN:-$ADMIN}")"
-    REPO_DRIVER_ADMIN="$(cast --to-checksum-address "${REPO_DRIVER_ADMIN:-$ADMIN}")"
+        cast to-check-sum-address "${IMMUTABLE_SPLITS_DRIVER_ADMIN:-$ADMIN}")"
+    REPO_DRIVER_ADMIN="$(cast to-check-sum-address "${REPO_DRIVER_ADMIN:-$ADMIN}")"
     DRIPS_CYCLE_SECS="${DRIPS_CYCLE_SECS:-$(( 7 * 24 * 60 * 60 ))}" # 1 week
-    REPO_DRIVER_OPERATOR="${REPO_DRIVER_OPERATOR:-$(cast --address-zero)}"
+    REPO_DRIVER_OPERATOR="${REPO_DRIVER_OPERATOR:-$(cast address-zero)}"
     REPO_DRIVER_JOB_ID="${REPO_DRIVER_JOB_ID:-00000000000000000000000000000000}"
     REPO_DRIVER_FEE="${REPO_DRIVER_FEE:-0}"
 
@@ -226,7 +224,7 @@ main() {
     MODULE_INIT_CODES_3="[$(
         create_module RepoDriver address,address,address,bytes32,uint96 \
             "$DRIPS_DEPLOYER" "$REPO_DRIVER_ADMIN" "$REPO_DRIVER_OPERATOR" \
-            $(cast --format-bytes32-string "$REPO_DRIVER_JOB_ID") "$REPO_DRIVER_FEE"
+            $(cast format-bytes32-string "$REPO_DRIVER_JOB_ID") "$REPO_DRIVER_FEE"
         )]"
     MODULE_INIT_CODES_4="[]"
     cast send $WALLET_ARGS "$DRIPS_DEPLOYER" "deployModules((bytes32,uint256,bytes)[], \
@@ -281,7 +279,7 @@ main() {
     "RepoDriver":                    "$(query "$REPO_DRIVER_MODULE" repoDriver address)",
     "RepoDriver ID":                 "$(query "$REPO_DRIVER_MODULE" driverId uint32)",
     "RepoDriver AnyApi operator":    "$(query "$REPO_DRIVER_MODULE" operator address)",
-    "RepoDriver AnyApi job ID":      "$(cast --parse-bytes32-string "$(query "$REPO_DRIVER_MODULE" jobId bytes32)")",
+    "RepoDriver AnyApi job ID":      "$(cast parse-bytes32-string "$(query "$REPO_DRIVER_MODULE" jobId bytes32)")",
     "RepoDriver AnyApi default fee": "$(query "$REPO_DRIVER_MODULE" defaultFee uint96)",
     "RepoDriver logic":              "$(query "$REPO_DRIVER_MODULE" logic address)",
     "RepoDriver admin":              "$(query "$REPO_DRIVER_MODULE" proxyAdmin address)"
