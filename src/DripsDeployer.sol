@@ -10,7 +10,6 @@ import {NFTDriver} from "./NFTDriver.sol";
 import {OperatorInterface, RepoDriver} from "./RepoDriver.sol";
 import {Ownable2Step} from "openzeppelin-contracts/access/Ownable2Step.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
-import {Create2} from "openzeppelin-contracts/utils/Create2.sol";
 
 struct Module {
     bytes32 salt;
@@ -50,7 +49,7 @@ contract DripsDeployer is Ownable2Step {
             Module calldata module = modules[i];
             _moduleSalts.push(module.salt);
             // slither-disable-next-line reentrancy-eth,reentrancy-no-eth
-            Create3.deploy(module.amount, module.salt, module.initCode);
+            Create3Factory.deploy(module.amount, module.salt, module.initCode);
         }
     }
 
@@ -59,27 +58,24 @@ contract DripsDeployer is Ownable2Step {
     }
 
     function moduleAddress(bytes32 salt) public view returns (address addr) {
-        return Create3.computeAddress(salt);
+        return Create3Factory.getDeployed(salt);
     }
 }
 
 abstract contract BaseModule {
-    address public immutable dripsDeployer;
+    DripsDeployer public immutable dripsDeployer;
     bytes32 public immutable moduleSalt;
 
-    constructor(address dripsDeployer_, bytes32 moduleSalt_) {
-        require(
-            address(this) == Create3.computeAddress(moduleSalt_, dripsDeployer_),
-            "Invalid module deployment salt"
-        );
+    constructor(DripsDeployer dripsDeployer_, bytes32 moduleSalt_) {
         dripsDeployer = dripsDeployer_;
         moduleSalt = moduleSalt_;
+        require(address(this) == _moduleAddress(moduleSalt_), "Invalid module deployment salt");
     }
 
     function args() public view virtual returns (bytes memory);
 
     function _moduleAddress(bytes32 salt) internal view returns (address addr) {
-        return Create3.computeAddress(salt, dripsDeployer);
+        return dripsDeployer.moduleAddress(salt);
     }
 
     modifier onlyModule(bytes32 salt) {
@@ -92,13 +88,13 @@ abstract contract ContractDeployerModule is BaseModule {
     bytes32 public immutable salt = "deployment";
 
     function deployment() public view returns (address) {
-        return Create3.computeAddress(salt);
+        return Create3Factory.getDeployed(salt);
     }
 
     function deploymentArgs() public view virtual returns (bytes memory);
 
     function _deployContract(bytes memory creationCode) internal {
-        Create3.deploy(0, salt, abi.encodePacked(creationCode, deploymentArgs()));
+        Create3Factory.deploy(0, salt, abi.encodePacked(creationCode, deploymentArgs()));
     }
 }
 
@@ -108,7 +104,7 @@ abstract contract ProxyDeployerModule is BaseModule {
     address public logic;
 
     function proxy() public view returns (address) {
-        return Create3.computeAddress(proxySalt);
+        return Create3Factory.getDeployed(proxySalt);
     }
 
     function proxyArgs() public view returns (bytes memory) {
@@ -132,7 +128,7 @@ abstract contract ProxyDeployerModule is BaseModule {
         proxyAdmin = proxyAdmin_;
         // slither-disable-next-line too-many-digits
         bytes memory proxyInitCode = abi.encodePacked(type(ManagedProxy).creationCode, proxyArgs());
-        Create3.deploy(0, proxySalt, proxyInitCode);
+        Create3Factory.deploy(0, proxySalt, proxyInitCode);
     }
 }
 
@@ -155,7 +151,7 @@ contract DripsModule is DripsDependentModule, ProxyDeployerModule {
         return abi.encode(dripsDeployer, dripsCycleSecs, proxyAdmin);
     }
 
-    constructor(address dripsDeployer_, uint32 dripsCycleSecs_, address proxyAdmin_)
+    constructor(DripsDeployer dripsDeployer_, uint32 dripsCycleSecs_, address proxyAdmin_)
         BaseModule(dripsDeployer_, _dripsModuleSalt)
     {
         dripsCycleSecs = dripsCycleSecs_;
@@ -200,7 +196,7 @@ contract CallerModule is ContractDeployerModule, CallerDependentModule {
         return abi.encode(dripsDeployer);
     }
 
-    constructor(address dripsDeployer_) BaseModule(dripsDeployer_, _callerModuleSalt) {
+    constructor(DripsDeployer dripsDeployer_) BaseModule(dripsDeployer_, _callerModuleSalt) {
         // slither-disable-next-line too-many-digits
         _deployContract(type(Caller).creationCode);
     }
@@ -228,7 +224,7 @@ contract AddressDriverModule is CallerDependentModule, DriverModule(0) {
         return abi.encode(dripsDeployer, proxyAdmin);
     }
 
-    constructor(address dripsDeployer_, address proxyAdmin_)
+    constructor(DripsDeployer dripsDeployer_, address proxyAdmin_)
         BaseModule(dripsDeployer_, "AddressDriver")
     {
         // slither-disable-next-line too-many-digits
@@ -249,7 +245,7 @@ contract NFTDriverModule is CallerDependentModule, DriverModule(1) {
         return abi.encode(dripsDeployer, proxyAdmin);
     }
 
-    constructor(address dripsDeployer_, address proxyAdmin_)
+    constructor(DripsDeployer dripsDeployer_, address proxyAdmin_)
         BaseModule(dripsDeployer_, "NFTDriver")
     {
         // slither-disable-next-line too-many-digits
@@ -270,7 +266,7 @@ contract ImmutableSplitsDriverModule is DriverModule(2) {
         return abi.encode(dripsDeployer, proxyAdmin);
     }
 
-    constructor(address dripsDeployer_, address proxyAdmin_)
+    constructor(DripsDeployer dripsDeployer_, address proxyAdmin_)
         BaseModule(dripsDeployer_, "ImmutableSplitsDriver")
     {
         // slither-disable-next-line too-many-digits
@@ -296,7 +292,7 @@ contract RepoDriverModule is CallerDependentModule, DriverModule(3) {
     }
 
     constructor(
-        address dripsDeployer_,
+        DripsDeployer dripsDeployer_,
         address proxyAdmin_,
         OperatorInterface operator_,
         bytes32 jobId_,
@@ -319,94 +315,51 @@ contract RepoDriverModule is CallerDependentModule, DriverModule(3) {
     }
 }
 
-/// @notice Creates a contract under a deterministic addresses
-/// derived only from the deployer's address and the salt.
-/// The deployment is a two-step process, first, a proxy is deployed using CREATE2 with
-/// the given salt, and then it's called with the bytecode of the deployed contract,
-/// the proxy uses it to deploy the contract using regular CREATE.
-/// If the deployed contract's constructor reverts, the proxy also reverts.
-/// If the proxy call has a non-zero value, it's passed to the deployed contract's constructor.
-/// Based on the bytecode from https://github.com/0xsequence/create3.
-library Create3 {
-    using Address for address;
+/// @notice Deploys contracts using CREATE3.
+/// Each deployer has its own namespace for deployed addresses.
+library Create3Factory {
+    /// @notice The CREATE3 factory address.
+    /// It's always the same, see `deploy_create3_factory` in the deployment script.
+    ICreate3Factory private constant _CREATE3_FACTORY =
+        ICreate3Factory(0x6aA3D87e99286946161dCA02B97C5806fC5eD46F);
 
-    //////////////////////////// PROXY CREATION CODE ///////////////////////////
-    // Opcode     | Opcode name      | Stack values after executing
-    // Store the proxy bytecode in memory
-    // 0x67XX..XX | PUSH8 bytecode   | bytecode
-    // 0x3d       | RETURNDATASIZE   | 0 bytecode
-    // 0x52       | MSTORE           |
-    // Return the proxy bytecode
-    // 0x6008     | PUSH1 8          | 8
-    // 0x6018     | PUSH1 24         | 24 8
-    // 0xf3       | RETURN           |
-
-    ////////////////////////////// PROXY BYTECODE //////////////////////////////
-    // Opcode     | Opcode name      | Stack values after executing
-    // Copy the calldata to memory
-    // 0x36       | CALLDATASIZE     | size
-    // 0x3d       | RETURNDATASIZE   | 0 size
-    // 0x3d       | RETURNDATASIZE   | 0 0 size
-    // 0x37       | CALLDATACOPY     |
-    // Create the contract
-    // 0x36       | CALLDATASIZE     | size
-    // 0x3d       | RETURNDATASIZE   | 0 size
-    // 0x34       | CALLVALUE        | value 0 size
-    // 0xf0       | CREATE           | newContract
-
-    bytes private constant PROXY_CREATION_CODE =
-    // Proxy creation code up to `PUSH8`
-        hex"67"
-        // Proxy bytecode
-        hex"363d3d37363d34f0"
-        // Proxy creation code after `PUSH8`
-        hex"3d5260086018f3";
-
-    /// @notice Deploys a contract under a deterministic address.
+    /// @notice Deploys a contract using CREATE3.
     /// @param amount The amount to pass into the deployed contract's constructor.
-    /// @param salt The salt to use. It must have never been used by this contract.
-    /// @param initCode The init code of the deployed contract.
-    function deploy(uint256 amount, bytes32 salt, bytes memory initCode) internal {
-        (address proxy, address addr) = _computeAddress(salt, address(this));
-        require(!proxy.isContract(), "Salt already used");
-        require(amount <= address(this).balance, "Balance too low");
+    /// @param salt The deployer-specific salt for determining the deployed contract's address.
+    /// @param creationCode The creation code of the contract to deploy.
+    function deploy(uint256 amount, bytes32 salt, bytes memory creationCode) internal {
         // slither-disable-next-line unused-return
-        Create2.deploy(0, salt, PROXY_CREATION_CODE);
-        bool success;
-        // slither-disable-next-line low-level-calls
-        (success,) = proxy.call{value: amount}(initCode);
-        require(addr.isContract(), "Deployment failed");
+        _CREATE3_FACTORY.deploy{value: amount}(salt, creationCode);
     }
 
-    /// @notice Computes the deterministic address of a contract deployed by this contract.
-    /// The deployed contract doesn't need to be deployed yet, it's a hypothetical address.
-    /// @param salt The salt used for deployment.
-    /// @return addr The deployed contract's address.
-    function computeAddress(bytes32 salt) internal view returns (address addr) {
-        return computeAddress(salt, address(this));
+    /// @notice Predicts the address of a contract deployed by this contract.
+    /// @param salt The deployer-specific salt for determining the deployed contract's address.
+    /// @return deployed The address of the contract that will be deployed.
+    function getDeployed(bytes32 salt) internal view returns (address deployed) {
+        return _CREATE3_FACTORY.getDeployed(address(this), salt);
     }
+}
 
-    /// @notice Computes the deterministic address of a contract deployed by a deployer.
-    /// The contract doesn't need to be deployed yet, it's a hypothetical address.
-    /// @param salt The salt used for deployment.
-    /// @param deployer The address of the deployer of the proxy and the contract.
-    /// @return addr The deployed contract's address.
-    function computeAddress(bytes32 salt, address deployer) internal pure returns (address addr) {
-        (, addr) = _computeAddress(salt, deployer);
-    }
+/// @title Factory for deploying contracts to deterministic addresses via CREATE3.
+/// @author zefram.eth, taken from https://github.com/ZeframLou/create3-factory.
+/// @notice Enables deploying contracts using CREATE3.
+/// Each deployer (`msg.sender`) has its own namespace for deployed addresses.
+interface ICreate3Factory {
+    /// @notice Deploys a contract using CREATE3.
+    /// @dev The provided salt is hashed together with msg.sender to generate the final salt.
+    /// @param salt The deployer-specific salt for determining the deployed contract's address.
+    /// @param creationCode The creation code of the contract to deploy.
+    /// @return deployed The address of the deployed contract.
+    function deploy(bytes32 salt, bytes memory creationCode)
+        external
+        payable
+        returns (address deployed);
 
-    /// @notice Computes the deterministic address of a proxy and a contract deployed by a deployer.
-    /// The proxy and the contract don't need to be deployed yet, these are hypothetical addresses.
-    /// @param salt The salt used for deployment.
-    /// @param deployer The address of the deployer of the proxy and the contract.
-    /// @return proxy The proxy's address.
-    /// @return addr The deployed contract's address.
-    function _computeAddress(bytes32 salt, address deployer)
-        private
-        pure
-        returns (address proxy, address addr)
-    {
-        proxy = Create2.computeAddress(salt, keccak256(PROXY_CREATION_CODE), deployer);
-        addr = address(uint160(uint256(keccak256(abi.encodePacked(hex"d694", proxy, hex"01")))));
-    }
+    /// @notice Predicts the address of a deployed contract.
+    /// @dev The provided salt is hashed together
+    /// with the deployer address to generate the final salt.
+    /// @param deployer The deployer account that will call `deploy()`.
+    /// @param salt The deployer-specific salt for determining the deployed contract's address.
+    /// @return deployed The address of the contract that will be deployed.
+    function getDeployed(address deployer, bytes32 salt) external view returns (address deployed);
 }
