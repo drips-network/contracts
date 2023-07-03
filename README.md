@@ -100,10 +100,6 @@ Set up environment variables configuring the deployed contracts:
 export ADMIN="<ADDRESS>"
 
 # OPTIONAL
-# Address of the DripsDeployer to use. If not set, a new instance will be deployed.
-export DRIPS_DEPLOYER="<ADDRESS>"
-
-# OPTIONAL
 # The salt used for the deployment of a DripsDeployer instance. If not set, `DripsDeployer` is used.
 export DRIPS_DEPLOYER_SALT="<SALT>"
 
