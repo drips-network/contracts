@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.19;
 
+import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
+
 /// @notice A splits receiver
 struct SplitsReceiver {
     /// @notice The account ID.
@@ -12,7 +14,7 @@ struct SplitsReceiver {
 }
 
 /// @notice Splits can keep track of at most `type(uint128).max`
-/// which is `2 ^ 128 - 1` units of each asset.
+/// which is `2 ^ 128 - 1` units of each ERC-20 token.
 /// It's up to the caller to guarantee that this limit is never exceeded,
 /// failing to do so may result in a total protocol collapse.
 abstract contract Splits {
@@ -21,7 +23,7 @@ abstract contract Splits {
     uint256 internal constant _MAX_SPLITS_RECEIVERS = 200;
     /// @notice The total splits weight of an account.
     uint32 internal constant _TOTAL_SPLITS_WEIGHT = 1_000_000;
-    /// @notice The amount the contract can keep track of each asset.
+    /// @notice The amount the contract can keep track of each ERC-20 token.
     // slither-disable-next-line unused-state
     uint128 internal constant _MAX_SPLITS_BALANCE = type(uint128).max;
     /// @notice The storage slot holding a single `SplitsStorage` structure.
@@ -29,34 +31,34 @@ abstract contract Splits {
 
     /// @notice Emitted when an account collects funds
     /// @param accountId The account ID.
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token.
     /// @param collected The collected amount
-    event Collected(uint256 indexed accountId, uint256 indexed assetId, uint128 collected);
+    event Collected(uint256 indexed accountId, IERC20 indexed erc20, uint128 collected);
 
     /// @notice Emitted when funds are split from an account to a receiver.
     /// This is caused by the account collecting received funds.
     /// @param accountId The account ID.
     /// @param receiver The splits receiver account ID
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token.
     /// @param amt The amount split to the receiver
     event Split(
-        uint256 indexed accountId, uint256 indexed receiver, uint256 indexed assetId, uint128 amt
+        uint256 indexed accountId, uint256 indexed receiver, IERC20 indexed erc20, uint128 amt
     );
 
     /// @notice Emitted when funds are made collectable after splitting.
     /// @param accountId The account ID.
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token.
     /// @param amt The amount made collectable for the account
     /// on top of what was collectable before.
-    event Collectable(uint256 indexed accountId, uint256 indexed assetId, uint128 amt);
+    event Collectable(uint256 indexed accountId, IERC20 indexed erc20, uint128 amt);
 
     /// @notice Emitted when funds are given from the account to the receiver.
     /// @param accountId The account ID.
     /// @param receiver The receiver account ID.
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token.
     /// @param amt The given amount
     event Given(
-        uint256 indexed accountId, uint256 indexed receiver, uint256 indexed assetId, uint128 amt
+        uint256 indexed accountId, uint256 indexed receiver, IERC20 indexed erc20, uint128 amt
     );
 
     /// @notice Emitted when the account's splits are updated.
@@ -83,7 +85,7 @@ abstract contract Splits {
         /// @notice The account's splits configuration hash, see `hashSplits`.
         bytes32 splitsHash;
         /// @notice The account's splits balances.
-        mapping(uint256 assetId => SplitsBalance) balances;
+        mapping(IERC20 erc20 => SplitsBalance) balances;
     }
 
     struct SplitsBalance {
@@ -98,16 +100,16 @@ abstract contract Splits {
         _splitsStorageSlot = splitsStorageSlot;
     }
 
-    function _addSplittable(uint256 accountId, uint256 assetId, uint128 amt) internal {
-        _splitsStorage().splitsStates[accountId].balances[assetId].splittable += amt;
+    function _addSplittable(uint256 accountId, IERC20 erc20, uint128 amt) internal {
+        _splitsStorage().splitsStates[accountId].balances[erc20].splittable += amt;
     }
 
     /// @notice Returns account's received but not split yet funds.
     /// @param accountId The account ID.
-    /// @param assetId The used asset ID.
+    /// @param erc20 The used ERC-20 token.
     /// @return amt The amount received but not split yet.
-    function _splittable(uint256 accountId, uint256 assetId) internal view returns (uint128 amt) {
-        return _splitsStorage().splitsStates[accountId].balances[assetId].splittable;
+    function _splittable(uint256 accountId, IERC20 erc20) internal view returns (uint128 amt) {
+        return _splitsStorage().splitsStates[accountId].balances[erc20].splittable;
     }
 
     /// @notice Calculate the result of splitting an amount using the current splits configuration.
@@ -138,21 +140,21 @@ abstract contract Splits {
     }
 
     /// @notice Splits the account's splittable funds among receivers.
-    /// The entire splittable balance of the given asset is split.
+    /// The entire splittable balance of the given ERC-20 token is split.
     /// All split funds are split using the current splits configuration.
     /// @param accountId The account ID.
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token.
     /// @param currReceivers The list of the account's current splits receivers.
     /// It must be exactly the same as the last list set for the account with `_setSplits`.
     /// @return collectableAmt The amount made collectable for the account
     /// on top of what was collectable before.
     /// @return splitAmt The amount split to the account's splits receivers
-    function _split(uint256 accountId, uint256 assetId, SplitsReceiver[] memory currReceivers)
+    function _split(uint256 accountId, IERC20 erc20, SplitsReceiver[] memory currReceivers)
         internal
         returns (uint128 collectableAmt, uint128 splitAmt)
     {
         _assertCurrSplits(accountId, currReceivers);
-        SplitsBalance storage balance = _splitsStorage().splitsStates[accountId].balances[assetId];
+        SplitsBalance storage balance = _splitsStorage().splitsStates[accountId].balances[erc20];
 
         collectableAmt = balance.splittable;
         if (collectableAmt == 0) {
@@ -168,46 +170,47 @@ abstract contract Splits {
                     uint128(collectableAmt * splitsWeight / _TOTAL_SPLITS_WEIGHT) - splitAmt;
                 splitAmt += currSplitAmt;
                 uint256 receiver = currReceivers[i].accountId;
-                _addSplittable(receiver, assetId, currSplitAmt);
-                emit Split(accountId, receiver, assetId, currSplitAmt);
+                _addSplittable(receiver, erc20, currSplitAmt);
+                emit Split(accountId, receiver, erc20, currSplitAmt);
             }
             collectableAmt -= splitAmt;
             balance.collectable += collectableAmt;
         }
-        emit Collectable(accountId, assetId, collectableAmt);
+        emit Collectable(accountId, erc20, collectableAmt);
     }
 
     /// @notice Returns account's received funds already split and ready to be collected.
     /// @param accountId The account ID.
-    /// @param assetId The used asset ID.
+    /// @param erc20 The used ERC-20 token.
     /// @return amt The collectable amount.
-    function _collectable(uint256 accountId, uint256 assetId) internal view returns (uint128 amt) {
-        return _splitsStorage().splitsStates[accountId].balances[assetId].collectable;
+    function _collectable(uint256 accountId, IERC20 erc20) internal view returns (uint128 amt) {
+        return _splitsStorage().splitsStates[accountId].balances[erc20].collectable;
     }
 
     /// @notice Collects account's received already split funds.
     /// @param accountId The account ID.
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token.
     /// @return amt The collected amount
-    function _collect(uint256 accountId, uint256 assetId) internal returns (uint128 amt) {
-        SplitsBalance storage balance = _splitsStorage().splitsStates[accountId].balances[assetId];
+    function _collect(uint256 accountId, IERC20 erc20) internal returns (uint128 amt) {
+        SplitsBalance storage balance = _splitsStorage().splitsStates[accountId].balances[erc20];
         amt = balance.collectable;
         balance.collectable = 0;
-        emit Collected(accountId, assetId, amt);
+        emit Collected(accountId, erc20, amt);
     }
 
     /// @notice Gives funds from the account to the receiver.
     /// The receiver can split and collect them immediately.
     /// @param accountId The account ID.
     /// @param receiver The receiver account ID.
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token.
     /// @param amt The given amount
-    function _give(uint256 accountId, uint256 receiver, uint256 assetId, uint128 amt) internal {
-        _addSplittable(receiver, assetId, amt);
-        emit Given(accountId, receiver, assetId, amt);
+    function _give(uint256 accountId, uint256 receiver, IERC20 erc20, uint128 amt) internal {
+        _addSplittable(receiver, erc20, amt);
+        emit Given(accountId, receiver, erc20, amt);
     }
 
-    /// @notice Sets the account splits configuration. The configuration is common for all assets.
+    /// @notice Sets the account splits configuration.
+    /// The configuration is common for all ERC-20 tokens.
     /// Nothing happens to the currently splittable funds, but when they are split
     /// after this function finishes, the new splits configuration will be used.
     /// @param accountId The account ID.

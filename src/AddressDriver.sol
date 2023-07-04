@@ -144,7 +144,8 @@ contract AddressDriver is Managed, ERC2771Context {
         if (realBalanceDelta < 0) drips.withdraw(erc20, transferTo, uint128(-realBalanceDelta));
     }
 
-    /// @notice Sets the account splits configuration. The configuration is common for all assets.
+    /// @notice Sets the account splits configuration.
+    /// The configuration is common for all ERC-20 tokens.
     /// Nothing happens to the currently splittable funds, but when they are split
     /// after this function finishes, the new splits configuration will be used.
     /// Because anybody can call `split` on `Drips`, calling this function may be frontrun

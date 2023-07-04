@@ -18,7 +18,7 @@ import {
 
 contract DripsTest is Test {
     Drips internal drips;
-    // The ERC-20 used in all helper functions
+    // The ERC-20 token used in all helper functions
     IERC20 internal erc20;
     IERC20 internal defaultErc20;
     IERC20 internal otherErc20;

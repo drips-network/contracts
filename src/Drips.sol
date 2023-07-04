@@ -330,7 +330,7 @@ contract Drips is Managed, Streams, Splits {
         view
         returns (uint32 cycles)
     {
-        return Streams._receivableStreamsCycles(accountId, _assetId(erc20));
+        return Streams._receivableStreamsCycles(accountId, erc20);
     }
 
     /// @notice Calculate effects of calling `receiveStreams` with the given parameters.
@@ -350,7 +350,7 @@ contract Drips is Managed, Streams, Splits {
         view
         returns (uint128 receivableAmt)
     {
-        (receivableAmt,,,,) = Streams._receiveStreamsResult(accountId, _assetId(erc20), maxCycles);
+        (receivableAmt,,,,) = Streams._receiveStreamsResult(accountId, erc20, maxCycles);
     }
 
     /// @notice Receive streams for the account.
@@ -372,11 +372,10 @@ contract Drips is Managed, Streams, Splits {
         whenNotPaused
         returns (uint128 receivedAmt)
     {
-        uint256 assetId = _assetId(erc20);
-        receivedAmt = Streams._receiveStreams(accountId, assetId, maxCycles);
+        receivedAmt = Streams._receiveStreams(accountId, erc20, maxCycles);
         if (receivedAmt != 0) {
             _moveBalanceFromStreamsToSplits(erc20, receivedAmt);
-            Splits._addSplittable(accountId, assetId, receivedAmt);
+            Splits._addSplittable(accountId, erc20, receivedAmt);
         }
     }
 
@@ -407,11 +406,10 @@ contract Drips is Managed, Streams, Splits {
         bytes32 historyHash,
         StreamsHistory[] memory streamsHistory
     ) public whenNotPaused returns (uint128 amt) {
-        uint256 assetId = _assetId(erc20);
-        amt = Streams._squeezeStreams(accountId, assetId, senderId, historyHash, streamsHistory);
+        amt = Streams._squeezeStreams(accountId, erc20, senderId, historyHash, streamsHistory);
         if (amt != 0) {
             _moveBalanceFromStreamsToSplits(erc20, amt);
-            Splits._addSplittable(accountId, assetId, amt);
+            Splits._addSplittable(accountId, erc20, amt);
         }
     }
 
@@ -435,9 +433,8 @@ contract Drips is Managed, Streams, Splits {
         bytes32 historyHash,
         StreamsHistory[] memory streamsHistory
     ) public view returns (uint128 amt) {
-        (amt,,,,) = Streams._squeezeStreamsResult(
-            accountId, _assetId(erc20), senderId, historyHash, streamsHistory
-        );
+        (amt,,,,) =
+            Streams._squeezeStreamsResult(accountId, erc20, senderId, historyHash, streamsHistory);
     }
 
     /// @notice Returns account's received but not split yet funds.
@@ -450,7 +447,7 @@ contract Drips is Managed, Streams, Splits {
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @return amt The amount received but not split yet.
     function splittable(uint256 accountId, IERC20 erc20) public view returns (uint128 amt) {
-        return Splits._splittable(accountId, _assetId(erc20));
+        return Splits._splittable(accountId, erc20);
     }
 
     /// @notice Calculate the result of splitting an amount using the current splits configuration.
@@ -470,7 +467,7 @@ contract Drips is Managed, Streams, Splits {
     }
 
     /// @notice Splits the account's splittable funds among receivers.
-    /// The entire splittable balance of the given asset is split.
+    /// The entire splittable balance of the given ERC-20 token is split.
     /// All split funds are split using the current splits configuration.
     /// Because the account can update their splits configuration at any time,
     /// it is possible that calling this function will be frontrun,
@@ -494,7 +491,7 @@ contract Drips is Managed, Streams, Splits {
         whenNotPaused
         returns (uint128 collectableAmt, uint128 splitAmt)
     {
-        return Splits._split(accountId, _assetId(erc20), currReceivers);
+        return Splits._split(accountId, erc20, currReceivers);
     }
 
     /// @notice Returns account's received funds already split and ready to be collected.
@@ -507,7 +504,7 @@ contract Drips is Managed, Streams, Splits {
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @return amt The collectable amount.
     function collectable(uint256 accountId, IERC20 erc20) public view returns (uint128 amt) {
-        return Splits._collectable(accountId, _assetId(erc20));
+        return Splits._collectable(accountId, erc20);
     }
 
     /// @notice Collects account's received already split funds and makes them withdrawable.
@@ -527,7 +524,7 @@ contract Drips is Managed, Streams, Splits {
         onlyDriver(accountId)
         returns (uint128 amt)
     {
-        amt = Splits._collect(accountId, _assetId(erc20));
+        amt = Splits._collect(accountId, erc20);
         if (amt != 0) _decreaseSplitsBalance(erc20, amt);
     }
 
@@ -551,7 +548,7 @@ contract Drips is Managed, Streams, Splits {
         onlyDriver(accountId)
     {
         if (amt != 0) _increaseSplitsBalance(erc20, amt);
-        Splits._give(accountId, receiver, _assetId(erc20), amt);
+        Splits._give(accountId, receiver, erc20, amt);
     }
 
     /// @notice Current account streams state.
@@ -578,7 +575,7 @@ contract Drips is Managed, Streams, Splits {
             uint32 maxEnd
         )
     {
-        return Streams._streamsState(accountId, _assetId(erc20));
+        return Streams._streamsState(accountId, erc20);
     }
 
     /// @notice The account's streams balance at the given timestamp.
@@ -602,7 +599,7 @@ contract Drips is Managed, Streams, Splits {
         StreamReceiver[] memory currReceivers,
         uint32 timestamp
     ) public view returns (uint128 balance) {
-        return Streams._balanceAt(accountId, _assetId(erc20), currReceivers, timestamp);
+        return Streams._balanceAt(accountId, erc20, currReceivers, timestamp);
     }
 
     /// @notice Sets the account's streams configuration.
@@ -662,13 +659,7 @@ contract Drips is Managed, Streams, Splits {
     ) public whenNotPaused onlyDriver(accountId) returns (int128 realBalanceDelta) {
         if (balanceDelta > 0) _increaseStreamsBalance(erc20, uint128(balanceDelta));
         realBalanceDelta = Streams._setStreams(
-            accountId,
-            _assetId(erc20),
-            currReceivers,
-            balanceDelta,
-            newReceivers,
-            maxEndHint1,
-            maxEndHint2
+            accountId, erc20, currReceivers, balanceDelta, newReceivers, maxEndHint1, maxEndHint2
         );
         if (realBalanceDelta < 0) _decreaseStreamsBalance(erc20, uint128(-realBalanceDelta));
     }
@@ -705,7 +696,8 @@ contract Drips is Managed, Streams, Splits {
         return Streams._hashStreamsHistory(oldStreamsHistoryHash, streamsHash, updateTime, maxEnd);
     }
 
-    /// @notice Sets the account splits configuration. The configuration is common for all assets.
+    /// @notice Sets the account splits configuration.
+    /// The configuration is common for all ERC-20 tokens.
     /// Nothing happens to the currently splittable funds, but when they are split
     /// after this function finishes, the new splits configuration will be used.
     /// Because anybody can call `split`, calling this function may be frontrun
@@ -775,12 +767,5 @@ contract Drips is Managed, Streams, Splits {
         assembly {
             storageRef.slot := slot
         }
-    }
-
-    /// @notice Generates an asset ID for the ERC-20 token
-    /// @param erc20 The ERC-20 token
-    /// @return assetId The asset ID
-    function _assetId(IERC20 erc20) internal pure returns (uint256 assetId) {
-        return uint160(address(erc20));
     }
 }

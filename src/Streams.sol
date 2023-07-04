@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.19;
 
+import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
+
 /// @notice A stream receiver
 struct StreamReceiver {
     /// @notice The account ID.
@@ -141,7 +143,7 @@ library StreamConfigImpl {
 }
 
 /// @notice Streams can keep track of at most `type(int128).max`
-/// which is `2 ^ 127 - 1` units of each asset.
+/// which is `2 ^ 127 - 1` units of each ERC-20 token.
 /// It's up to the caller to guarantee that this limit is never exceeded,
 /// failing to do so may result in a total protocol collapse.
 abstract contract Streams {
@@ -152,7 +154,7 @@ abstract contract Streams {
     uint8 internal constant _AMT_PER_SEC_EXTRA_DECIMALS = 9;
     /// @notice The multiplier for all amtPerSec values. It's `10 ** _AMT_PER_SEC_EXTRA_DECIMALS`.
     uint160 internal constant _AMT_PER_SEC_MULTIPLIER = 1_000_000_000;
-    /// @notice The amount the contract can keep track of each asset.
+    /// @notice The amount the contract can keep track of each ERC-20 token.
     uint128 internal constant _MAX_STREAMS_BALANCE = uint128(type(int128).max);
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
     /// gain access to streams received during `T - cycleSecs` to `T - 1`.
@@ -167,7 +169,7 @@ abstract contract Streams {
 
     /// @notice Emitted when the streams configuration of an account is updated.
     /// @param accountId The account ID.
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token.
     /// @param receiversHash The streams receivers list hash
     /// @param streamsHistoryHash The streams history hash that was valid right before the update.
     /// @param balance The account's streams balance. These funds will be streamed to the receivers.
@@ -176,7 +178,7 @@ abstract contract Streams {
     /// If the balance is 0 or there are no receivers, it's set to the current timestamp.
     event StreamsSet(
         uint256 indexed accountId,
-        uint256 indexed assetId,
+        IERC20 indexed erc20,
         bytes32 indexed receiversHash,
         bytes32 streamsHistoryHash,
         uint128 balance,
@@ -193,16 +195,16 @@ abstract contract Streams {
 
     /// @notice Emitted when streams are received.
     /// @param accountId The account ID.
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token.
     /// @param amt The received amount.
     /// @param receivableCycles The number of cycles which still can be received.
     event ReceivedStreams(
-        uint256 indexed accountId, uint256 indexed assetId, uint128 amt, uint32 receivableCycles
+        uint256 indexed accountId, IERC20 indexed erc20, uint128 amt, uint32 receivableCycles
     );
 
     /// @notice Emitted when streams are squeezed.
     /// @param accountId The squeezing account ID.
-    /// @param assetId The used asset ID.
+    /// @param erc20 The used ERC-20 token.
     /// @param senderId The ID of the streaming account from whom funds are squeezed.
     /// @param amt The squeezed amount.
     /// @param streamsHistoryHashes The history hashes of all squeezed streams history entries.
@@ -211,7 +213,7 @@ abstract contract Streams {
     /// Sorted in the oldest streams configuration to the newest.
     event SqueezedStreams(
         uint256 indexed accountId,
-        uint256 indexed assetId,
+        IERC20 indexed erc20,
         uint256 indexed senderId,
         uint128 amt,
         bytes32[] streamsHistoryHashes
@@ -219,7 +221,7 @@ abstract contract Streams {
 
     struct StreamsStorage {
         /// @notice Account streams states.
-        mapping(uint256 assetId => mapping(uint256 accountId => StreamsState)) states;
+        mapping(IERC20 erc20 => mapping(uint256 accountId => StreamsState)) states;
     }
 
     struct StreamsState {
@@ -273,12 +275,12 @@ abstract contract Streams {
     /// @notice Receive streams from unreceived cycles of the account.
     /// Received streams cycles won't need to be analyzed ever again.
     /// @param accountId The account ID.
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token.
     /// @param maxCycles The maximum number of received streams cycles.
     /// If too low, receiving will be cheap, but may not cover many cycles.
     /// If too high, receiving may become too expensive to fit in a single transaction.
     /// @return receivedAmt The received amount
-    function _receiveStreams(uint256 accountId, uint256 assetId, uint32 maxCycles)
+    function _receiveStreams(uint256 accountId, IERC20 erc20, uint32 maxCycles)
         internal
         returns (uint128 receivedAmt)
     {
@@ -287,9 +289,9 @@ abstract contract Streams {
         uint32 toCycle;
         int128 finalAmtPerCycle;
         (receivedAmt, receivableCycles, fromCycle, toCycle, finalAmtPerCycle) =
-            _receiveStreamsResult(accountId, assetId, maxCycles);
+            _receiveStreamsResult(accountId, erc20, maxCycles);
         if (fromCycle != toCycle) {
-            StreamsState storage state = _streamsStorage().states[assetId][accountId];
+            StreamsState storage state = _streamsStorage().states[erc20][accountId];
             state.nextReceivableCycle = toCycle;
             mapping(uint32 cycle => AmtDelta) storage amtDeltas = state.amtDeltas;
             unchecked {
@@ -303,12 +305,12 @@ abstract contract Streams {
                 }
             }
         }
-        emit ReceivedStreams(accountId, assetId, receivedAmt, receivableCycles);
+        emit ReceivedStreams(accountId, erc20, receivedAmt, receivableCycles);
     }
 
     /// @notice Calculate effects of calling `_receiveStreams` with the given parameters.
     /// @param accountId The account ID.
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token.
     /// @param maxCycles The maximum number of received streams cycles.
     /// If too low, receiving will be cheap, but may not cover many cycles.
     /// If too high, receiving may become too expensive to fit in a single transaction.
@@ -317,7 +319,7 @@ abstract contract Streams {
     /// @return fromCycle The cycle from which funds would be received
     /// @return toCycle The cycle to which funds would be received
     /// @return amtPerCycle The amount per cycle when `toCycle` starts.
-    function _receiveStreamsResult(uint256 accountId, uint256 assetId, uint32 maxCycles)
+    function _receiveStreamsResult(uint256 accountId, IERC20 erc20, uint32 maxCycles)
         internal
         view
         returns (
@@ -329,13 +331,13 @@ abstract contract Streams {
         )
     {
         unchecked {
-            (fromCycle, toCycle) = _receivableStreamsCyclesRange(accountId, assetId);
+            (fromCycle, toCycle) = _receivableStreamsCyclesRange(accountId, erc20);
             if (toCycle - fromCycle > maxCycles) {
                 receivableCycles = toCycle - fromCycle - maxCycles;
                 toCycle -= receivableCycles;
             }
             mapping(uint32 cycle => AmtDelta) storage amtDeltas =
-                _streamsStorage().states[assetId][accountId].amtDeltas;
+                _streamsStorage().states[erc20][accountId].amtDeltas;
             for (uint32 cycle = fromCycle; cycle < toCycle; cycle++) {
                 AmtDelta memory amtDelta = amtDeltas[cycle];
                 amtPerCycle += amtDelta.thisCycle;
@@ -349,30 +351,30 @@ abstract contract Streams {
     /// This function can be used to detect that there are
     /// too many cycles to analyze in a single transaction.
     /// @param accountId The account ID.
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token.
     /// @return cycles The number of cycles which can be flushed
-    function _receivableStreamsCycles(uint256 accountId, uint256 assetId)
+    function _receivableStreamsCycles(uint256 accountId, IERC20 erc20)
         internal
         view
         returns (uint32 cycles)
     {
         unchecked {
-            (uint32 fromCycle, uint32 toCycle) = _receivableStreamsCyclesRange(accountId, assetId);
+            (uint32 fromCycle, uint32 toCycle) = _receivableStreamsCyclesRange(accountId, erc20);
             return toCycle - fromCycle;
         }
     }
 
     /// @notice Calculates the cycles range from which streams can be received.
     /// @param accountId The account ID.
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token.
     /// @return fromCycle The cycle from which funds can be received
     /// @return toCycle The cycle to which funds can be received
-    function _receivableStreamsCyclesRange(uint256 accountId, uint256 assetId)
+    function _receivableStreamsCyclesRange(uint256 accountId, IERC20 erc20)
         private
         view
         returns (uint32 fromCycle, uint32 toCycle)
     {
-        fromCycle = _streamsStorage().states[assetId][accountId].nextReceivableCycle;
+        fromCycle = _streamsStorage().states[erc20][accountId].nextReceivableCycle;
         toCycle = _cycleOf(_currTimestamp());
         // slither-disable-next-line timestamp
         if (fromCycle == 0 || toCycle < fromCycle) {
@@ -386,7 +388,7 @@ abstract contract Streams {
     /// to `_squeezeStreams` or `_receiveStreams`.
     /// Only funds streamed before `block.timestamp` can be squeezed.
     /// @param accountId The ID of the account receiving streams to squeeze funds for.
-    /// @param assetId The used asset ID.
+    /// @param erc20 The used ERC-20 token.
     /// @param senderId The ID of the streaming account to squeeze funds from.
     /// @param historyHash The sender's history hash that was valid right before
     /// they set up the sequence of configurations described by `streamsHistory`.
@@ -398,7 +400,7 @@ abstract contract Streams {
     /// @return amt The squeezed amount.
     function _squeezeStreams(
         uint256 accountId,
-        uint256 assetId,
+        IERC20 erc20,
         uint256 senderId,
         bytes32 historyHash,
         StreamsHistory[] memory streamsHistory
@@ -409,9 +411,9 @@ abstract contract Streams {
             bytes32[] memory historyHashes;
             uint256 currCycleConfigs;
             (amt, squeezedNum, squeezedRevIdxs, historyHashes, currCycleConfigs) =
-                _squeezeStreamsResult(accountId, assetId, senderId, historyHash, streamsHistory);
+                _squeezeStreamsResult(accountId, erc20, senderId, historyHash, streamsHistory);
             bytes32[] memory squeezedHistoryHashes = new bytes32[](squeezedNum);
-            StreamsState storage state = _streamsStorage().states[assetId][accountId];
+            StreamsState storage state = _streamsStorage().states[erc20][accountId];
             uint32[2 ** 32] storage nextSqueezed = state.nextSqueezed[senderId];
             for (uint256 i = 0; i < squeezedNum; i++) {
                 // `squeezedRevIdxs` are sorted from the newest configuration to the oldest,
@@ -424,14 +426,14 @@ abstract contract Streams {
             _addDeltaRange(
                 state, cycleStart, cycleStart + 1, -int160(amt * _AMT_PER_SEC_MULTIPLIER)
             );
-            emit SqueezedStreams(accountId, assetId, senderId, amt, squeezedHistoryHashes);
+            emit SqueezedStreams(accountId, erc20, senderId, amt, squeezedHistoryHashes);
         }
     }
 
     /// @notice Calculate effects of calling `_squeezeStreams` with the given parameters.
     /// See its documentation for more details.
     /// @param accountId The ID of the account receiving streams to squeeze funds for.
-    /// @param assetId The used asset ID.
+    /// @param erc20 The used ERC-20 token.
     /// @param senderId The ID of the streaming account to squeeze funds from.
     /// @param historyHash The sender's history hash that was valid right before `streamsHistory`.
     /// @param streamsHistory The sequence of the sender's streams configurations.
@@ -453,7 +455,7 @@ abstract contract Streams {
     /// This is also the number of used entries in each of the sender's `nextSqueezed` arrays.
     function _squeezeStreamsResult(
         uint256 accountId,
-        uint256 assetId,
+        IERC20 erc20,
         uint256 senderId,
         bytes32 historyHash,
         StreamsHistory[] memory streamsHistory
@@ -469,7 +471,7 @@ abstract contract Streams {
         )
     {
         {
-            StreamsState storage sender = _streamsStorage().states[assetId][senderId];
+            StreamsState storage sender = _streamsStorage().states[erc20][senderId];
             historyHashes =
                 _verifyStreamsHistory(historyHash, streamsHistory, sender.streamsHistoryHash);
             // If the last update was not in the current cycle,
@@ -480,7 +482,7 @@ abstract contract Streams {
         }
         squeezedRevIdxs = new uint256[](streamsHistory.length);
         uint32[2 ** 32] storage nextSqueezed =
-            _streamsStorage().states[assetId][accountId].nextSqueezed[senderId];
+            _streamsStorage().states[erc20][accountId].nextSqueezed[senderId];
         uint32 squeezeEndCap = _currTimestamp();
         unchecked {
             for (uint256 i = 1; i <= streamsHistory.length && i <= currCycleConfigs; i++) {
@@ -572,13 +574,13 @@ abstract contract Streams {
 
     /// @notice Current account streams state.
     /// @param accountId The account ID.
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token.
     /// @return streamsHash The current streams receivers list hash, see `_hashStreams`
     /// @return streamsHistoryHash The current streams history hash, see `_hashStreamsHistory`.
     /// @return updateTime The time when streams have been configured for the last time.
     /// @return balance The balance when streams have been configured for the last time.
     /// @return maxEnd The current maximum end time of streaming.
-    function _streamsState(uint256 accountId, uint256 assetId)
+    function _streamsState(uint256 accountId, IERC20 erc20)
         internal
         view
         returns (
@@ -589,7 +591,7 @@ abstract contract Streams {
             uint32 maxEnd
         )
     {
-        StreamsState storage state = _streamsStorage().states[assetId][accountId];
+        StreamsState storage state = _streamsStorage().states[erc20][accountId];
         return (
             state.streamsHash,
             state.streamsHistoryHash,
@@ -601,7 +603,7 @@ abstract contract Streams {
 
     /// @notice The account's streams balance at the given timestamp.
     /// @param accountId The account ID.
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token.
     /// @param currReceivers The current streams receivers list.
     /// It must be exactly the same as the last list set for the account with `_setStreams`.
     /// @param timestamp The timestamps for which balance should be calculated.
@@ -611,11 +613,11 @@ abstract contract Streams {
     /// @return balance The account balance on `timestamp`
     function _balanceAt(
         uint256 accountId,
-        uint256 assetId,
+        IERC20 erc20,
         StreamReceiver[] memory currReceivers,
         uint32 timestamp
     ) internal view returns (uint128 balance) {
-        StreamsState storage state = _streamsStorage().states[assetId][accountId];
+        StreamsState storage state = _streamsStorage().states[erc20][accountId];
         require(timestamp >= state.updateTime, "Timestamp before the last update");
         _verifyStreamsReceivers(currReceivers, state);
         return _calcBalance(state.balance, state.updateTime, state.maxEnd, currReceivers, timestamp);
@@ -656,7 +658,7 @@ abstract contract Streams {
 
     /// @notice Sets the account's streams configuration.
     /// @param accountId The account ID.
-    /// @param assetId The used asset ID
+    /// @param erc20 The used ERC-20 token.
     /// @param currReceivers The current streams receivers list.
     /// It must be exactly the same as the last list set for the account with `_setStreams`.
     /// If this is the first update, pass an empty array.
@@ -690,7 +692,7 @@ abstract contract Streams {
     /// @return realBalanceDelta The actually applied streams balance change.
     function _setStreams(
         uint256 accountId,
-        uint256 assetId,
+        IERC20 erc20,
         StreamReceiver[] memory currReceivers,
         int128 balanceDelta,
         StreamReceiver[] memory newReceivers,
@@ -699,7 +701,7 @@ abstract contract Streams {
         uint32 maxEndHint2
     ) internal returns (int128 realBalanceDelta) {
         unchecked {
-            StreamsState storage state = _streamsStorage().states[assetId][accountId];
+            StreamsState storage state = _streamsStorage().states[erc20][accountId];
             _verifyStreamsReceivers(currReceivers, state);
             uint32 lastUpdate = state.updateTime;
             uint128 newBalance;
@@ -719,7 +721,7 @@ abstract contract Streams {
                 newBalance = uint128(currBalance + realBalanceDelta);
                 newMaxEnd = _calcMaxEnd(newBalance, newReceivers, maxEndHint1, maxEndHint2);
                 _updateReceiverStates(
-                    _streamsStorage().states[assetId],
+                    _streamsStorage().states[erc20],
                     currReceivers,
                     lastUpdate,
                     currMaxEnd,
@@ -740,9 +742,7 @@ abstract contract Streams {
             bytes32 newStreamsHash = _hashStreams(newReceivers);
             state.streamsHistoryHash =
                 _hashStreamsHistory(streamsHistory, newStreamsHash, _currTimestamp(), newMaxEnd);
-            emit StreamsSet(
-                accountId, assetId, newStreamsHash, streamsHistory, newBalance, newMaxEnd
-            );
+            emit StreamsSet(accountId, erc20, newStreamsHash, streamsHistory, newBalance, newMaxEnd);
             // slither-disable-next-line timestamp
             if (newStreamsHash != state.streamsHash) {
                 state.streamsHash = newStreamsHash;
@@ -985,7 +985,7 @@ abstract contract Streams {
     }
 
     /// @notice Applies the effects of the change of the streams on the receivers' streams state.
-    /// @param states The streams states for the used asset.
+    /// @param states The streams states for the used ERC-20 token.
     /// @param currReceivers The list of the streams receivers
     /// set in the last streams update of the account.
     /// If this is the first update, pass an empty array.
