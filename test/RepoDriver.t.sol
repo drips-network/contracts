@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import {Caller} from "src/Caller.sol";
 import {Forge, RepoDriver} from "src/RepoDriver.sol";

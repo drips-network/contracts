@@ -1,6 +1,7 @@
 [profile.default]
-solc_version = '0.8.19'
-optimizer_runs = 5_100
+solc_version = '0.8.20'
+evm_version = 'shanghai'
+optimizer_runs = 7_700
 verbosity = 1
 fuzz_runs = 5
 [fmt]
