@@ -10,6 +10,7 @@ import {LinkTokenInterface} from "chainlink/interfaces/LinkTokenInterface.sol";
 import {OperatorInterface} from "chainlink/interfaces/OperatorInterface.sol";
 import {BufferChainlink, CBORChainlink} from "chainlink/Chainlink.sol";
 import {Context, ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
+import {ShortString, ShortStrings} from "openzeppelin-contracts/utils/ShortStrings.sol";
 
 /// @notice The supported forges where repositories are stored.
 enum Forge {
@@ -25,27 +26,14 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
     using SafeERC20 for IERC20;
     using CBORChainlink for BufferChainlink.buffer;
 
-    uint256 internal constant CHAIN_ID_ETHEREUM = 1;
-    string internal constant CHAIN_NAME_ETHEREUM = "ethereum";
-    address internal constant LINK_TOKEN_ETHEREUM = 0x514910771AF9Ca656af840dff83E8264EcF986CA;
-
-    uint256 internal constant CHAIN_ID_GOERLI = 5;
-    string internal constant CHAIN_NAME_GOERLI = "goerli";
-    address internal constant LINK_TOKEN_GOERLI = 0x326C977E6efc84E512bB9C30f76E30c160eD06FB;
-
-    uint256 internal constant CHAIN_ID_SEPOLIA = 11155111;
-    string internal constant CHAIN_NAME_SEPOLIA = "sepolia";
-    address internal constant LINK_TOKEN_SEPOLIA = 0x779877A7B0D9E8603169DdbD7836e478b4624789;
-
-    string internal constant CHAIN_NAME_OTHER = "other";
-    address internal constant LINK_TOKEN_OTHER = address(bytes20("dummy link token"));
-
     /// @notice The Drips address used by this driver.
     Drips public immutable drips;
     /// @notice The driver ID which this driver uses when calling Drips.
     uint32 public immutable driverId;
     /// @notice The Link token used for paying the operators.
     LinkTokenInterface public immutable linkToken;
+    /// @notice The JSON path inside `FUNDING.json` where the account ID owner is stored.
+    ShortString internal immutable jsonPath;
 
     /// @notice The ERC-1967 storage slot holding a single `RepoDriverStorage` structure.
     bytes32 private immutable _repoDriverStorageSlot = _erc1967Slot("eip1967.repoDriver.storage");
@@ -100,11 +88,22 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
     constructor(Drips _drips, address forwarder, uint32 _driverId) ERC2771Context(forwarder) {
         drips = _drips;
         driverId = _driverId;
+        string memory chainName;
         address _linkToken;
-        if (block.chainid == CHAIN_ID_ETHEREUM) _linkToken = LINK_TOKEN_ETHEREUM;
-        else if (block.chainid == CHAIN_ID_GOERLI) _linkToken = LINK_TOKEN_GOERLI;
-        else if (block.chainid == CHAIN_ID_SEPOLIA) _linkToken = LINK_TOKEN_SEPOLIA;
-        else _linkToken = LINK_TOKEN_OTHER;
+        if (block.chainid == 1) {
+            chainName = "ethereum";
+            _linkToken = 0x514910771AF9Ca656af840dff83E8264EcF986CA;
+        } else if (block.chainid == 5) {
+            chainName = "goerli";
+            _linkToken = 0x326C977E6efc84E512bB9C30f76E30c160eD06FB;
+        } else if (block.chainid == 11155111) {
+            chainName = "sepolia";
+            _linkToken = 0x779877A7B0D9E8603169DdbD7836e478b4624789;
+        } else {
+            chainName = "other";
+            _linkToken = address(bytes20("dummy link token"));
+        }
+        jsonPath = ShortStrings.toShortString(string.concat("drips,", chainName, ",ownedBy"));
         linkToken = LinkTokenInterface(_linkToken);
     }
 
@@ -339,7 +338,7 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
         buffer.encodeString("get");
         buffer.encodeString(_requestUrl(forge, name));
         buffer.encodeString("path");
-        buffer.encodeString(_requestPath());
+        buffer.encodeString(ShortStrings.toString(jsonPath));
         return buffer.buf;
     }
 
@@ -361,18 +360,6 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
         } else {
             revert("Unsupported forge");
         }
-    }
-
-    /// @notice Builds the JSON path inside `FUNDING.json` where the account ID owner is stored.
-    /// @return path The comma-separated JSON path.
-    function _requestPath() internal view returns (string memory path) {
-        // slither-disable-next-line uninitialized-local
-        string memory chainName;
-        if (block.chainid == CHAIN_ID_ETHEREUM) chainName = CHAIN_NAME_ETHEREUM;
-        else if (block.chainid == CHAIN_ID_GOERLI) chainName = CHAIN_NAME_GOERLI;
-        else if (block.chainid == CHAIN_ID_SEPOLIA) chainName = CHAIN_NAME_SEPOLIA;
-        else chainName = CHAIN_NAME_OTHER;
-        return string.concat("drips,", chainName, ",ownedBy");
     }
 
     /// @notice Updates the account owner. Callable only by the AnyApi operator.
