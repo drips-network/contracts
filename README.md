@@ -7,7 +7,7 @@ See [docs](https://docs.drips.network) for a high-level introduction and documen
 Radicle Drips uses [Foundry](https://github.com/foundry-rs/foundry) for development.
 You can install it using [foundryup](https://github.com/foundry-rs/foundry#installation).
 
-The codebase is statically checked with [Slither](https://github.com/crytic/slither) version 0.9.2.
+The codebase is statically checked with [Slither](https://github.com/crytic/slither) version 0.9.5.
 Here are the [installation instructions](https://github.com/crytic/slither#how-to-install).
 
 ## Format code
