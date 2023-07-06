@@ -1,5 +1,4 @@
 #! /usr/bin/env bash
-
 set -eo pipefail
 
 print_title() {
@@ -23,80 +22,6 @@ verify_parameter() {
         echo "Error: '$1' variable not set, see README.md"
         exit 1
     fi
-}
-
-# Args: contract name, constructor argument types, constructor arguments
-create_module() {
-    local SALT="$(cast format-bytes32-string "$1")"
-    local CREATION_CODE="$(forge inspect "src/DripsDeployer.sol:$1Module" bytecode)"
-    local TYPES="$2"
-    shift 2
-    local ARGS="$(cast abi-encode "constructor($TYPES)" "$@")"
-    local INIT_CODE="$(cast concat-hex "$CREATION_CODE" "$ARGS")"
-    echo "($SALT,0,$INIT_CODE)"
-}
-
-# Args: module name
-module_address() {
-    local SALT="$(cast format-bytes32-string "$1")"
-    cast call "$DRIPS_DEPLOYER" "moduleAddress(bytes32)(address)" "$SALT"
-}
-
-# Args: module address, field name, field type
-query() {
-    cast call "$1" "$2()($3)"
-}
-
-# Args: contract address, contract path, ABI-encoded constructor args, verifier name
-verify_single() {
-    echo "Verifying on $4"
-    forge verify-contract "$1" "$2" --chain "$CHAIN" --watch --constructor-args "$3" --verifier "$4"
-}
-
-# Args: contract address, contract path, ABI-encoded constructor args
-verify() {
-    if [ -n "$ETHERSCAN_API_KEY" ]; then
-        verify_single "$1" "$2" "$3" etherscan
-        local VERIFIED=1
-    fi
-    if [ -n "$VERIFY_SOURCIFY" ]; then
-        verify_single "$1" "$2" "$3" sourcify
-        local VERIFIED=1
-    fi
-    if [ -n "$VERIFY_BLOCKSCOUT" ]; then
-        verify_single "$1" "$2" "$3" blockscout
-        local VERIFIED=1
-    fi
-    if [ -z "$VERIFIED" ] ; then
-        echo "Skipping"
-    fi
-}
-
-# Args: contract name
-# Sets: MODULE_ADDR
-verify_module() {
-    print_title "Verifying module $1"
-    MODULE_ADDR="$(module_address "$1")"
-    verify "$MODULE_ADDR" "src/DripsDeployer.sol:$1Module" "$(query "$MODULE_ADDR" args bytes)"
-}
-
-# Args: contract name, module address, field name, contract path
-verify_module_contract() {
-    print_title "Verifying $1 $3"
-    verify "$(query "$2" "$3" address)" "$4" "$(query "$2" "$3Args" bytes)"
-}
-
-# Args: contract name
-verify_contract_deployer_module() {
-    verify_module "$1"
-    verify_module_contract "$1" "$MODULE_ADDR" deployment "src/$1.sol:$1"
-}
-
-# Args: contract name
-verify_proxy_deployer_module() {
-    verify_module "$1"
-    verify_module_contract "$1" "$MODULE_ADDR" logic "src/$1.sol:$1"
-    verify_module_contract "$1" "$MODULE_ADDR" proxy "src/Managed.sol:ManagedProxy"
 }
 
 deploy_deterministic_deployer() {
@@ -170,106 +95,13 @@ deploy_drips_deployer() {
     DRIPS_DEPLOYER=$(drips_deployer)
     local DEPLOY="deploy(bytes32 salt, bytes initCode)"
     local SALT="$(cast format-bytes32-string "$DRIPS_DEPLOYER_SALT")"
-    local CONTRACT_PATH="src/DripsDeployer.sol:DripsDeployer"
-    local CREATION_CODE="$(forge inspect "$CONTRACT_PATH" bytecode)"
+    local CREATION_CODE="$(forge inspect "src/DripsDeployer.sol:DripsDeployer" bytecode)"
     local ARGS="$(cast abi-encode "constructor(address)" "$WALLET")"
     local INIT_CODE="$(cast concat-hex "$CREATION_CODE" "$ARGS")"
     cast send $WALLET_ARGS "$CREATE3_FACTORY" "$DEPLOY" "$SALT" "$INIT_CODE"
-
-    print_title "Verifying DripsDeployer"
-    verify "$DRIPS_DEPLOYER" "$CONTRACT_PATH" "$(query "$DRIPS_DEPLOYER" args bytes)"
 }
 
-main() {
-    verify_parameter ETH_RPC_URL
-    verify_parameter WALLET_ARGS
-
-    # Set up the defaults
-    if [ $(cast chain-id) == 11155111 ]; then
-        CHAIN=sepolia
-    else
-        CHAIN="$(cast chain)"
-    fi
-    DEPLOYMENT_JSON=${DEPLOYMENT_JSON:-./deployment_$CHAIN.json}
-    WALLET=$(cast wallet address $WALLET_ARGS | cut -d " " -f 2)
-
-    # Taken from https://github.com/Arachnid/deterministic-deployment-proxy
-    DETERMINISTIC_DEPLOYER="0x4e59b44847b379578588920cA78FbF26c0B4956C"
-    # Always the same, see `deploy_create3_factory`
-    CREATE3_FACTORY="0x6aa3d87e99286946161dca02b97c5806fc5ed46f"
-    DRIPS_DEPLOYER_SALT="${DRIPS_DEPLOYER_SALT:-DripsDeployer}"
-
-    DEPLOY_DETERMINISTIC_DEPLOYER="will be deployed"
-    DEPLOY_CREATE3_FACTORY="will be deployed"
-    DEPLOY_DRIPS_DEPLOYER="will be deployed"
-    if [ "$(cast code "$DETERMINISTIC_DEPLOYER")" != "0x" ]; then
-        DEPLOY_DETERMINISTIC_DEPLOYER="" # Do not deploy
-        if [ "$(cast code "$CREATE3_FACTORY")" != "0x" ]; then
-            DEPLOY_CREATE3_FACTORY="" # Do not deploy
-            DRIPS_DEPLOYER=$(drips_deployer)
-            if [ "$(cast code "$DRIPS_DEPLOYER")" != "0x" ]; then
-                DEPLOY_DRIPS_DEPLOYER="" # Do not deploy
-            fi
-        fi
-    fi
-
-    ADMIN="${ADMIN:-$WALLET}"
-    DRIPS_ADMIN="$(cast to-check-sum-address "${DRIPS_ADMIN:-$ADMIN}")"
-    ADDRESS_DRIVER_ADMIN="$(cast to-check-sum-address "${ADDRESS_DRIVER_ADMIN:-$ADMIN}")"
-    NFT_DRIVER_ADMIN="$(cast to-check-sum-address "${NFT_DRIVER_ADMIN:-$ADMIN}")"
-    IMMUTABLE_SPLITS_DRIVER_ADMIN="$(\
-        cast to-check-sum-address "${IMMUTABLE_SPLITS_DRIVER_ADMIN:-$ADMIN}")"
-    REPO_DRIVER_ADMIN="$(cast to-check-sum-address "${REPO_DRIVER_ADMIN:-$ADMIN}")"
-    DRIPS_CYCLE_SECS="${DRIPS_CYCLE_SECS:-$(( 7 * 24 * 60 * 60 ))}" # 1 week
-    REPO_DRIVER_OPERATOR="${REPO_DRIVER_OPERATOR:-$(cast address-zero)}"
-    REPO_DRIVER_JOB_ID="${REPO_DRIVER_JOB_ID:-00000000000000000000000000000000}"
-    REPO_DRIVER_FEE="${REPO_DRIVER_FEE:-0}"
-
-    # Print the configuration
-    print_title "Deployment configuration"
-    echo "Chain:                         $CHAIN"
-    echo "Wallet:                        $WALLET"
-    echo "Etherscan verification:        $(is_set ETHERSCAN_API_KEY)"
-    echo "Sourcify verification:         $(is_set VERIFY_SOURCIFY)"
-    echo "Blockscout verification:       $(is_set VERIFY_BLOCKSCOUT)"
-    echo "Deployment JSON:               $DEPLOYMENT_JSON"
-    echo "Deterministic deployer:        ${DEPLOY_DETERMINISTIC_DEPLOYER:-already deployed}"
-    echo "CREATE3 factory:               ${DEPLOY_CREATE3_FACTORY:-already deployed}"
-    echo "DripsDeployer salt:            $DRIPS_DEPLOYER_SALT"
-    echo "DripsDeployer:                 ${DEPLOY_DRIPS_DEPLOYER:-already deployed}"
-    echo "Drips cycle seconds:           $DRIPS_CYCLE_SECS"
-    echo "Drips admin:                   $DRIPS_ADMIN"
-    echo "AddressDriver admin:           $ADDRESS_DRIVER_ADMIN"
-    echo "NFTDriver admin:               $NFT_DRIVER_ADMIN"
-    echo "ImmutableSplitsDriver admin:   $IMMUTABLE_SPLITS_DRIVER_ADMIN"
-    echo "RepoDriver AnyApi operator:    $REPO_DRIVER_OPERATOR"
-    echo "RepoDriver AnyApi job ID:      $REPO_DRIVER_JOB_ID"
-    echo "RepoDriver AnyApi default fee: $REPO_DRIVER_FEE"
-    echo "RepoDriver admin:              $REPO_DRIVER_ADMIN"
-    echo
-
-    read -p "Proceed with deployment? [y/n] " -n 1 -r
-    echo
-    if [[ "$REPLY" =~ ^[^Yy] ]]
-    then
-        exit 0
-    fi
-
-    print_title "Installing dependencies"
-    forge install
-
-    if [ -n "$DEPLOY_DETERMINISTIC_DEPLOYER" ]; then
-        deploy_deterministic_deployer
-    fi
-
-    if [ -n "$DEPLOY_CREATE3_FACTORY" ]; then
-        deploy_create3_factory
-    fi
-
-    if [ -n "$DEPLOY_DRIPS_DEPLOYER" ]; then
-        deploy_drips_deployer
-    fi
-
+deploy_modules() {
     print_title "Deploying modules"
     MODULE_INIT_CODES_1="[$(
         create_module Drips address,uint32,address \
@@ -294,35 +126,35 @@ main() {
     cast send $WALLET_ARGS "$DRIPS_DEPLOYER" "deployModules((bytes32,uint256,bytes)[], \
         (bytes32,uint256,bytes)[],(bytes32,uint256,bytes)[],(bytes32,uint256,bytes)[])" \
         "$MODULE_INIT_CODES_1" "$MODULE_INIT_CODES_2" "$MODULE_INIT_CODES_3" "$MODULE_INIT_CODES_4"
+}
 
-    verify_proxy_deployer_module Drips
-    local DRIPS_MODULE="$MODULE_ADDR"
+# Args: contract name, constructor argument types, constructor arguments
+create_module() {
+    local SALT="$(cast format-bytes32-string "$1")"
+    local CREATION_CODE="$(forge inspect "src/DripsDeployer.sol:$1Module" bytecode)"
+    local TYPES="$2"
+    shift 2
+    local ARGS="$(cast abi-encode "constructor($TYPES)" "$@")"
+    local INIT_CODE="$(cast concat-hex "$CREATION_CODE" "$ARGS")"
+    echo "($SALT,0,$INIT_CODE)"
+}
 
-    verify_contract_deployer_module Caller
-    local CALLER_MODULE="$MODULE_ADDR"
-
-    verify_proxy_deployer_module AddressDriver
-    local ADDRESS_DRIVER_MODULE="$MODULE_ADDR"
-
-    verify_proxy_deployer_module NFTDriver
-    local NFT_DRIVER_MODULE="$MODULE_ADDR"
-
-    verify_proxy_deployer_module ImmutableSplitsDriver
-    local IMMUTABLE_SPLITS_DRIVER_MODULE="$MODULE_ADDR"
-
-    verify_proxy_deployer_module RepoDriver
-    local REPO_DRIVER_MODULE="$MODULE_ADDR"
-
-    # Build and print the deployment JSON
+print_deployment_json() {
     print_title Building the deployment JSON: "$DEPLOYMENT_JSON"
+    local DRIPS_MODULE="$(module_address Drips)"
+    local CALLER_MODULE="$(module_address Caller)"
+    local ADDRESS_DRIVER_MODULE="$(module_address AddressDriver)"
+    local NFT_DRIVER_MODULE="$(module_address NFTDriver)"
+    local IMMUTABLE_SPLITS_DRIVER_MODULE="$(module_address ImmutableSplitsDriver)"
+    local REPO_DRIVER_MODULE="$(module_address RepoDriver)"
     tee "$DEPLOYMENT_JSON" <<EOF
 {
     "Chain":                         "$CHAIN",
     "Deployment time":               "$(date --utc --iso-8601=seconds)",
     "Commit hash":                   "$(git rev-parse HEAD)",
     "Wallet":                        "$WALLET",
-    "Deterministic deployer:         "$DETERMINISTIC_DEPLOYER"
-    "CREATE3 factory:                "$CREATE3_FACTORY"
+    "Deterministic deployer":        "$DETERMINISTIC_DEPLOYER",
+    "CREATE3 factory":               "$CREATE3_FACTORY",
     "DripsDeployer salt":            "$DRIPS_DEPLOYER_SALT",
     "DripsDeployer":                 "$DRIPS_DEPLOYER",
     "Drips":                         "$(query "$DRIPS_MODULE" drips address)",
@@ -351,6 +183,125 @@ main() {
     "RepoDriver admin":              "$(query "$REPO_DRIVER_MODULE" proxyAdmin address)"
 }
 EOF
+}
+
+# Args: module name
+module_address() {
+    local SALT="$(cast format-bytes32-string "$1")"
+    cast call "$DRIPS_DEPLOYER" "moduleAddress(bytes32)(address)" "$SALT"
+}
+
+# Args: module address, field name, field type
+query() {
+    cast call "$1" "$2()($3)"
+}
+
+main() {
+    verify_parameter ETH_RPC_URL
+    verify_parameter WALLET_ARGS
+
+    # Set up the defaults
+    if [ $(cast chain-id) == 11155111 ]; then
+        CHAIN=sepolia
+    else
+        CHAIN="$(cast chain)"
+    fi
+    WALLET=$(cast wallet address $WALLET_ARGS | cut -d " " -f 2)
+
+    DEPLOYMENT_JSON=${DEPLOYMENT_JSON:-./deployment_$CHAIN.json}
+    DRIPS_DEPLOYER_SALT="${DRIPS_DEPLOYER_SALT:-DripsDeployer}"
+    ADMIN="${ADMIN:-$WALLET}"
+    DRIPS_ADMIN="$(cast to-check-sum-address "${DRIPS_ADMIN:-$ADMIN}")"
+    ADDRESS_DRIVER_ADMIN="$(cast to-check-sum-address "${ADDRESS_DRIVER_ADMIN:-$ADMIN}")"
+    NFT_DRIVER_ADMIN="$(cast to-check-sum-address "${NFT_DRIVER_ADMIN:-$ADMIN}")"
+    IMMUTABLE_SPLITS_DRIVER_ADMIN="$(\
+        cast to-check-sum-address "${IMMUTABLE_SPLITS_DRIVER_ADMIN:-$ADMIN}")"
+    REPO_DRIVER_ADMIN="$(cast to-check-sum-address "${REPO_DRIVER_ADMIN:-$ADMIN}")"
+    DRIPS_CYCLE_SECS="${DRIPS_CYCLE_SECS:-$(( 7 * 24 * 60 * 60 ))}" # 1 week
+    REPO_DRIVER_OPERATOR="${REPO_DRIVER_OPERATOR:-$(cast address-zero)}"
+    REPO_DRIVER_JOB_ID="${REPO_DRIVER_JOB_ID:-00000000000000000000000000000000}"
+    REPO_DRIVER_FEE="${REPO_DRIVER_FEE:-0}"
+
+    # Taken from https://github.com/Arachnid/deterministic-deployment-proxy
+    DETERMINISTIC_DEPLOYER="0x4e59b44847b379578588920cA78FbF26c0B4956C"
+    # Always the same, see `deploy_create3_factory`
+    CREATE3_FACTORY="0x6aa3d87e99286946161dca02b97c5806fc5ed46f"
+
+    DEPLOY_DETERMINISTIC_DEPLOYER="will be deployed"
+    DEPLOY_CREATE3_FACTORY="will be deployed"
+    DEPLOY_DRIPS_DEPLOYER="will be deployed"
+    DEPLOY_MODULES="will be deployed"
+    if [ "$(cast code "$DETERMINISTIC_DEPLOYER")" != "0x" ]; then
+        DEPLOY_DETERMINISTIC_DEPLOYER="" # Do not deploy
+        if [ "$(cast code "$CREATE3_FACTORY")" != "0x" ]; then
+            DEPLOY_CREATE3_FACTORY="" # Do not deploy
+            DRIPS_DEPLOYER=$(drips_deployer)
+            if [ "$(cast code "$DRIPS_DEPLOYER")" != "0x" ]; then
+                DEPLOY_DRIPS_DEPLOYER="" # Do not deploy
+                if [ "$(cast call "$DRIPS_DEPLOYER" "moduleSalts()(bytes32[])")" != "[]" ]; then
+                    DEPLOY_MODULES="" # Do not deploy
+                fi
+            fi
+        fi
+    fi
+
+    print_title "Deployment configuration"
+    echo "Chain:                         $CHAIN"
+    echo "Wallet:                        $WALLET"
+    echo "Etherscan verification:        $(is_set ETHERSCAN_API_KEY)"
+    echo "Sourcify verification:         $(is_set VERIFY_SOURCIFY)"
+    echo "Blockscout verification:       $(is_set VERIFY_BLOCKSCOUT)"
+    echo "Deployment JSON:               $DEPLOYMENT_JSON"
+    echo "Deterministic deployer:        ${DEPLOY_DETERMINISTIC_DEPLOYER:-already deployed}"
+    echo "CREATE3 factory:               ${DEPLOY_CREATE3_FACTORY:-already deployed}"
+    echo "DripsDeployer salt:            $DRIPS_DEPLOYER_SALT"
+    echo "DripsDeployer:                 ${DEPLOY_DRIPS_DEPLOYER:-already deployed}"
+    echo "Modules:                       ${DEPLOY_MODULES:-already deployed}"
+    echo "Drips cycle seconds:           $DRIPS_CYCLE_SECS"
+    echo "Drips admin:                   $DRIPS_ADMIN"
+    echo "AddressDriver admin:           $ADDRESS_DRIVER_ADMIN"
+    echo "NFTDriver admin:               $NFT_DRIVER_ADMIN"
+    echo "ImmutableSplitsDriver admin:   $IMMUTABLE_SPLITS_DRIVER_ADMIN"
+    echo "RepoDriver AnyApi operator:    $REPO_DRIVER_OPERATOR"
+    echo "RepoDriver AnyApi job ID:      $REPO_DRIVER_JOB_ID"
+    echo "RepoDriver AnyApi default fee: $REPO_DRIVER_FEE"
+    echo "RepoDriver admin:              $REPO_DRIVER_ADMIN"
+    echo
+
+    echo "Proceed with deployment? [y/n]"
+    while true
+    do
+        read -r -s -n 1
+        case "$REPLY" in
+            Y | y ) break ;;
+            N | n ) exit 0 ;;
+        esac
+    done
+
+    print_title "Installing dependencies"
+    forge install
+
+    if [ -n "$DEPLOY_DETERMINISTIC_DEPLOYER" ]; then
+        deploy_deterministic_deployer
+    fi
+
+    if [ -n "$DEPLOY_CREATE3_FACTORY" ]; then
+        deploy_create3_factory
+    fi
+
+    if [ -n "$DEPLOY_DRIPS_DEPLOYER" ]; then
+        deploy_drips_deployer
+    fi
+
+    if [ -n "$DEPLOY_MODULES" ]; then
+        deploy_modules
+    fi
+
+    print_deployment_json
+
+    if [ -n "$ETHERSCAN_API_KEY" ] || [ -n "$VERIFY_SOURCIFY" ] || [ -n "$VERIFY_BLOCKSCOUT" ]; then
+        scripts/verify.sh "$DRIPS_DEPLOYER"
+    fi
 }
 
 main "$@"

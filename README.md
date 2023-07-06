@@ -146,3 +146,47 @@ Run deployment:
 ```bash
 scripts/deploy.sh
 ```
+
+## Verify and publish source code of an existing deployment
+
+The deployment may not be verified, either because the deployer chose to do that,
+or because the verification process failed, as it randomly happens.
+Verification can be done separately for any deployment as long as the
+repository is checked out at the right commit.
+
+Set up environment variables controlling the deployment process:
+
+```bash
+# The RPC URL to use, e.g. `https://mainnet.infura.io/MY_INFURA_KEY`.
+# Contracts will be deployed to whatever network that endpoint works in.
+export ETH_RPC_URL="<URL>"
+
+# OPTIONAL
+# The API key to use to submit contracts' code to Etherscan.
+# In case of deployments to networks other than Ethereum an appropriate equivalent service is used.
+# If not set, contracts won't be verified.
+export ETHERSCAN_API_KEY="<KEY>"
+
+# OPTIONAL
+# If set, submits contracts' code to Sourcify.
+# In case of deployments to networks other than Ethereum an appropriate equivalent service is used.
+# If not set, contracts won't be verified.
+export VERIFY_SOURCIFY=1
+
+# OPTIONAL
+# If set, submits contracts' code to Blockscout.
+# In case of deployments to networks other than Ethereum an appropriate equivalent service is used.
+# If not set, contracts won't be verified.
+export VERIFY_BLOCKSCOUT=1
+```
+
+At least one of `ETHERSCAN_API_KEY`, `VERIFY_SOURCIFY` and `VERIFY_BLOCKSCOUT` must be set.
+
+Run verification:
+
+```bash
+scripts/verify.sh <DRIPS_DEPLOYER>
+```
+
+The `DRIPS_DEPLOYER` parameter is the `DripsDeployer` contract address,
+it can be found in the deployment JSON.
