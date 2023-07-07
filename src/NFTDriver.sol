@@ -4,9 +4,10 @@ pragma solidity ^0.8.20;
 import {
     AccountMetadata, Drips, StreamReceiver, IERC20, SafeERC20, SplitsReceiver
 } from "./Drips.sol";
+import {DriverTransferUtils, ERC2771Context} from "./DriverTransferUtils.sol";
 import {Managed} from "./Managed.sol";
-import {Context, ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
 import {
+    Context,
     ERC721,
     ERC721Burnable,
     IERC721,
@@ -17,7 +18,7 @@ import {
 /// Anybody can mint a new token and create a new identity.
 /// Only the current holder of the token can control its account ID.
 /// The token ID and the account ID controlled by it are always equal.
-contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
+contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     using SafeERC20 for IERC20;
 
     /// @notice The Drips address used by this driver.
@@ -34,15 +35,20 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
         mapping(address minter => mapping(uint64 salt => bool)) isSaltUsed;
     }
 
-    /// @param _drips The Drips contract to use.
+    /// @param drips_ The Drips contract to use.
     /// @param forwarder The ERC-2771 forwarder to trust. May be the zero address.
-    /// @param _driverId The driver ID to use when calling Drips.
-    constructor(Drips _drips, address forwarder, uint32 _driverId)
-        ERC2771Context(forwarder)
+    /// @param driverId_ The driver ID to use when calling Drips.
+    constructor(Drips drips_, address forwarder, uint32 driverId_)
+        DriverTransferUtils(forwarder)
         ERC721("", "")
     {
-        drips = _drips;
-        driverId = _driverId;
+        drips = drips_;
+        driverId = driverId_;
+    }
+
+    /// @notice Returns the address of the Drips contract to use for ERC-20 transfers.
+    function _drips() internal view override returns (Drips) {
+        return drips;
     }
 
     modifier onlyHolder(uint256 tokenId) {
@@ -233,8 +239,7 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
         whenNotPaused
         onlyHolder(tokenId)
     {
-        if (amt > 0) _transferFromCaller(erc20, amt);
-        drips.give(tokenId, receiver, erc20, amt);
+        _giveAndTransfer(tokenId, receiver, erc20, amt);
     }
 
     /// @notice Sets the account's streams configuration.
@@ -292,11 +297,16 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
         uint32 maxEndHint2,
         address transferTo
     ) public whenNotPaused onlyHolder(tokenId) returns (int128 realBalanceDelta) {
-        if (balanceDelta > 0) _transferFromCaller(erc20, uint128(balanceDelta));
-        realBalanceDelta = drips.setStreams(
-            tokenId, erc20, currReceivers, balanceDelta, newReceivers, maxEndHint1, maxEndHint2
+        return _setStreamsAndTransfer(
+            tokenId,
+            erc20,
+            currReceivers,
+            balanceDelta,
+            newReceivers,
+            maxEndHint1,
+            maxEndHint2,
+            transferTo
         );
-        if (realBalanceDelta < 0) drips.withdraw(erc20, transferTo, uint128(-realBalanceDelta));
     }
 
     /// @notice Sets the account splits configuration.
@@ -405,10 +415,6 @@ contract NFTDriver is ERC721Burnable, ERC2771Context, Managed {
         whenNotPaused
     {
         super.transferFrom(from, to, tokenId);
-    }
-
-    function _transferFromCaller(IERC20 erc20, uint128 amt) internal {
-        erc20.safeTransferFrom(_msgSender(), address(drips), amt);
     }
 
     // Workaround for https://github.com/ethereum/solidity/issues/12554

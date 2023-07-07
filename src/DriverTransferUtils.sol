@@ -1,54 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.20;
 
-import {AccountMetadata, Drips, StreamReceiver, IERC20, SplitsReceiver} from "./Drips.sol";
-import {Managed} from "./Managed.sol";
-import {DriverTransferUtils} from "./DriverTransferUtils.sol";
+import {Drips, StreamReceiver, IERC20, SafeERC20} from "./Drips.sol";
+import {ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
 
-/// @notice A Drips driver implementing address-based account identification.
-/// Each address can use `AddressDriver` to control a single account ID derived from that address.
-/// No registration is required, an `AddressDriver`-based account ID
-/// for each address is available upfront.
-contract AddressDriver is DriverTransferUtils, Managed {
-    /// @notice The Drips address used by this driver.
-    Drips public immutable drips;
-    /// @notice The driver ID which this driver uses when calling Drips.
-    uint32 public immutable driverId;
-
-    /// @param drips_ The Drips contract to use.
+/// @notice ERC-20 token transfer utilities for drivers.
+/// Encapsulates the logic for token transfers made by drivers implementing user identities.
+/// All funds going into Drips are transferred ad-hoc from the caller (`msg.sender`),
+/// and all funds going out of Drips are transferred in full to the provided address.
+/// Compatible with `Caller` by supporting ERC-2771.
+abstract contract DriverTransferUtils is ERC2771Context {
     /// @param forwarder The ERC-2771 forwarder to trust. May be the zero address.
-    /// @param driverId_ The driver ID to use when calling Drips.
-    constructor(Drips drips_, address forwarder, uint32 driverId_) DriverTransferUtils(forwarder) {
-        drips = drips_;
-        driverId = driverId_;
-    }
+    constructor(address forwarder) ERC2771Context(forwarder) {}
 
     /// @notice Returns the address of the Drips contract to use for ERC-20 transfers.
-    function _drips() internal view override returns (Drips) {
-        return drips;
-    }
-
-    /// @notice Calculates the account ID for an address.
-    /// Every account ID is a 256-bit integer constructed by concatenating:
-    /// `driverId (32 bits) | zeros (64 bits) | addr (160 bits)`.
-    /// @param addr The address
-    /// @return accountId The account ID
-    function calcAccountId(address addr) public view returns (uint256 accountId) {
-        // By assignment we get `accountId` value:
-        // `zeros (224 bits) | driverId (32 bits)`
-        accountId = driverId;
-        // By bit shifting we get `accountId` value:
-        // `driverId (32 bits) | zeros (224 bits)`
-        // By bit masking we get `accountId` value:
-        // `driverId (32 bits) | zeros (64 bits) | addr (160 bits)`
-        accountId = (accountId << 224) | uint160(addr);
-    }
-
-    /// @notice Calculates the account ID for the message sender
-    /// @return accountId The account ID
-    function _callerAccountId() internal view returns (uint256 accountId) {
-        return calcAccountId(_msgSender());
-    }
+    function _drips() internal virtual returns (Drips);
 
     /// @notice Collects the account's received already split funds
     /// and transfers them out of the Drips contract.
@@ -60,8 +26,12 @@ contract AddressDriver is DriverTransferUtils, Managed {
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param transferTo The address to send collected funds to
     /// @return amt The collected amount
-    function collect(IERC20 erc20, address transferTo) public whenNotPaused returns (uint128 amt) {
-        return _collectAndTransfer(_callerAccountId(), erc20, transferTo);
+    function _collectAndTransfer(uint256 accountId, IERC20 erc20, address transferTo)
+        internal
+        returns (uint128 amt)
+    {
+        amt = _drips().collect(accountId, erc20);
+        if (amt > 0) _drips().withdraw(erc20, transferTo, amt);
     }
 
     /// @notice Gives funds from the message sender to the receiver.
@@ -75,8 +45,11 @@ contract AddressDriver is DriverTransferUtils, Managed {
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param amt The given amount
-    function give(uint256 receiver, IERC20 erc20, uint128 amt) public whenNotPaused {
-        _giveAndTransfer(_callerAccountId(), receiver, erc20, amt);
+    function _giveAndTransfer(uint256 accountId, uint256 receiver, IERC20 erc20, uint128 amt)
+        internal
+    {
+        if (amt > 0) _transferFromCaller(erc20, amt);
+        _drips().give(accountId, receiver, erc20, amt);
     }
 
     /// @notice Sets the message sender's streams configuration.
@@ -120,7 +93,8 @@ contract AddressDriver is DriverTransferUtils, Managed {
     /// The second hint for finding the maximum end time, see `maxEndHint1` docs for more details.
     /// @param transferTo The address to send funds to in case of decreasing balance
     /// @return realBalanceDelta The actually applied streams balance change.
-    function setStreams(
+    function _setStreamsAndTransfer(
+        uint256 accountId,
         IERC20 erc20,
         StreamReceiver[] calldata currReceivers,
         int128 balanceDelta,
@@ -129,45 +103,18 @@ contract AddressDriver is DriverTransferUtils, Managed {
         uint32 maxEndHint1,
         uint32 maxEndHint2,
         address transferTo
-    ) public whenNotPaused returns (int128 realBalanceDelta) {
-        return _setStreamsAndTransfer(
-            _callerAccountId(),
-            erc20,
-            currReceivers,
-            balanceDelta,
-            newReceivers,
-            maxEndHint1,
-            maxEndHint2,
-            transferTo
+    ) internal returns (int128 realBalanceDelta) {
+        if (balanceDelta > 0) _transferFromCaller(erc20, uint128(balanceDelta));
+        realBalanceDelta = _drips().setStreams(
+            accountId, erc20, currReceivers, balanceDelta, newReceivers, maxEndHint1, maxEndHint2
         );
+        if (realBalanceDelta < 0) _drips().withdraw(erc20, transferTo, uint128(-realBalanceDelta));
     }
 
-    /// @notice Sets the account splits configuration.
-    /// The configuration is common for all ERC-20 tokens.
-    /// Nothing happens to the currently splittable funds, but when they are split
-    /// after this function finishes, the new splits configuration will be used.
-    /// Because anybody can call `split` on `Drips`, calling this function may be frontrun
-    /// and all the currently splittable funds will be split using the old splits configuration.
-    /// @param receivers The list of the account's splits receivers to be set.
-    /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
-    /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
-    /// share of the funds collected by the account.
-    /// If the sum of weights of all receivers is less than `_TOTAL_SPLITS_WEIGHT`,
-    /// some funds won't be split, but they will be left for the account to collect.
-    /// It's valid to include the account's own `accountId` in the list of receivers,
-    /// but funds split to themselves return to their splittable balance and are not collectable.
-    /// This is usually unwanted, because if splitting is repeated,
-    /// funds split to themselves will be again split using the current configuration.
-    /// Splitting 100% to self effectively blocks splitting unless the configuration is updated.
-    function setSplits(SplitsReceiver[] calldata receivers) public whenNotPaused {
-        drips.setSplits(_callerAccountId(), receivers);
-    }
-
-    /// @notice Emits the account metadata for the message sender.
-    /// The keys and the values are not standardized by the protocol, it's up to the users
-    /// to establish and follow conventions to ensure compatibility with the consumers.
-    /// @param accountMetadata The list of account metadata.
-    function emitAccountMetadata(AccountMetadata[] calldata accountMetadata) public whenNotPaused {
-        drips.emitAccountMetadata(_callerAccountId(), accountMetadata);
+    /// @notice Transfers tokens from the sender to Drips.
+    /// @param erc20 The used ERC-20 token.
+    /// @param amt The transferred amount
+    function _transferFromCaller(IERC20 erc20, uint128 amt) internal {
+        SafeERC20.safeTransferFrom(erc20, _msgSender(), address(_drips()), amt);
     }
 }

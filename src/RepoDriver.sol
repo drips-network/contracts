@@ -4,12 +4,12 @@ pragma solidity ^0.8.20;
 import {
     AccountMetadata, Drips, StreamReceiver, IERC20, SafeERC20, SplitsReceiver
 } from "./Drips.sol";
+import {DriverTransferUtils} from "./DriverTransferUtils.sol";
 import {Managed} from "./Managed.sol";
 import {ERC677ReceiverInterface} from "chainlink/interfaces/ERC677ReceiverInterface.sol";
 import {LinkTokenInterface} from "chainlink/interfaces/LinkTokenInterface.sol";
 import {OperatorInterface} from "chainlink/interfaces/OperatorInterface.sol";
 import {BufferChainlink, CBORChainlink} from "chainlink/Chainlink.sol";
-import {Context, ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
 import {ShortString, ShortStrings} from "openzeppelin-contracts/utils/ShortStrings.sol";
 
 /// @notice The supported forges where repositories are stored.
@@ -22,7 +22,7 @@ enum Forge {
 /// Each repository stored in one of the supported forges has a deterministic account ID assigned.
 /// By default the repositories have no owner and their accounts can't be controlled by anybody,
 /// use `requestUpdateOwner` to update the owner.
-contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
+contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     using SafeERC20 for IERC20;
     using CBORChainlink for BufferChainlink.buffer;
 
@@ -82,12 +82,12 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
         uint248 nonce;
     }
 
-    /// @param _drips The Drips contract to use.
+    /// @param drips_ The Drips contract to use.
     /// @param forwarder The ERC-2771 forwarder to trust. May be the zero address.
-    /// @param _driverId The driver ID to use when calling Drips.
-    constructor(Drips _drips, address forwarder, uint32 _driverId) ERC2771Context(forwarder) {
-        drips = _drips;
-        driverId = _driverId;
+    /// @param driverId_ The driver ID to use when calling Drips.
+    constructor(Drips drips_, address forwarder, uint32 driverId_) DriverTransferUtils(forwarder) {
+        drips = drips_;
+        driverId = driverId_;
         string memory chainName;
         address _linkToken;
         if (block.chainid == 1) {
@@ -110,6 +110,11 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
     modifier onlyOwner(uint256 accountId) {
         require(_msgSender() == ownerOf(accountId), "Caller is not the account owner");
         _;
+    }
+
+    /// @notice Returns the address of the Drips contract to use for ERC-20 transfers.
+    function _drips() internal view override returns (Drips) {
+        return drips;
     }
 
     /// @notice Calculates the account ID.
@@ -418,8 +423,7 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
         whenNotPaused
         onlyOwner(accountId)
     {
-        if (amt > 0) _transferFromCaller(erc20, amt);
-        drips.give(accountId, receiver, erc20, amt);
+        _giveAndTransfer(accountId, receiver, erc20, amt);
     }
 
     /// @notice Sets the account's streams configuration.
@@ -476,11 +480,16 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
         uint32 maxEndHint2,
         address transferTo
     ) public whenNotPaused onlyOwner(accountId) returns (int128 realBalanceDelta) {
-        if (balanceDelta > 0) _transferFromCaller(erc20, uint128(balanceDelta));
-        realBalanceDelta = drips.setStreams(
-            accountId, erc20, currReceivers, balanceDelta, newReceivers, maxEndHint1, maxEndHint2
+        return _setStreamsAndTransfer(
+            accountId,
+            erc20,
+            currReceivers,
+            balanceDelta,
+            newReceivers,
+            maxEndHint1,
+            maxEndHint2,
+            transferTo
         );
-        if (realBalanceDelta < 0) drips.withdraw(erc20, transferTo, uint128(-realBalanceDelta));
     }
 
     /// @notice Sets the account splits configuration.
@@ -523,10 +532,6 @@ contract RepoDriver is ERC677ReceiverInterface, ERC2771Context, Managed {
     {
         if (accountMetadata.length == 0) return;
         drips.emitAccountMetadata(accountId, accountMetadata);
-    }
-
-    function _transferFromCaller(IERC20 erc20, uint128 amt) internal {
-        erc20.safeTransferFrom(_msgSender(), address(drips), amt);
     }
 
     /// @notice Returns the RepoDriver storage.
