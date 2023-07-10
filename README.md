@@ -59,13 +59,13 @@ export ETH_RPC_URL="<URL>"
 
 # Foundry wallet arguments. They will be passed to all commands needing signing.
 # Examples:
-# "--interactive" - Open an interactive prompt to enter your private key.
-# "--private-key <RAW_PRIVATE_KEY>" - Use the provided private key.
-# "--mnemonic-path <PATH> --mnemonic-index <INDEX>" - Use the mnemonic file
-# "--keystore <PATH> --password <PASSWORD>" - Use the keystore in the given folder or file.
-# "--ledger --hd-path <PATH>" - Use a Ledger hardware wallet.
-# "--trezor --hd-path <PATH>" - Use a Trezor hardware wallet.
-# "--from <ADDRESS>" - Use the Foundry sender account.
+# WALLET_ARGS="--interactive" - Open an interactive prompt to enter your private key.
+# WALLET_ARGS="--private-key <RAW_PRIVATE_KEY>" - Use the provided private key.
+# WALLET_ARGS="--mnemonic-path <PATH> --mnemonic-index <INDEX>" - Use the mnemonic file
+# WALLET_ARGS="--keystore <PATH> --password <PASS>" - Use the keystore in the given folder or file.
+# WALLET_ARGS="--ledger --hd-path <PATH>" - Use a Ledger hardware wallet.
+# WALLET_ARGS="--trezor --hd-path <PATH>" - Use a Trezor hardware wallet.
+# WALLET_ARGS="--from <ADDRESS>" - Use the Foundry sender account.
 # For the full list check Foundry's documentation e.g. by running `cast wallet address --help`.
 export WALLET_ARGS="<ARGS>"
 
