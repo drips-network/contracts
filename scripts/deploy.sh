@@ -199,6 +199,7 @@ query() {
 main() {
     verify_parameter ETH_RPC_URL
     verify_parameter WALLET_ARGS
+    verify_parameter DRIPS_DEPLOYER_SALT
 
     # Set up the defaults
     if [ $(cast chain-id) == 11155111 ]; then
@@ -209,7 +210,6 @@ main() {
     WALLET=$(cast wallet address $WALLET_ARGS | cut -d " " -f 2)
 
     DEPLOYMENT_JSON=${DEPLOYMENT_JSON:-./deployment_$CHAIN.json}
-    DRIPS_DEPLOYER_SALT="${DRIPS_DEPLOYER_SALT:-DripsDeployer}"
     ADMIN="${ADMIN:-$WALLET}"
     DRIPS_ADMIN="$(cast to-check-sum-address "${DRIPS_ADMIN:-$ADMIN}")"
     ADDRESS_DRIVER_ADMIN="$(cast to-check-sum-address "${ADDRESS_DRIVER_ADMIN:-$ADMIN}")"

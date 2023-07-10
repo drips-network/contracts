@@ -95,13 +95,14 @@ export DEPLOYMENT_JSON="<PATH>"
 Set up environment variables configuring the deployed contracts:
 
 ```bash
+# The salt used for the deployment of a DripsDeployer instance.
+# For the final, official mainnet deployments use `DripsDeployer`.
+# For test deployments use something else, e.g. `DripsDeployerTest1`.
+export DRIPS_DEPLOYER_SALT="<SALT>"
+
 # OPTIONAL
 # Address of the deployed contracts admin to set. If not set, the deployer's wallet address is used.
 export ADMIN="<ADDRESS>"
-
-# OPTIONAL
-# The salt used for the deployment of a DripsDeployer instance. If not set, `DripsDeployer` is used.
-export DRIPS_DEPLOYER_SALT="<SALT>"
 
 # OPTIONAL
 # Cycle length  to use in `DRIPS_LOGIC` when it's deployed. If not set, 1 week is used.
