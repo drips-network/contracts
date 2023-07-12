@@ -63,8 +63,8 @@ export ETH_RPC_URL="<URL>"
 # WALLET_ARGS="--private-key <RAW_PRIVATE_KEY>" - Use the provided private key.
 # WALLET_ARGS="--mnemonic-path <PATH> --mnemonic-index <INDEX>" - Use the mnemonic file
 # WALLET_ARGS="--keystore <PATH> --password <PASS>" - Use the keystore in the given folder or file.
-# WALLET_ARGS="--ledger --hd-path <PATH>" - Use a Ledger hardware wallet.
-# WALLET_ARGS="--trezor --hd-path <PATH>" - Use a Trezor hardware wallet.
+# WALLET_ARGS="--ledger --mnemonic-derivation-path <PATH>" - Use a Ledger wallet using the HD path.
+# WALLET_ARGS="--trezor --mnemonic-derivation-path <PATH>" - Use a Trezor wallet using the HD path.
 # WALLET_ARGS="--from <ADDRESS>" - Use the Foundry sender account.
 # For the full list check Foundry's documentation e.g. by running `cast wallet address --help`.
 export WALLET_ARGS="<ARGS>"

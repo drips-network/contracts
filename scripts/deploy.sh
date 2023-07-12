@@ -150,7 +150,7 @@ print_deployment_json() {
     tee "$DEPLOYMENT_JSON" <<EOF
 {
     "Chain":                         "$CHAIN",
-    "Deployment time":               "$(date --utc --iso-8601=seconds)",
+    "Deployment time":               "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
     "Commit hash":                   "$(git rev-parse HEAD)",
     "Wallet":                        "$WALLET",
     "Deterministic deployer":        "$DETERMINISTIC_DEPLOYER",
