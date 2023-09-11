@@ -568,6 +568,7 @@ contract RepoDriverTest is Test {
 
     function testSetStreams() public {
         uint128 amt = 5;
+
         // Top-up
         StreamReceiver[] memory receivers = new StreamReceiver[](1);
         receivers[0] =
@@ -578,11 +579,11 @@ contract RepoDriverTest is Test {
         );
         assertEq(erc20.balanceOf(address(this)), balance - amt, "Invalid balance after top-up");
         assertEq(erc20.balanceOf(address(drips)), amt, "Invalid Drips balance after top-up");
-        (,,, uint128 streamsBalance,) = drips.streamsState(accountId1, erc20);
+        (bytes32 streamsHash,,, uint128 streamsBalance,) = drips.streamsState(accountId1, erc20);
+        assertEq(streamsHash, drips.hashStreams(receivers), "Invalid streams hash after top-up");
         assertEq(streamsBalance, amt, "Invalid streams balance after top-up");
         assertEq(realBalanceDelta, int128(amt), "Invalid streams balance delta after top-up");
-        (bytes32 streamsHash,,,,) = drips.streamsState(accountId1, erc20);
-        assertEq(streamsHash, drips.hashStreams(receivers), "Invalid streams hash after top-up");
+
         // Withdraw
         balance = erc20.balanceOf(address(user));
         realBalanceDelta = driver.setStreams(

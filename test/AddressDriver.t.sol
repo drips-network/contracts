@@ -38,10 +38,9 @@ contract AddressDriverTest is Test {
         // Make AddressDriver's driver ID non-0 to test if it's respected by AddressDriver
         drips.registerDriver(address(1));
         drips.registerDriver(address(1));
-        uint32 driverId = drips.registerDriver(address(this));
-        AddressDriver driverLogic = new AddressDriver(drips, address(caller), driverId);
+        AddressDriver driverLogic = new AddressDriver(drips, address(caller), drips.nextDriverId());
         driver = AddressDriver(address(new ManagedProxy(driverLogic, admin)));
-        drips.updateDriverAddress(driverId, address(driver));
+        drips.registerDriver(address(driver));
 
         thisId = driver.calcAccountId(address(this));
         accountId = driver.calcAccountId(user);
@@ -108,11 +107,10 @@ contract AddressDriverTest is Test {
 
         assertEq(erc20.balanceOf(address(this)), balance - amt, "Invalid balance after top-up");
         assertEq(erc20.balanceOf(address(drips)), amt, "Invalid Drips balance after top-up");
-        (,,, uint128 streamsBalance,) = drips.streamsState(thisId, erc20);
+        (bytes32 streamsHash,,, uint128 streamsBalance,) = drips.streamsState(thisId, erc20);
+        assertEq(streamsHash, drips.hashStreams(receivers), "Invalid streams hash after top-up");
         assertEq(streamsBalance, amt, "Invalid streams balance after top-up");
         assertEq(realBalanceDelta, int128(amt), "Invalid streams balance delta after top-up");
-        (bytes32 streamsHash,,,,) = drips.streamsState(thisId, erc20);
-        assertEq(streamsHash, drips.hashStreams(receivers), "Invalid streams hash after top-up");
 
         // Withdraw
         balance = erc20.balanceOf(address(user));

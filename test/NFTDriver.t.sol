@@ -43,10 +43,9 @@ contract NFTDriverTest is Test {
         // Make NFTDriver's driver ID non-0 to test if it's respected by NFTDriver
         drips.registerDriver(address(1));
         drips.registerDriver(address(1));
-        uint32 driverId = drips.registerDriver(address(this));
-        NFTDriver driverLogic = new NFTDriver(drips, address(caller), driverId);
+        NFTDriver driverLogic = new NFTDriver(drips, address(caller), drips.nextDriverId());
         driver = NFTDriver(address(new ManagedProxy(driverLogic, admin)));
-        drips.updateDriverAddress(driverId, address(driver));
+        drips.registerDriver(address(driver));
 
         tokenId = driver.mint(address(this), noMetadata());
         tokenId1 = driver.mint(address(this), noMetadata());
@@ -219,7 +218,6 @@ contract NFTDriverTest is Test {
         uint128 amt = 5;
 
         // Top-up
-
         StreamReceiver[] memory receivers = new StreamReceiver[](1);
         receivers[0] =
             StreamReceiver(tokenId2, StreamConfigImpl.create(0, drips.minAmtPerSec(), 0, 0));
@@ -231,12 +229,10 @@ contract NFTDriverTest is Test {
 
         assertEq(erc20.balanceOf(address(this)), balance - amt, "Invalid balance after top-up");
         assertEq(erc20.balanceOf(address(drips)), amt, "Invalid Drips balance after top-up");
-        (,,, uint128 streamsBalance,) = drips.streamsState(tokenId1, erc20);
-        assertEq(streamsBalance, amt, "Invalid streams balance after top-up");
-
-        assertEq(realBalanceDelta, int128(amt), "Invalid streams balance delta after top-up");
-        (bytes32 streamsHash,,,,) = drips.streamsState(tokenId1, erc20);
+        (bytes32 streamsHash,,, uint128 streamsBalance,) = drips.streamsState(tokenId1, erc20);
         assertEq(streamsHash, drips.hashStreams(receivers), "Invalid streams hash after top-up");
+        assertEq(streamsBalance, amt, "Invalid streams balance after top-up");
+        assertEq(realBalanceDelta, int128(amt), "Invalid streams balance delta after top-up");
 
         // Withdraw
         balance = erc20.balanceOf(address(user));
@@ -336,6 +332,14 @@ contract NFTDriverTest is Test {
 
     function testSafeMintCanBePaused() public canBePausedTest {
         driver.safeMint(user, noMetadata());
+    }
+
+    function testMintWithSaltCanBePaused() public canBePausedTest {
+        driver.mintWithSalt(0, user, noMetadata());
+    }
+
+    function testSafeMintWithSaltCanBePaused() public canBePausedTest {
+        driver.safeMintWithSalt(0, user, noMetadata());
     }
 
     function testCollectCanBePaused() public canBePausedTest {
