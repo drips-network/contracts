@@ -166,9 +166,9 @@ abstract contract Splits {
             uint256 splitsWeight = 0;
             for (uint256 i = 0; i < currReceivers.length; i++) {
                 splitsWeight += currReceivers[i].weight;
-                uint128 currSplitAmt =
-                    uint128(collectableAmt * splitsWeight / _TOTAL_SPLITS_WEIGHT) - splitAmt;
-                splitAmt += currSplitAmt;
+                uint128 currSplitAmt = splitAmt;
+                splitAmt = uint128(collectableAmt * splitsWeight / _TOTAL_SPLITS_WEIGHT);
+                currSplitAmt = splitAmt - currSplitAmt;
                 uint256 receiver = currReceivers[i].accountId;
                 _addSplittable(receiver, erc20, currSplitAmt);
                 emit Split(accountId, receiver, erc20, currSplitAmt);
