@@ -1,10 +1,22 @@
-# Radicle Drips protocol V2 smart contracts
+# Drips protocol V2 smart contracts
 
-Radicle Drips is an EVM blockchain protocol for streaming and splitting ERC-20 tokens.
+Drips is an EVM blockchain protocol for streaming and splitting ERC-20 tokens.
 See [docs](https://docs.drips.network) for a high-level introduction and documentation.
 
+# Organization of the repository
+
+The `main` branch is always in-development, it contains the newest
+version of the contracts that may not be deployed anywhere.
+
+The hashes of the git commits that were used for deployments can be found
+in the `deployments` directory, in the JSON files under the `Commit hash` key.
+These commits are also git tagged using the `v2_<chain_name>_deploy` naming scheme,
+e.g. `v2_ethereum_deploy`.
+
+The deployed contracts for the old, v1 version of the protocol can be found on the `v1` branch.
+
 # Development
-Radicle Drips uses [Foundry](https://github.com/foundry-rs/foundry) for development.
+Drips uses [Foundry](https://github.com/foundry-rs/foundry) for development.
 You can install it using [foundryup](https://github.com/foundry-rs/foundry#installation).
 
 The codebase is statically checked with [Slither](https://github.com/crytic/slither) version 0.9.5.
