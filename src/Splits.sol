@@ -243,15 +243,14 @@ abstract contract Splits {
         unchecked {
             require(receivers.length <= _MAX_SPLITS_RECEIVERS, "Too many splits receivers");
             uint64 totalWeight = 0;
-            // slither-disable-next-line uninitialized-local
-            uint256 prevAccountId;
+            uint256 prevAccountId = 0;
             for (uint256 i = 0; i < receivers.length; i++) {
                 SplitsReceiver memory receiver = receivers[i];
                 uint32 weight = receiver.weight;
                 require(weight != 0, "Splits receiver weight is zero");
                 totalWeight += weight;
                 uint256 accountId = receiver.accountId;
-                if (i > 0) require(prevAccountId < accountId, "Splits receivers not sorted");
+                if (accountId <= prevAccountId) require(i == 0, "Splits receivers not sorted");
                 prevAccountId = accountId;
                 emit SplitsReceiverSeen(receiversHash, accountId, weight);
             }
