@@ -130,7 +130,7 @@ abstract contract Splits {
             return (0, 0);
         }
         unchecked {
-            uint160 splitsWeight = 0;
+            uint256 splitsWeight = 0;
             for (uint256 i = 0; i < currReceivers.length; i++) {
                 splitsWeight += currReceivers[i].weight;
             }
@@ -163,7 +163,7 @@ abstract contract Splits {
         balance.splittable = 0;
 
         unchecked {
-            uint160 splitsWeight = 0;
+            uint256 splitsWeight = 0;
             for (uint256 i = 0; i < currReceivers.length; i++) {
                 splitsWeight += currReceivers[i].weight;
                 uint128 currSplitAmt =
@@ -242,7 +242,7 @@ abstract contract Splits {
     function _assertSplitsValid(SplitsReceiver[] memory receivers, bytes32 receiversHash) private {
         unchecked {
             require(receivers.length <= _MAX_SPLITS_RECEIVERS, "Too many splits receivers");
-            uint64 totalWeight = 0;
+            uint256 totalWeight = 0;
             uint256 prevAccountId = 0;
             for (uint256 i = 0; i < receivers.length; i++) {
                 SplitsReceiver memory receiver = receivers[i];
