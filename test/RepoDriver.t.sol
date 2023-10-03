@@ -658,14 +658,6 @@ contract RepoDriverTest is Test {
         _;
     }
 
-    function testInitializeAnyApiOperatorCanBePaused() public canBePausedTest {
-        driver.initializeAnyApiOperator(OperatorInterface(address(0)), 0, 0);
-    }
-
-    function testUpdateAnyApiOperatorCanBePaused() public canBePausedTest {
-        driver.updateAnyApiOperator(OperatorInterface(address(0)), 0, 0);
-    }
-
     function testRequestUpdateOwnerCanBePaused() public canBePausedTest {
         driver.requestUpdateOwner(Forge.GitHub, "");
     }

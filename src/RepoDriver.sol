@@ -183,7 +183,6 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     /// update request when the driver is covering the cost.
     function initializeAnyApiOperator(OperatorInterface operator, bytes32 jobId, uint96 defaultFee)
         public
-        whenNotPaused
     {
         require(!_repoDriverAnyApiStorage().isInitialized, "Already initialized");
         _updateAnyApiOperator(operator, jobId, defaultFee);
@@ -196,7 +195,6 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     /// update request when the driver is covering the cost.
     function updateAnyApiOperator(OperatorInterface operator, bytes32 jobId, uint96 defaultFee)
         public
-        whenNotPaused
         onlyAdmin
     {
         _updateAnyApiOperator(operator, jobId, defaultFee);
