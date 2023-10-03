@@ -131,8 +131,8 @@ abstract contract Splits {
         }
         unchecked {
             uint256 splitsWeight = 0;
-            for (uint256 i = 0; i < currReceivers.length; i++) {
-                splitsWeight += currReceivers[i].weight;
+            for (uint256 i = currReceivers.length; i != 0;) {
+                splitsWeight += currReceivers[--i].weight;
             }
             splitAmt = uint128(amount * splitsWeight / _TOTAL_SPLITS_WEIGHT);
             collectableAmt = amount - splitAmt;
