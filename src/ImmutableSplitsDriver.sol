@@ -56,9 +56,11 @@ contract ImmutableSplitsDriver is Managed {
     /// The configuration is immutable and nobody can control the account ID after its creation.
     /// Calling this function is the only way and the only chance to emit metadata for that account.
     /// @param receivers The list of the account's splits receivers to be set.
-    /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
+    /// Must be sorted by the account IDs, without duplicate account IDs and without 0 weights.
     /// Each splits receiver will be getting `weight / totalSplitsWeight`
     /// share of the funds collected by the account.
+    /// Fractions of tokens are always rounder either up or down depending on the amount
+    /// being split, the receiver's position on the list and the other receivers' weights.
     /// The sum of the receivers' weights must be equal to `totalSplitsWeight`,
     /// or in other words the configuration must be splitting 100% of received funds.
     /// @param accountMetadata The list of account metadata to emit for the created account.

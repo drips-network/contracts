@@ -243,18 +243,24 @@ abstract contract Streams {
         uint128 balance;
         /// @notice The number of streams configurations seen in the current cycle
         uint32 currCycleConfigs;
-        /// @notice The changes of received amounts on specific cycle.
+        /// @notice The changes of the received amounts in each cycle.
         /// The keys are cycles, each cycle `C` becomes receivable on timestamp `C * cycleSecs`.
+        /// Each cycle is described by 2 deltas, the cycle's `thisCycle` and the previous cycle's
+        /// `nextCycle`, so to get the change of the amount sent during the cycle `C`,
+        /// you need to calculate `amtDeltas[C].thisCycle + amtDeltas[C-1].nextCycle`.
+        /// To calculate the absolute amount streamed in the cycle `C`, you need to take the
+        /// amount streamed during the cycle `C - 1` and add the change applied in the cycle `C`.
         /// Values for cycles before `nextReceivableCycle` are guaranteed to be zeroed.
         /// This means that the value of `amtDeltas[nextReceivableCycle].thisCycle` is always
         /// relative to 0 or in other words it's an absolute value independent from other cycles.
         mapping(uint32 cycle => AmtDelta) amtDeltas;
     }
 
+    /// @notice The change of the received amounts in the given cycle and the cycle after it.
     struct AmtDelta {
-        /// @notice Amount delta applied on this cycle
+        /// @notice Amount delta applied in this cycle.
         int128 thisCycle;
-        /// @notice Amount delta applied on the next cycle
+        /// @notice Amount delta applied on the next cycle.
         int128 nextCycle;
     }
 
@@ -341,6 +347,8 @@ abstract contract Streams {
             for (uint32 cycle = fromCycle; cycle < toCycle; cycle++) {
                 AmtDelta memory amtDelta = amtDeltas[cycle];
                 amtPerCycle += amtDelta.thisCycle;
+                // This will not overflow if the requirement of tracking in the contract
+                // no more than `_MAX_STREAMS_BALANCE` of each token is followed.
                 receivedAmt += uint128(amtPerCycle);
                 amtPerCycle += amtDelta.nextCycle;
             }
@@ -495,6 +503,8 @@ abstract contract Streams {
                     }
                     if (squeezeStartCap < squeezeEndCap) {
                         squeezedRevIdxs[squeezedNum++] = i;
+                        // This will not overflow if the requirement of tracking in the contract
+                        // no more than `_MAX_STREAMS_BALANCE` of each token is followed.
                         amt += _squeezedAmt(accountId, historyEntry, squeezeStartCap, squeezeEndCap);
                     }
                 }
@@ -566,6 +576,8 @@ abstract contract Streams {
                 if (receiver.accountId != accountId) break;
                 (uint32 start, uint32 end) =
                     _streamRange(receiver, updateTime, maxEnd, squeezeStartCap, squeezeEndCap);
+                // This will not overflow if the requirement of tracking in the contract
+                // no more than `_MAX_STREAMS_BALANCE` of each token is followed.
                 amt += _streamedAmt(receiver.config.amtPerSec(), start, end);
             }
             return uint128(amt);
@@ -606,7 +618,7 @@ abstract contract Streams {
     /// @param erc20 The used ERC-20 token.
     /// @param currReceivers The current streams receivers list.
     /// It must be exactly the same as the last list set for the account with `_setStreams`.
-    /// @param timestamp The timestamps for which balance should be calculated.
+    /// @param timestamp The timestamp for which balance should be calculated.
     /// It can't be lower than the timestamp of the last call to `_setStreams`.
     /// If it's bigger than `block.timestamp`, then it's a prediction assuming
     /// that `_setStreams` won't be called before `timestamp`.
@@ -628,7 +640,7 @@ abstract contract Streams {
     /// @param lastUpdate The timestamp when streaming started.
     /// @param maxEnd The maximum end time of streaming.
     /// @param receivers The list of streams receivers.
-    /// @param timestamp The timestamps for which balance should be calculated.
+    /// @param timestamp The timestamp for which balance should be calculated.
     /// It can't be lower than `lastUpdate`.
     /// If it's bigger than `block.timestamp`, then it's a prediction assuming
     /// that `_setStreams` won't be called before `timestamp`.
@@ -662,10 +674,15 @@ abstract contract Streams {
     /// @param currReceivers The current streams receivers list.
     /// It must be exactly the same as the last list set for the account with `_setStreams`.
     /// If this is the first update, pass an empty array.
-    /// @param balanceDelta The streams balance change being applied.
-    /// Positive when adding funds to the streams balance, negative to removing them.
+    /// @param balanceDelta The streams balance change to be applied.
+    /// If it's positive, the balance is increased by `balanceDelta`.
+    /// If it's zero, the balance doesn't change.
+    /// If it's negative, the balance is decreased by `balanceDelta`,
+    /// but the change is capped at the current balance amount, so it doesn't go below 0.
+    /// Passing `type(int128).min` always decreases the current balance to 0.
     /// @param newReceivers The list of the streams receivers of the account to be set.
-    /// Must be sorted, deduplicated and without 0 amtPerSecs.
+    /// Must be sorted by the account IDs and then by the stream configurations,
+    /// without identical elements and without 0 amtPerSecs.
     /// @param maxEndHint1 An optional parameter allowing gas optimization, pass `0` to ignore it.
     /// The first hint for finding the maximum end time when all streams stop due to funds
     /// running out after the balance is updated and the new receivers list is applied.
@@ -690,6 +707,8 @@ abstract contract Streams {
     /// @param maxEndHint2 An optional parameter allowing gas optimization, pass `0` to ignore it.
     /// The second hint for finding the maximum end time, see `maxEndHint1` docs for more details.
     /// @return realBalanceDelta The actually applied streams balance change.
+    /// It's equal to the passed `balanceDelta`, unless it's negative
+    /// and it gets capped at the current balance amount.
     function _setStreams(
         uint256 accountId,
         IERC20 erc20,
@@ -718,6 +737,8 @@ abstract contract Streams {
                 if (realBalanceDelta < -currBalance) {
                     realBalanceDelta = -currBalance;
                 }
+                // This will not overflow if the requirement of tracking in the contract
+                // no more than `_MAX_STREAMS_BALANCE` of each token is followed.
                 newBalance = uint128(currBalance + realBalanceDelta);
                 newMaxEnd = _calcMaxEnd(newBalance, newReceivers, maxEndHint1, maxEndHint2);
                 _updateReceiverStates(
@@ -767,7 +788,8 @@ abstract contract Streams {
     /// @notice Calculates the maximum end time of all streams.
     /// @param balance The balance when streaming starts.
     /// @param receivers The list of streams receivers.
-    /// Must be sorted, deduplicated and without 0 amtPerSecs.
+    /// Must be sorted by the account IDs and then by the stream configurations,
+    /// without identical elements and without 0 amtPerSecs.
     /// @param hint1 The first hint for finding the maximum end time.
     /// See `_setStreams` docs for `maxEndHint1` for more details.
     /// @param hint2 The second hint for finding the maximum end time.
@@ -860,7 +882,8 @@ abstract contract Streams {
 
     /// @notice Build a preprocessed list of streams configurations from receivers.
     /// @param receivers The list of streams receivers.
-    /// Must be sorted, deduplicated and without 0 amtPerSecs.
+    /// Must be sorted by the account IDs and then by the stream configurations,
+    /// without identical elements and without 0 amtPerSecs.
     /// @return configs The list of streams configurations
     /// @return configsLen The length of `configs`
     function _buildConfigs(StreamReceiver[] memory receivers)
@@ -952,8 +975,7 @@ abstract contract Streams {
     /// @notice Calculates the hash of the streams configuration.
     /// It's used to verify if streams configuration is the previously set one.
     /// @param receivers The list of the streams receivers.
-    /// Must be sorted, deduplicated and without 0 amtPerSecs.
-    /// If the streams have never been updated, pass an empty array.
+    /// If the streams have never been set, pass an empty array.
     /// @return streamsHash The hash of the streams configuration
     function _hashStreams(StreamReceiver[] memory receivers)
         internal
@@ -985,6 +1007,8 @@ abstract contract Streams {
     }
 
     /// @notice Applies the effects of the change of the streams on the receivers' streams state.
+    /// Only affects `amtDeltas` and `nextReceivableCycle` of the accounts
+    /// present either in `currReceivers` or in `newReceivers`.
     /// @param states The streams states for the used ERC-20 token.
     /// @param currReceivers The list of the streams receivers
     /// set in the last streams update of the account.
@@ -993,7 +1017,8 @@ abstract contract Streams {
     /// If this is the first update, pass zero.
     /// @param currMaxEnd The maximum end time of streaming according to the last streams update.
     /// @param newReceivers  The list of the streams receivers of the account to be set.
-    /// Must be sorted, deduplicated and without 0 amtPerSecs.
+    /// Must be sorted by the account IDs and then by the stream configurations,
+    /// without identical elements and without 0 amtPerSecs.
     /// @param newMaxEnd The maximum end time of streaming according to the new configuration.
     // slither-disable-next-line cyclomatic-complexity
     function _updateReceiverStates(
@@ -1021,7 +1046,8 @@ abstract contract Streams {
                 newRecv = newReceivers[newIdx];
             }
 
-            // Limit picking both curr and new to situations when they differ only by time
+            // Limit picking both curr and new to situations when they
+            // differ only by the stream ID, the start or the duration.
             if (pickCurr && pickNew) {
                 if (
                     currRecv.accountId != newRecv.accountId
@@ -1214,7 +1240,7 @@ abstract contract Streams {
     /// - During every second full units are streamed, there are no partially streamed units.
     /// - Unstreamed fractions are streamed when they add up into full units.
     /// - Unstreamed fractions don't add up across cycle end boundaries.
-    /// - Some seconds stream more units and some less.
+    /// - Some seconds stream 1 unit more to emulate streaming fractions of the unit.
     /// - Every `N`th second of each cycle streams the same amount.
     /// - Every full cycle streams the same amount.
     /// - The amount streamed in a given second is independent from the streaming start and end.

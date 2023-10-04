@@ -120,9 +120,12 @@ contract Drips is Managed, Streams, Splits {
 
     /// @notice The balance currently stored in the protocol.
     struct Balance {
-        /// @notice The balance currently stored in streaming.
+        /// @notice The balance currently stored in the protocol in streaming.
+        /// It's the sum of all the funds of all the users
+        /// that are in the streams balances, are squeezable or are receivable.
         uint128 streams;
-        /// @notice The balance currently stored in splitting.
+        /// @notice The balance currently stored in the protocol in splitting.
+        /// It's the sum of all the funds of all the users that are splittable or are collectable.
         uint128 splits;
     }
 
@@ -214,8 +217,11 @@ contract Drips is Managed, Streams, Splits {
     /// Tokens which rebase the holders' balances, collect taxes on transfers,
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
-    /// @return streamsBalance The balance currently stored in streaming.
-    /// @return splitsBalance The balance currently stored in splitting.
+    /// @return streamsBalance The balance currently stored in the protocol in streaming.
+    /// It's the sum of all the funds of all the users
+    /// that are in the streams balances, are squeezable or are receivable.
+    /// @return splitsBalance The balance currently stored in the protocol in splitting.
+    /// It's the sum of all the funds of all the users that are splittable or are collectable.
     function balances(IERC20 erc20)
         public
         view
@@ -245,12 +251,12 @@ contract Drips is Managed, Streams, Splits {
         _dripsStorage().balances[erc20].streams -= amt;
     }
 
-    /// @notice Increases the balance of the given token currently stored in streams.
+    /// @notice Increases the balance of the given token currently stored in splits.
     /// No funds are transferred, all the tokens are expected to be already held by Drips.
     /// The new total balance is verified to have coverage in the held tokens
     /// and to be within the limit of `MAX_TOTAL_BALANCE`.
     /// @param erc20 The used ERC-20 token.
-    /// @param amt The amount to increase the streams balance by.
+    /// @param amt The amount to increase the splits balance by.
     function _increaseSplitsBalance(IERC20 erc20, uint128 amt) internal {
         _verifyBalanceIncrease(erc20, amt);
         _dripsStorage().balances[erc20].splits += amt;
@@ -451,9 +457,12 @@ contract Drips is Managed, Streams, Splits {
     }
 
     /// @notice Calculate the result of splitting an amount using the current splits configuration.
+    /// Fractions of tokens are always rounder either up or down depending on the amount
+    /// being split, the receiver's position on the list and the other receivers' weights.
     /// @param accountId The account ID.
     /// @param currReceivers The list of the account's current splits receivers.
     /// It must be exactly the same as the last list set for the account with `setSplits`.
+    /// If the splits have never been set, pass an empty array.
     /// @param amount The amount being split.
     /// @return collectableAmt The amount made collectable for the account
     /// on top of what was collectable before.
@@ -468,6 +477,8 @@ contract Drips is Managed, Streams, Splits {
 
     /// @notice Splits the account's splittable funds among receivers.
     /// The entire splittable balance of the given ERC-20 token is split.
+    /// Fractions of tokens are always rounder either up or down depending on the amount
+    /// being split, the receiver's position on the list and the other receivers' weights.
     /// All split funds are split using the current splits configuration.
     /// Because the account can update their splits configuration at any time,
     /// it is possible that calling this function will be frontrun,
@@ -483,6 +494,7 @@ contract Drips is Managed, Streams, Splits {
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param currReceivers The list of the account's current splits receivers.
     /// It must be exactly the same as the last list set for the account with `setSplits`.
+    /// If the splits have never been set, pass an empty array.
     /// @return collectableAmt The amount made collectable for the account
     /// on top of what was collectable before.
     /// @return splitAmt The amount split to the account's splits receivers
@@ -588,7 +600,7 @@ contract Drips is Managed, Streams, Splits {
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param currReceivers The current streams receivers list.
     /// It must be exactly the same as the last list set for the account with `setStreams`.
-    /// @param timestamp The timestamps for which balance should be calculated.
+    /// @param timestamp The timestamp for which balance should be calculated.
     /// It can't be lower than the timestamp of the last call to `setStreams`.
     /// If it's bigger than `block.timestamp`, then it's a prediction assuming
     /// that `setStreams` won't be called before `timestamp`.
@@ -619,9 +631,14 @@ contract Drips is Managed, Streams, Splits {
     /// It must be exactly the same as the last list set for the account with `setStreams`.
     /// If this is the first update, pass an empty array.
     /// @param balanceDelta The streams balance change to be applied.
-    /// Positive to add funds to the streams balance, negative to remove them.
+    /// If it's positive, the balance is increased by `balanceDelta`.
+    /// If it's zero, the balance doesn't change.
+    /// If it's negative, the balance is decreased by `balanceDelta`,
+    /// but the change is capped at the current balance amount, so it doesn't go below 0.
+    /// Passing `type(int128).min` always decreases the current balance to 0.
     /// @param newReceivers The list of the streams receivers of the account to be set.
-    /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
+    /// Must be sorted by the account IDs and then by the stream configurations,
+    /// without identical elements and without 0 amtPerSecs.
     /// @param maxEndHint1 An optional parameter allowing gas optimization, pass `0` to ignore it.
     /// The first hint for finding the maximum end time when all streams stop due to funds
     /// running out after the balance is updated and the new receivers list is applied.
@@ -646,6 +663,8 @@ contract Drips is Managed, Streams, Splits {
     /// @param maxEndHint2 An optional parameter allowing gas optimization, pass `0` to ignore it.
     /// The second hint for finding the maximum end time, see `maxEndHint1` docs for more details.
     /// @return realBalanceDelta The actually applied streams balance change.
+    /// It's equal to the passed `balanceDelta`, unless it's negative
+    /// and it gets capped at the current balance amount.
     /// If it's lower than zero, it's the negative of the amount that became withdrawable.
     function setStreams(
         uint256 accountId,
@@ -667,8 +686,9 @@ contract Drips is Managed, Streams, Splits {
     /// @notice Calculates the hash of the streams configuration.
     /// It's used to verify if streams configuration is the previously set one.
     /// @param receivers The list of the streams receivers.
-    /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
-    /// If the streams have never been updated, pass an empty array.
+    /// Must be sorted by the account IDs and then by the stream configurations,
+    /// without identical elements and without 0 amtPerSecs.
+    /// If the streams have never been set, pass an empty array.
     /// @return streamsHash The hash of the streams configuration
     function hashStreams(StreamReceiver[] memory receivers)
         public
@@ -704,11 +724,13 @@ contract Drips is Managed, Streams, Splits {
     /// and all the currently splittable funds will be split using the old splits configuration.
     /// @param accountId The account ID.
     /// @param receivers The list of the account's splits receivers to be set.
-    /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
+    /// Must be sorted by the account IDs, without duplicate account IDs and without 0 weights.
     /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the account.
     /// If the sum of weights of all receivers is less than `_TOTAL_SPLITS_WEIGHT`,
     /// some funds won't be split, but they will be left for the account to collect.
+    /// Fractions of tokens are always rounder either up or down depending on the amount
+    /// being split, the receiver's position on the list and the other receivers' weights.
     /// It's valid to include the account's own `accountId` in the list of receivers,
     /// but funds split to themselves return to their splittable balance and are not collectable.
     /// This is usually unwanted, because if splitting is repeated,
@@ -731,7 +753,7 @@ contract Drips is Managed, Streams, Splits {
 
     /// @notice Calculates the hash of the list of splits receivers.
     /// @param receivers The list of the splits receivers.
-    /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
+    /// Must be sorted by the account IDs, without duplicate account IDs and without 0 weights.
     /// @return receiversHash The hash of the list of splits receivers.
     function hashSplits(SplitsReceiver[] memory receivers)
         public

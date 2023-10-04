@@ -65,9 +65,14 @@ abstract contract DriverTransferUtils is ERC2771Context {
     /// It must be exactly the same as the last list set for the sender with `setStreams`.
     /// If this is the first update, pass an empty array.
     /// @param balanceDelta The streams balance change to be applied.
-    /// Positive to add funds to the streams balance, negative to remove them.
+    /// If it's positive, the balance is increased by `balanceDelta`.
+    /// If it's zero, the balance doesn't change.
+    /// If it's negative, the balance is decreased by `balanceDelta`,
+    /// but the change is capped at the current balance amount, so it doesn't go below 0.
+    /// Passing `type(int128).min` always decreases the current balance to 0.
     /// @param newReceivers The list of the streams receivers of the sender to be set.
-    /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
+    /// Must be sorted by the account IDs and then by the stream configurations,
+    /// without identical elements and without 0 amtPerSecs.
     /// @param maxEndHint1 An optional parameter allowing gas optimization, pass `0` to ignore it.
     /// The first hint for finding the maximum end time when all streams stop due to funds
     /// running out after the balance is updated and the new receivers list is applied.
@@ -93,6 +98,8 @@ abstract contract DriverTransferUtils is ERC2771Context {
     /// The second hint for finding the maximum end time, see `maxEndHint1` docs for more details.
     /// @param transferTo The address to send funds to in case of decreasing balance
     /// @return realBalanceDelta The actually applied streams balance change.
+    /// It's equal to the passed `balanceDelta`, unless it's negative
+    /// and it gets capped at the current balance amount.
     function _setStreamsAndTransfer(
         uint256 accountId,
         IERC20 erc20,

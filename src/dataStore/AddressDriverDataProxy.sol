@@ -55,10 +55,15 @@ contract AddressDriverDataProxy is ERC2771Context, Managed {
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param balanceDelta The streams balance change to be applied.
-    /// Positive to add funds to the streams balance, negative to remove them.
+    /// If it's positive, the balance is increased by `balanceDelta`.
+    /// If it's zero, the balance doesn't change.
+    /// If it's negative, the balance is decreased by `balanceDelta`,
+    /// but the change is capped at the current balance amount, so it doesn't go below 0.
+    /// Passing `type(int128).min` always decreases the current balance to 0.
     /// @param newStreamsHash The hash of the list of the streams receivers of the sender to be set,
     /// the actual list must be stored in DripsDataStore.
-    /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
+    /// Must be sorted by the account IDs and then by the stream configurations,
+    /// without identical elements and without 0 amtPerSecs.
     /// @param maxEndHint1 An optional parameter allowing gas optimization, pass `0` to ignore it.
     /// The first hint for finding the maximum end time when all streams stop due to funds
     /// running out after the balance is updated and the new receivers list is applied.
@@ -84,6 +89,8 @@ contract AddressDriverDataProxy is ERC2771Context, Managed {
     /// The second hint for finding the maximum end time, see `maxEndHint1` docs for more details.
     /// @param transferTo The address to send funds to in case of decreasing balance
     /// @return realBalanceDelta The actually applied streams balance change.
+    /// It's equal to the passed `balanceDelta`, unless it's negative
+    /// and it gets capped at the current balance amount.
     function setStreams(
         IERC20 erc20,
         int128 balanceDelta,
@@ -119,11 +126,13 @@ contract AddressDriverDataProxy is ERC2771Context, Managed {
     /// and all the currently splittable funds will be split using the old splits configuration.
     /// @param splitsHash The hash of the list of the sender's splits receivers to be set,
     /// the actual list must be stored in DripsDataStore.
-    /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
+    /// Must be sorted by the account IDs, without duplicate account IDs and without 0 weights.
     /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the account.
     /// If the sum of weights of all receivers is less than `_TOTAL_SPLITS_WEIGHT`,
     /// some funds won't be split, but they will be left for the account to collect.
+    /// Fractions of tokens are always rounder either up or down depending on the amount
+    /// being split, the receiver's position on the list and the other receivers' weights.
     /// It's valid to include the account's own `accountId` in the list of receivers,
     /// but funds split to themselves return to their splittable balance and are not collectable.
     /// This is usually unwanted, because if splitting is repeated,

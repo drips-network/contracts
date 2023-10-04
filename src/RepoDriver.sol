@@ -44,8 +44,10 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     /// @notice Emitted when the AnyApi operator configuration is updated.
     /// @param operator The new address of the AnyApi operator.
     /// @param jobId The new AnyApi job ID used for requesting account owner updates.
-    /// @param defaultFee The new fee in Link for each account owner.
+    /// @param defaultFee The new fee in Link for each account owner
     /// update request when the driver is covering the cost.
+    /// The fee must be high enough for the operator to accept the requests,
+    /// refer to their documentation to see what's the minimum value.
     event AnyApiOperatorUpdated(
         OperatorInterface indexed operator, bytes32 indexed jobId, uint96 defaultFee
     );
@@ -71,8 +73,10 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         mapping(bytes32 requestId => uint256 accountId) requestedUpdates;
         /// @notice The new address of the AnyApi operator.
         OperatorInterface operator;
-        /// @notice The fee in Link for each account owner.
+        /// @notice The fee in Link for each account owner
         /// update request when the driver is covering the cost.
+        /// The fee must be high enough for the operator to accept the requests,
+        /// refer to their documentation to see what's the minimum value.
         uint96 defaultFee;
         /// @notice The AnyApi job ID used for requesting account owner updates.
         bytes32 jobId;
@@ -179,8 +183,10 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     /// Callable only once, and only before any calls to `updateAnyApiOperator`.
     /// @param operator The initial address of the AnyApi operator.
     /// @param jobId The initial AnyApi job ID used for requesting account owner updates.
-    /// @param defaultFee The initial fee in Link for each account owner.
+    /// @param defaultFee The initial fee in Link for each account owner
     /// update request when the driver is covering the cost.
+    /// The fee must be high enough for the operator to accept the requests,
+    /// refer to their documentation to see what's the minimum value.
     function initializeAnyApiOperator(OperatorInterface operator, bytes32 jobId, uint96 defaultFee)
         public
     {
@@ -191,8 +197,10 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     /// @notice Updates the AnyApi operator configuration. Callable only by the admin.
     /// @param operator The new address of the AnyApi operator.
     /// @param jobId The new AnyApi job ID used for requesting account owner updates.
-    /// @param defaultFee The new fee in Link for each account owner.
+    /// @param defaultFee The new fee in Link for each account owner
     /// update request when the driver is covering the cost.
+    /// The fee must be high enough for the operator to accept the requests,
+    /// refer to their documentation to see what's the minimum value.
     function updateAnyApiOperator(OperatorInterface operator, bytes32 jobId, uint96 defaultFee)
         public
         onlyAdmin
@@ -203,8 +211,10 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     /// @notice Updates the AnyApi operator configuration. Callable only by the admin.
     /// @param operator The new address of the AnyApi operator.
     /// @param jobId The new AnyApi job ID used for requesting account owner updates.
-    /// @param defaultFee The new fee in Link for each account owner.
+    /// @param defaultFee The new fee in Link for each account owner
     /// update request when the driver is covering the cost.
+    /// The fee must be high enough for the operator to accept the requests,
+    /// refer to their documentation to see what's the minimum value.
     function _updateAnyApiOperator(OperatorInterface operator, bytes32 jobId, uint96 defaultFee)
         internal
     {
@@ -219,8 +229,10 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     /// @notice Gets the current AnyApi operator configuration.
     /// @return operator The address of the AnyApi operator.
     /// @return jobId The AnyApi job ID used for requesting account owner updates.
-    /// @return defaultFee The fee in Link for each account owner.
+    /// @return defaultFee The fee in Link for each account owner
     /// update request when the driver is covering the cost.
+    /// The fee must be high enough for the operator to accept the requests,
+    /// refer to their documentation to see what's the minimum value.
     function anyApiOperator()
         public
         view
@@ -439,9 +451,14 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     /// It must be exactly the same as the last list set for the account with `setStreams`.
     /// If this is the first update, pass an empty array.
     /// @param balanceDelta The streams balance change to be applied.
-    /// Positive to add funds to the streams balance, negative to remove them.
+    /// If it's positive, the balance is increased by `balanceDelta`.
+    /// If it's zero, the balance doesn't change.
+    /// If it's negative, the balance is decreased by `balanceDelta`,
+    /// but the change is capped at the current balance amount, so it doesn't go below 0.
+    /// Passing `type(int128).min` always decreases the current balance to 0.
     /// @param newReceivers The list of the streams receivers of the sender to be set.
-    /// Must be sorted by the receivers' addresses, deduplicated and without 0 amtPerSecs.
+    /// Must be sorted by the account IDs and then by the stream configurations,
+    /// without identical elements and without 0 amtPerSecs.
     /// @param maxEndHint1 An optional parameter allowing gas optimization, pass `0` to ignore it.
     /// The first hint for finding the maximum end time when all streams stop due to funds
     /// running out after the balance is updated and the new receivers list is applied.
@@ -467,6 +484,8 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     /// The second hint for finding the maximum end time, see `maxEndHint1` docs for more details.
     /// @param transferTo The address to send funds to in case of decreasing balance
     /// @return realBalanceDelta The actually applied streams balance change.
+    /// It's equal to the passed `balanceDelta`, unless it's negative
+    /// and it gets capped at the current balance amount.
     function setStreams(
         uint256 accountId,
         IERC20 erc20,
@@ -499,11 +518,13 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     /// @param accountId The ID of the configured account.
     /// The caller must be the owner of the account.
     /// @param receivers The list of the account's splits receivers to be set.
-    /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
+    /// Must be sorted by the account IDs, without duplicate account IDs and without 0 weights.
     /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the account.
     /// If the sum of weights of all receivers is less than `_TOTAL_SPLITS_WEIGHT`,
     /// some funds won't be split, but they will be left for the account to collect.
+    /// Fractions of tokens are always rounder either up or down depending on the amount
+    /// being split, the receiver's position on the list and the other receivers' weights.
     /// It's valid to include the account's own `accountId` in the list of receivers,
     /// but funds split to themselves return to their splittable balance and are not collectable.
     /// This is usually unwanted, because if splitting is repeated,

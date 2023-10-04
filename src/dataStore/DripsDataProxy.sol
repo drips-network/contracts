@@ -151,7 +151,7 @@ contract DripsDataProxy is Managed {
     /// Tokens which rebase the holders' balances, collect taxes on transfers,
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
-    /// @param timestamp The timestamps for which balance should be calculated.
+    /// @param timestamp The timestamp for which balance should be calculated.
     /// It can't be lower than the timestamp of the last call to `setStreams`.
     /// If it's bigger than `block.timestamp`, then it's a prediction assuming
     /// that `setStreams` won't be called before `timestamp`.

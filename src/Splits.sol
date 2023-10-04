@@ -101,6 +101,8 @@ abstract contract Splits {
     }
 
     function _addSplittable(uint256 accountId, IERC20 erc20, uint128 amt) internal {
+        // This will not overflow if the requirement of tracking in the contract
+        // no more than `_MAX_SPLITS_BALANCE` of each token is followed.
         _splitsStorage().splitsStates[accountId].balances[erc20].splittable += amt;
     }
 
@@ -116,6 +118,7 @@ abstract contract Splits {
     /// @param accountId The account ID.
     /// @param currReceivers The list of the account's current splits receivers.
     /// It must be exactly the same as the last list set for the account with `_setSplits`.
+    /// If the splits have never been set, pass an empty array.
     /// @param amount The amount being split.
     /// @return collectableAmt The amount made collectable for the account
     /// on top of what was collectable before.
@@ -146,6 +149,7 @@ abstract contract Splits {
     /// @param erc20 The used ERC-20 token.
     /// @param currReceivers The list of the account's current splits receivers.
     /// It must be exactly the same as the last list set for the account with `_setSplits`.
+    /// If the splits have never been set, pass an empty array.
     /// @return collectableAmt The amount made collectable for the account
     /// on top of what was collectable before.
     /// @return splitAmt The amount split to the account's splits receivers
@@ -174,6 +178,8 @@ abstract contract Splits {
                 emit Split(accountId, receiver, erc20, currSplitAmt);
             }
             collectableAmt -= splitAmt;
+            // This will not overflow if the requirement of tracking in the contract
+            // no more than `_MAX_SPLITS_BALANCE` of each token is followed.
             balance.collectable += collectableAmt;
         }
         emit Collectable(accountId, erc20, collectableAmt);
@@ -215,11 +221,13 @@ abstract contract Splits {
     /// after this function finishes, the new splits configuration will be used.
     /// @param accountId The account ID.
     /// @param receivers The list of the account's splits receivers to be set.
-    /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
+    /// Must be sorted by the account IDs, without duplicate account IDs and without 0 weights.
     /// Each splits receiver will be getting `weight / _TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the account.
     /// If the sum of weights of all receivers is less than `_TOTAL_SPLITS_WEIGHT`,
     /// some funds won't be split, but they will be left for the account to collect.
+    /// Fractions of tokens are always rounder either up or down depending on the amount
+    /// being split, the receiver's position on the list and the other receivers' weights.
     /// It's valid to include the account's own `accountId` in the list of receivers,
     /// but funds split to themselves return to their splittable balance and are not collectable.
     /// This is usually unwanted, because if splitting is repeated,
@@ -238,7 +246,7 @@ abstract contract Splits {
     /// @notice Validates a list of splits receivers and emits events for them
     /// @param receivers The list of splits receivers
     /// @param receiversHash The hash of the list of splits receivers.
-    /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
+    /// Must be sorted by the account IDs, without duplicate account IDs and without 0 weights.
     function _assertSplitsValid(SplitsReceiver[] memory receivers, bytes32 receiversHash) private {
         unchecked {
             require(receivers.length <= _MAX_SPLITS_RECEIVERS, "Too many splits receivers");
@@ -261,6 +269,7 @@ abstract contract Splits {
     /// @notice Asserts that the list of splits receivers is the account's currently used one.
     /// @param accountId The account ID.
     /// @param currReceivers The list of the account's current splits receivers.
+    /// If the splits have never been set, pass an empty array.
     function _assertCurrSplits(uint256 accountId, SplitsReceiver[] memory currReceivers)
         internal
         view
@@ -279,7 +288,7 @@ abstract contract Splits {
 
     /// @notice Calculates the hash of the list of splits receivers.
     /// @param receivers The list of the splits receivers.
-    /// Must be sorted by the splits receivers' addresses, deduplicated and without 0 weights.
+    /// If the splits have never been set, pass an empty array.
     /// @return receiversHash The hash of the list of splits receivers.
     function _hashSplits(SplitsReceiver[] memory receivers)
         internal
