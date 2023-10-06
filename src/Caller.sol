@@ -198,7 +198,7 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     /// @param data The calldata to be used for the call.
     /// @param deadline The timestamp until which the message signature is valid.
     /// @param r The `r` part of the compact message signature as per EIP-2098.
-    /// @param sv The `sv` part of the compact message signature as per EIP-2098.
+    /// @param vs The `vs` part of the compact message signature as per EIP-2098.
     /// @return returnData The data returned by the call.
     function callSigned(
         address sender,
@@ -206,7 +206,7 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
         bytes calldata data,
         uint256 deadline,
         bytes32 r,
-        bytes32 sv
+        bytes32 vs
     ) public payable returns (bytes memory returnData) {
         // slither-disable-next-line timestamp
         require(block.timestamp <= deadline, "Execution deadline expired");
@@ -216,7 +216,7 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
                 callSignedTypeHash, sender, target, keccak256(data), msg.value, currNonce, deadline
             )
         );
-        address signer = ECDSA.recover(_hashTypedDataV4(executeHash), r, sv);
+        address signer = ECDSA.recover(_hashTypedDataV4(executeHash), r, vs);
         require(signer == sender, "Invalid signature");
         emit CalledSigned(sender, currNonce);
         return _call(sender, target, data, msg.value);
