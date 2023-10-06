@@ -3,11 +3,13 @@ pragma solidity ^0.8.20;
 
 import {
     AccountMetadata,
+    Drips,
+    Splits,
     SplitsReceiver,
     StreamConfigImpl,
-    Drips,
-    StreamsHistory,
-    StreamReceiver
+    StreamReceiver,
+    Streams,
+    StreamsHistory
 } from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
@@ -15,6 +17,11 @@ import {
     IERC20,
     ERC20PresetFixedSupply
 } from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
+
+contract Constants is Splits(0), Streams(2, 0) {
+    uint128 public constant MAX_STREAMS_BALANCE = _MAX_STREAMS_BALANCE;
+    uint128 public constant MAX_SPLITS_BALANCE = _MAX_SPLITS_BALANCE;
+}
 
 contract DripsTest is Test {
     Drips internal drips;
@@ -630,6 +637,13 @@ contract DripsTest is Test {
         accountMetadata[0] = AccountMetadata("key", "value");
         vm.expectRevert(ERROR_NOT_DRIVER);
         drips.emitAccountMetadata(accountId, accountMetadata);
+    }
+
+    function testMaxBalanceIsNotTooHigh() public {
+        uint128 maxBalance = drips.MAX_TOTAL_BALANCE();
+        Constants consts = new Constants();
+        assertLe(maxBalance, consts.MAX_SPLITS_BALANCE(), "Max balance over max splits balance");
+        assertLe(maxBalance, consts.MAX_STREAMS_BALANCE(), "Max balance over max streams balance");
     }
 
     function testSetStreamsLimitsTotalBalance() public {
