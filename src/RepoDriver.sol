@@ -116,11 +116,6 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         _;
     }
 
-    /// @notice Returns the address of the Drips contract to use for ERC-20 transfers.
-    function _drips() internal view override returns (Drips) {
-        return drips;
-    }
-
     /// @notice Calculates the account ID.
     /// Every account ID is a 256-bit integer constructed by concatenating:
     /// `driverId (32 bits) | forgeId (8 bits) | nameEncoded (216 bits)`.
@@ -412,8 +407,7 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         onlyOwner(accountId)
         returns (uint128 amt)
     {
-        amt = drips.collect(accountId, erc20);
-        if (amt > 0) drips.withdraw(erc20, transferTo, amt);
+        return _collectAndTransfer(drips, accountId, erc20, transferTo);
     }
 
     /// @notice Gives funds from the account to the receiver.
@@ -433,7 +427,7 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         whenNotPaused
         onlyOwner(accountId)
     {
-        _giveAndTransfer(accountId, receiver, erc20, amt);
+        _giveAndTransfer(drips, accountId, receiver, erc20, amt);
     }
 
     /// @notice Sets the account's streams configuration.
@@ -498,6 +492,7 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         address transferTo
     ) public whenNotPaused onlyOwner(accountId) returns (int128 realBalanceDelta) {
         return _setStreamsAndTransfer(
+            drips,
             accountId,
             erc20,
             currReceivers,

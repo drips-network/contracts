@@ -26,19 +26,15 @@ contract DummyDriver is DriverTransferUtils {
         drips.registerDriver(address(this));
     }
 
-    function _drips() internal view override returns (Drips) {
-        return drips;
-    }
-
     function collect(uint256 accountId, IERC20 erc20, address transferTo)
         public
         returns (uint128 amt)
     {
-        return _collectAndTransfer(accountId, erc20, transferTo);
+        return _collectAndTransfer(drips, accountId, erc20, transferTo);
     }
 
     function give(uint256 accountId, uint256 receiver, IERC20 erc20, uint128 amt) public {
-        _giveAndTransfer(accountId, receiver, erc20, amt);
+        _giveAndTransfer(drips, accountId, receiver, erc20, amt);
     }
 
     function setStreams(
@@ -53,6 +49,7 @@ contract DummyDriver is DriverTransferUtils {
         address transferTo
     ) public returns (int128 realBalanceDelta) {
         return _setStreamsAndTransfer(
+            drips,
             accountId,
             erc20,
             currReceivers,

@@ -13,11 +13,9 @@ abstract contract DriverTransferUtils is ERC2771Context {
     /// @param forwarder The ERC-2771 forwarder to trust. May be the zero address.
     constructor(address forwarder) ERC2771Context(forwarder) {}
 
-    /// @notice Returns the address of the Drips contract to use for ERC-20 transfers.
-    function _drips() internal virtual returns (Drips);
-
     /// @notice Collects the account's received already split funds
     /// and transfers them out of the Drips contract.
+    /// @param drips The Drips contract to use.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
@@ -26,17 +24,18 @@ abstract contract DriverTransferUtils is ERC2771Context {
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param transferTo The address to send collected funds to
     /// @return amt The collected amount
-    function _collectAndTransfer(uint256 accountId, IERC20 erc20, address transferTo)
+    function _collectAndTransfer(Drips drips, uint256 accountId, IERC20 erc20, address transferTo)
         internal
         returns (uint128 amt)
     {
-        amt = _drips().collect(accountId, erc20);
-        if (amt > 0) _drips().withdraw(erc20, transferTo, amt);
+        amt = drips.collect(accountId, erc20);
+        if (amt > 0) drips.withdraw(erc20, transferTo, amt);
     }
 
     /// @notice Gives funds from the message sender to the receiver.
     /// The receiver can split and collect them immediately.
     /// Transfers the funds to be given from the message sender's wallet to the Drips contract.
+    /// @param drips The Drips contract to use.
     /// @param receiver The receiver account ID.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
@@ -45,16 +44,21 @@ abstract contract DriverTransferUtils is ERC2771Context {
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param amt The given amount
-    function _giveAndTransfer(uint256 accountId, uint256 receiver, IERC20 erc20, uint128 amt)
-        internal
-    {
-        if (amt > 0) _transferFromCaller(erc20, amt);
-        _drips().give(accountId, receiver, erc20, amt);
+    function _giveAndTransfer(
+        Drips drips,
+        uint256 accountId,
+        uint256 receiver,
+        IERC20 erc20,
+        uint128 amt
+    ) internal {
+        if (amt > 0) _transferFromCaller(drips, erc20, amt);
+        drips.give(accountId, receiver, erc20, amt);
     }
 
     /// @notice Sets the message sender's streams configuration.
     /// Transfers funds between the message sender's wallet and the Drips contract
     /// to fulfil the change of the streams balance.
+    /// @param drips The Drips contract to use.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
@@ -101,6 +105,7 @@ abstract contract DriverTransferUtils is ERC2771Context {
     /// It's equal to the passed `balanceDelta`, unless it's negative
     /// and it gets capped at the current balance amount.
     function _setStreamsAndTransfer(
+        Drips drips,
         uint256 accountId,
         IERC20 erc20,
         StreamReceiver[] calldata currReceivers,
@@ -111,17 +116,18 @@ abstract contract DriverTransferUtils is ERC2771Context {
         uint32 maxEndHint2,
         address transferTo
     ) internal returns (int128 realBalanceDelta) {
-        if (balanceDelta > 0) _transferFromCaller(erc20, uint128(balanceDelta));
-        realBalanceDelta = _drips().setStreams(
+        if (balanceDelta > 0) _transferFromCaller(drips, erc20, uint128(balanceDelta));
+        realBalanceDelta = drips.setStreams(
             accountId, erc20, currReceivers, balanceDelta, newReceivers, maxEndHint1, maxEndHint2
         );
-        if (realBalanceDelta < 0) _drips().withdraw(erc20, transferTo, uint128(-realBalanceDelta));
+        if (realBalanceDelta < 0) drips.withdraw(erc20, transferTo, uint128(-realBalanceDelta));
     }
 
     /// @notice Transfers tokens from the sender to Drips.
+    /// @param drips The Drips contract to use.
     /// @param erc20 The used ERC-20 token.
     /// @param amt The transferred amount
-    function _transferFromCaller(IERC20 erc20, uint128 amt) internal {
-        SafeERC20.safeTransferFrom(erc20, _msgSender(), address(_drips()), amt);
+    function _transferFromCaller(Drips drips, IERC20 erc20, uint128 amt) internal {
+        SafeERC20.safeTransferFrom(erc20, _msgSender(), address(drips), amt);
     }
 }

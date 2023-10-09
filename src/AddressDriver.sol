@@ -23,11 +23,6 @@ contract AddressDriver is DriverTransferUtils, Managed {
         driverId = driverId_;
     }
 
-    /// @notice Returns the address of the Drips contract to use for ERC-20 transfers.
-    function _drips() internal view override returns (Drips) {
-        return drips;
-    }
-
     /// @notice Calculates the account ID for an address.
     /// Every account ID is a 256-bit integer constructed by concatenating:
     /// `driverId (32 bits) | zeros (64 bits) | addr (160 bits)`.
@@ -61,7 +56,7 @@ contract AddressDriver is DriverTransferUtils, Managed {
     /// @param transferTo The address to send collected funds to
     /// @return amt The collected amount
     function collect(IERC20 erc20, address transferTo) public whenNotPaused returns (uint128 amt) {
-        return _collectAndTransfer(_callerAccountId(), erc20, transferTo);
+        return _collectAndTransfer(drips, _callerAccountId(), erc20, transferTo);
     }
 
     /// @notice Gives funds from the message sender to the receiver.
@@ -76,7 +71,7 @@ contract AddressDriver is DriverTransferUtils, Managed {
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param amt The given amount
     function give(uint256 receiver, IERC20 erc20, uint128 amt) public whenNotPaused {
-        _giveAndTransfer(_callerAccountId(), receiver, erc20, amt);
+        _giveAndTransfer(drips, _callerAccountId(), receiver, erc20, amt);
     }
 
     /// @notice Sets the message sender's streams configuration.
@@ -138,6 +133,7 @@ contract AddressDriver is DriverTransferUtils, Managed {
         address transferTo
     ) public whenNotPaused returns (int128 realBalanceDelta) {
         return _setStreamsAndTransfer(
+            drips,
             _callerAccountId(),
             erc20,
             currReceivers,

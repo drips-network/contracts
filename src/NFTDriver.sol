@@ -46,11 +46,6 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
         driverId = driverId_;
     }
 
-    /// @notice Returns the address of the Drips contract to use for ERC-20 transfers.
-    function _drips() internal view override returns (Drips) {
-        return drips;
-    }
-
     modifier onlyHolder(uint256 tokenId) {
         require(
             _isApprovedOrOwner(_msgSender(), tokenId),
@@ -216,8 +211,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
         onlyHolder(tokenId)
         returns (uint128 amt)
     {
-        amt = drips.collect(tokenId, erc20);
-        if (amt > 0) drips.withdraw(erc20, transferTo, amt);
+        return _collectAndTransfer(drips, tokenId, erc20, transferTo);
     }
 
     /// @notice Gives funds from the account to the receiver.
@@ -239,7 +233,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
         whenNotPaused
         onlyHolder(tokenId)
     {
-        _giveAndTransfer(tokenId, receiver, erc20, amt);
+        _giveAndTransfer(drips, tokenId, receiver, erc20, amt);
     }
 
     /// @notice Sets the account's streams configuration.
@@ -305,6 +299,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
         address transferTo
     ) public whenNotPaused onlyHolder(tokenId) returns (int128 realBalanceDelta) {
         return _setStreamsAndTransfer(
+            drips,
             tokenId,
             erc20,
             currReceivers,
