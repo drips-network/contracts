@@ -177,6 +177,8 @@ contract AddressDriver is DriverTransferUtils, Managed {
     /// to establish and follow conventions to ensure compatibility with the consumers.
     /// @param accountMetadata The list of account metadata.
     function emitAccountMetadata(AccountMetadata[] calldata accountMetadata) public whenNotPaused {
-        drips.emitAccountMetadata(_callerAccountId(), accountMetadata);
+        if (accountMetadata.length != 0) {
+            drips.emitAccountMetadata(_callerAccountId(), accountMetadata);
+        }
     }
 }

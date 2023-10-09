@@ -370,8 +370,9 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     function _emitAccountMetadata(uint256 tokenId, AccountMetadata[] calldata accountMetadata)
         internal
     {
-        if (accountMetadata.length == 0) return;
-        drips.emitAccountMetadata(tokenId, accountMetadata);
+        if (accountMetadata.length != 0) {
+            drips.emitAccountMetadata(tokenId, accountMetadata);
+        }
     }
 
     /// @inheritdoc IERC721Metadata

@@ -549,8 +549,9 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         whenNotPaused
         onlyOwner(accountId)
     {
-        if (accountMetadata.length == 0) return;
-        drips.emitAccountMetadata(accountId, accountMetadata);
+        if (accountMetadata.length != 0) {
+            drips.emitAccountMetadata(accountId, accountMetadata);
+        }
     }
 
     /// @notice Returns the RepoDriver storage.

@@ -82,6 +82,6 @@ contract ImmutableSplitsDriver is Managed {
         require(weightSum == totalSplitsWeight, "Invalid total receivers weight");
         emit CreatedSplits(accountId, drips.hashSplits(receivers));
         drips.setSplits(accountId, receivers);
-        if (accountMetadata.length > 0) drips.emitAccountMetadata(accountId, accountMetadata);
+        if (accountMetadata.length != 0) drips.emitAccountMetadata(accountId, accountMetadata);
     }
 }
