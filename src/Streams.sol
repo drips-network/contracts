@@ -241,8 +241,9 @@ abstract contract Streams {
         uint32 maxEnd;
         /// @notice The balance when streams have been configured for the last time.
         uint128 balance;
-        /// @notice The number of streams configurations seen in the current cycle
-        uint32 currCycleConfigs;
+        /// @notice The number of streams configurations seen in the cycle
+        /// during which streams have been configured for the last time.
+        uint32 lastUpdatedCycleConfigs;
         /// @notice The changes of the received amounts in each cycle.
         /// The keys are cycles, each cycle `C` becomes receivable on timestamp `C * cycleSecs`.
         /// Each cycle is described by 2 deltas, the cycle's `thisCycle` and the previous cycle's
@@ -486,7 +487,9 @@ abstract contract Streams {
             // there's only the single latest history entry to squeeze in the current cycle.
             currCycleConfigs = 1;
             // slither-disable-next-line timestamp
-            if (sender.updateTime >= _currCycleStart()) currCycleConfigs = sender.currCycleConfigs;
+            if (sender.updateTime >= _currCycleStart()) {
+                currCycleConfigs = sender.lastUpdatedCycleConfigs;
+            }
         }
         squeezedRevIdxs = new uint256[](streamsHistory.length);
         uint32[2 ** 32] storage nextSqueezed =
@@ -756,9 +759,9 @@ abstract contract Streams {
             bytes32 streamsHistory = state.streamsHistoryHash;
             // slither-disable-next-line timestamp
             if (streamsHistory != 0 && _cycleOf(lastUpdate) != _cycleOf(_currTimestamp())) {
-                state.currCycleConfigs = 2;
+                state.lastUpdatedCycleConfigs = 2;
             } else {
-                state.currCycleConfigs++;
+                state.lastUpdatedCycleConfigs++;
             }
             bytes32 newStreamsHash = _hashStreams(newReceivers);
             state.streamsHistoryHash =
