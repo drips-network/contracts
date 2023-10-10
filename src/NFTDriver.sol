@@ -46,7 +46,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
         driverId = driverId_;
     }
 
-    modifier onlyHolder(uint256 tokenId) {
+    modifier onlyApprovedOrOwner(uint256 tokenId) {
         require(
             _isApprovedOrOwner(_msgSender(), tokenId),
             "ERC721: caller is not token owner or approved"
@@ -208,7 +208,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     function collect(uint256 tokenId, IERC20 erc20, address transferTo)
         public
         whenNotPaused
-        onlyHolder(tokenId)
+        onlyApprovedOrOwner(tokenId)
         returns (uint128 amt)
     {
         return _collectAndTransfer(drips, tokenId, erc20, transferTo);
@@ -231,7 +231,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     function give(uint256 tokenId, uint256 receiver, IERC20 erc20, uint128 amt)
         public
         whenNotPaused
-        onlyHolder(tokenId)
+        onlyApprovedOrOwner(tokenId)
     {
         _giveAndTransfer(drips, tokenId, receiver, erc20, amt);
     }
@@ -297,7 +297,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
         uint32 maxEndHint1,
         uint32 maxEndHint2,
         address transferTo
-    ) public whenNotPaused onlyHolder(tokenId) returns (int128 realBalanceDelta) {
+    ) public whenNotPaused onlyApprovedOrOwner(tokenId) returns (int128 realBalanceDelta) {
         return _setStreamsAndTransfer(
             drips,
             tokenId,
@@ -336,7 +336,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     function setSplits(uint256 tokenId, SplitsReceiver[] calldata receivers)
         public
         whenNotPaused
-        onlyHolder(tokenId)
+        onlyApprovedOrOwner(tokenId)
     {
         drips.setSplits(tokenId, receivers);
     }
@@ -351,7 +351,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     function emitAccountMetadata(uint256 tokenId, AccountMetadata[] calldata accountMetadata)
         public
         whenNotPaused
-        onlyHolder(tokenId)
+        onlyApprovedOrOwner(tokenId)
     {
         _emitAccountMetadata(tokenId, accountMetadata);
     }
