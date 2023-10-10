@@ -236,11 +236,10 @@ abstract contract Splits {
     function _setSplits(uint256 accountId, SplitsReceiver[] memory receivers) internal {
         SplitsState storage state = _splitsStorage().splitsStates[accountId];
         bytes32 newSplitsHash = _hashSplits(receivers);
+        if (newSplitsHash == state.splitsHash) return;
         emit SplitsSet(accountId, newSplitsHash);
-        if (newSplitsHash != state.splitsHash) {
-            _assertSplitsValid(receivers, newSplitsHash);
-            state.splitsHash = newSplitsHash;
-        }
+        _assertSplitsValid(receivers, newSplitsHash);
+        state.splitsHash = newSplitsHash;
     }
 
     /// @notice Validates a list of splits receivers and emits events for them
