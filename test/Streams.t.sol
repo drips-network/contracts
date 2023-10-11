@@ -1372,6 +1372,25 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         receiveStreams(receiver, _cycleSecs);
     }
 
+    function testReceiveAllStreamsCyclesWithLowMaxCycles() public {
+        // Enough for 3 cycles
+        uint128 amt = _cycleSecs * 3;
+        skipToCycleEnd();
+        setStreams(sender, 0, amt, recv(receiver, 1), _cycleSecs * 3);
+        skipToCycleEnd();
+        skipToCycleEnd();
+        skipToCycleEnd();
+        receiveStreams({
+            accountId: receiver,
+            maxCycles: 4,
+            expectedReceivedAmt: _cycleSecs * 3,
+            expectedReceivedCycles: 3,
+            expectedAmtAfter: 0,
+            expectedCyclesAfter: 0
+        });
+        receiveStreams(receiver, 0);
+    }
+
     function testSenderCanStreamToThemselves() public {
         uint128 amt = _cycleSecs * 3;
         skipToCycleEnd();
