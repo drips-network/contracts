@@ -20,6 +20,12 @@ verify_drips_deployer() {
     verify "$DRIPS_DEPLOYER" "src/DripsDeployer.sol:DripsDeployer" "$(query "$DRIPS_DEPLOYER" args bytes)"
 }
 
+verify_repo_driver_module() {
+    verify_proxy_deployer_module RepoDriver
+    verify_module_contract FunctionsConfig "$MODULE_ADDR" functionsConfig "src/RepoDriver.sol:FunctionsConfig"
+}
+
+
 # Args: contract name
 verify_contract_deployer_module() {
     verify_module "$1"
@@ -112,7 +118,7 @@ main() {
     verify_proxy_deployer_module AddressDriver
     verify_proxy_deployer_module NFTDriver
     verify_proxy_deployer_module ImmutableSplitsDriver
-    verify_proxy_deployer_module RepoDriver
+    verify_repo_driver_module
 }
 
 main "$@"

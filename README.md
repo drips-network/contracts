@@ -137,17 +137,8 @@ export NFT_DRIVER_ADMIN="<ADDRESS>"
 export IMMUTABLE_SPLITS_DRIVER_ADMIN="<ADDRESS>"
 
 # OPTIONAL
-# The address of the AnyApi operator. If not set, zero address is used.
-export REPO_DRIVER_OPERATOR="<ADDRESS>"
-
-# OPTIONAL
-# The AnyApi job ID used for requesting account owner updates.
-# If not set, a string of zeros is used.
-export REPO_DRIVER_JOB_ID="<JOB_ID>"
-
-# OPTIONAL
-# The fee in Link for each account owner. If not set, `0` is used.
-export REPO_DRIVER_FEE="<FEE>"
+# The address of the AnyApi operator. If not set, `0` is used.
+export REPO_DRIVER_SUBSCRIPTION_ID="<SUBSCRIPTION_ID>"
 
 # OPTIONAL
 # Address of the RepoDriver admin to set. If not set, `ADMIN` is used.

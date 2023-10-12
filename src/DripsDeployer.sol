@@ -7,7 +7,7 @@ import {Drips} from "./Drips.sol";
 import {ImmutableSplitsDriver} from "./ImmutableSplitsDriver.sol";
 import {Managed, ManagedProxy} from "./Managed.sol";
 import {NFTDriver} from "./NFTDriver.sol";
-import {OperatorInterface, RepoDriver} from "./RepoDriver.sol";
+import {FunctionsConfig, RepoDriver} from "./RepoDriver.sol";
 import {Ownable2Step} from "openzeppelin-contracts/access/Ownable2Step.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
@@ -283,31 +283,29 @@ contract ImmutableSplitsDriverModule is DriverModule(2) {
 }
 
 contract RepoDriverModule is CallerDependentModule, DriverModule(3) {
-    OperatorInterface public immutable operator;
-    bytes32 public immutable jobId;
-    uint96 public immutable defaultFee;
+    uint64 public immutable subscriptionId;
+    FunctionsConfig public immutable functionsConfig;
 
     function args() public view override returns (bytes memory) {
-        return abi.encode(dripsDeployer, proxyAdmin, operator, jobId, defaultFee);
+        return abi.encode(dripsDeployer, proxyAdmin, subscriptionId);
     }
 
     constructor(
         DripsDeployer dripsDeployer_,
-        address proxyAdmin_,
-        OperatorInterface operator_,
-        bytes32 jobId_,
-        uint96 defaultFee_
+        address proxyAdmin_, uint64 subscriptionId_
     ) BaseModule(dripsDeployer_, "RepoDriver") {
-        operator = operator_;
-        jobId = jobId_;
-        defaultFee = defaultFee_;
+        subscriptionId = subscriptionId_;
+        functionsConfig = new FunctionsConfig(subscriptionId);
         // slither-disable-next-line too-many-digits
         _deployProxy(proxyAdmin_, type(RepoDriver).creationCode);
-        repoDriver().initializeAnyApiOperator(operator, jobId, defaultFee);
     }
 
     function logicArgs() public view override returns (bytes memory) {
-        return abi.encode(_dripsModule().drips(), _callerModule().caller(), driverId);
+        return abi.encode(_dripsModule().drips(), _callerModule().caller(), driverId, functionsConfig);
+    }
+
+    function functionsConfigArgs() public view returns(bytes memory){
+        return abi.encode(subscriptionId);
     }
 
     function repoDriver() public view returns (RepoDriver) {

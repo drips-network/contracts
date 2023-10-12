@@ -9,20 +9,14 @@ import {
     AccountMetadata, StreamConfigImpl, Drips, StreamReceiver, SplitsReceiver
 } from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
-import {Forge} from "src/RepoDriver.sol";
-import {OperatorInterface} from "chainlink/interfaces/OperatorInterface.sol";
+import {Forge, FunctionsConfig, IFunctionsRouter, LinkTokenInterface} from "src/RepoDriver.sol";
+import {MockLinkToken} from "chainlink/mocks/MockLinkToken.sol";
 import {Test} from "forge-std/Test.sol";
 import {
     ERC20,
     IERC20,
     ERC20PresetFixedSupply
 } from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
-
-contract TestLinkToken is ERC20("", "") {
-    function transferAndCall(address, uint256, bytes calldata) external pure returns (bool) {
-        return true;
-    }
-}
 
 contract RepoDriverDataProxyTest is Test {
     Drips internal drips;
@@ -45,12 +39,13 @@ contract RepoDriverDataProxyTest is Test {
         // Make RepoDriver's driver ID non-0 to test if it's respected by RepoDriver
         drips.registerDriver(address(1));
         drips.registerDriver(address(1));
-        RepoDriver driverLogic = new RepoDriver(drips, address(caller), drips.nextDriverId());
+        RepoDriver driverLogic =
+            new RepoDriver(drips, address(caller), drips.nextDriverId(), new FunctionsConfig(1234));
         driver = RepoDriver(address(new ManagedProxy(driverLogic, admin)));
         drips.registerDriver(address(driver));
-        address operator = address(1234);
-        driver.initializeAnyApiOperator(OperatorInterface(operator), keccak256("job ID"), 0);
-        vm.etch(address(driver.linkToken()), address(new TestLinkToken()).code);
+        (LinkTokenInterface linkToken, IFunctionsRouter functionsRouter,) =
+            driver.functionsConfig().subscription();
+        vm.etch(address(linkToken), address(new MockLinkToken()).code);
 
         dripsDataStore = new DripsDataStore();
 
@@ -59,13 +54,16 @@ contract RepoDriverDataProxyTest is Test {
 
         caller.authorize(address(dataProxy));
 
-        Forge forge = Forge.GitHub;
-        bytes memory name = "this/repo";
-        accountId = driver.calcAccountId(forge, name);
-        driver.requestUpdateOwner(forge, name);
-        bytes32 requestId = keccak256(abi.encodePacked(driver, uint256(0)));
-        vm.prank(operator);
-        driver.updateOwnerByAnyApi(requestId, abi.encodePacked(this));
+        bytes32 requestId = "requestId";
+        vm.mockCall(
+            address(functionsRouter),
+            abi.encodeWithSelector(IFunctionsRouter.sendRequest.selector),
+            abi.encode(requestId)
+        );
+        accountId = driver.requestUpdateOwner(Forge.GitHub, "this/repo");
+        vm.clearMockedCalls();
+        vm.prank(address(functionsRouter));
+        driver.handleOracleFulfillment(requestId, abi.encode(this), "");
 
         erc20 = new ERC20PresetFixedSupply("test", "test", type(uint136).max, address(this));
         erc20.approve(address(driver), type(uint256).max);

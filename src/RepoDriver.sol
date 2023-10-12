@@ -6,10 +6,11 @@ import {
 } from "./Drips.sol";
 import {DriverTransferUtils} from "./DriverTransferUtils.sol";
 import {Managed} from "./Managed.sol";
-import {ERC677ReceiverInterface} from "chainlink/interfaces/ERC677ReceiverInterface.sol";
-import {LinkTokenInterface} from "chainlink/interfaces/LinkTokenInterface.sol";
-import {OperatorInterface} from "chainlink/interfaces/OperatorInterface.sol";
-import {BufferChainlink, CBORChainlink} from "chainlink/Chainlink.sol";
+import {IERC677Receiver} from "chainlink/shared/interfaces/IERC677Receiver.sol";
+import {LinkTokenInterface} from "chainlink/shared/interfaces/LinkTokenInterface.sol";
+import {IFunctionsClient} from "chainlink/functions/v1_0_0/interfaces/IFunctionsClient.sol";
+import {IFunctionsRouter} from "chainlink/functions/v1_0_0/interfaces/IFunctionsRouter.sol";
+import {FunctionsRequest} from "chainlink/functions/v1_0_0/libraries/FunctionsRequest.sol";
 import {ShortString, ShortStrings} from "openzeppelin-contracts/utils/ShortStrings.sol";
 
 /// @notice The supported forges where repositories are stored.
@@ -18,39 +19,145 @@ enum Forge {
     GitLab
 }
 
+interface IFunctionsConfig {
+    function subscription()
+        external
+        view
+        returns (
+            LinkTokenInterface linkToken,
+            IFunctionsRouter functionsRouter,
+            uint64 subscriptionId
+        );
+    function buildRequest(Forge forge, bytes memory name)
+        external
+        view
+        returns (bytes memory data, uint16 dataVersion, uint32 callbackGasLimit, bytes32 donId);
+}
+
+contract FunctionsConfig is IFunctionsConfig {
+    using ShortStrings for ShortString;
+
+    // /// @notice The Link token used for paying the operators.
+    LinkTokenInterface internal immutable linkToken;
+    IFunctionsRouter internal immutable functionsRouter;
+    uint64 internal immutable subscriptionId;
+    ShortString internal immutable chainName;
+    bytes32 internal immutable donId;
+
+    constructor(uint64 subscriptionId_) {
+        subscriptionId = subscriptionId_;
+        string memory chainName_;
+        address linkToken_;
+        address functionsRouter_;
+        bytes32 donId_;
+        if (block.chainid == 1) {
+            chainName_ = "ethereum";
+            linkToken_ = 0x514910771AF9Ca656af840dff83E8264EcF986CA;
+            functionsRouter_ = 0x65Dcc24F8ff9e51F10DCc7Ed1e4e2A61e6E14bd6;
+            donId_ = "fun-ethereum-mainnet-1";
+        } else if (block.chainid == 11155111) {
+            chainName_ = "sepolia";
+            linkToken_ = 0x779877A7B0D9E8603169DdbD7836e478b4624789;
+            functionsRouter_ = 0xb83E47C2bC239B3bf370bc41e1459A34b41238D0;
+            donId_ = "fun-ethereum-sepolia-1";
+        } else {
+            chainName_ = "other";
+            linkToken_ = address(bytes20("dummy link token"));
+            functionsRouter_ = address(bytes20("dummy router"));
+            donId_ = "fun-other-1";
+        }
+        chainName = ShortStrings.toShortString(chainName_);
+        linkToken = LinkTokenInterface(linkToken_);
+        functionsRouter = IFunctionsRouter(functionsRouter_);
+        donId = donId_;
+    }
+
+    function subscription()
+        external
+        view
+        override
+        returns (
+            LinkTokenInterface linkToken_,
+            IFunctionsRouter functionsRouter_,
+            uint64 subscriptionId_
+        )
+    {
+        return (linkToken, functionsRouter, subscriptionId);
+    }
+
+    function buildRequest(Forge forge, bytes memory name)
+        public
+        view
+        override
+        returns (bytes memory data, uint16 dataVersion, uint32 callbackGasLimit, bytes32 donId_)
+    {
+        string memory source;
+        if (forge == Forge.GitHub) {
+            source = string.concat(
+                "return Functions.encodeUint256(BigInt((await Functions.makeHttpRequest("
+                "{url:`https://raw.githubusercontent.com/${args[0]}/HEAD/FUNDING.json`})).data.drips.",
+                chainName.toString(),
+                ".ownedBy))"
+            );
+        } else if (forge == Forge.GitLab) {
+            source = string.concat(
+                "return Functions.encodeUint256(BigInt((await Functions.makeHttpRequest("
+                "{url:`https://gitlab.com/${args[0]}/-/raw/HEAD/FUNDING.json`})).data.drips.",
+                chainName.toString(),
+                ".ownedBy))"
+            );
+        }
+
+        string[] memory args = new string[](1);
+        args[0] = string(name);
+
+        FunctionsRequest.Request memory request = FunctionsRequest.Request({
+            codeLocation: FunctionsRequest.Location.Inline,
+            secretsLocation: FunctionsRequest.Location.Inline,
+            language: FunctionsRequest.CodeLanguage.JavaScript,
+            source: source,
+            encryptedSecretsReference: "",
+            args: args,
+            bytesArgs: new bytes[](0)
+        });
+
+        data = FunctionsRequest.encodeCBOR(request);
+        dataVersion = FunctionsRequest.REQUEST_DATA_VERSION;
+        callbackGasLimit = 50_000;
+        donId_ = donId;
+    }
+}
+
 /// @notice A Drips driver implementing repository-based account identification.
 /// Each repository stored in one of the supported forges has a deterministic account ID assigned.
 /// By default the repositories have no owner and their accounts can't be controlled by anybody,
 /// use `requestUpdateOwner` to update the owner.
-contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
+contract RepoDriver is IFunctionsClient, IERC677Receiver, DriverTransferUtils, Managed {
     using SafeERC20 for IERC20;
-    using CBORChainlink for BufferChainlink.buffer;
 
     /// @notice The Drips address used by this driver.
     Drips public immutable drips;
     /// @notice The driver ID which this driver uses when calling Drips.
     uint32 public immutable driverId;
-    /// @notice The Link token used for paying the operators.
-    LinkTokenInterface public immutable linkToken;
-    /// @notice The JSON path inside `FUNDING.json` where the account ID owner is stored.
-    ShortString internal immutable jsonPath;
+
+    IFunctionsConfig internal immutable _initialFunctionsConfig;
 
     /// @notice The ERC-1967 storage slot holding a single `RepoDriverStorage` structure.
     bytes32 private immutable _repoDriverStorageSlot = _erc1967Slot("eip1967.repoDriver.storage");
-    /// @notice The ERC-1967 storage slot holding a single `RepoDriverAnyApiStorage` structure.
-    bytes32 private immutable _repoDriverAnyApiStorageSlot =
-        _erc1967Slot("eip1967.repoDriver.anyApi.storage");
+    /// @notice The ERC-1967 storage slot holding a single `FunctionsStorage` structure.
+    bytes32 private immutable _functionsStorageSlot =
+        _erc1967Slot("eip1967.repoDriver.functions.storage");
 
-    /// @notice Emitted when the AnyApi operator configuration is updated.
-    /// @param operator The new address of the AnyApi operator.
-    /// @param jobId The new AnyApi job ID used for requesting account owner updates.
-    /// @param defaultFee The new fee in Link for each account owner
-    /// update request when the driver is covering the cost.
-    /// The fee must be high enough for the operator to accept the requests,
-    /// refer to their documentation to see what's the minimum value.
-    event AnyApiOperatorUpdated(
-        OperatorInterface indexed operator, bytes32 indexed jobId, uint96 defaultFee
-    );
+    // /// @notice Emitted when the AnyApi operator configuration is updated.
+    // /// @param operator The new address of the AnyApi operator.
+    // /// @param jobId The new AnyApi job ID used for requesting account owner updates.
+    // /// @param defaultFee The new fee in Link for each account owner
+    // /// update request when the driver is covering the cost.
+    // /// The fee must be high enough for the operator to accept the requests,
+    // /// refer to their documentation to see what's the minimum value.
+    event FunctionsConfigUpdated(IFunctionsConfig indexed functionsConfig);
+
+    event SubscriptionFunded(uint64 subscriptionId, uint256 amt);
 
     /// @notice Emitted when the account ownership update is requested.
     /// @param accountId The ID of the account.
@@ -68,47 +175,27 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         mapping(uint256 accountId => address) accountOwners;
     }
 
-    struct RepoDriverAnyApiStorage {
+    struct FunctionsStorage {
+        // / @notice If false, the initial operator configuration is possible.
+        bool isFunctionsConfigUpdated;
+        IFunctionsConfig functionsConfig;
         /// @notice The requested account owner updates.
-        mapping(bytes32 requestId => uint256 accountId) requestedUpdates;
-        /// @notice The new address of the AnyApi operator.
-        OperatorInterface operator;
-        /// @notice The fee in Link for each account owner
-        /// update request when the driver is covering the cost.
-        /// The fee must be high enough for the operator to accept the requests,
-        /// refer to their documentation to see what's the minimum value.
-        uint96 defaultFee;
-        /// @notice The AnyApi job ID used for requesting account owner updates.
-        bytes32 jobId;
-        /// @notice If false, the initial operator configuration is possible.
-        bool isInitialized;
-        /// @notice The AnyApi requests counter used as a nonce when calculating the request ID.
-        uint248 nonce;
+        mapping(bytes32 requestId => uint256 accountId)
+            requestedUpdates;
     }
 
     /// @param drips_ The Drips contract to use.
     /// @param forwarder The ERC-2771 forwarder to trust. May be the zero address.
     /// @param driverId_ The driver ID to use when calling Drips.
-    constructor(Drips drips_, address forwarder, uint32 driverId_) DriverTransferUtils(forwarder) {
+    constructor(
+        Drips drips_,
+        address forwarder,
+        uint32 driverId_,
+        IFunctionsConfig functionsConfig_
+    ) DriverTransferUtils(forwarder) {
         drips = drips_;
         driverId = driverId_;
-        string memory chainName;
-        address _linkToken;
-        if (block.chainid == 1) {
-            chainName = "ethereum";
-            _linkToken = 0x514910771AF9Ca656af840dff83E8264EcF986CA;
-        } else if (block.chainid == 5) {
-            chainName = "goerli";
-            _linkToken = 0x326C977E6efc84E512bB9C30f76E30c160eD06FB;
-        } else if (block.chainid == 11155111) {
-            chainName = "sepolia";
-            _linkToken = 0x779877A7B0D9E8603169DdbD7836e478b4624789;
-        } else {
-            chainName = "other";
-            _linkToken = address(bytes20("dummy link token"));
-        }
-        jsonPath = ShortStrings.toShortString(string.concat("drips,", chainName, ",ownedBy"));
-        linkToken = LinkTokenInterface(_linkToken);
+        _initialFunctionsConfig = functionsConfig_;
     }
 
     modifier onlyOwner(uint256 accountId) {
@@ -149,7 +236,7 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
                 // `nameEncoded` is the lower 27 bytes of the hash
                 nameEncoded = uint216(uint256(keccak256(name)));
             }
-        } else {
+        } else if (forge == Forge.GitLab) {
             if (name.length <= 27) {
                 forgeId = 2;
                 nameEncoded = uint216(bytes27(name));
@@ -174,76 +261,104 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         accountId = (accountId << 216) | nameEncoded;
     }
 
-    /// @notice Initializes the AnyApi operator configuration.
-    /// Callable only once, and only before any calls to `updateAnyApiOperator`.
-    /// @param operator The initial address of the AnyApi operator.
-    /// @param jobId The initial AnyApi job ID used for requesting account owner updates.
-    /// @param defaultFee The initial fee in Link for each account owner
-    /// update request when the driver is covering the cost.
-    /// The fee must be high enough for the operator to accept the requests,
-    /// refer to their documentation to see what's the minimum value.
-    function initializeAnyApiOperator(OperatorInterface operator, bytes32 jobId, uint96 defaultFee)
-        public
-    {
-        require(!_repoDriverAnyApiStorage().isInitialized, "Already initialized");
-        _updateAnyApiOperator(operator, jobId, defaultFee);
+    // /// @notice Gets the current AnyApi operator configuration.
+    // /// @return operator The address of the AnyApi operator.
+    // /// @return jobId The AnyApi job ID used for requesting account owner updates.
+    // /// @return defaultFee The fee in Link for each account owner
+    // /// update request when the driver is covering the cost.
+    // /// The fee must be high enough for the operator to accept the requests,
+    // /// refer to their documentation to see what's the minimum value.
+    function functionsConfig() public view returns (IFunctionsConfig functionsConfig_) {
+        FunctionsStorage storage functionsStorage = _functionsStorage();
+        if (functionsStorage.isFunctionsConfigUpdated) return functionsStorage.functionsConfig;
+        return _initialFunctionsConfig;
     }
 
-    /// @notice Updates the AnyApi operator configuration. Callable only by the admin.
-    /// @param operator The new address of the AnyApi operator.
-    /// @param jobId The new AnyApi job ID used for requesting account owner updates.
-    /// @param defaultFee The new fee in Link for each account owner
-    /// update request when the driver is covering the cost.
-    /// The fee must be high enough for the operator to accept the requests,
-    /// refer to their documentation to see what's the minimum value.
-    function updateAnyApiOperator(OperatorInterface operator, bytes32 jobId, uint96 defaultFee)
-        public
-        onlyAdmin
-    {
-        _updateAnyApiOperator(operator, jobId, defaultFee);
+    // / @notice Updates the AnyApi operator configuration. Callable only by the admin.
+    // / @param operator The new address of the AnyApi operator.
+    // / @param jobId The new AnyApi job ID used for requesting account owner updates.
+    // / @param defaultFee The new fee in Link for each account owner
+    // / update request when the driver is covering the cost.
+    // / The fee must be high enough for the operator to accept the requests,
+    // / refer to their documentation to see what's the minimum value.
+    function updateFunctionsConfig(IFunctionsConfig functionsConfig_) public onlyAdmin {
+        FunctionsStorage storage functionsStorage = _functionsStorage();
+        functionsStorage.isFunctionsConfigUpdated = true;
+        functionsStorage.functionsConfig = functionsConfig_;
+        emit FunctionsConfigUpdated(functionsConfig_);
     }
 
-    /// @notice Updates the AnyApi operator configuration. Callable only by the admin.
-    /// @param operator The new address of the AnyApi operator.
-    /// @param jobId The new AnyApi job ID used for requesting account owner updates.
-    /// @param defaultFee The new fee in Link for each account owner
-    /// update request when the driver is covering the cost.
-    /// The fee must be high enough for the operator to accept the requests,
-    /// refer to their documentation to see what's the minimum value.
-    function _updateAnyApiOperator(OperatorInterface operator, bytes32 jobId, uint96 defaultFee)
-        internal
-    {
-        RepoDriverAnyApiStorage storage storageRef = _repoDriverAnyApiStorage();
-        storageRef.isInitialized = true;
-        storageRef.operator = operator;
-        storageRef.jobId = jobId;
-        storageRef.defaultFee = defaultFee;
-        emit AnyApiOperatorUpdated(operator, jobId, defaultFee);
-    }
-
-    /// @notice Gets the current AnyApi operator configuration.
-    /// @return operator The address of the AnyApi operator.
-    /// @return jobId The AnyApi job ID used for requesting account owner updates.
-    /// @return defaultFee The fee in Link for each account owner
-    /// update request when the driver is covering the cost.
-    /// The fee must be high enough for the operator to accept the requests,
-    /// refer to their documentation to see what's the minimum value.
-    function anyApiOperator()
-        public
-        view
-        returns (OperatorInterface operator, bytes32 jobId, uint96 defaultFee)
-    {
-        RepoDriverAnyApiStorage storage storageRef = _repoDriverAnyApiStorage();
-        operator = storageRef.operator;
-        jobId = storageRef.jobId;
-        defaultFee = storageRef.defaultFee;
-    }
+    // / @notice Updates the AnyApi operator configuration. Callable only by the admin.
+    // / @param operator The new address of the AnyApi operator.
+    // / @param jobId The new AnyApi job ID used for requesting account owner updates.
+    // / @param defaultFee The new fee in Link for each account owner
+    // / update request when the driver is covering the cost.
+    // / The fee must be high enough for the operator to accept the requests,
+    // / refer to their documentation to see what's the minimum value.
+    // function _updateFunctionsConfig(IFunctionsConfig functionsConfig_) internal {
+    //     FunctionsStorage storage functionsStorage = _functionsStorage();
+    //     functionsStorage.isInitialized = true;
+    //     functionsStorage.functionsConfig = functionsConfig_;
+    //     emit FunctionsConfigUpdated(functionsConfig_);
+    // }
 
     /// @notice Gets the account owner.
     /// @param accountId The ID of the account.
     /// @return owner The owner of the account.
     function ownerOf(uint256 accountId) public view returns (address owner) {
         return _repoDriverStorage().accountOwners[accountId];
+    }
+
+    /// @notice The function called when receiving funds from ERC-677 `transferAndCall`.
+    /// Only supports receiving Link tokens, callable only by the Link token smart contract.
+    /// The only supported usage is requesting account ownership updates,
+    /// the transferred tokens are then used for paying the AnyApi operator fee,
+    /// see `requestUpdateOwner` for more details.
+    /// The received tokens are never refunded, so make sure that
+    /// the amount isn't too low to cover the fee, isn't too high and wasteful,
+    /// and the repository's content is valid so its ownership can be verified.
+    /// @param data The `transferAndCall` payload.
+    /// It must be a valid ABI-encoded calldata for `requestUpdateOwner`.
+    /// The call parameters will be used the same way as when calling `requestUpdateOwner`,
+    /// to determine which account's ownership update is requested.
+    function onTokenTransfer(address, /* sender */ uint256, /* amount */ bytes calldata data)
+        public
+        whenNotPaused
+    {
+        (LinkTokenInterface linkToken, IFunctionsRouter functionsRouter, uint64 subscriptionId) =
+            functionsConfig().subscription();
+        require(msg.sender == address(linkToken), "Callable only by the Link token");
+        require(data.length >= 4, "Data not a valid calldata");
+        bytes4 selector = bytes4(data[:4]);
+        if (selector == this.requestUpdateOwner.selector) {
+            (Forge forge, bytes memory name) = abi.decode(data[4:], (Forge, bytes));
+            _fundSubscription(linkToken, functionsRouter, subscriptionId);
+            _requestUpdateOwner(forge, name, functionsRouter, subscriptionId);
+        } else if (selector == this.fundSubscription.selector) {
+            _fundSubscription(linkToken, functionsRouter, subscriptionId);
+        } else {
+            revert("Data not a supported calldata");
+        }
+    }
+
+    function fundSubscription() public whenNotPaused returns (uint256 amt) {
+        (LinkTokenInterface linkToken, IFunctionsRouter functionsRouter, uint64 subscriptionId) =
+            functionsConfig().subscription();
+        return _fundSubscription(linkToken, functionsRouter, subscriptionId);
+    }
+
+    function _fundSubscription(
+        LinkTokenInterface linkToken,
+        IFunctionsRouter functionsRouter,
+        uint64 subscriptionId
+    ) internal returns (uint256 amt) {
+        amt = linkToken.balanceOf(address(this));
+        if (amt == 0) return 0;
+        require(
+            linkToken.transferAndCall(address(functionsRouter), amt, abi.encode(subscriptionId)),
+            "Link transfer failed"
+        );
+        emit SubscriptionFunded(subscriptionId, amt);
     }
 
     /// @notice Requests an update of the ownership of the account representing the repository.
@@ -268,123 +383,49 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         whenNotPaused
         returns (uint256 accountId)
     {
-        uint256 fee = _repoDriverAnyApiStorage().defaultFee;
-        require(linkToken.balanceOf(address(this)) >= fee, "Link balance too low");
-        return _requestUpdateOwner(forge, name, fee);
+        (, IFunctionsRouter functionsRouter, uint64 subscriptionId) =
+            functionsConfig().subscription();
+        return _requestUpdateOwner(forge, name, functionsRouter, subscriptionId);
     }
 
-    /// @notice The function called when receiving funds from ERC-677 `transferAndCall`.
-    /// Only supports receiving Link tokens, callable only by the Link token smart contract.
-    /// The only supported usage is requesting account ownership updates,
-    /// the transferred tokens are then used for paying the AnyApi operator fee,
-    /// see `requestUpdateOwner` for more details.
-    /// The received tokens are never refunded, so make sure that
-    /// the amount isn't too low to cover the fee, isn't too high and wasteful,
-    /// and the repository's content is valid so its ownership can be verified.
-    /// @param amount The transferred amount, it will be used as the AnyApi operator fee.
-    /// @param data The `transferAndCall` payload.
-    /// It must be a valid ABI-encoded calldata for `requestUpdateOwner`.
-    /// The call parameters will be used the same way as when calling `requestUpdateOwner`,
-    /// to determine which account's ownership update is requested.
-    function onTokenTransfer(address, /* sender */ uint256 amount, bytes calldata data)
-        public
-        whenNotPaused
-    {
-        require(msg.sender == address(linkToken), "Callable only by the Link token");
-        require(data.length >= 4, "Data not a valid calldata");
-        require(bytes4(data[:4]) == this.requestUpdateOwner.selector, "Data not requestUpdateOwner");
-        (Forge forge, bytes memory name) = abi.decode(data[4:], (Forge, bytes));
-        _requestUpdateOwner(forge, name, amount);
-    }
-
-    /// @notice Requests an update of the ownership of the account representing the repository.
-    /// See `requestUpdateOwner` for more details.
-    /// @param forge The forge where the repository is stored.
-    /// @param name The name of the repository.
-    /// @param fee The fee in Link to pay for the request.
-    /// @return accountId The ID of the account.
-    function _requestUpdateOwner(Forge forge, bytes memory name, uint256 fee)
-        internal
-        returns (uint256 accountId)
-    {
-        RepoDriverAnyApiStorage storage storageRef = _repoDriverAnyApiStorage();
-        address operator = address(storageRef.operator);
-        require(operator != address(0), "Operator address not set");
-        uint256 nonce = storageRef.nonce++;
-        bytes32 requestId = keccak256(abi.encodePacked(this, nonce));
+    function _requestUpdateOwner(
+        Forge forge,
+        bytes memory name,
+        IFunctionsRouter functionsRouter,
+        uint64 subscriptionId
+    ) internal returns (uint256 accountId) {
+        (bytes memory data, uint16 dataVersion, uint32 callbackGasLimit, bytes32 donId) =
+            functionsConfig().buildRequest(forge, name);
+        bytes32 requestId =
+            functionsRouter.sendRequest(subscriptionId, data, dataVersion, callbackGasLimit, donId);
         accountId = calcAccountId(forge, name);
-        storageRef.requestedUpdates[requestId] = accountId;
-        bytes memory payload = _requestPayload(forge, name);
-        bytes memory callData = abi.encodeCall(
-            OperatorInterface.operatorRequest,
-            (
-                address(0), // ignored, will be replaced in the operator with this contract address
-                0, // ignored, will be replaced in the operator with the fee
-                storageRef.jobId,
-                this.updateOwnerByAnyApi.selector,
-                nonce,
-                2, // data version
-                payload
-            )
-        );
-        require(linkToken.transferAndCall(operator, fee, callData), "Transfer and call failed");
-        // slither-disable-next-line reentrancy-events
+        _functionsStorage().requestedUpdates[requestId] = accountId;
         emit OwnerUpdateRequested(accountId, forge, name);
     }
 
-    /// @notice Builds the AnyApi generic `bytes` fetching request payload.
-    /// It instructs the operator to fetch the current owner of the account.
-    /// @param forge The forge where the repository is stored.
-    /// @param name The name of the repository.
-    /// @return payload The AnyApi request payload.
-    function _requestPayload(Forge forge, bytes memory name)
-        internal
-        view
-        returns (bytes memory payload)
+    // /// @notice Updates the account owner. Callable only by the AnyApi operator.
+    // /// @param requestId The ID of the AnyApi request.
+    // /// Must be the same as the request ID generated when requesting an owner update,
+    // /// this function will update the account ownership that was requested back then.
+    // /// @param ownerRaw The new owner of the account. Must be a 20 bytes long address.
+    /// @inheritdoc IFunctionsClient
+    function handleOracleFulfillment(bytes32 requestId, bytes memory response, bytes memory err)
+        public
+        override
+        whenNotPaused
     {
-        // slither-disable-next-line uninitialized-local
-        BufferChainlink.buffer memory buffer;
-        buffer = BufferChainlink.init(buffer, 256);
-        buffer.encodeString("get");
-        buffer.encodeString(_requestUrl(forge, name));
-        buffer.encodeString("path");
-        buffer.encodeString(ShortStrings.toString(jsonPath));
-        return buffer.buf;
-    }
-
-    /// @notice Builds the URL for fetch the `FUNDING.json` file for the given repository.
-    /// @param forge The forge where the repository is stored.
-    /// @param name The name of the repository.
-    /// @return url The built URL.
-    function _requestUrl(Forge forge, bytes memory name)
-        internal
-        pure
-        returns (string memory url)
-    {
-        if (forge == Forge.GitHub) {
-            return string.concat(
-                "https://raw.githubusercontent.com/", string(name), "/HEAD/FUNDING.json"
-            );
-        } else if (forge == Forge.GitLab) {
-            return string.concat("https://gitlab.com/", string(name), "/-/raw/HEAD/FUNDING.json");
-        } else {
-            revert("Unsupported forge");
+        (, IFunctionsRouter functionsRouter,) = functionsConfig().subscription();
+        require(msg.sender == address(functionsRouter), "Callable only by the router");
+        mapping(bytes32 => uint256) storage requestedUpdates =
+            _functionsStorage().requestedUpdates;
+        uint256 accountId = requestedUpdates[requestId];
+        delete requestedUpdates[requestId];
+        address owner = address(0);
+        if (err.length == 0) {
+            require(response.length == 32, "Invalid response length");
+            uint256 ownerRaw = uint256(bytes32(response));
+            if (ownerRaw <= type(uint160).max) owner = address(uint160(ownerRaw));
         }
-    }
-
-    /// @notice Updates the account owner. Callable only by the AnyApi operator.
-    /// @param requestId The ID of the AnyApi request.
-    /// Must be the same as the request ID generated when requesting an owner update,
-    /// this function will update the account ownership that was requested back then.
-    /// @param ownerRaw The new owner of the account. Must be a 20 bytes long address.
-    function updateOwnerByAnyApi(bytes32 requestId, bytes calldata ownerRaw) public whenNotPaused {
-        RepoDriverAnyApiStorage storage storageRef = _repoDriverAnyApiStorage();
-        require(msg.sender == address(storageRef.operator), "Callable only by the operator");
-        uint256 accountId = storageRef.requestedUpdates[requestId];
-        require(accountId != 0, "Unknown request ID");
-        delete storageRef.requestedUpdates[requestId];
-        require(ownerRaw.length == 20, "Invalid owner length");
-        address owner = address(bytes20(ownerRaw));
         _repoDriverStorage().accountOwners[accountId] = owner;
         emit OwnerUpdated(accountId, owner);
     }
@@ -559,14 +600,10 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         }
     }
 
-    /// @notice Returns the RepoDriver storage specific to AnyApi.
+    /// @notice Returns the RepoDriver storage specific to Chainlink Functions.
     /// @return storageRef The storage.
-    function _repoDriverAnyApiStorage()
-        internal
-        view
-        returns (RepoDriverAnyApiStorage storage storageRef)
-    {
-        bytes32 slot = _repoDriverAnyApiStorageSlot;
+    function _functionsStorage() internal view returns (FunctionsStorage storage storageRef) {
+        bytes32 slot = _functionsStorageSlot;
         // slither-disable-next-line assembly
         assembly {
             storageRef.slot := slot

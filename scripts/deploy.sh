@@ -85,7 +85,7 @@ ffffffffffffffffffffffffffe0908116603f0116810190838211818310171561059b5761059b61
 }
 
 drips_deployer() {
-    local GET_DEPLOYED="getDeployed(address deployer, bytes32 salt)(address deployed))"
+    local GET_DEPLOYED="getDeployed(address deployer, bytes32 salt)(address deployed)"
     local SALT="$(cast format-bytes32-string "$DRIPS_DEPLOYER_SALT")"
     cast call "$CREATE3_FACTORY" "$GET_DEPLOYED" "$WALLET" "$SALT"
 }
@@ -118,9 +118,8 @@ deploy_modules() {
             "$DRIPS_DEPLOYER" "$IMMUTABLE_SPLITS_DRIVER_ADMIN"
         )]"
     MODULE_INIT_CODES_3="[$(
-        create_module RepoDriver address,address,address,bytes32,uint96 \
-            "$DRIPS_DEPLOYER" "$REPO_DRIVER_ADMIN" "$REPO_DRIVER_OPERATOR" \
-            $(cast format-bytes32-string "$REPO_DRIVER_JOB_ID") "$REPO_DRIVER_FEE"
+        create_module RepoDriver address,address,uint64 \
+            "$DRIPS_DEPLOYER" "$REPO_DRIVER_ADMIN" "$REPO_DRIVER_SUBSCRIPTION_ID"
         )]"
     MODULE_INIT_CODES_4="[]"
     cast send $WALLET_ARGS "$DRIPS_DEPLOYER" "deployModules((bytes32,uint256,bytes)[], \
@@ -176,9 +175,8 @@ print_deployment_json() {
     "ImmutableSplitsDriver admin":   "$(query "$IMMUTABLE_SPLITS_DRIVER_MODULE" proxyAdmin address)",
     "RepoDriver":                    "$(query "$REPO_DRIVER_MODULE" repoDriver address)",
     "RepoDriver ID":                 "$(query "$REPO_DRIVER_MODULE" driverId uint32)",
-    "RepoDriver AnyApi operator":    "$(query "$REPO_DRIVER_MODULE" operator address)",
-    "RepoDriver AnyApi job ID":      "$(cast parse-bytes32-string "$(query "$REPO_DRIVER_MODULE" jobId bytes32)")",
-    "RepoDriver AnyApi default fee": "$(query "$REPO_DRIVER_MODULE" defaultFee uint96)",
+    "RepoDriver subscription ID":    "$(query "$REPO_DRIVER_MODULE" subscriptionId uint64)",
+    "RepoDriver functions config":   "$(query "$REPO_DRIVER_MODULE" functionsConfig address)",
     "RepoDriver logic":              "$(query "$REPO_DRIVER_MODULE" logic address)",
     "RepoDriver admin":              "$(query "$REPO_DRIVER_MODULE" proxyAdmin address)"
 }
@@ -218,9 +216,7 @@ main() {
         cast to-check-sum-address "${IMMUTABLE_SPLITS_DRIVER_ADMIN:-$ADMIN}")"
     REPO_DRIVER_ADMIN="$(cast to-check-sum-address "${REPO_DRIVER_ADMIN:-$ADMIN}")"
     DRIPS_CYCLE_SECS="${DRIPS_CYCLE_SECS:-$(( 7 * 24 * 60 * 60 ))}" # 1 week
-    REPO_DRIVER_OPERATOR="${REPO_DRIVER_OPERATOR:-$(cast address-zero)}"
-    REPO_DRIVER_JOB_ID="${REPO_DRIVER_JOB_ID:-00000000000000000000000000000000}"
-    REPO_DRIVER_FEE="${REPO_DRIVER_FEE:-0}"
+    REPO_DRIVER_SUBSCRIPTION_ID="${REPO_DRIVER_SUBSCRIPTION_ID:-0}"
 
     # Taken from https://github.com/Arachnid/deterministic-deployment-proxy
     DETERMINISTIC_DEPLOYER="0x4e59b44847b379578588920cA78FbF26c0B4956C"
@@ -262,9 +258,7 @@ main() {
     echo "AddressDriver admin:           $ADDRESS_DRIVER_ADMIN"
     echo "NFTDriver admin:               $NFT_DRIVER_ADMIN"
     echo "ImmutableSplitsDriver admin:   $IMMUTABLE_SPLITS_DRIVER_ADMIN"
-    echo "RepoDriver AnyApi operator:    $REPO_DRIVER_OPERATOR"
-    echo "RepoDriver AnyApi job ID:      $REPO_DRIVER_JOB_ID"
-    echo "RepoDriver AnyApi default fee: $REPO_DRIVER_FEE"
+    echo "RepoDriver subscription ID:    $REPO_DRIVER_SUBSCRIPTION_ID"
     echo "RepoDriver admin:              $REPO_DRIVER_ADMIN"
     echo
 

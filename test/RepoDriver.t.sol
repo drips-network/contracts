@@ -2,7 +2,15 @@
 pragma solidity ^0.8.20;
 
 import {Caller} from "src/Caller.sol";
-import {Forge, RepoDriver} from "src/RepoDriver.sol";
+import {
+    Forge,
+    FunctionsConfig,
+    IERC677Receiver,
+    IFunctionsConfig,
+    IFunctionsRouter,
+    LinkTokenInterface,
+    RepoDriver
+} from "src/RepoDriver.sol";
 import {
     AccountMetadata,
     StreamConfigImpl,
@@ -12,33 +20,13 @@ import {
     SplitsReceiver
 } from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
-import {BufferChainlink, CBORChainlink} from "chainlink/Chainlink.sol";
-import {ERC677ReceiverInterface} from "chainlink/interfaces/ERC677ReceiverInterface.sol";
-import {OperatorInterface} from "chainlink/interfaces/OperatorInterface.sol";
-import {LinkTokenInterface} from "chainlink/interfaces/LinkTokenInterface.sol";
+import {MockLinkToken} from "chainlink/mocks/MockLinkToken.sol";
 import {console2, Test} from "forge-std/Test.sol";
 import {
     ERC20,
     IERC20,
     ERC20PresetFixedSupply
 } from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
-
-using CBORChainlink for BufferChainlink.buffer;
-
-contract TestLinkToken is ERC20("", "") {
-    function mint(address receiver, uint256 amount) public {
-        _mint(receiver, amount);
-    }
-
-    function transferAndCall(address to, uint256 value, bytes calldata data)
-        external
-        returns (bool success)
-    {
-        super.transfer(to, value);
-        ERC677ReceiverInterface(to).onTokenTransfer(msg.sender, value, data);
-        return true;
-    }
-}
 
 contract MockDummy {
     fallback() external payable {
@@ -50,22 +38,18 @@ contract RepoDriverTest is Test {
     Drips internal drips;
     Caller internal caller;
     RepoDriver internal driver;
-    uint256 internal driverNonce;
+    IFunctionsConfig internal functionsConfig;
     IERC20 internal erc20;
 
     address internal admin = address(1);
     address internal user = address(2);
     uint256 internal accountId;
-    uint256 internal accountId1;
-    uint256 internal accountId2;
-    uint256 internal accountIdUser;
+    uint256 internal otherAccountId;
+    uint256 internal userAccountId;
+    Forge internal accountForge = Forge.GitHub;
+    bytes internal accountName = "this/repo";
 
     bytes internal constant ERROR_NOT_OWNER = "Caller is not the account owner";
-    bytes internal constant ERROR_ALREADY_INITIALIZED = "Already initialized";
-
-    uint256 internal constant CHAIN_ID_MAINNET = 1;
-    uint256 internal constant CHAIN_ID_GOERLI = 5;
-    uint256 internal constant CHAIN_ID_SEPOLIA = 11155111;
 
     function setUp() public {
         Drips dripsLogic = new Drips(10);
@@ -73,15 +57,27 @@ contract RepoDriverTest is Test {
 
         caller = new Caller();
 
+        functionsConfig = new FunctionsConfig(1234);
+        vm.etch(address(linkToken()), address(new MockLinkToken()).code);
+        MockLinkToken(address(linkToken())).setBalance(address(this), 100);
+        vm.etch(functionsRouter(), address(new MockDummy()).code);
+
         // Make RepoDriver's driver ID non-0 to test if it's respected by RepoDriver
         drips.registerDriver(address(1));
         drips.registerDriver(address(1));
-        deployDriver(CHAIN_ID_MAINNET);
+        RepoDriver driverLogic =
+            new RepoDriver(drips, address(caller), drips.nextDriverId(), functionsConfig);
+        driver = RepoDriver(address(new ManagedProxy(driverLogic, admin)));
+        drips.registerDriver(address(driver));
+        assertEq(
+            address(driver.functionsConfig()),
+            address(functionsConfig),
+            "Invalid initial Functions functionsConfig"
+        );
 
-        accountId = initialUpdateOwner(address(this), "this/repo1");
-        accountId1 = initialUpdateOwner(address(this), "this/repo2");
-        accountId2 = initialUpdateOwner(address(this), "this/repo3");
-        accountIdUser = initialUpdateOwner(user, "user/repo");
+        accountId = updateOwner(accountForge, accountName, address(this));
+        otherAccountId = updateOwner(Forge.GitLab, "this/other", address(this));
+        userAccountId = updateOwner(Forge.GitHub, "user/repo", user);
 
         erc20 = new ERC20PresetFixedSupply("test", "test", type(uint136).max, address(this));
         erc20.approve(address(driver), type(uint256).max);
@@ -90,24 +86,17 @@ contract RepoDriverTest is Test {
         erc20.approve(address(driver), type(uint256).max);
     }
 
-    function deployDriver(uint256 chainId) internal {
-        vm.chainId(chainId);
-        deployDriverUninitialized();
-        initializeAnyApiOperator(
-            OperatorInterface(address(new MockDummy())), keccak256("job ID"), 2
-        );
-        TestLinkToken linkToken = TestLinkToken(address(driver.linkToken()));
-        vm.etch(address(linkToken), address(new TestLinkToken()).code);
-        linkToken.mint(address(this), 100);
-        linkToken.mint(address(driver), 100);
+    function linkToken() internal view returns (LinkTokenInterface linkToken_) {
+        (linkToken_,,) = functionsConfig.subscription();
     }
 
-    function deployDriverUninitialized() internal {
-        uint32 driverId = drips.registerDriver(address(this));
-        RepoDriver driverLogic = new RepoDriver(drips, address(caller), driverId);
-        driver = RepoDriver(address(new ManagedProxy(driverLogic, admin)));
-        drips.updateDriverAddress(driverId, address(driver));
-        driverNonce = 0;
+    function functionsRouter() internal view returns (address functionsRouter_) {
+        (, IFunctionsRouter functionsRouterRaw,) = functionsConfig.subscription();
+        return address(functionsRouterRaw);
+    }
+
+    function subscriptionId() internal view returns (uint64 subscriptionId_) {
+        (,, subscriptionId_) = functionsConfig.subscription();
     }
 
     function noMetadata() internal pure returns (AccountMetadata[] memory accountMetadata) {
@@ -119,135 +108,78 @@ contract RepoDriverTest is Test {
         accountMetadata[0] = AccountMetadata("key", "value");
     }
 
-    function assertAnyApiOperator(
-        OperatorInterface expectedOperator,
-        bytes32 expectedJobId,
-        uint96 expectedDefaultFee
-    ) internal {
-        (OperatorInterface operator, bytes32 jobId, uint96 defaultFee) = driver.anyApiOperator();
-        assertEq(address(operator), address(expectedOperator), "Invalid operator after the update");
-        assertEq(jobId, expectedJobId, "Invalid job ID after the update");
-        assertEq(defaultFee, expectedDefaultFee, "Invalid default fee after the update");
+    function updateOwner(Forge forge, bytes memory name, address owner)
+        internal
+        returns (uint256 accountId_)
+    {
+        bytes32 requestId;
+        (accountId_, requestId) = requestUpdateOwner(forge, name);
+        handleOracleFulfillment(requestId, forge, name, owner);
     }
 
-    function initializeAnyApiOperator(OperatorInterface operator, bytes32 jobId, uint96 defaultFee)
+    function requestUpdateOwner(Forge forge, bytes memory name)
         internal
+        returns (uint256 accountId_, bytes32 requestId)
     {
-        driver.initializeAnyApiOperator(operator, jobId, defaultFee);
-        assertAnyApiOperator(operator, jobId, defaultFee);
+        requestId = mockSendRequest(forge, name);
+        accountId_ = driver.requestUpdateOwner(forge, name);
+        vm.clearMockedCalls();
+        assertEq(accountId_, driver.calcAccountId(forge, name), "Invalid returned account ID");
     }
 
-    function updateAnyApiOperator(OperatorInterface operator, bytes32 jobId, uint96 defaultFee)
-        internal
-    {
-        vm.prank(admin);
-        driver.updateAnyApiOperator(operator, jobId, defaultFee);
-        assertAnyApiOperator(operator, jobId, defaultFee);
-    }
-
-    function initialUpdateOwner(address owner, string memory name)
-        internal
-        returns (uint256 ownedAccountId)
-    {
-        Forge forge = Forge.GitHub;
-        updateOwner(
-            forge,
-            bytes(name),
-            owner,
-            string.concat("https://raw.githubusercontent.com/", name, "/HEAD/FUNDING.json"),
-            "drips,ethereum,ownedBy"
+    function mockSendRequest(Forge forge, bytes memory name) internal returns (bytes32 requestId) {
+        (bytes memory data, uint16 dataVersion, uint32 callbackGasLimit, bytes32 donId) =
+            functionsConfig.buildRequest(forge, name);
+        bytes memory expectedData = abi.encodeCall(
+            IFunctionsRouter.sendRequest,
+            (subscriptionId(), data, dataVersion, callbackGasLimit, donId)
         );
-        return driver.calcAccountId(forge, bytes(name));
+        requestId = bytes32(gasleft());
+        vm.mockCall(functionsRouter(), expectedData, abi.encode(requestId));
+        vm.expectCall(functionsRouter(), expectedData);
     }
 
-    function updateOwner(
+    function handleOracleFulfillment(
+        bytes32 requestId,
         Forge forge,
         bytes memory name,
-        address owner,
-        string memory url,
-        string memory path
+        address owner
     ) internal {
-        bytes32 requestId = requestUpdateOwner(forge, name, url, path);
-        updateOwnerByAnyApi(requestId, owner);
+        vm.prank(functionsRouter());
+        driver.handleOracleFulfillment(requestId, abi.encode(owner), "");
         assertOwner(forge, name, owner);
     }
 
-    function requestUpdateOwner(
-        Forge forge,
-        bytes memory name,
-        string memory url,
-        string memory path
-    ) internal returns (bytes32 requestId) {
-        (OperatorInterface operator,, uint96 fee) = driver.anyApiOperator();
-        LinkTokenInterface linkToken = driver.linkToken();
-        uint256 driverBalance = linkToken.balanceOf(address(driver));
-        uint256 operatorBalance = linkToken.balanceOf(address(operator));
-
-        mockOperatorRequest(url, path, driverNonce, fee);
-        driver.requestUpdateOwner(forge, name);
-        vm.clearMockedCalls();
-
-        assertEq(
-            linkToken.balanceOf(address(driver)), driverBalance - fee, "Invalid driver balance"
+    function mockFundSubscription(uint256 amt) internal {
+        bytes memory expectedData = abi.encodeCall(
+            IERC677Receiver.onTokenTransfer, (address(driver), amt, abi.encode(subscriptionId()))
         );
-        assertEq(
-            linkToken.balanceOf(address(operator)),
-            operatorBalance + fee,
-            "Invalid operator balance"
-        );
-        return calcRequestId(driverNonce++);
-    }
-
-    function mockOperatorRequest(string memory url, string memory path, uint256 nonce, uint256 fee)
-        internal
-    {
-        (OperatorInterface operator, bytes32 jobId,) = driver.anyApiOperator();
-
-        BufferChainlink.buffer memory buffer;
-        buffer = BufferChainlink.init(buffer, 256);
-        buffer.encodeString("get");
-        buffer.encodeString(url);
-        buffer.encodeString("path");
-        buffer.encodeString(path);
-
-        vm.mockCall(
-            address(operator),
-            abi.encodeCall(
-                ERC677ReceiverInterface.onTokenTransfer,
-                (
-                    address(driver),
-                    fee,
-                    abi.encodeCall(
-                        OperatorInterface.operatorRequest,
-                        (
-                            address(0),
-                            0,
-                            jobId,
-                            RepoDriver.updateOwnerByAnyApi.selector,
-                            nonce,
-                            2,
-                            buffer.buf
-                        )
-                        )
-                )
-            ),
-            ""
-        );
-    }
-
-    function updateOwnerByAnyApi(bytes32 requestId, address owner) internal {
-        (OperatorInterface operator,,) = driver.anyApiOperator();
-        vm.prank(address(operator));
-        driver.updateOwnerByAnyApi(requestId, abi.encodePacked(owner));
+        vm.mockCall(functionsRouter(), expectedData, "");
+        vm.expectCall(functionsRouter(), expectedData);
     }
 
     function assertOwner(Forge forge, bytes memory name, address expectedOwner) internal {
-        uint256 repoAccountId = driver.calcAccountId(forge, name);
-        assertEq(driver.ownerOf(repoAccountId), expectedOwner, "Invalid account owner");
+        assertOwner(driver.calcAccountId(forge, name), expectedOwner);
     }
 
-    function calcRequestId(uint256 nonce) internal view returns (bytes32 requestId) {
-        return keccak256(abi.encodePacked(address(driver), nonce));
+    function assertOwner(uint256 accountId_, address expectedOwner) internal {
+        assertEq(driver.ownerOf(accountId_), expectedOwner, "Invalid account owner");
+    }
+
+    function assertRouterBalance(uint256 amt) internal {
+        assertEq(linkToken().balanceOf(functionsRouter()), amt, "Invalid router balance");
+    }
+
+    function fundSubscriptionCalldata() internal pure returns (bytes memory data) {
+        data = abi.encodeCall(RepoDriver.fundSubscription, ());
+    }
+
+    function requestUpdateOwnerCalldata(Forge forge, bytes memory name)
+        internal
+        pure
+        returns (bytes memory data)
+    {
+        data = abi.encodeCall(RepoDriver.requestUpdateOwner, (forge, name));
     }
 
     function testAccountIdsDoNotCollideBetweenForges() public {
@@ -313,224 +245,246 @@ contract RepoDriverTest is Test {
         assertEq(bytes32(actualAccountId), bytes32(expectedAccountId), "Invalid account ID");
     }
 
-    function testUpdateAnyApiOperator() public {
-        (OperatorInterface operator, bytes32 jobId, uint96 defaultFee) = driver.anyApiOperator();
-        OperatorInterface newOperator = OperatorInterface(address(~uint160(address(operator))));
-        updateAnyApiOperator(newOperator, ~jobId, ~defaultFee);
+    function testFundSubscription() public {
+        uint256 amt = 10;
+        linkToken().transfer(address(driver), amt);
+        mockFundSubscription(amt);
+        driver.fundSubscription();
+        assertRouterBalance(amt);
     }
 
-    function testUpdateAnyApiOperatorRevertsIfNotCalledByAdmin() public {
-        vm.expectRevert("Caller not the admin");
-        driver.updateAnyApiOperator(OperatorInterface(address(1234)), keccak256("job ID"), 123);
+    function testFundSubscriptionDoesNothingWhenBalanceIsZero() public {
+        driver.fundSubscription();
+        assertRouterBalance(0);
     }
 
-    function testInitializeAnyApiOperator() public {
-        deployDriverUninitialized();
-        initializeAnyApiOperator(OperatorInterface(address(1234)), keccak256("job ID"), 123);
+    function testOnTokenTransferForFundSubscription() public {
+        runOnTokenTransferFundSubscriptionTest(10, 7);
     }
 
-    function testInitializeAnyApiOperatorRevertsIfCalledTwice() public {
-        deployDriverUninitialized();
-        initializeAnyApiOperator(OperatorInterface(address(1234)), keccak256("job ID"), 123);
-
-        vm.expectRevert(ERROR_ALREADY_INITIALIZED);
-        driver.initializeAnyApiOperator(OperatorInterface(address(1234)), keccak256("job ID"), 123);
+    function testOnTokenTransferForFundSubscriptionWhenBalanceIsZero() public {
+        runOnTokenTransferFundSubscriptionTest(0, 10);
     }
 
-    function testInitializeAnyApiOperatorRevertsIfCalledAfterUpdate() public {
-        deployDriverUninitialized();
-        updateAnyApiOperator(OperatorInterface(address(1234)), keccak256("job ID"), 123);
-
-        vm.expectRevert(ERROR_ALREADY_INITIALIZED);
-        driver.initializeAnyApiOperator(OperatorInterface(address(1234)), keccak256("job ID"), 123);
+    function testOnTokenTransferForFundSubscriptionWhenAmountIsZero() public {
+        runOnTokenTransferFundSubscriptionTest(10, 0);
     }
 
-    function testUpdateOwnerGitHubMainnet() public {
-        updateOwner(
-            Forge.GitHub,
-            "me/repo",
-            user,
-            "https://raw.githubusercontent.com/me/repo/HEAD/FUNDING.json",
-            "drips,ethereum,ownedBy"
-        );
+    function runOnTokenTransferFundSubscriptionTest(uint256 amtDriver, uint256 amtTransfer)
+        public
+    {
+        uint256 amt = amtDriver + amtTransfer;
+        linkToken().transfer(address(driver), amtDriver);
+        mockFundSubscription(amt);
+        linkToken().transferAndCall(address(driver), amtTransfer, fundSubscriptionCalldata());
+        assertRouterBalance(amt);
     }
 
-    function testUpdateOwnerGitLabMainnet() public {
-        updateOwner(
-            Forge.GitLab,
-            "me/repo",
-            user,
-            "https://gitlab.com/me/repo/-/raw/HEAD/FUNDING.json",
-            "drips,ethereum,ownedBy"
-        );
+    function testOnTokenTransferForFundSubscriptionDoesNothingWhenValueAndBalanceAreZero() public {
+        linkToken().transferAndCall(address(driver), 0, fundSubscriptionCalldata());
+        assertRouterBalance(0);
     }
 
-    function testUpdateOwnerGitHubGoerli() public {
-        deployDriver(CHAIN_ID_GOERLI);
-        updateOwner(
-            Forge.GitHub,
-            "me/repo",
-            user,
-            "https://raw.githubusercontent.com/me/repo/HEAD/FUNDING.json",
-            "drips,goerli,ownedBy"
-        );
+    function testOnTokenTransferForRequestUpdateOwner() public {
+        runOnTokenTransferRequestUpdateOwnerTest(10, 7);
     }
 
-    function testUpdateOwnerGitHubSepolia() public {
-        deployDriver(CHAIN_ID_SEPOLIA);
-        updateOwner(
-            Forge.GitHub,
-            "me/repo",
-            user,
-            "https://raw.githubusercontent.com/me/repo/HEAD/FUNDING.json",
-            "drips,sepolia,ownedBy"
-        );
+    function testOnTokenTransferForRequestUpdateOwnerWhenBalanceIsZero() public {
+        runOnTokenTransferRequestUpdateOwnerTest(0, 10);
     }
 
-    function testUpdateOwnerGitHubOtherChain() public {
-        deployDriver(1234567890);
-        updateOwner(
-            Forge.GitHub,
-            "me/repo",
-            user,
-            "https://raw.githubusercontent.com/me/repo/HEAD/FUNDING.json",
-            "drips,other,ownedBy"
-        );
+    function testOnTokenTransferForRequestUpdateOwnerWhenAmountIsZero() public {
+        runOnTokenTransferRequestUpdateOwnerTest(10, 0);
     }
 
-    function testRequestUpdateOwnerRevertsWhenNotEnoughLink() public {
-        uint256 balance = driver.linkToken().balanceOf(address(driver));
-        (OperatorInterface operator, bytes32 jobId,) = driver.anyApiOperator();
-        updateAnyApiOperator(operator, jobId, uint96(balance) + 1);
-        vm.expectRevert("Link balance too low");
-        driver.requestUpdateOwner(Forge.GitHub, "me/repo");
-    }
+    function runOnTokenTransferRequestUpdateOwnerTest(uint256 amtDriver, uint256 amtTransfer)
+        public
+    {
+        uint256 amt = amtDriver + amtTransfer;
+        Forge forge = Forge.GitHub;
+        bytes memory name = "this/newRepo";
+        linkToken().transfer(address(driver), amtDriver);
+        mockFundSubscription(amt);
+        bytes32 requestId = mockSendRequest(forge, name);
 
-    function testRequestUpdateOwnerRevertsWhenOperatorAddressIsZero() public {
-        (, bytes32 jobId, uint96 fee) = driver.anyApiOperator();
-        updateAnyApiOperator(OperatorInterface(address(0)), jobId, fee);
-        vm.expectRevert("Operator address not set");
-        driver.requestUpdateOwner(Forge.GitHub, "me/repo");
-    }
-
-    function testUpdateOwnerByAnyApiRevertsIfNotCalledByTheOperator() public {
-        bytes32 requestId = requestUpdateOwner(
-            Forge.GitHub,
-            "me/repo",
-            "https://raw.githubusercontent.com/me/repo/HEAD/FUNDING.json",
-            "drips,ethereum,ownedBy"
-        );
-        vm.expectRevert("Callable only by the operator");
-        driver.updateOwnerByAnyApi(requestId, abi.encodePacked(user));
-    }
-
-    function testUpdateOwnerByAnyApiRevertsIfUnknownRequestId() public {
-        (OperatorInterface operator,,) = driver.anyApiOperator();
-        vm.prank(address(operator));
-        vm.expectRevert("Unknown request ID");
-        driver.updateOwnerByAnyApi(keccak256("requestId"), abi.encodePacked(user));
-    }
-
-    function testUpdateOwnerByAnyApiRevertsIfReusedRequestId() public {
-        bytes32 requestId = requestUpdateOwner(
-            Forge.GitHub,
-            "me/repo",
-            "https://raw.githubusercontent.com/me/repo/HEAD/FUNDING.json",
-            "drips,ethereum,ownedBy"
-        );
-        (OperatorInterface operator,,) = driver.anyApiOperator();
-
-        vm.prank(address(operator));
-        driver.updateOwnerByAnyApi(requestId, abi.encodePacked(user));
-
-        vm.prank(address(operator));
-        vm.expectRevert("Unknown request ID");
-        driver.updateOwnerByAnyApi(requestId, abi.encodePacked(user));
-    }
-
-    function testUpdateOwnerByAnyApiRevertsIfOwnerIsNotAddress() public {
-        bytes32 requestId = requestUpdateOwner(
-            Forge.GitHub,
-            "me/repo",
-            "https://raw.githubusercontent.com/me/repo/HEAD/FUNDING.json",
-            "drips,ethereum,ownedBy"
-        );
-        (OperatorInterface operator,,) = driver.anyApiOperator();
-
-        vm.prank(address(operator));
-        vm.expectRevert("Invalid owner length");
-        driver.updateOwnerByAnyApi(requestId, abi.encodePacked(user, uint8(0)));
-    }
-
-    function testOnTokenTransfer() public {
-        (OperatorInterface operator,,) = driver.anyApiOperator();
-        LinkTokenInterface linkToken = driver.linkToken();
-        uint256 thisBalance = linkToken.balanceOf(address(this));
-        uint256 operatorBalance = linkToken.balanceOf(address(operator));
-        uint256 fee = thisBalance / 2;
-
-        mockOperatorRequest(
-            "https://raw.githubusercontent.com/me/repo/HEAD/FUNDING.json",
-            "drips,ethereum,ownedBy",
-            driverNonce,
-            fee
-        );
-        linkToken.transferAndCall(
-            address(driver),
-            fee,
-            abi.encodeCall(driver.requestUpdateOwner, (Forge.GitHub, "me/repo"))
+        linkToken().transferAndCall(
+            address(driver), amtTransfer, requestUpdateOwnerCalldata(forge, name)
         );
 
-        assertEq(linkToken.balanceOf(address(this)), thisBalance - fee, "Invalid this balance");
-        assertEq(
-            linkToken.balanceOf(address(operator)),
-            operatorBalance + fee,
-            "Invalid operator balance"
-        );
-        updateOwnerByAnyApi(calcRequestId(driverNonce), user);
+        assertRouterBalance(amt);
+        handleOracleFulfillment(requestId, forge, name, address(9876));
     }
 
-    function testOnTokenTransferRevertsIfNotLinkIsReceived() public {
-        TestLinkToken notLinkToken = new TestLinkToken();
-        notLinkToken.mint(address(this), 1);
+    function testOnTokenTransferForRequestUpdateOwnerWhenValueAndBalanceAreZero() public {
+        Forge forge = Forge.GitHub;
+        bytes memory name = "this/newRepo";
+        bytes32 requestId = mockSendRequest(forge, name);
+
+        linkToken().transferAndCall(address(driver), 0, requestUpdateOwnerCalldata(forge, name));
+
+        assertRouterBalance(0);
+        handleOracleFulfillment(requestId, forge, name, address(9876));
+    }
+
+    function testOnTokenTransferRevertsWhenNotCalledByLinkToken() public {
         vm.expectRevert("Callable only by the Link token");
-        notLinkToken.transferAndCall(
-            address(driver), 1, abi.encodeCall(driver.requestUpdateOwner, (Forge.GitHub, "me/repo"))
-        );
+        driver.onTokenTransfer(address(0), 0, "");
     }
 
-    function testOnTokenTransferRevertsIfPayloadIsNotCalldata() public {
-        LinkTokenInterface linkToken = driver.linkToken();
+    function testOnTokenTransferRevertsWhenDataIsNotCalldata() public {
+        LinkTokenInterface linkToken_ = linkToken();
         vm.expectRevert("Data not a valid calldata");
-        linkToken.transferAndCall(address(driver), 1, "abc");
+        linkToken_.transferAndCall(address(driver), 0, "");
     }
 
-    function testOnTokenTransferRevertsIfPayloadHasInvalidSelector() public {
-        LinkTokenInterface linkToken = driver.linkToken();
-        vm.expectRevert("Data not requestUpdateOwner");
-        linkToken.transferAndCall(
-            address(driver),
-            1,
-            abi.encodeWithSelector(driver.updateOwnerByAnyApi.selector, Forge.GitHub, "me/repo")
+    function testOnTokenTransferRevertsWhenWhenDataIsNotSupported() public {
+        LinkTokenInterface linkToken_ = linkToken();
+        vm.expectRevert("Data not a supported calldata");
+        linkToken_.transferAndCall(address(driver), 0, abi.encodeCall(driver.functionsConfig, ()));
+    }
+
+    function testHandleOracleFulfillmentUpdatesOwner() public {
+        (, bytes32 requestId) = requestUpdateOwner(accountForge, accountName);
+        address owner = address(1234567890);
+        vm.prank(functionsRouter());
+        driver.handleOracleFulfillment(requestId, abi.encode(owner), "");
+        assertOwner(accountId, owner);
+    }
+
+    function testHandleOracleFulfillmentAcceptsMaxAddress() public {
+        (, bytes32 requestId) = requestUpdateOwner(accountForge, accountName);
+        address owner = address(type(uint160).max);
+        vm.prank(functionsRouter());
+        driver.handleOracleFulfillment(requestId, abi.encode(owner), "");
+        assertOwner(accountId, owner);
+    }
+
+    function testHandleOracleFulfillmentAcceptsZeroAddress() public {
+        (, bytes32 requestId) = requestUpdateOwner(accountForge, accountName);
+        address owner = address(0);
+        vm.prank(functionsRouter());
+        driver.handleOracleFulfillment(requestId, abi.encode(owner), "");
+        assertOwner(accountId, owner);
+    }
+
+    function testHandleOracleFulfillmentTreatsOutOfBoundAddressAsZero() public {
+        (, bytes32 requestId) = requestUpdateOwner(accountForge, accountName);
+        vm.prank(functionsRouter());
+        driver.handleOracleFulfillment(requestId, abi.encode(uint256(type(uint160).max) + 1), "");
+        assertOwner(accountId, address(0));
+    }
+
+    function testHandleOracleFulfillmentTreatsErrorAsZeroAddress() public {
+        (, bytes32 requestId) = requestUpdateOwner(accountForge, accountName);
+        vm.prank(functionsRouter());
+        driver.handleOracleFulfillment(requestId, "", "Error");
+        assertOwner(accountId, address(0));
+    }
+
+    function testHandleOracleFulfillmentRevertsWhenNotCalledByFunctionsRouter() public {
+        (, bytes32 requestId) = requestUpdateOwner(accountForge, accountName);
+        vm.expectRevert("Callable only by the router");
+        driver.handleOracleFulfillment(requestId, abi.encode(address(0)), "");
+    }
+
+    function testHandleOracleFulfillmentRevertsWhenResponseTooShort() public {
+        (, bytes32 requestId) = requestUpdateOwner(accountForge, accountName);
+        vm.prank(functionsRouter());
+        vm.expectRevert("Invalid response length");
+        driver.handleOracleFulfillment(requestId, new bytes(31), "");
+    }
+
+    function testHandleOracleFulfillmentRevertsWhenResponseTooLong() public {
+        (, bytes32 requestId) = requestUpdateOwner(accountForge, accountName);
+        vm.prank(functionsRouter());
+        vm.expectRevert("Invalid response length");
+        driver.handleOracleFulfillment(requestId, new bytes(33), "");
+    }
+
+    function testUpdateFunctionsConfigRevertsWhenNotCalledByAdmin() public {
+        IFunctionsConfig newConfig = new FunctionsConfig(9876);
+        vm.expectRevert("Caller not the admin");
+        driver.updateFunctionsConfig(newConfig);
+    }
+
+    function testUpdateFunctionsConfigIsRespectedByFunctionsConfig() public {
+        updateFunctionsConfig();
+        assertEq(
+            address(driver.functionsConfig()), address(functionsConfig), "Invalid FunctionsConfig"
         );
     }
 
-    function testOnTokenTransferRevertsIfPayloadIsNotValidCalldata() public {
-        LinkTokenInterface linkToken = driver.linkToken();
-        vm.expectRevert(bytes(""));
-        linkToken.transferAndCall(
-            address(driver),
-            1,
-            abi.encodeWithSelector(driver.requestUpdateOwner.selector, "me/repo")
+    function testUpdateFunctionsConfigIsRespectedByFundSubscription() public {
+        updateFunctionsConfig();
+        uint256 amt = 10;
+        linkToken().transfer(address(driver), amt);
+        mockFundSubscription(amt);
+        expectCallSubscription();
+        driver.fundSubscription();
+    }
+
+    function testUpdateFunctionsConfigIsRespectedByRequestUpdateOwner() public {
+        updateFunctionsConfig();
+        mockSendRequest(accountForge, accountName);
+        expectCallSubscription();
+        expectCallBuildRequest(accountForge, accountName);
+        driver.requestUpdateOwner(accountForge, accountName);
+    }
+
+    function testUpdateFunctionsConfigIsRespectedByOnTokenTransferForFundSubscription() public {
+        updateFunctionsConfig();
+        LinkTokenInterface linkToken_ = linkToken();
+        uint256 amt = 10;
+        mockFundSubscription(amt);
+        expectCallSubscription();
+        linkToken_.transferAndCall(address(driver), amt, fundSubscriptionCalldata());
+    }
+
+    function testUpdateFunctionsConfigIsRespectedByOnTokenTransferForRequestUpdateOwner() public {
+        updateFunctionsConfig();
+        LinkTokenInterface linkToken_ = linkToken();
+        uint256 amt = 10;
+        mockFundSubscription(amt);
+        mockSendRequest(accountForge, accountName);
+        expectCallSubscription();
+        expectCallBuildRequest(accountForge, accountName);
+        linkToken_.transferAndCall(
+            address(driver), amt, requestUpdateOwnerCalldata(accountForge, accountName)
+        );
+    }
+
+    function testUpdateFunctionsConfigIsRespectedByHandleOracleFulfillment() public {
+        updateFunctionsConfig();
+        (, bytes32 requestId) = requestUpdateOwner(accountForge, accountName);
+        vm.prank(functionsRouter());
+        expectCallSubscription();
+        driver.handleOracleFulfillment(requestId, abi.encode(address(1234567890)), "");
+    }
+
+    function updateFunctionsConfig() internal {
+        bytes memory data = abi.encodeWithSignature("Error(string)", "Old FUnctionsConfig called");
+        vm.mockCallRevert(address(functionsConfig), "", data);
+        functionsConfig = new FunctionsConfig(9876);
+        vm.prank(admin);
+        driver.updateFunctionsConfig(functionsConfig);
+    }
+
+    function expectCallSubscription() internal {
+        vm.expectCall(address(functionsConfig), abi.encodeCall(IFunctionsConfig.subscription, ()));
+    }
+
+    function expectCallBuildRequest(Forge forge, bytes memory name) internal {
+        vm.expectCall(
+            address(functionsConfig), abi.encodeCall(IFunctionsConfig.buildRequest, (forge, name))
         );
     }
 
     function testCollect() public {
         uint128 amt = 5;
-        driver.give(accountId1, accountId2, erc20, amt);
-        drips.split(accountId2, erc20, new SplitsReceiver[](0));
+        driver.give(accountId, otherAccountId, erc20, amt);
+        drips.split(otherAccountId, erc20, new SplitsReceiver[](0));
         uint256 balance = erc20.balanceOf(address(this));
-        uint128 collected = driver.collect(accountId2, erc20, address(this));
+        uint128 collected = driver.collect(otherAccountId, erc20, address(this));
         assertEq(collected, amt, "Invalid collected");
         assertEq(erc20.balanceOf(address(this)), balance + amt, "Invalid balance");
         assertEq(erc20.balanceOf(address(drips)), 0, "Invalid Drips balance");
@@ -538,10 +492,10 @@ contract RepoDriverTest is Test {
 
     function testCollectTransfersFundsToTheProvidedAddress() public {
         uint128 amt = 5;
-        driver.give(accountId1, accountId2, erc20, amt);
-        drips.split(accountId2, erc20, new SplitsReceiver[](0));
+        driver.give(accountId, otherAccountId, erc20, amt);
+        drips.split(otherAccountId, erc20, new SplitsReceiver[](0));
         address transferTo = address(1234);
-        uint128 collected = driver.collect(accountId2, erc20, transferTo);
+        uint128 collected = driver.collect(otherAccountId, erc20, transferTo);
         assertEq(collected, amt, "Invalid collected");
         assertEq(erc20.balanceOf(transferTo), amt, "Invalid balance");
         assertEq(erc20.balanceOf(address(drips)), 0, "Invalid Drips balance");
@@ -549,21 +503,21 @@ contract RepoDriverTest is Test {
 
     function testCollectRevertsWhenNotAccountOwner() public {
         vm.expectRevert(ERROR_NOT_OWNER);
-        driver.collect(accountIdUser, erc20, address(this));
+        driver.collect(userAccountId, erc20, address(this));
     }
 
     function testGive() public {
         uint128 amt = 5;
         uint256 balance = erc20.balanceOf(address(this));
-        driver.give(accountId1, accountId2, erc20, amt);
+        driver.give(accountId, otherAccountId, erc20, amt);
         assertEq(erc20.balanceOf(address(this)), balance - amt, "Invalid balance");
         assertEq(erc20.balanceOf(address(drips)), amt, "Invalid Drips balance");
-        assertEq(drips.splittable(accountId2, erc20), amt, "Invalid received amount");
+        assertEq(drips.splittable(otherAccountId, erc20), amt, "Invalid received amount");
     }
 
     function testGiveRevertsWhenNotAccountOwner() public {
         vm.expectRevert(ERROR_NOT_OWNER);
-        driver.give(accountIdUser, accountId, erc20, 5);
+        driver.give(userAccountId, accountId, erc20, 5);
     }
 
     function testSetStreams() public {
@@ -572,14 +526,14 @@ contract RepoDriverTest is Test {
         // Top-up
         StreamReceiver[] memory receivers = new StreamReceiver[](1);
         receivers[0] =
-            StreamReceiver(accountId2, StreamConfigImpl.create(0, drips.minAmtPerSec(), 0, 0));
+            StreamReceiver(otherAccountId, StreamConfigImpl.create(0, drips.minAmtPerSec(), 0, 0));
         uint256 balance = erc20.balanceOf(address(this));
         int128 realBalanceDelta = driver.setStreams(
-            accountId1, erc20, new StreamReceiver[](0), int128(amt), receivers, 0, 0, address(this)
+            accountId, erc20, new StreamReceiver[](0), int128(amt), receivers, 0, 0, address(this)
         );
         assertEq(erc20.balanceOf(address(this)), balance - amt, "Invalid balance after top-up");
         assertEq(erc20.balanceOf(address(drips)), amt, "Invalid Drips balance after top-up");
-        (bytes32 streamsHash,,, uint128 streamsBalance,) = drips.streamsState(accountId1, erc20);
+        (bytes32 streamsHash,,, uint128 streamsBalance,) = drips.streamsState(accountId, erc20);
         assertEq(streamsHash, drips.hashStreams(receivers), "Invalid streams hash after top-up");
         assertEq(streamsBalance, amt, "Invalid streams balance after top-up");
         assertEq(realBalanceDelta, int128(amt), "Invalid streams balance delta after top-up");
@@ -587,11 +541,11 @@ contract RepoDriverTest is Test {
         // Withdraw
         balance = erc20.balanceOf(address(user));
         realBalanceDelta = driver.setStreams(
-            accountId1, erc20, receivers, -int128(amt), receivers, 0, 0, address(user)
+            accountId, erc20, receivers, -int128(amt), receivers, 0, 0, address(user)
         );
         assertEq(erc20.balanceOf(address(user)), balance + amt, "Invalid balance after withdrawal");
         assertEq(erc20.balanceOf(address(drips)), 0, "Invalid Drips balance after withdrawal");
-        (,,, streamsBalance,) = drips.streamsState(accountId1, erc20);
+        (,,, streamsBalance,) = drips.streamsState(accountId, erc20);
         assertEq(streamsBalance, 0, "Invalid streams balance after withdrawal");
         assertEq(realBalanceDelta, -int128(amt), "Invalid streams balance delta after withdrawal");
     }
@@ -606,7 +560,7 @@ contract RepoDriverTest is Test {
         );
         assertEq(erc20.balanceOf(transferTo), amt, "Invalid balance");
         assertEq(erc20.balanceOf(address(drips)), 0, "Invalid Drips balance");
-        (,,, uint128 streamsBalance,) = drips.streamsState(accountId1, erc20);
+        (,,, uint128 streamsBalance,) = drips.streamsState(accountId, erc20);
         assertEq(streamsBalance, 0, "Invalid streams balance");
         assertEq(realBalanceDelta, -int128(amt), "Invalid streams balance delta");
     }
@@ -614,12 +568,12 @@ contract RepoDriverTest is Test {
     function testSetStreamsRevertsWhenNotAccountOwner() public {
         StreamReceiver[] memory noReceivers = new StreamReceiver[](0);
         vm.expectRevert(ERROR_NOT_OWNER);
-        driver.setStreams(accountIdUser, erc20, noReceivers, 0, noReceivers, 0, 0, address(this));
+        driver.setStreams(userAccountId, erc20, noReceivers, 0, noReceivers, 0, 0, address(this));
     }
 
     function testSetSplits() public {
         SplitsReceiver[] memory receivers = new SplitsReceiver[](1);
-        receivers[0] = SplitsReceiver(accountId2, 1);
+        receivers[0] = SplitsReceiver(otherAccountId, 1);
         driver.setSplits(accountId, receivers);
         bytes32 actual = drips.splitsHash(accountId);
         bytes32 expected = drips.hashSplits(receivers);
@@ -628,7 +582,7 @@ contract RepoDriverTest is Test {
 
     function testSetSplitsRevertsWhenNotAccountOwner() public {
         vm.expectRevert(ERROR_NOT_OWNER);
-        driver.setSplits(accountIdUser, new SplitsReceiver[](0));
+        driver.setSplits(userAccountId, new SplitsReceiver[](0));
     }
 
     function testEmitAccountMetadata() public {
@@ -637,7 +591,7 @@ contract RepoDriverTest is Test {
 
     function testEmitAccountMetadataRevertsWhenNotAccountOwner() public {
         vm.expectRevert(ERROR_NOT_OWNER);
-        driver.emitAccountMetadata(accountIdUser, someMetadata());
+        driver.emitAccountMetadata(userAccountId, someMetadata());
     }
 
     function testForwarderIsTrusted() public {
@@ -646,7 +600,7 @@ contract RepoDriverTest is Test {
         assertEq(drips.splittable(accountId, erc20), 0, "Invalid splittable before give");
         uint128 amt = 10;
         bytes memory giveData =
-            abi.encodeWithSelector(driver.give.selector, accountIdUser, accountId, erc20, amt);
+            abi.encodeWithSelector(driver.give.selector, userAccountId, accountId, erc20, amt);
         caller.callAs(user, address(driver), giveData);
         assertEq(drips.splittable(accountId, erc20), amt, "Invalid splittable after give");
     }
@@ -658,16 +612,20 @@ contract RepoDriverTest is Test {
         _;
     }
 
-    function testRequestUpdateOwnerCanBePaused() public canBePausedTest {
-        driver.requestUpdateOwner(Forge.GitHub, "");
-    }
-
     function testOnTokenTransferCanBePaused() public canBePausedTest {
         driver.onTokenTransfer(address(0), 0, "");
     }
 
-    function testUpdateOwnerByAnyApiCanBePaused() public canBePausedTest {
-        driver.updateOwnerByAnyApi(0, "");
+    function testFundSubscriptionCanBePaused() public canBePausedTest {
+        driver.fundSubscription();
+    }
+
+    function testRequestUpdateOwnerCanBePaused() public canBePausedTest {
+        driver.requestUpdateOwner(Forge.GitHub, "");
+    }
+
+    function testHandleOracleFulfillmentCanBePaused() public canBePausedTest {
+        driver.handleOracleFulfillment(0, "", "");
     }
 
     function testCollectCanBePaused() public canBePausedTest {
