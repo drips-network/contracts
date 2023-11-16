@@ -7,10 +7,16 @@ set -eo pipefail
 # Required programs on the machine: foundry, curl, jq
 # This script is standalone, it may be copied and run outside of this repository.
 
-# Each account to be split must be represented in the splits file with a line consisting of
-# the token address and the account ID in decimal, white spaces are ignored, for example:
-# 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 390153557637010290125401600086462573573670190927
-# Lines not following this pattern are ignored, they may be used as comments.
+# The file is read line by line, with white spaces ignored.
+# Whenever a line with an address is found, it's assumed to be an ERC-20 address, which from this
+# point will be used for processing accounts until the next ERC-20 address is found, for example:
+# 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
+# The token address may be followed by the minimum amount to be processed, for example:
+# 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 1.5
+# Whenever a line with only a decimal number is found, it's assumed to be an account ID,
+# which will be processed for the currently used token, for example:
+# 390153557637010290125401600086462573573670190927
+# Lines not following these patterns are ignored, they may be used as comments.
 
 # SUBGRAPH_API is the subgraph API to use to collect information.
 # As of writing this script the URL of the subgraph of Drips on Ethereum is:
@@ -44,39 +50,84 @@ set -eo pipefail
 # > cast rpc evm_increaseTime 86400
 # > cast send $WALLET_ARGS $(cast address-zero)
 
+verify_parameter() {
+    if [ -z "${!1}" ]; then
+        echo "Error: '$1' variable not set"
+        exit 1
+    fi
+}
+
 # args: subgraph query, jq filter
 query_subgraph() {
     curl "$SUBGRAPH_API" -s -X POST -H 'content-type: application/json' -d "{\"query\": \"$1\"}" \
         | jq -r "$2"
 }
 
-ADDRESS_DRIVER=$(query_subgraph '{ app(id: 0) { appAddress } }' '.data.app.appAddress')
-DRIPS=$(cast call "$ADDRESS_DRIVER" "drips()(address)")
-echo "Running on chain $(cast chain) using Drips contract $DRIPS"
+# args: amount
+pretty_amt() {
+    echo $(cast to-fixed-point "$DECIMALS" "$1") $SYMBOL
+}
 
-RECEIVED_CYCLES=52
-SPLITS_FILE_PATTERN='^[[:blank:]]*0x[[:xdigit:]]{40}[[:blank:]]*[[:digit:]]+[[:blank:]]*$'
-grep -E "$SPLITS_FILE_PATTERN" "$1" | while read TOKEN ACCOUNT_ID; do
+# args: address, minimum amount (optional)
+set_token() {
+    TOKEN="$1"
+    MIN_AMT_RAW="$2"
+    DECIMALS=$(cast call "$TOKEN" "decimals()(uint8)")
+    SYMBOL=$(cast call "$TOKEN" "symbol()(string)" | sed 's/^"//;s/"$//')
+    MIN_AMT=0
+    if [ -n "$MIN_AMT_RAW" ]; then
+        MIN_AMT=$(cast from-fixed-point "$DECIMALS" "$MIN_AMT_RAW")
+    fi
+    echo
+    echo =============================================================================
+    echo "Using token $TOKEN ($(cast call "$TOKEN" "name()(string)" | sed 's/^"//;s/"$//'))"
+    echo "The minimum amount to process is $(pretty_amt "$MIN_AMT")"
+}
+
+# args: amount
+is_below_min_amt() {
+    local AMT_FLOAT=$(cast to-fixed-point 18 "$1")
+    local AMT_HIGH=$(echo "$AMT_FLOAT" | sed 's/\..*//')
+    local AMT_LOW=$(echo "$AMT_FLOAT" | sed 's/[^.]*\.//')
+    local MIN_FLOAT=$(cast to-fixed-point 18 "$MIN_AMT")
+    local MIN_HIGH=$(echo "$MIN_FLOAT" | sed 's/\..*//')
+    local MIN_LOW=$(echo "$MIN_FLOAT" | sed 's/[^.]*\.//')
+    if [ "$AMT_HIGH" == "$MIN_HIGH" ]; then
+        [ "$AMT_LOW" -lt "$MIN_LOW" ]
+    else
+        [ "$AMT_HIGH" -lt "$MIN_HIGH" ]
+    fi
+}
+
+# args: account ID
+process_account() {
+    if [ -z "$TOKEN" ]; then
+        echo "No token set, unclear how to process the account"
+        exit 1
+    fi
+    ACCOUNT_ID="$1"
     echo
     echo -----------------------------------------------------------------------------
-    echo "Splitting token $TOKEN ($(cast call "$TOKEN" "name()(string)")) for account ID $ACCOUNT_ID"
+    echo "Processing account ID $ACCOUNT_ID"
     echo
 
-    RECEIVABLE=$(cast call "$DRIPS" "receiveStreamsResult(uint256,address,uint32)(uint128)" "$ACCOUNT_ID" "$TOKEN" "$RECEIVED_CYCLES")
-    if [ "$RECEIVABLE" == 0 ]; then
-        echo "Nothing to receive from streams, skipping."
+    # Receive streams
+    local CYCLES=52
+    RECEIVABLE=$(cast call "$DRIPS" "receiveStreamsResult(uint256,address,uint32)(uint128)" "$ACCOUNT_ID" "$TOKEN" "$CYCLES")
+    if is_below_min_amt "$RECEIVABLE" ; then
+        echo "$(pretty_amt "$RECEIVABLE") receivable from streams, skipping."
     else
-        echo "$RECEIVABLE receivable from streams, receiving..."
-        cast send $WALLET_ARGS "$DRIPS" "receiveStreams(uint256,address,uint32)" "$ACCOUNT_ID" "$TOKEN" "$RECEIVED_CYCLES"
+        echo "$(pretty_amt "$RECEIVABLE") receivable from streams, receiving..."
+        cast send $WALLET_ARGS "$DRIPS" "receiveStreams(uint256,address,uint32)" "$ACCOUNT_ID" "$TOKEN" "$CYCLES"
     fi
-
     echo
 
+    # Split
     SPLITTABLE=$(cast call "$DRIPS" "splittable(uint256,address)(uint128)" "$ACCOUNT_ID" "$TOKEN")
-    if [ "$SPLITTABLE" == 0 ]; then
-        echo "Nothing to split, skipping."
+    if is_below_min_amt "$SPLITTABLE" ; then
+        echo "$(pretty_amt "$SPLITTABLE") splittable, skipping."
     else
-        echo "$SPLITTABLE splittable, splitting..."
+        echo "$(pretty_amt "$SPLITTABLE") splittable, splitting..."
         SPLITS=$(query_subgraph \
             "{ account(id: \\\"$ACCOUNT_ID\\\") { splitsEntries { accountId, weight}}}" \
             `# First, pad the account IDs to a maximum length with 0s.` \
@@ -88,5 +139,22 @@ grep -E "$SPLITS_FILE_PATTERN" "$1" | while read TOKEN ACCOUNT_ID; do
                 | map("(\(.accountId),\(.weight))") | join(",") | "[\(.)]"
             ')
         cast send $WALLET_ARGS "$DRIPS" "split(uint256,address,(uint256,uint32)[])" "$ACCOUNT_ID" "$TOKEN" "$SPLITS"
+    fi
+}
+
+verify_parameter ETH_RPC_URL
+verify_parameter WALLET_ARGS
+verify_parameter SUBGRAPH_API
+
+unset TOKEN
+ADDRESS_DRIVER=$(query_subgraph '{ app(id: 0) { appAddress } }' '.data.app.appAddress')
+DRIPS=$(cast call "$ADDRESS_DRIVER" "drips()(address)")
+echo "Running on chain $(cast chain) using Drips contract $DRIPS"
+
+cat "$1" | while read FIRST SECOND; do
+    if (echo "$FIRST" | grep -Eq '^0x[[:xdigit:]]{40}$'); then
+        set_token "$FIRST" "$SECOND"
+    elif (echo "$FIRST" | grep -Eq '^[[:digit:]]+$') && [ -z "$SECOND" ]; then
+        process_account "$FIRST"
     fi
 done
