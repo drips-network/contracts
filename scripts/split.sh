@@ -72,7 +72,7 @@ pretty_amt() {
 set_token() {
     TOKEN="$1"
     MIN_AMT_RAW="$2"
-    DECIMALS=$(cast call "$TOKEN" "decimals()(uint8)")
+    DECIMALS=$(cast call "$TOKEN" "decimals()(uint8)" | cut -f 1 -d " ")
     SYMBOL=$(cast call "$TOKEN" "symbol()(string)" | sed 's/^"//;s/"$//')
     MIN_AMT=0
     if [ -n "$MIN_AMT_RAW" ]; then
@@ -113,7 +113,7 @@ process_account() {
 
     # Receive streams
     local CYCLES=52
-    RECEIVABLE=$(cast call "$DRIPS" "receiveStreamsResult(uint256,address,uint32)(uint128)" "$ACCOUNT_ID" "$TOKEN" "$CYCLES")
+    RECEIVABLE=$(cast call "$DRIPS" "receiveStreamsResult(uint256,address,uint32)(uint128)" "$ACCOUNT_ID" "$TOKEN" "$CYCLES" | cut -f 1 -d " ")
     if is_below_min_amt "$RECEIVABLE" ; then
         echo "$(pretty_amt "$RECEIVABLE") receivable from streams, skipping."
     else
@@ -123,7 +123,7 @@ process_account() {
     echo
 
     # Split
-    SPLITTABLE=$(cast call "$DRIPS" "splittable(uint256,address)(uint128)" "$ACCOUNT_ID" "$TOKEN")
+    SPLITTABLE=$(cast call "$DRIPS" "splittable(uint256,address)(uint128)" "$ACCOUNT_ID" "$TOKEN" | cut -f 1 -d " ")
     if is_below_min_amt "$SPLITTABLE" ; then
         echo "$(pretty_amt "$SPLITTABLE") splittable, skipping."
     else
@@ -148,7 +148,7 @@ verify_parameter SUBGRAPH_API
 
 unset TOKEN
 ADDRESS_DRIVER=$(query_subgraph '{ app(id: 0) { appAddress } }' '.data.app.appAddress')
-DRIPS=$(cast call "$ADDRESS_DRIVER" "drips()(address)")
+DRIPS=$(cast call "$ADDRESS_DRIVER" "drips()(address)" | cut -f 1 -d " ")
 echo "Running on chain $(cast chain) using Drips contract $DRIPS"
 
 cat "$1" | while read FIRST SECOND; do
