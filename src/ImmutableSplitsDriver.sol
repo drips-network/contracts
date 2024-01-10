@@ -59,7 +59,7 @@ contract ImmutableSplitsDriver is Managed {
     /// Must be sorted by the account IDs, without duplicate account IDs and without 0 weights.
     /// Each splits receiver will be getting `weight / totalSplitsWeight`
     /// share of the funds collected by the account.
-    /// Fractions of tokens are always rounder either up or down depending on the amount
+    /// Fractions of tokens are always rounded either up or down depending on the amount
     /// being split, the receiver's position on the list and the other receivers' weights.
     /// The sum of the receivers' weights must be equal to `totalSplitsWeight`,
     /// or in other words the configuration must be splitting 100% of received funds.

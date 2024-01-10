@@ -226,7 +226,7 @@ abstract contract Splits {
     /// share of the funds collected by the account.
     /// If the sum of weights of all receivers is less than `_TOTAL_SPLITS_WEIGHT`,
     /// some funds won't be split, but they will be left for the account to collect.
-    /// Fractions of tokens are always rounder either up or down depending on the amount
+    /// Fractions of tokens are always rounded either up or down depending on the amount
     /// being split, the receiver's position on the list and the other receivers' weights.
     /// It's valid to include the account's own `accountId` in the list of receivers,
     /// but funds split to themselves return to their splittable balance and are not collectable.

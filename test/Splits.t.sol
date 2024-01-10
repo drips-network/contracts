@@ -100,6 +100,14 @@ contract SplitsTest is Test, Splits {
         Splits._split(usedAccountId, usedErc20, currReceivers);
     }
 
+    function splitResultExternal(
+        uint256 usedAccountId,
+        SplitsReceiver[] memory currReceivers,
+        uint128 amount
+    ) external view {
+        Splits._splitResult(usedAccountId, currReceivers, amount);
+    }
+
     function split(uint256 usedAccountId, uint128 expectedCollectable, uint128 expectedSplit)
         internal
     {
@@ -368,5 +376,11 @@ contract SplitsTest is Test, Splits {
             splitSum += Splits._splittable(receivers[i].accountId, usedErc20);
         }
         assertEq(splitSum, splitAmt, "Invalid split amount");
+    }
+
+    function testSplitResultRevertsIfInvalidCurrSplitsReceivers() public {
+        setSplits(accountId, splitsReceivers(receiver, 1));
+        vm.expectRevert("Invalid current splits receivers");
+        this.splitResultExternal(accountId, splitsReceivers(receiver, 2), 0);
     }
 }

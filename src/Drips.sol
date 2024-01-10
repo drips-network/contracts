@@ -290,7 +290,7 @@ contract Drips is Managed, Streams, Splits {
         (uint256 streamsBalance, uint128 splitsBalance) = balances(erc20);
         uint256 newTotalBalance = streamsBalance + splitsBalance + amt;
         require(newTotalBalance <= MAX_TOTAL_BALANCE, "Total balance too high");
-        require(newTotalBalance <= _tokenBalance(erc20), "Token balance too low");
+        require(newTotalBalance <= erc20.balanceOf(address(this)), "Token balance too low");
     }
 
     /// @notice Transfers withdrawable funds to an address.
@@ -310,14 +310,10 @@ contract Drips is Managed, Streams, Splits {
     /// contract address and the sum of balances managed by the protocol as indicated by `balances`.
     function withdraw(IERC20 erc20, address receiver, uint256 amt) public {
         (uint128 streamsBalance, uint128 splitsBalance) = balances(erc20);
-        uint256 withdrawable = _tokenBalance(erc20) - streamsBalance - splitsBalance;
+        uint256 withdrawable = erc20.balanceOf(address(this)) - streamsBalance - splitsBalance;
         require(amt <= withdrawable, "Withdrawal amount too high");
         emit Withdrawn(erc20, receiver, amt);
         erc20.safeTransfer(receiver, amt);
-    }
-
-    function _tokenBalance(IERC20 erc20) internal view returns (uint256) {
-        return erc20.balanceOf(address(this));
     }
 
     /// @notice Counts cycles from which streams can be collected.
@@ -457,7 +453,7 @@ contract Drips is Managed, Streams, Splits {
     }
 
     /// @notice Calculate the result of splitting an amount using the current splits configuration.
-    /// Fractions of tokens are always rounder either up or down depending on the amount
+    /// Fractions of tokens are always rounded either up or down depending on the amount
     /// being split, the receiver's position on the list and the other receivers' weights.
     /// @param accountId The account ID.
     /// @param currReceivers The list of the account's current splits receivers.
@@ -477,7 +473,7 @@ contract Drips is Managed, Streams, Splits {
 
     /// @notice Splits the account's splittable funds among receivers.
     /// The entire splittable balance of the given ERC-20 token is split.
-    /// Fractions of tokens are always rounder either up or down depending on the amount
+    /// Fractions of tokens are always rounded either up or down depending on the amount
     /// being split, the receiver's position on the list and the other receivers' weights.
     /// All split funds are split using the current splits configuration.
     /// Because the account can update their splits configuration at any time,
@@ -729,7 +725,7 @@ contract Drips is Managed, Streams, Splits {
     /// share of the funds collected by the account.
     /// If the sum of weights of all receivers is less than `_TOTAL_SPLITS_WEIGHT`,
     /// some funds won't be split, but they will be left for the account to collect.
-    /// Fractions of tokens are always rounder either up or down depending on the amount
+    /// Fractions of tokens are always rounded either up or down depending on the amount
     /// being split, the receiver's position on the list and the other receivers' weights.
     /// It's valid to include the account's own `accountId` in the list of receivers,
     /// but funds split to themselves return to their splittable balance and are not collectable.
