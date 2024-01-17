@@ -164,6 +164,17 @@ contract SplitsTest is Test, Splits {
         split(accountId, 4, 6);
     }
 
+    function testSplitTwice() public {
+        // 60% split
+        setSplits(accountId, splitsReceivers(receiver, (Splits._TOTAL_SPLITS_WEIGHT / 10) * 6));
+        // Split for the first time
+        addSplittable(accountId, 5);
+        splitCollect(accountId, 2, 3);
+        // Split for the second time
+        addSplittable(accountId, 10);
+        splitCollect(accountId, 4, 6);
+    }
+
     function testLimitsTheTotalSplitsReceiversCount() public {
         uint256 countMax = Splits._MAX_SPLITS_RECEIVERS;
         SplitsReceiver[] memory receiversGood = new SplitsReceiver[](countMax);
@@ -362,6 +373,7 @@ contract SplitsTest is Test, Splits {
         uint256 receiversLengthRaw,
         uint256 totalWeightRaw
     ) public {
+        amt %= _MAX_SPLITS_BALANCE + 1;
         SplitsReceiver[] memory receivers =
             sanitizeReceivers(receiversRaw, receiversLengthRaw, totalWeightRaw);
         Splits._addSplittable(usedAccountId, usedErc20, amt);

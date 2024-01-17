@@ -25,9 +25,11 @@ abstract contract Splits {
     uint32 internal constant _TOTAL_SPLITS_WEIGHT = 1_000_000;
     /// @notice The amount the contract can keep track of each ERC-20 token.
     // slither-disable-next-line unused-state
-    uint128 internal constant _MAX_SPLITS_BALANCE = type(uint128).max;
+    uint128 internal constant _MAX_SPLITS_BALANCE = _SPLITTABLE_MASK;
     /// @notice The storage slot holding a single `SplitsStorage` structure.
     bytes32 private immutable _splitsStorageSlot;
+    /// @notice The mask for `SplitsBalance.splittable` where the actual value is stored.
+    uint128 private constant _SPLITTABLE_MASK = type(uint128).max >> 1;
 
     /// @notice Emitted when an account collects funds
     /// @param accountId The account ID.
@@ -90,6 +92,8 @@ abstract contract Splits {
 
     struct SplitsBalance {
         /// @notice The not yet split balance, must be split before collecting by the account.
+        /// The bits outside of the `_SPLITTABLE_MASK` mask may be set to `1`
+        /// to keep the storage slot non-zero, so always clear these bits when reading.
         uint128 splittable;
         /// @notice The already split balance, ready to be collected by the account.
         uint128 collectable;
@@ -101,9 +105,11 @@ abstract contract Splits {
     }
 
     function _addSplittable(uint256 accountId, IERC20 erc20, uint128 amt) internal {
-        // This will not overflow if the requirement of tracking in the contract
-        // no more than `_MAX_SPLITS_BALANCE` of each token is followed.
-        _splitsStorage().splitsStates[accountId].balances[erc20].splittable += amt;
+        unchecked {
+            // This will not overflow if the requirement of tracking in the contract
+            // no more than `_MAX_SPLITS_BALANCE` of each token is followed.
+            _splitsStorage().splitsStates[accountId].balances[erc20].splittable += amt;
+        }
     }
 
     /// @notice Returns account's received but not split yet funds.
@@ -111,7 +117,9 @@ abstract contract Splits {
     /// @param erc20 The used ERC-20 token.
     /// @return amt The amount received but not split yet.
     function _splittable(uint256 accountId, IERC20 erc20) internal view returns (uint128 amt) {
-        return _splitsStorage().splitsStates[accountId].balances[erc20].splittable;
+        // Clear the bits outside of the mask
+        return
+            _splitsStorage().splitsStates[accountId].balances[erc20].splittable & _SPLITTABLE_MASK;
     }
 
     /// @notice Calculate the result of splitting an amount using the current splits configuration.
@@ -160,11 +168,14 @@ abstract contract Splits {
         _assertCurrSplits(accountId, currReceivers);
         SplitsBalance storage balance = _splitsStorage().splitsStates[accountId].balances[erc20];
 
-        collectableAmt = balance.splittable;
+        // Clear the bits outside of the mask
+        collectableAmt = balance.splittable & _SPLITTABLE_MASK;
         if (collectableAmt == 0) {
             return (0, 0);
         }
-        balance.splittable = 0;
+        // Set the value of `splittable` to `0`,
+        // and the bits outside of the mask to `1` to keep the storage slot non-zero.
+        balance.splittable = ~_SPLITTABLE_MASK;
 
         unchecked {
             uint256 splitsWeight = 0;
