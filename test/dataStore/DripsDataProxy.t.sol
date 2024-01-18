@@ -105,7 +105,7 @@ contract DripsDataProxyTest is Test {
         vm.prank(driver);
         drips.setStreams(account, erc20, new StreamReceiver[](0), 2, streams, 0, 0);
 
-        uint256 balanceAt = dataProxy.balanceAt(account, erc20, uint32(block.timestamp + 1));
+        uint256 balanceAt = dataProxy.balanceAt(account, erc20, uint32(vm.getBlockTimestamp() + 1));
         assertEq(balanceAt, 1, "Invalid balance");
     }
 

@@ -19,7 +19,7 @@ jobs:
         if: ${{ github.event_name == 'push' }}
         run: echo FOUNDRY_FUZZ_RUNS=50000 >> $GITHUB_ENV
       - name: run tests
-        run: forge test --deny-warnings
+        run: FOUNDRY_PROFILE=optimized forge test --deny-warnings
       - name: run Slither
         uses: crytic/slither-action@v0.3.0
         with:

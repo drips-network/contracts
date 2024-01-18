@@ -85,7 +85,7 @@ ffffffffffffffffffffffffffe0908116603f0116810190838211818310171561059b5761059b61
 }
 
 drips_deployer() {
-    local GET_DEPLOYED="getDeployed(address deployer, bytes32 salt)(address deployed))"
+    local GET_DEPLOYED="getDeployed(address deployer, bytes32 salt)(address deployed)"
     local SALT="$(cast format-bytes32-string "$DRIPS_DEPLOYER_SALT")"
     cast call "$CREATE3_FACTORY" "$GET_DEPLOYED" "$WALLET" "$SALT"
 }
@@ -197,6 +197,8 @@ query() {
 }
 
 main() {
+    export FOUNDRY_PROFILE=optimized
+
     verify_parameter ETH_RPC_URL
     verify_parameter WALLET_ARGS
     verify_parameter DRIPS_DEPLOYER_SALT
@@ -278,8 +280,8 @@ main() {
         esac
     done
 
-    print_title "Installing dependencies"
-    forge install
+    print_title "Building the contracts"
+    forge build --skip test
 
     if [ -n "$DEPLOY_DETERMINISTIC_DEPLOYER" ]; then
         deploy_deterministic_deployer
