@@ -15,16 +15,12 @@ contract DripsDataStore {
     bytes32 public constant EMPTY_HASH = 0;
 
     /// @notice The streams receiver lists storage contract addresses.
-    // slither-disable-next-line naming-convention
     mapping(bytes32 hash => address pointer) internal _streamsPointers;
     /// @notice The splits receiver lists storage contract addresses.
-    // slither-disable-next-line naming-convention
     mapping(bytes32 hash => address pointer) internal _splitsPointers;
     /// @notice The account metadata lists storage contract addresses.
-    // slither-disable-next-line naming-convention
     mapping(bytes32 hash => address pointer) internal _accountMetadataPointers;
     /// @notice The streams history entries lists storage contract addresses.
-    // slither-disable-next-line naming-convention
     mapping(bytes32 hash => address pointer) internal _streamsHistoryPointers;
 
     /// @notice Emitted when a new streams receiver list is stored.

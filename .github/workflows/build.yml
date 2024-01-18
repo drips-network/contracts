@@ -23,4 +23,4 @@ jobs:
       - name: run Slither
         uses: crytic/slither-action@v0.3.0
         with:
-          slither-version: '0.9.5'
+          slither-version: '0.10.0'

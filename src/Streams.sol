@@ -161,10 +161,8 @@ abstract contract Streams {
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
     /// gain access to streams received during `T - cycleSecs` to `T - 1`.
     /// Always higher than 1.
-    // slither-disable-next-line naming-convention
     uint32 internal immutable _cycleSecs;
     /// @notice The minimum amtPerSec of a stream. It's 1 token per cycle.
-    // slither-disable-next-line naming-convention
     uint160 internal immutable _minAmtPerSec;
     /// @notice The storage slot holding a single `StreamsStorage` structure.
     bytes32 private immutable _streamsStorageSlot;
@@ -1098,7 +1096,6 @@ abstract contract Streams {
             } else if (pickNew) {
                 // Create a new stream
                 StreamsState storage state = states[newRecv.accountId];
-                // slither-disable-next-line uninitialized-local
                 (uint32 start, uint32 end) =
                     _streamRangeInFuture(newRecv, _currTimestamp(), newMaxEnd);
                 int256 amtPerSec = int256(uint256(newRecv.config.amtPerSec()));
