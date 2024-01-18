@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.24;
 
 import {DripsDataStore, NFTDriver, NFTDriverDataProxy} from "src/dataStore/NFTDriverDataProxy.sol";
 import {Call, Caller} from "src/Caller.sol";

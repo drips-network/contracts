@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.24;
 
 import {DripsDataStore} from "./DripsDataStore.sol";
 import {Drips, StreamReceiver, IERC20, SplitsReceiver} from "../Drips.sol";
