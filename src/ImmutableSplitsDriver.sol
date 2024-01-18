@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.24;
 
 import {AccountMetadata, Drips, SplitsReceiver} from "./Drips.sol";
 import {Managed} from "./Managed.sol";

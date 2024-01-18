@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.24;
 
 import {Drips, StreamReceiver, IERC20, SafeERC20} from "./Drips.sol";
 import {ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
