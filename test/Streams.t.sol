@@ -68,7 +68,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     }
 
     function skipToCycleEnd() internal {
-        skip(_cycleSecs - (block.timestamp % _cycleSecs));
+        skip(_cycleSecs - (vm.getBlockTimestamp() % _cycleSecs));
     }
 
     function skipTo(uint256 timestamp) internal {
@@ -328,13 +328,13 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
             historyHash,
             "Invalid history hash"
         );
-        assertEq(updateTime, block.timestamp, "Invalid new last update time");
+        assertEq(updateTime, vm.getBlockTimestamp(), "Invalid new last update time");
         assertEq(balanceTo, balance, "Invalid streams balance");
-        assertEq(maxEnd, block.timestamp + expectedMaxEndFromNow, "Invalid max end");
+        assertEq(maxEnd, vm.getBlockTimestamp() + expectedMaxEndFromNow, "Invalid max end");
     }
 
     function maxEndMax() internal view returns (uint32) {
-        return type(uint32).max - uint32(block.timestamp);
+        return type(uint32).max - uint32(vm.getBlockTimestamp());
     }
 
     function assertStreams(uint256 accountId, StreamReceiver[] memory currReceivers) internal {
@@ -344,7 +344,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     }
 
     function assertBalance(uint256 accountId, uint128 expected) internal {
-        assertBalanceAt(accountId, expected, block.timestamp);
+        assertBalanceAt(accountId, expected, vm.getBlockTimestamp());
     }
 
     function assertBalanceAt(uint256 accountId, uint128 expected, uint256 timestamp) internal {
@@ -508,16 +508,15 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         StreamsHistory[] memory streamsHistory,
         uint256 expectedAmt
     ) internal {
-        (uint128 amtBefore,,,,) =
-            Streams._squeezeStreamsResult(accountId, erc20, senderId, historyHash, streamsHistory);
+        uint128 amtBefore =
+            this.squeezeStreamsResultExternal(accountId, senderId, historyHash, streamsHistory);
         assertEq(amtBefore, expectedAmt, "Invalid squeezable amount before squeezing");
 
-        uint128 amt =
-            Streams._squeezeStreams(accountId, erc20, senderId, historyHash, streamsHistory);
+        uint128 amt = this.squeezeStreamsExternal(accountId, senderId, historyHash, streamsHistory);
 
         assertEq(amt, expectedAmt, "Invalid squeezed amount");
-        (uint128 amtAfter,,,,) =
-            Streams._squeezeStreamsResult(accountId, erc20, senderId, historyHash, streamsHistory);
+        uint128 amtAfter =
+            this.squeezeStreamsResultExternal(accountId, senderId, historyHash, streamsHistory);
         assertEq(amtAfter, 0, "Squeezable amount after squeezing non-zero");
     }
 
@@ -539,8 +538,8 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         uint256 senderId,
         bytes32 historyHash,
         StreamsHistory[] memory streamsHistory
-    ) external {
-        Streams._squeezeStreams(accountId, erc20, senderId, historyHash, streamsHistory);
+    ) external returns (uint128 amt) {
+        return Streams._squeezeStreams(accountId, erc20, senderId, historyHash, streamsHistory);
     }
 
     function squeezeStreamsResultExternal(
@@ -548,8 +547,9 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         uint256 senderId,
         bytes32 historyHash,
         StreamsHistory[] memory streamsHistory
-    ) external view {
-        Streams._squeezeStreamsResult(accountId, erc20, senderId, historyHash, streamsHistory);
+    ) external view returns (uint128 amt) {
+        (amt,,,,) =
+            Streams._squeezeStreamsResult(accountId, erc20, senderId, historyHash, streamsHistory);
     }
 
     function testStreamsConfigStoresParameters() public {
@@ -625,7 +625,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     }
 
     function testStreamsWithStartAndDuration() public {
-        setStreams(sender, 0, 10, recv(receiver, 1, block.timestamp + 5, 10), maxEndMax());
+        setStreams(sender, 0, 10, recv(receiver, 1, vm.getBlockTimestamp() + 5, 10), maxEndMax());
         skip(5);
         assertBalance(sender, 10);
         skip(10);
@@ -635,7 +635,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     }
 
     function testStreamsWithStartAndDurationWithInsufficientBalance() public {
-        setStreams(sender, 0, 1, recv(receiver, 1, block.timestamp + 1, 2), 2);
+        setStreams(sender, 0, 1, recv(receiver, 1, vm.getBlockTimestamp() + 1, 2), 2);
         skip(1);
         assertBalance(sender, 1);
         skip(1);
@@ -661,7 +661,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     }
 
     function testStreamsWithOnlyStart() public {
-        setStreams(sender, 0, 10, recv(receiver, 1, block.timestamp + 5, 0), 15);
+        setStreams(sender, 0, 10, recv(receiver, 1, vm.getBlockTimestamp() + 5, 0), 15);
         skip(5);
         assertBalance(sender, 10);
         skip(10);
@@ -677,9 +677,9 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
             0,
             39,
             recv(
-                recv(receiver1, 1, block.timestamp + 5, 0),
+                recv(receiver1, 1, vm.getBlockTimestamp() + 5, 0),
                 recv(receiver2, 2, 0, 0),
-                recv(receiver3, 3, block.timestamp + 3, 0)
+                recv(receiver3, 3, vm.getBlockTimestamp() + 3, 0)
             ),
             8
         );
@@ -698,8 +698,8 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
             0,
             28,
             recv(
-                recv(receiver, 1, block.timestamp + 5, 10),
-                recv(receiver, 2, block.timestamp + 10, 9)
+                recv(receiver, 1, vm.getBlockTimestamp() + 5, 10),
+                recv(receiver, 2, vm.getBlockTimestamp() + 10, 9)
             ),
             maxEndMax()
         );
@@ -717,8 +717,8 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
             recv(
                 recv(receiver1, 1, 0, 0),
                 recv(receiver2, 2, 0, 4),
-                recv(receiver3, 3, block.timestamp + 2, 0),
-                recv(receiver4, 4, block.timestamp + 3, 5)
+                recv(receiver3, 3, vm.getBlockTimestamp() + 2, 0),
+                recv(receiver4, 4, vm.getBlockTimestamp() + 3, 5)
             ),
             10
         );
@@ -732,7 +732,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
 
     function testStreamsWithStartInThePast() public {
         skip(5);
-        setStreams(sender, 0, 3, recv(receiver, 1, block.timestamp - 5, 0), 3);
+        setStreams(sender, 0, 3, recv(receiver, 1, vm.getBlockTimestamp() - 5, 0), 3);
         skip(3);
         assertBalance(sender, 0);
         skipToCycleEnd();
@@ -741,7 +741,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
 
     function testStreamsWithStartInThePastAndDurationIntoFuture() public {
         skip(5);
-        setStreams(sender, 0, 3, recv(receiver, 1, block.timestamp - 5, 8), maxEndMax());
+        setStreams(sender, 0, 3, recv(receiver, 1, vm.getBlockTimestamp() - 5, 8), maxEndMax());
         skip(3);
         assertBalance(sender, 0);
         skipToCycleEnd();
@@ -750,14 +750,18 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
 
     function testStreamsWithStartAndDurationInThePast() public {
         skip(5);
-        setStreams(sender, 0, 1, recv(receiver, 1, block.timestamp - 5, 3), 0);
+        setStreams(sender, 0, 1, recv(receiver, 1, vm.getBlockTimestamp() - 5, 3), 0);
         skipToCycleEnd();
         receiveStreams(receiver, 0);
     }
 
     function testStreamsWithStartAfterFundsRunOut() public {
         setStreams(
-            sender, 0, 4, recv(recv(receiver1, 1), recv(receiver2, 2, block.timestamp + 5, 0)), 4
+            sender,
+            0,
+            4,
+            recv(recv(receiver1, 1), recv(receiver2, 2, vm.getBlockTimestamp() + 5, 0)),
+            4
         );
         skip(6);
         skipToCycleEnd();
@@ -766,7 +770,9 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     }
 
     function testStreamsWithStartInTheFutureCycleCanBeMovedToAnEarlierOne() public {
-        setStreams(sender, 0, 1, recv(receiver, 1, block.timestamp + _cycleSecs, 0), _cycleSecs + 1);
+        setStreams(
+            sender, 0, 1, recv(receiver, 1, vm.getBlockTimestamp() + _cycleSecs, 0), _cycleSecs + 1
+        );
         setStreams(sender, 1, 1, recv(receiver, 1), 1);
         skipToCycleEnd();
         receiveStreams(receiver, 1);
@@ -780,8 +786,8 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
             0,
             7,
             recv(
-                recv(receiver1, 2, block.timestamp + 2, 0),
-                recv(receiver2, 1, block.timestamp + 1, 0)
+                recv(receiver1, 2, vm.getBlockTimestamp() + 2, 0),
+                recv(receiver2, 1, vm.getBlockTimestamp() + 1, 0)
             ),
             4
         );
@@ -801,7 +807,11 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         skip(_cycleSecs / 2);
         // Streaming starts in 2 cycles
         setStreams(
-            sender, 0, 1, recv(receiver, 1, block.timestamp + _cycleSecs * 2, 0), _cycleSecs * 2 + 1
+            sender,
+            0,
+            1,
+            recv(receiver, 1, vm.getBlockTimestamp() + _cycleSecs * 2, 0),
+            _cycleSecs * 2 + 1
         );
         // The first cycle hasn't been streaming
         skipToCycleEnd();
@@ -820,7 +830,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     function testFirstCollectableCycleCanBeMovedEarlier() public {
         // Streaming start in the next cycle
         setStreams(
-            sender1, 0, 1, recv(receiver, 1, block.timestamp + _cycleSecs, 0), _cycleSecs + 1
+            sender1, 0, 1, recv(receiver, 1, vm.getBlockTimestamp() + _cycleSecs, 0), _cycleSecs + 1
         );
         // Streaming start in the current cycle
         setStreams(sender2, 0, 2, recv(receiver, 2), 1);
@@ -891,7 +901,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
             sender,
             0,
             amt,
-            recv(receiver, amtPerSec, block.timestamp + _cycleSecs - secs, 0),
+            recv(receiver, amtPerSec, vm.getBlockTimestamp() + _cycleSecs - secs, 0),
             _cycleSecs + 2
         );
         skipToCycleEnd();
@@ -963,7 +973,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
 
     function testAllowsStreamingWithDurationEndingAfterMaxTimestamp() public {
         uint32 maxTimestamp = type(uint32).max;
-        uint32 currTimestamp = uint32(block.timestamp);
+        uint32 currTimestamp = uint32(vm.getBlockTimestamp());
         uint32 maxDuration = maxTimestamp - currTimestamp;
         uint32 duration = maxDuration + 5;
         setStreams(sender, 0, duration, recv(receiver, 1, 0, duration), maxEndMax());
@@ -1072,12 +1082,12 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         // Rate of 0.25 per second
         // Full units are streamed on cycle timestamps 3 and 7
         setStreams(sender, 0, 3, recv(receiver, 0, Streams._AMT_PER_SEC_MULTIPLIER / 4 + 1), 17);
-        assertBalanceAt(sender, 3, block.timestamp + 3);
-        assertBalanceAt(sender, 2, block.timestamp + 4);
-        assertBalanceAt(sender, 2, block.timestamp + 7);
-        assertBalanceAt(sender, 1, block.timestamp + 8);
-        assertBalanceAt(sender, 1, block.timestamp + 13);
-        assertBalanceAt(sender, 0, block.timestamp + 14);
+        assertBalanceAt(sender, 3, vm.getBlockTimestamp() + 3);
+        assertBalanceAt(sender, 2, vm.getBlockTimestamp() + 4);
+        assertBalanceAt(sender, 2, vm.getBlockTimestamp() + 7);
+        assertBalanceAt(sender, 1, vm.getBlockTimestamp() + 8);
+        assertBalanceAt(sender, 1, vm.getBlockTimestamp() + 13);
+        assertBalanceAt(sender, 0, vm.getBlockTimestamp() + 14);
     }
 
     function testFractionsAreAppliedRegardlessOfStartTime() public {
@@ -1086,8 +1096,8 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         // Rate of 0.4 per second
         // Full units are streamed on cycle timestamps 3, 5 and 8
         setStreams(sender, 0, 1, recv(receiver, 0, Streams._AMT_PER_SEC_MULTIPLIER / 10 * 4 + 1), 4);
-        assertBalanceAt(sender, 1, block.timestamp + 1);
-        assertBalanceAt(sender, 0, block.timestamp + 2);
+        assertBalanceAt(sender, 1, vm.getBlockTimestamp() + 1);
+        assertBalanceAt(sender, 0, vm.getBlockTimestamp() + 2);
     }
 
     function testStreamsWithFractionsCanBeSeamlesslyToppedUp() public {
@@ -1124,13 +1134,13 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         );
         // Full units are streamed by 0.25 on cycle timestamps 3 and 7, 0.33 on 3, 6 and 9
         assertBalance(sender, 5);
-        assertBalanceAt(sender, 5, block.timestamp + 3);
-        assertBalanceAt(sender, 3, block.timestamp + 4);
-        assertBalanceAt(sender, 3, block.timestamp + 6);
-        assertBalanceAt(sender, 2, block.timestamp + 7);
-        assertBalanceAt(sender, 1, block.timestamp + 8);
-        assertBalanceAt(sender, 1, block.timestamp + 9);
-        assertBalanceAt(sender, 0, block.timestamp + 10);
+        assertBalanceAt(sender, 5, vm.getBlockTimestamp() + 3);
+        assertBalanceAt(sender, 3, vm.getBlockTimestamp() + 4);
+        assertBalanceAt(sender, 3, vm.getBlockTimestamp() + 6);
+        assertBalanceAt(sender, 2, vm.getBlockTimestamp() + 7);
+        assertBalanceAt(sender, 1, vm.getBlockTimestamp() + 8);
+        assertBalanceAt(sender, 1, vm.getBlockTimestamp() + 9);
+        assertBalanceAt(sender, 0, vm.getBlockTimestamp() + 10);
         skipToCycleEnd();
         assertBalance(sender, 0);
         receiveStreams(receiver1, 2);
@@ -1180,7 +1190,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
 
     function testBenchSetStreams() public {
         initSeed(0);
-        uint32 wrongHint1 = uint32(block.timestamp) + 1;
+        uint32 wrongHint1 = uint32(vm.getBlockTimestamp()) + 1;
         uint32 wrongHint2 = wrongHint1 + 1;
 
         uint32 worstEnd = type(uint32).max - 2;
@@ -1210,7 +1220,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         benchSetStreams("worst 1 wrong hint       ", 1, worstEnd, wrongHint1, wrongHint2);
         emit log_string("-----------------------------------------------");
 
-        uint32 monthEnd = uint32(block.timestamp) + 30 days;
+        uint32 monthEnd = uint32(vm.getBlockTimestamp()) + 30 days;
         uint32 monthHint = monthEnd + 1;
         uint32 monthHintPerfect = monthEnd;
         uint32 monthHint1Minute = monthEnd - 1 minutes;
@@ -1249,7 +1259,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         for (uint256 i = 0; i < count; i++) {
             receivers[i] = recv(senderId + 1 + i, 1, 0, 0)[0];
         }
-        int128 amt = int128(int256((maxEnd - block.timestamp) * count));
+        int128 amt = int128(int256((maxEnd - vm.getBlockTimestamp()) * count));
         uint256 gas = gasleft();
         Streams._setStreams(senderId, erc20, recv(), amt, receivers, maxEndHint1, maxEndHint2);
         gas -= gasleft();
@@ -1460,26 +1470,26 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     function testBalanceAtReturnsCurrentBalance() public {
         setStreams(sender, 0, 10, recv(receiver, 1), 10);
         skip(2);
-        assertBalanceAt(sender, 8, block.timestamp);
+        assertBalanceAt(sender, 8, vm.getBlockTimestamp());
     }
 
     function testBalanceAtReturnsFutureBalance() public {
         setStreams(sender, 0, 10, recv(receiver, 1), 10);
         skip(2);
-        assertBalanceAt(sender, 6, block.timestamp + 2);
+        assertBalanceAt(sender, 6, vm.getBlockTimestamp() + 2);
     }
 
     function testBalanceAtReturnsPastBalanceAfterSetDelta() public {
         setStreams(sender, 0, 10, recv(receiver, 1), 10);
         skip(2);
-        assertBalanceAt(sender, 10, block.timestamp - 2);
+        assertBalanceAt(sender, 10, vm.getBlockTimestamp() - 2);
     }
 
     function testBalanceAtRevertsForTimestampBeforeSetDelta() public {
         StreamReceiver[] memory receivers = recv(receiver, 1);
         setStreams(sender, 0, 10, receivers, 10);
         skip(2);
-        assertBalanceAtReverts(sender, receivers, block.timestamp - 3, ERROR_TIMESTAMP_EARLY);
+        assertBalanceAtReverts(sender, receivers, vm.getBlockTimestamp() - 3, ERROR_TIMESTAMP_EARLY);
     }
 
     function testBalanceAtRevertsForInvalidStreamsList() public {
@@ -1487,7 +1497,9 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         setStreams(sender, 0, 10, receivers, 10);
         skip(2);
         receivers = recv(receiver, 2);
-        assertBalanceAtReverts(sender, receivers, block.timestamp, ERROR_INVALID_STREAMS_LIST);
+        assertBalanceAtReverts(
+            sender, receivers, vm.getBlockTimestamp(), ERROR_INVALID_STREAMS_LIST
+        );
     }
 
     function testFuzzStreamReceivers(bytes32 seed) public {
@@ -1504,7 +1516,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
 
         StreamReceiver[] memory receivers =
             genRandomRecv(amountReceivers, maxAmtPerSec, maxStart, maxDuration);
-        emit log_named_uint("setStreams.updateTime", block.timestamp);
+        emit log_named_uint("setStreams.updateTime", vm.getBlockTimestamp());
         Streams._setStreams(sender, erc20, recv(), int128(maxCosts), receivers, 0, 0);
 
         (,, uint32 updateTime,, uint32 maxEnd) = Streams._streamsState(sender, erc20);
@@ -1515,7 +1527,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
 
         skip(maxAllStreamsFinished);
         skipToCycleEnd();
-        emit log_named_uint("receiveStreams.time", block.timestamp);
+        emit log_named_uint("receiveStreams.time", vm.getBlockTimestamp());
         receiveStreams(receivers, maxEnd, updateTime);
     }
 
@@ -1857,7 +1869,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
 
     function testFundsFromBeforeStreamingStartedAreNotSqueezed() public {
         skip(1);
-        setStreams(sender, 0, 10, recv(receiver, 1, block.timestamp - 1, 0), 10);
+        setStreams(sender, 0, 10, recv(receiver, 1, vm.getBlockTimestamp() - 1, 0), 10);
         squeezeStreams(receiver, sender, hist(sender), 0);
         skip(2);
         drainBalance(sender, 8);
@@ -1893,7 +1905,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     }
 
     function testStreamsWithStartAndDurationCanBeSqueezed() public {
-        setStreams(sender, 0, 10, recv(receiver, 1, block.timestamp + 2, 2), maxEndMax());
+        setStreams(sender, 0, 10, recv(receiver, 1, vm.getBlockTimestamp() + 2, 2), maxEndMax());
         skip(5);
         squeezeStreams(receiver, sender, hist(sender), 2);
         skipToCycleEnd();
