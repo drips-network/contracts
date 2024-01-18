@@ -44,10 +44,8 @@ contract GiversRegistry is Managed {
     /// @notice The driver to use to `give`.
     AddressDriver public immutable addressDriver;
     /// @notice The `Drips` contract used by `addressDriver`.
-    // slither-disable-next-line naming-convention
     Drips internal immutable _drips;
     /// @notice The maximum balance of each token that Drips can hold.
-    // slither-disable-next-line naming-convention
     uint128 internal immutable _maxTotalBalance;
 
     /// @param addressDriver_ The driver to use to `give`.

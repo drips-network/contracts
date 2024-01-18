@@ -18,7 +18,6 @@ struct Module {
 }
 
 contract DripsDeployer is Ownable2Step {
-    // slither-disable-next-line naming-convention
     bytes32[] internal _moduleSalts;
     address public immutable initialOwner;
 
@@ -133,7 +132,6 @@ abstract contract ProxyDeployerModule is BaseModule {
 }
 
 abstract contract DripsDependentModule is BaseModule {
-    // slither-disable-next-line naming-convention
     bytes32 internal immutable _dripsModuleSalt = "Drips";
 
     function _dripsModule() internal view returns (DripsModule) {
@@ -181,7 +179,6 @@ contract DripsModule is DripsDependentModule, ProxyDeployerModule {
 }
 
 abstract contract CallerDependentModule is BaseModule {
-    // slither-disable-next-line naming-convention
     bytes32 internal immutable _callerModuleSalt = "Caller";
 
     function _callerModule() internal view returns (CallerModule) {

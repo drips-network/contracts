@@ -86,7 +86,6 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     bytes32 internal immutable callSignedTypeHash = keccak256(bytes(CALL_SIGNED_TYPE_NAME));
 
     /// @notice Each sender's set of address authorized to make calls on its behalf.
-    // slither-disable-next-line naming-convention
     mapping(address sender => AddressSetClearable) internal _authorized;
     /// @notice The nonce which needs to be used in the next EIP-712 message signed by the address.
     mapping(address sender => uint256) public nonce;
