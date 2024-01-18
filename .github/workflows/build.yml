@@ -19,7 +19,11 @@ jobs:
         if: ${{ github.event_name == 'push' }}
         run: echo FOUNDRY_FUZZ_RUNS=50000 >> $GITHUB_ENV
       - name: run tests
-        run: forge test --deny-warnings
+        run: |
+          export FOUNDRY_PROFILE=optimized
+          # A workaround for https://github.com/ethereum/solidity/issues/14878
+          forge build --skip test --sizes --deny-warnings
+          forge test
       - name: run Slither
         uses: crytic/slither-action@v0.3.0
         with:

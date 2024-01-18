@@ -132,10 +132,10 @@ abstract contract ProxyDeployerModule is BaseModule {
 }
 
 abstract contract DripsDependentModule is BaseModule {
-    bytes32 internal immutable _dripsModuleSalt = "Drips";
+    bytes32 internal constant _DRIPS_MODULE_SALT = "Drips";
 
     function _dripsModule() internal view returns (DripsModule) {
-        address module = _moduleAddress(_dripsModuleSalt);
+        address module = _moduleAddress(_DRIPS_MODULE_SALT);
         require(Address.isContract(module), "Drips module not deployed");
         return DripsModule(module);
     }
@@ -150,7 +150,7 @@ contract DripsModule is DripsDependentModule, ProxyDeployerModule {
     }
 
     constructor(DripsDeployer dripsDeployer_, uint32 dripsCycleSecs_, address proxyAdmin_)
-        BaseModule(dripsDeployer_, _dripsModuleSalt)
+        BaseModule(dripsDeployer_, _DRIPS_MODULE_SALT)
     {
         dripsCycleSecs = dripsCycleSecs_;
         // slither-disable-next-line too-many-digits
@@ -179,10 +179,10 @@ contract DripsModule is DripsDependentModule, ProxyDeployerModule {
 }
 
 abstract contract CallerDependentModule is BaseModule {
-    bytes32 internal immutable _callerModuleSalt = "Caller";
+    bytes32 internal constant _CALLER_MODULE_SALT = "Caller";
 
     function _callerModule() internal view returns (CallerModule) {
-        address module = _moduleAddress(_callerModuleSalt);
+        address module = _moduleAddress(_CALLER_MODULE_SALT);
         require(Address.isContract(module), "Caller module not deployed");
         return CallerModule(module);
     }
@@ -193,7 +193,7 @@ contract CallerModule is ContractDeployerModule, CallerDependentModule {
         return abi.encode(dripsDeployer);
     }
 
-    constructor(DripsDeployer dripsDeployer_) BaseModule(dripsDeployer_, _callerModuleSalt) {
+    constructor(DripsDeployer dripsDeployer_) BaseModule(dripsDeployer_, _CALLER_MODULE_SALT) {
         // slither-disable-next-line too-many-digits
         _deployContract(type(Caller).creationCode);
     }

@@ -56,8 +56,8 @@ contract CallerTest is Test {
 
     function testCallSignedRejectsExpiredDeadline() public {
         bytes memory data = abi.encodeCall(target.run, (1));
-        uint256 deadline = block.timestamp;
         skip(1);
+        uint256 deadline = block.timestamp - 1;
         (bytes32 r, bytes32 sv) = signCall(senderKey, target, data, 0, 0, deadline);
 
         vm.expectRevert(ERROR_DEADLINE);

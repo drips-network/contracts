@@ -79,6 +79,8 @@ verify_single() {
 }
 
 main() {
+    export FOUNDRY_PROFILE=optimized
+
     if [ -z "$1" ]; then
         echo "Error: expected 1 argument, the DripsDeployer address, see README.md"
         exit 1
