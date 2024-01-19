@@ -68,7 +68,7 @@ contract GiversRegistry is Managed {
     }
 
     /// @notice Initialize this instance of the contract.
-    function initialize() public {
+    function initialize() public onlyProxy {
         if (!Address.isContract(_giverLogic(address(this)))) new Giver();
     }
 
@@ -77,7 +77,7 @@ contract GiversRegistry is Managed {
     /// to its address will be `give`n when `give` is called.
     /// @param accountId The ID of the account to which the `Giver` is assigned.
     /// @return giver_ The address of the `Giver`.
-    function giver(uint256 accountId) public view returns (address giver_) {
+    function giver(uint256 accountId) public view onlyProxy returns (address giver_) {
         return _giver(accountId, address(this));
     }
 
@@ -106,7 +106,7 @@ contract GiversRegistry is Managed {
     /// If it's the zero address, `Giver` wraps all the native tokens it holds using
     /// `nativeTokenWrapper`, and then `give`s to the account all the wrapped tokens it holds.
     /// @param amt The amount of tokens that were `give`n.
-    function give(uint256 accountId, IERC20 erc20) public returns (uint256 amt) {
+    function give(uint256 accountId, IERC20 erc20) public onlyProxy returns (uint256 amt) {
         address giver_ = giver(accountId);
         if (!Address.isContract(giver_)) {
             // slither-disable-next-line unused-return

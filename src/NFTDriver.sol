@@ -8,6 +8,7 @@ import {DriverTransferUtils, ERC2771Context} from "./DriverTransferUtils.sol";
 import {Managed} from "./Managed.sol";
 import {
     Context,
+    ERC165,
     ERC721,
     ERC721Burnable,
     IERC721,
@@ -58,7 +59,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     /// Every token ID is a 256-bit integer constructed by concatenating:
     /// `driverId (32 bits) | zeros (160 bits) | mintedTokensCounter (64 bits)`.
     /// @return tokenId The token ID. It's equal to the account ID controlled by it.
-    function nextTokenId() public view returns (uint256 tokenId) {
+    function nextTokenId() public view onlyProxy returns (uint256 tokenId) {
         return calcTokenIdWithSalt(address(0), _nftDriverStorage().mintedTokens);
     }
 
@@ -71,6 +72,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     function calcTokenIdWithSalt(address minter, uint64 salt)
         public
         view
+        onlyProxy
         returns (uint256 tokenId)
     {
         // By assignment we get `tokenId` value:
@@ -93,7 +95,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     /// @param minter The minter of the token.
     /// @param salt The salt used for minting the token.
     /// @return isUsed True if the salt has been used, false otherwise.
-    function isSaltUsed(address minter, uint64 salt) public view returns (bool isUsed) {
+    function isSaltUsed(address minter, uint64 salt) public view onlyProxy returns (bool isUsed) {
         return _nftDriverStorage().isSaltUsed[minter][salt];
     }
 
@@ -107,6 +109,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     /// @return tokenId The minted token ID. It's equal to the account ID controlled by it.
     function mint(address to, AccountMetadata[] calldata accountMetadata)
         public
+        onlyProxy
         returns (uint256 tokenId)
     {
         tokenId = _registerTokenId();
@@ -124,6 +127,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     /// @return tokenId The minted token ID. It's equal to the account ID controlled by it.
     function safeMint(address to, AccountMetadata[] calldata accountMetadata)
         public
+        onlyProxy
         returns (uint256 tokenId)
     {
         tokenId = _registerTokenId();
@@ -151,6 +155,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     /// The ID is calculated using `calcTokenIdWithSalt` for the caller's address and the used salt.
     function mintWithSalt(uint64 salt, address to, AccountMetadata[] calldata accountMetadata)
         public
+        onlyProxy
         returns (uint256 tokenId)
     {
         tokenId = _registerTokenIdWithSalt(salt);
@@ -171,6 +176,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     /// The ID is calculated using `calcTokenIdWithSalt` for the caller's address and the used salt.
     function safeMintWithSalt(uint64 salt, address to, AccountMetadata[] calldata accountMetadata)
         public
+        onlyProxy
         returns (uint256 tokenId)
     {
         tokenId = _registerTokenIdWithSalt(salt);
@@ -203,6 +209,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     /// @return amt The collected amount
     function collect(uint256 tokenId, IERC20 erc20, address transferTo)
         public
+        onlyProxy
         onlyApprovedOrOwner(tokenId)
         returns (uint128 amt)
     {
@@ -225,6 +232,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     /// @param amt The given amount
     function give(uint256 tokenId, uint256 receiver, IERC20 erc20, uint128 amt)
         public
+        onlyProxy
         onlyApprovedOrOwner(tokenId)
     {
         _giveAndTransfer(drips, tokenId, receiver, erc20, amt);
@@ -291,7 +299,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
         uint32 maxEndHint1,
         uint32 maxEndHint2,
         address transferTo
-    ) public onlyApprovedOrOwner(tokenId) returns (int128 realBalanceDelta) {
+    ) public onlyProxy onlyApprovedOrOwner(tokenId) returns (int128 realBalanceDelta) {
         return _setStreamsAndTransfer(
             drips,
             tokenId,
@@ -329,6 +337,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     /// Splitting 100% to self effectively blocks splitting unless the configuration is updated.
     function setSplits(uint256 tokenId, SplitsReceiver[] calldata receivers)
         public
+        onlyProxy
         onlyApprovedOrOwner(tokenId)
     {
         drips.setSplits(tokenId, receivers);
@@ -343,6 +352,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     /// @param accountMetadata The list of account metadata.
     function emitAccountMetadata(uint256 tokenId, AccountMetadata[] calldata accountMetadata)
         public
+        onlyProxy
         onlyApprovedOrOwner(tokenId)
     {
         _emitAccountMetadata(tokenId, accountMetadata);
@@ -362,6 +372,16 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
         }
     }
 
+    /// @inheritdoc IERC721
+    function balanceOf(address owner) public view override onlyProxy returns (uint256) {
+        return super.balanceOf(owner);
+    }
+
+    /// @inheritdoc IERC721
+    function ownerOf(uint256 tokenId) public view override onlyProxy returns (address) {
+        return super.ownerOf(tokenId);
+    }
+
     /// @inheritdoc IERC721Metadata
     function name() public pure override returns (string memory) {
         return "Drips identity";
@@ -372,18 +392,48 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
         return "DHI";
     }
 
-    /// @inheritdoc ERC721Burnable
-    function burn(uint256 tokenId) public override {
-        super.burn(tokenId);
+    /// @inheritdoc IERC721Metadata
+    function tokenURI(uint256 tokenId) public view override onlyProxy returns (string memory) {
+        return super.tokenURI(tokenId);
     }
 
     /// @inheritdoc IERC721
-    function approve(address to, uint256 tokenId) public override {
+    function approve(address to, uint256 tokenId) public override onlyProxy {
         super.approve(to, tokenId);
     }
 
     /// @inheritdoc IERC721
-    function safeTransferFrom(address from, address to, uint256 tokenId) public override {
+    function getApproved(uint256 tokenId) public view override onlyProxy returns (address) {
+        return super.getApproved(tokenId);
+    }
+
+    /// @inheritdoc IERC721
+    function setApprovalForAll(address operator, bool approved) public override onlyProxy {
+        super.setApprovalForAll(operator, approved);
+    }
+
+    /// @inheritdoc IERC721
+    function isApprovedForAll(address owner, address operator)
+        public
+        view
+        override
+        onlyProxy
+        returns (bool)
+    {
+        return super.isApprovedForAll(owner, operator);
+    }
+
+    /// @inheritdoc IERC721
+    function transferFrom(address from, address to, uint256 tokenId) public override onlyProxy {
+        super.transferFrom(from, to, tokenId);
+    }
+
+    /// @inheritdoc IERC721
+    function safeTransferFrom(address from, address to, uint256 tokenId)
+        public
+        override
+        onlyProxy
+    {
         super.safeTransferFrom(from, to, tokenId);
     }
 
@@ -391,18 +441,14 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     function safeTransferFrom(address from, address to, uint256 tokenId, bytes memory data)
         public
         override
+        onlyProxy
     {
         super.safeTransferFrom(from, to, tokenId, data);
     }
 
-    /// @inheritdoc IERC721
-    function setApprovalForAll(address operator, bool approved) public override {
-        super.setApprovalForAll(operator, approved);
-    }
-
-    /// @inheritdoc IERC721
-    function transferFrom(address from, address to, uint256 tokenId) public override {
-        super.transferFrom(from, to, tokenId);
+    /// @inheritdoc ERC721Burnable
+    function burn(uint256 tokenId) public override onlyProxy {
+        super.burn(tokenId);
     }
 
     // Workaround for https://github.com/ethereum/solidity/issues/12554

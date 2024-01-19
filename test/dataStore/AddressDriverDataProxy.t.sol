@@ -150,4 +150,21 @@ contract AddressDriverDataProxyTest is Test {
         });
         caller.callBatched(calls);
     }
+
+    function notDelegatedReverts() internal returns (AddressDriverDataProxy dataProxy_) {
+        dataProxy_ = AddressDriverDataProxy(dataProxy.implementation());
+        vm.expectRevert("Function must be called through delegatecall");
+    }
+
+    function testSetStreamsMustBeDelegated() public {
+        notDelegatedReverts().setStreams(erc20, 0, 0, 0, 0, user);
+    }
+
+    function testSetSplitsMustBeDelegated() public {
+        notDelegatedReverts().setSplits(0);
+    }
+
+    function testEmitAccountMetadataMustBeDelegated() public {
+        notDelegatedReverts().emitAccountMetadata(0);
+    }
 }

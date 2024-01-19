@@ -107,4 +107,17 @@ contract DripsDataProxyTest is Test {
         uint256 balanceAt = dataProxy.balanceAt(account, erc20, uint32(vm.getBlockTimestamp() + 1));
         assertEq(balanceAt, 1, "Invalid balance");
     }
+
+    function notDelegatedReverts() internal returns (DripsDataProxy dataProxy_) {
+        dataProxy_ = DripsDataProxy(dataProxy.implementation());
+        vm.expectRevert("Function must be called through delegatecall");
+    }
+
+    function testSqueezeStreamsMustBeDelegated() public {
+        notDelegatedReverts().squeezeStreams(account, erc20, account, 0, 0);
+    }
+
+    function testSplitMustBeDelegated() public {
+        notDelegatedReverts().split(account, erc20);
+    }
 }

@@ -168,4 +168,35 @@ contract AddressDriverTest is Test {
 
         assertEq(drips.splittable(accountId, erc20), amt, "Invalid splittable after give");
     }
+
+    function notDelegatedReverts() internal returns (AddressDriver driver_) {
+        driver_ = AddressDriver(driver.implementation());
+        vm.expectRevert("Function must be called through delegatecall");
+    }
+
+    function testCalcAccountIdMustBeDelegated() public {
+        notDelegatedReverts().calcAccountId(user);
+    }
+
+    function testCollectMustBeDelegated() public {
+        notDelegatedReverts().collect(erc20, user);
+    }
+
+    function testGiveMustBeDelegated() public {
+        notDelegatedReverts().give(accountId, erc20, 0);
+    }
+
+    function testSetStreamsMustBeDelegated() public {
+        notDelegatedReverts().setStreams(
+            erc20, new StreamReceiver[](0), 0, new StreamReceiver[](0), 0, 0, user
+        );
+    }
+
+    function testSetSplitsMustBeDelegated() public {
+        notDelegatedReverts().setSplits(new SplitsReceiver[](0));
+    }
+
+    function testEmitAccountMetadataMustBeDelegated() public {
+        notDelegatedReverts().emitAccountMetadata(new AccountMetadata[](0));
+    }
 }

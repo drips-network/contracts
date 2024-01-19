@@ -717,4 +717,101 @@ contract DripsTest is Test {
 
         withdraw(1);
     }
+
+    function notDelegatedReverts() internal returns (Drips drips_) {
+        drips_ = Drips(drips.implementation());
+        vm.expectRevert("Function must be called through delegatecall");
+    }
+
+    function testRegisterDriverMustBeDelegated() public {
+        notDelegatedReverts().registerDriver(address(0x1234));
+    }
+
+    function testDriverAddressMustBeDelegated() public {
+        notDelegatedReverts().driverAddress(0);
+    }
+
+    function testUpdateDriverAddressMustBeDelegated() public {
+        notDelegatedReverts().updateDriverAddress(driverId, address(0x1234));
+    }
+
+    function testNextDriverIdMustBeDelegated() public {
+        notDelegatedReverts().nextDriverId();
+    }
+
+    function testBalancesMustBeDelegated() public {
+        notDelegatedReverts().balances(erc20);
+    }
+
+    function testWithdrawMustBeDelegated() public {
+        notDelegatedReverts().withdraw(erc20, address(0x1234), 0);
+    }
+
+    function testReceivableStreamsCyclesMustBeDelegated() public {
+        notDelegatedReverts().receivableStreamsCycles(accountId, erc20);
+    }
+
+    function testReceiveStreamsResultMustBeDelegated() public {
+        notDelegatedReverts().receiveStreams(accountId, erc20, 0);
+    }
+
+    function testReceiveStreamsMustBeDelegated() public {
+        notDelegatedReverts().receiveStreams(accountId, erc20, 0);
+    }
+
+    function testSqueezeStreamsMustBeDelegated() public {
+        notDelegatedReverts().squeezeStreams(0, erc20, accountId, 0, new StreamsHistory[](0));
+    }
+
+    function testSqueezeStreamsResultMustBeDelegated() public {
+        notDelegatedReverts().squeezeStreamsResult(0, erc20, accountId, 0, new StreamsHistory[](0));
+    }
+
+    function testSplittableMustBeDelegated() public {
+        notDelegatedReverts().splittable(accountId, erc20);
+    }
+
+    function testSplitResultMustBeDelegated() public {
+        notDelegatedReverts().splitResult(accountId, splitsReceivers(), 0);
+    }
+
+    function testSplitMustBeDelegated() public {
+        notDelegatedReverts().split(accountId, erc20, splitsReceivers());
+    }
+
+    function testCollectableMustBeDelegated() public {
+        notDelegatedReverts().collectable(accountId, erc20);
+    }
+
+    function testCollectMustBeDelegated() public {
+        notDelegatedReverts().collect(accountId, erc20);
+    }
+
+    function testGiveMustBeDelegated() public {
+        notDelegatedReverts().give(accountId, 0, erc20, 1);
+    }
+
+    function testStreamsStateMustBeDelegated() public {
+        notDelegatedReverts().streamsState(accountId, erc20);
+    }
+
+    function testBalanceAtMustBeDelegated() public {
+        notDelegatedReverts().balanceAt(accountId, erc20, streamsReceivers(), 0);
+    }
+
+    function testSetStreamsMustBeDelegated() public {
+        notDelegatedReverts().setStreams(0, erc20, streamsReceivers(), 0, streamsReceivers(), 0, 0);
+    }
+
+    function testSetSplitsMustBeDelegated() public {
+        notDelegatedReverts().setSplits(accountId, splitsReceivers());
+    }
+
+    function testSplitsHashMustBeDelegated() public {
+        notDelegatedReverts().splitsHash(accountId);
+    }
+
+    function testEmitAccountMetadataMustBeDelegated() public {
+        notDelegatedReverts().emitAccountMetadata(accountId, new AccountMetadata[](0));
+    }
 }

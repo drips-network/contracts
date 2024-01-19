@@ -28,7 +28,7 @@ contract AddressDriver is DriverTransferUtils, Managed {
     /// `driverId (32 bits) | zeros (64 bits) | addr (160 bits)`.
     /// @param addr The address
     /// @return accountId The account ID
-    function calcAccountId(address addr) public view returns (uint256 accountId) {
+    function calcAccountId(address addr) public view onlyProxy returns (uint256 accountId) {
         // By assignment we get `accountId` value:
         // `zeros (224 bits) | driverId (32 bits)`
         accountId = driverId;
@@ -55,7 +55,7 @@ contract AddressDriver is DriverTransferUtils, Managed {
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param transferTo The address to send collected funds to
     /// @return amt The collected amount
-    function collect(IERC20 erc20, address transferTo) public returns (uint128 amt) {
+    function collect(IERC20 erc20, address transferTo) public onlyProxy returns (uint128 amt) {
         return _collectAndTransfer(drips, _callerAccountId(), erc20, transferTo);
     }
 
@@ -70,7 +70,7 @@ contract AddressDriver is DriverTransferUtils, Managed {
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param amt The given amount
-    function give(uint256 receiver, IERC20 erc20, uint128 amt) public {
+    function give(uint256 receiver, IERC20 erc20, uint128 amt) public onlyProxy {
         _giveAndTransfer(drips, _callerAccountId(), receiver, erc20, amt);
     }
 
@@ -131,7 +131,7 @@ contract AddressDriver is DriverTransferUtils, Managed {
         uint32 maxEndHint1,
         uint32 maxEndHint2,
         address transferTo
-    ) public returns (int128 realBalanceDelta) {
+    ) public onlyProxy returns (int128 realBalanceDelta) {
         return _setStreamsAndTransfer(
             drips,
             _callerAccountId(),
@@ -164,7 +164,7 @@ contract AddressDriver is DriverTransferUtils, Managed {
     /// This is usually unwanted, because if splitting is repeated,
     /// funds split to themselves will be again split using the current configuration.
     /// Splitting 100% to self effectively blocks splitting unless the configuration is updated.
-    function setSplits(SplitsReceiver[] calldata receivers) public {
+    function setSplits(SplitsReceiver[] calldata receivers) public onlyProxy {
         drips.setSplits(_callerAccountId(), receivers);
     }
 
@@ -172,7 +172,7 @@ contract AddressDriver is DriverTransferUtils, Managed {
     /// The keys and the values are not standardized by the protocol, it's up to the users
     /// to establish and follow conventions to ensure compatibility with the consumers.
     /// @param accountMetadata The list of account metadata.
-    function emitAccountMetadata(AccountMetadata[] calldata accountMetadata) public {
+    function emitAccountMetadata(AccountMetadata[] calldata accountMetadata) public onlyProxy {
         if (accountMetadata.length != 0) {
             drips.emitAccountMetadata(_callerAccountId(), accountMetadata);
         }
