@@ -50,4 +50,17 @@ contract ImmutableSplitsDriverTest is Test {
         vm.expectRevert("Invalid total receivers weight");
         driver.createSplits(receivers, new AccountMetadata[](0));
     }
+
+    function notDelegatedReverts() internal returns (ImmutableSplitsDriver driver_) {
+        driver_ = ImmutableSplitsDriver(driver.implementation());
+        vm.expectRevert("Function must be called through delegatecall");
+    }
+
+    function testNextAccountIdMustBeDelegated() public {
+        notDelegatedReverts().nextAccountId();
+    }
+
+    function testCreateSplitsMustBeDelegated() public {
+        notDelegatedReverts().createSplits(new SplitsReceiver[](0), new AccountMetadata[](0));
+    }
 }

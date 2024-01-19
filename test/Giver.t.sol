@@ -165,4 +165,21 @@ contract GiversRegistryTest is Test {
         vm.expectRevert("Caller is not GiversRegistry");
         giversRegistry.giveImpl(accountId, erc20);
     }
+
+    function notDelegatedReverts() internal returns (GiversRegistry giversRegistry_) {
+        giversRegistry_ = GiversRegistry(giversRegistry.implementation());
+        vm.expectRevert("Function must be called through delegatecall");
+    }
+
+    function testInitializeMustBeDelegated() public {
+        notDelegatedReverts().initialize();
+    }
+
+    function testGiverMustBeDelegated() public {
+        notDelegatedReverts().giver(accountId);
+    }
+
+    function testGiveMustBeDelegated() public {
+        notDelegatedReverts().give(accountId, erc20);
+    }
 }

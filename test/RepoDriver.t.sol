@@ -650,4 +650,63 @@ contract RepoDriverTest is Test {
         caller.callAs(user, address(driver), giveData);
         assertEq(drips.splittable(accountId, erc20), amt, "Invalid splittable after give");
     }
+
+    function notDelegatedReverts() internal returns (RepoDriver driver_) {
+        driver_ = RepoDriver(driver.implementation());
+        vm.expectRevert("Function must be called through delegatecall");
+    }
+
+    function testCalcAccountIdMustBeDelegated() public {
+        notDelegatedReverts().calcAccountId(Forge.GitHub, "");
+    }
+
+    function testInitializeAnyApiOperatorMustBeDelegated() public {
+        notDelegatedReverts().initializeAnyApiOperator(OperatorInterface(address(0)), 0, 0);
+    }
+
+    function testUpdateAnyApiOperatorMustBeDelegated() public {
+        notDelegatedReverts().updateAnyApiOperator(OperatorInterface(address(0)), 0, 0);
+    }
+
+    function testAnyApiOperatorMustBeDelegated() public {
+        notDelegatedReverts().anyApiOperator();
+    }
+
+    function testOwnerOfMustBeDelegated() public {
+        notDelegatedReverts().ownerOf(0);
+    }
+
+    function testRequestUpdateOwnerMustBeDelegated() public {
+        notDelegatedReverts().requestUpdateOwner(Forge.GitHub, "");
+    }
+
+    function testOnTokenTransferMustBeDelegated() public {
+        notDelegatedReverts().onTokenTransfer(address(0), 0, "");
+    }
+
+    function testUpdateOwnerByAnyApiMustBeDelegated() public {
+        notDelegatedReverts().updateOwnerByAnyApi(0, "");
+    }
+
+    function testCollectMustBeDelegated() public {
+        notDelegatedReverts().collect(0, erc20, user);
+    }
+
+    function testGiveMustBeDelegated() public {
+        notDelegatedReverts().give(0, 0, erc20, 0);
+    }
+
+    function testSetStreamsMustBeDelegated() public {
+        notDelegatedReverts().setStreams(
+            0, erc20, new StreamReceiver[](0), 0, new StreamReceiver[](0), 0, 0, user
+        );
+    }
+
+    function testSetSplitsMustBeDelegated() public {
+        notDelegatedReverts().setSplits(0, new SplitsReceiver[](0));
+    }
+
+    function testEmitAccountMetadataMustBeDelegated() public {
+        notDelegatedReverts().emitAccountMetadata(0, noMetadata());
+    }
 }

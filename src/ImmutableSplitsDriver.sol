@@ -38,7 +38,7 @@ contract ImmutableSplitsDriver is Managed {
     /// Every account ID is a 256-bit integer constructed by concatenating:
     /// `driverId (32 bits) | accountIdsCounter (224 bits)`.
     /// @return accountId The account ID.
-    function nextAccountId() public view returns (uint256 accountId) {
+    function nextAccountId() public view onlyProxy returns (uint256 accountId) {
         // By assignment we get `accountId` value:
         // `zeros (224 bits) | driverId (32 bits)`
         accountId = driverId;
@@ -70,7 +70,7 @@ contract ImmutableSplitsDriver is Managed {
     function createSplits(
         SplitsReceiver[] calldata receivers,
         AccountMetadata[] calldata accountMetadata
-    ) public returns (uint256 accountId) {
+    ) public onlyProxy returns (uint256 accountId) {
         accountId = nextAccountId();
         StorageSlot.getUint256Slot(_counterSlot).value++;
         uint256 weightSum = 0;

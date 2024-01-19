@@ -199,4 +199,37 @@ contract NFTDriverDataProxyTest is Test {
         });
         caller.callBatched(calls);
     }
+
+    function notDelegatedReverts() internal returns (NFTDriverDataProxy dataProxy_) {
+        dataProxy_ = NFTDriverDataProxy(dataProxy.implementation());
+        vm.expectRevert("Function must be called through delegatecall");
+    }
+
+    function testMintMustBeDelegated() public {
+        notDelegatedReverts().mint(user, 0);
+    }
+
+    function testSafeMintMustBeDelegated() public {
+        notDelegatedReverts().safeMint(user, 0);
+    }
+
+    function testMintWithSaltMustBeDelegated() public {
+        notDelegatedReverts().mintWithSalt(0, user, 0);
+    }
+
+    function testSafeMintWithSaltMustBeDelegated() public {
+        notDelegatedReverts().safeMintWithSalt(0, user, 0);
+    }
+
+    function testSetStreamsMustBeDelegated() public {
+        notDelegatedReverts().setStreams(0, erc20, 0, 0, 0, 0, user);
+    }
+
+    function testSetSplitsMustBeDelegated() public {
+        notDelegatedReverts().setSplits(0, 0);
+    }
+
+    function testEmitAccountMetadataMustBeDelegated() public {
+        notDelegatedReverts().emitAccountMetadata(0, 0);
+    }
 }

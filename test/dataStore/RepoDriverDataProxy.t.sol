@@ -167,4 +167,21 @@ contract RepoDriverDataProxyTest is Test {
         });
         caller.callBatched(calls);
     }
+
+    function notDelegatedReverts() internal returns (RepoDriverDataProxy dataProxy_) {
+        dataProxy_ = RepoDriverDataProxy(dataProxy.implementation());
+        vm.expectRevert("Function must be called through delegatecall");
+    }
+
+    function testSetStreamsMustBeDelegated() public {
+        notDelegatedReverts().setStreams(0, erc20, 0, 0, 0, 0, user);
+    }
+
+    function testSetSplitsMustBeDelegated() public {
+        notDelegatedReverts().setSplits(0, 0);
+    }
+
+    function testEmitAccountMetadataMustBeDelegated() public {
+        notDelegatedReverts().emitAccountMetadata(0, 0);
+    }
 }

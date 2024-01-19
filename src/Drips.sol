@@ -174,7 +174,7 @@ contract Drips is Managed, Streams, Splits {
     /// It should be a smart contract capable of dealing with the Drips API.
     /// It shouldn't be an EOA because the API requires making multiple calls per transaction.
     /// @return driverId The registered driver ID.
-    function registerDriver(address driverAddr) public returns (uint32 driverId) {
+    function registerDriver(address driverAddr) public onlyProxy returns (uint32 driverId) {
         require(driverAddr != address(0), "Driver registered for 0 address");
         DripsStorage storage dripsStorage = _dripsStorage();
         driverId = dripsStorage.nextDriverId++;
@@ -186,7 +186,7 @@ contract Drips is Managed, Streams, Splits {
     /// @param driverId The driver ID to look up.
     /// @return driverAddr The address of the driver.
     /// If the driver hasn't been registered yet, returns address 0.
-    function driverAddress(uint32 driverId) public view returns (address driverAddr) {
+    function driverAddress(uint32 driverId) public view onlyProxy returns (address driverAddr) {
         return _dripsStorage().driverAddresses[driverId];
     }
 
@@ -195,7 +195,7 @@ contract Drips is Managed, Streams, Splits {
     /// @param newDriverAddr The new address of the driver.
     /// It should be a smart contract capable of dealing with the Drips API.
     /// It shouldn't be an EOA because the API requires making multiple calls per transaction.
-    function updateDriverAddress(uint32 driverId, address newDriverAddr) public {
+    function updateDriverAddress(uint32 driverId, address newDriverAddr) public onlyProxy {
         _assertCallerIsDriver(driverId);
         _dripsStorage().driverAddresses[driverId] = newDriverAddr;
         emit DriverAddressUpdated(driverId, msg.sender, newDriverAddr);
@@ -203,7 +203,7 @@ contract Drips is Managed, Streams, Splits {
 
     /// @notice Returns the driver ID which will be assigned for the next registered driver.
     /// @return driverId The next driver ID.
-    function nextDriverId() public view returns (uint32 driverId) {
+    function nextDriverId() public view onlyProxy returns (uint32 driverId) {
         return _dripsStorage().nextDriverId;
     }
 
@@ -225,6 +225,7 @@ contract Drips is Managed, Streams, Splits {
     function balances(IERC20 erc20)
         public
         view
+        onlyProxy
         returns (uint128 streamsBalance, uint128 splitsBalance)
     {
         Balance storage balance = _dripsStorage().balances[erc20];
@@ -308,7 +309,7 @@ contract Drips is Managed, Streams, Splits {
     /// @param amt The withdrawn amount.
     /// It must be at most the difference between the balance of the token held by the Drips
     /// contract address and the sum of balances managed by the protocol as indicated by `balances`.
-    function withdraw(IERC20 erc20, address receiver, uint256 amt) public {
+    function withdraw(IERC20 erc20, address receiver, uint256 amt) public onlyProxy {
         (uint128 streamsBalance, uint128 splitsBalance) = balances(erc20);
         uint256 withdrawable = erc20.balanceOf(address(this)) - streamsBalance - splitsBalance;
         require(amt <= withdrawable, "Withdrawal amount too high");
@@ -330,6 +331,7 @@ contract Drips is Managed, Streams, Splits {
     function receivableStreamsCycles(uint256 accountId, IERC20 erc20)
         public
         view
+        onlyProxy
         returns (uint32 cycles)
     {
         return Streams._receivableStreamsCycles(accountId, erc20);
@@ -350,6 +352,7 @@ contract Drips is Managed, Streams, Splits {
     function receiveStreamsResult(uint256 accountId, IERC20 erc20, uint32 maxCycles)
         public
         view
+        onlyProxy
         returns (uint128 receivableAmt)
     {
         (receivableAmt,,,,) = Streams._receiveStreamsResult(accountId, erc20, maxCycles);
@@ -371,6 +374,7 @@ contract Drips is Managed, Streams, Splits {
     /// @return receivedAmt The received amount
     function receiveStreams(uint256 accountId, IERC20 erc20, uint32 maxCycles)
         public
+        onlyProxy
         returns (uint128 receivedAmt)
     {
         receivedAmt = Streams._receiveStreams(accountId, erc20, maxCycles);
@@ -406,7 +410,7 @@ contract Drips is Managed, Streams, Splits {
         uint256 senderId,
         bytes32 historyHash,
         StreamsHistory[] memory streamsHistory
-    ) public returns (uint128 amt) {
+    ) public onlyProxy returns (uint128 amt) {
         amt = Streams._squeezeStreams(accountId, erc20, senderId, historyHash, streamsHistory);
         if (amt != 0) {
             _moveBalanceFromStreamsToSplits(erc20, amt);
@@ -433,7 +437,7 @@ contract Drips is Managed, Streams, Splits {
         uint256 senderId,
         bytes32 historyHash,
         StreamsHistory[] memory streamsHistory
-    ) public view returns (uint128 amt) {
+    ) public view onlyProxy returns (uint128 amt) {
         (amt,,,,) =
             Streams._squeezeStreamsResult(accountId, erc20, senderId, historyHash, streamsHistory);
     }
@@ -447,7 +451,12 @@ contract Drips is Managed, Streams, Splits {
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @return amt The amount received but not split yet.
-    function splittable(uint256 accountId, IERC20 erc20) public view returns (uint128 amt) {
+    function splittable(uint256 accountId, IERC20 erc20)
+        public
+        view
+        onlyProxy
+        returns (uint128 amt)
+    {
         return Splits._splittable(accountId, erc20);
     }
 
@@ -465,6 +474,7 @@ contract Drips is Managed, Streams, Splits {
     function splitResult(uint256 accountId, SplitsReceiver[] memory currReceivers, uint128 amount)
         public
         view
+        onlyProxy
         returns (uint128 collectableAmt, uint128 splitAmt)
     {
         return Splits._splitResult(accountId, currReceivers, amount);
@@ -495,6 +505,7 @@ contract Drips is Managed, Streams, Splits {
     /// @return splitAmt The amount split to the account's splits receivers
     function split(uint256 accountId, IERC20 erc20, SplitsReceiver[] memory currReceivers)
         public
+        onlyProxy
         returns (uint128 collectableAmt, uint128 splitAmt)
     {
         return Splits._split(accountId, erc20, currReceivers);
@@ -509,7 +520,12 @@ contract Drips is Managed, Streams, Splits {
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @return amt The collectable amount.
-    function collectable(uint256 accountId, IERC20 erc20) public view returns (uint128 amt) {
+    function collectable(uint256 accountId, IERC20 erc20)
+        public
+        view
+        onlyProxy
+        returns (uint128 amt)
+    {
         return Splits._collectable(accountId, erc20);
     }
 
@@ -526,6 +542,7 @@ contract Drips is Managed, Streams, Splits {
     /// @return amt The collected amount
     function collect(uint256 accountId, IERC20 erc20)
         public
+        onlyProxy
         onlyDriver(accountId)
         returns (uint128 amt)
     {
@@ -549,6 +566,7 @@ contract Drips is Managed, Streams, Splits {
     /// @param amt The given amount
     function give(uint256 accountId, uint256 receiver, IERC20 erc20, uint128 amt)
         public
+        onlyProxy
         onlyDriver(accountId)
     {
         if (amt != 0) _increaseSplitsBalance(erc20, amt);
@@ -571,6 +589,7 @@ contract Drips is Managed, Streams, Splits {
     function streamsState(uint256 accountId, IERC20 erc20)
         public
         view
+        onlyProxy
         returns (
             bytes32 streamsHash,
             bytes32 streamsHistoryHash,
@@ -602,7 +621,7 @@ contract Drips is Managed, Streams, Splits {
         IERC20 erc20,
         StreamReceiver[] memory currReceivers,
         uint32 timestamp
-    ) public view returns (uint128 balance) {
+    ) public view onlyProxy returns (uint128 balance) {
         return Streams._balanceAt(accountId, erc20, currReceivers, timestamp);
     }
 
@@ -667,7 +686,7 @@ contract Drips is Managed, Streams, Splits {
         // slither-disable-next-line similar-names
         uint32 maxEndHint1,
         uint32 maxEndHint2
-    ) public onlyDriver(accountId) returns (int128 realBalanceDelta) {
+    ) public onlyProxy onlyDriver(accountId) returns (int128 realBalanceDelta) {
         if (balanceDelta > 0) _increaseStreamsBalance(erc20, uint128(balanceDelta));
         realBalanceDelta = Streams._setStreams(
             accountId, erc20, currReceivers, balanceDelta, newReceivers, maxEndHint1, maxEndHint2
@@ -730,6 +749,7 @@ contract Drips is Managed, Streams, Splits {
     /// Splitting 100% to self effectively blocks splitting unless the configuration is updated.
     function setSplits(uint256 accountId, SplitsReceiver[] memory receivers)
         public
+        onlyProxy
         onlyDriver(accountId)
     {
         Splits._setSplits(accountId, receivers);
@@ -738,7 +758,7 @@ contract Drips is Managed, Streams, Splits {
     /// @notice Current account's splits hash, see `hashSplits`.
     /// @param accountId The account ID.
     /// @return currSplitsHash The current account's splits hash
-    function splitsHash(uint256 accountId) public view returns (bytes32 currSplitsHash) {
+    function splitsHash(uint256 accountId) public view onlyProxy returns (bytes32 currSplitsHash) {
         return Splits._splitsHash(accountId);
     }
 
@@ -761,6 +781,7 @@ contract Drips is Managed, Streams, Splits {
     /// @param accountMetadata The list of account metadata.
     function emitAccountMetadata(uint256 accountId, AccountMetadata[] calldata accountMetadata)
         public
+        onlyProxy
         onlyDriver(accountId)
     {
         unchecked {
