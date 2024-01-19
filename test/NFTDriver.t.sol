@@ -317,4 +317,115 @@ contract NFTDriverTest is Test {
 
         assertEq(drips.splittable(tokenId, erc20), amt, "Invalid splittable after give");
     }
+
+    function notDelegatedReverts() internal returns (NFTDriver driver_) {
+        driver_ = NFTDriver(driver.implementation());
+        vm.expectRevert("Function must be called through delegatecall");
+    }
+
+    function testNextTokenIdMustBeDelegated() public {
+        notDelegatedReverts().nextTokenId();
+    }
+
+    function testCalcTokenIdWithSaltMustBeDelegated() public {
+        notDelegatedReverts().calcTokenIdWithSalt(user, 0);
+    }
+
+    function testIsSaltUsedMustBeDelegated() public {
+        notDelegatedReverts().isSaltUsed(user, 0);
+    }
+
+    function testMintMustBeDelegated() public {
+        notDelegatedReverts().mint(user, noMetadata());
+    }
+
+    function testSafeMintMustBeDelegated() public {
+        notDelegatedReverts().safeMint(user, noMetadata());
+    }
+
+    function testMintWithSaltMustBeDelegated() public {
+        notDelegatedReverts().mintWithSalt(0, user, noMetadata());
+    }
+
+    function testSafeMintWithSaltMustBeDelegated() public {
+        notDelegatedReverts().safeMintWithSalt(0, user, noMetadata());
+    }
+
+    function testCollectMustBeDelegated() public {
+        notDelegatedReverts().collect(0, erc20, user);
+    }
+
+    function testGiveMustBeDelegated() public {
+        notDelegatedReverts().give(0, 0, erc20, 0);
+    }
+
+    function testSetStreamsMustBeDelegated() public {
+        notDelegatedReverts().setStreams(
+            0, erc20, new StreamReceiver[](0), 0, new StreamReceiver[](0), 0, 0, user
+        );
+    }
+
+    function testSetSplitsMustBeDelegated() public {
+        notDelegatedReverts().setSplits(0, new SplitsReceiver[](0));
+    }
+
+    function testEmitAccountMetadataMustBeDelegated() public {
+        notDelegatedReverts().emitAccountMetadata(0, noMetadata());
+    }
+
+    function testSupportsInterfaceMustBeDelegated() public {
+        notDelegatedReverts().supportsInterface(0);
+    }
+
+    function testBalanceOfMustBeDelegated() public {
+        notDelegatedReverts().balanceOf(user);
+    }
+
+    function testOwnerOfMustBeDelegated() public {
+        notDelegatedReverts().ownerOf(0);
+    }
+
+    function testNameMustBeDelegated() public {
+        notDelegatedReverts().name();
+    }
+
+    function testSymbolMustBeDelegated() public {
+        notDelegatedReverts().symbol();
+    }
+
+    function testTokenURIMustBeDelegated() public {
+        notDelegatedReverts().tokenURI(0);
+    }
+
+    function testApproveMustBeDelegated() public {
+        notDelegatedReverts().approve(user, 0);
+    }
+
+    function testGetApprovedMustBeDelegated() public {
+        notDelegatedReverts().getApproved(0);
+    }
+
+    function testSetApprovalForAllMustBeDelegated() public {
+        notDelegatedReverts().setApprovalForAll(user, false);
+    }
+
+    function testIsApprovedForAllMustBeDelegated() public {
+        notDelegatedReverts().isApprovedForAll(user, user);
+    }
+
+    function testTransferFromMustBeDelegated() public {
+        notDelegatedReverts().transferFrom(user, user, 0);
+    }
+
+    function testSafeTransferFromMustBeDelegated() public {
+        notDelegatedReverts().safeTransferFrom(user, user, 0);
+    }
+
+    function testSafeTransferFromWithDataMustBeDelegated() public {
+        notDelegatedReverts().safeTransferFrom(user, user, 0, new bytes(0));
+    }
+
+    function testBurnMustBeDelegated() public {
+        notDelegatedReverts().burn(0);
+    }
 }

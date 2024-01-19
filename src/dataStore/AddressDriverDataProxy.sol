@@ -99,7 +99,7 @@ contract AddressDriverDataProxy is ERC2771Context, Managed {
         uint32 maxEndHint1,
         uint32 maxEndHint2,
         address transferTo
-    ) public returns (int128 realBalanceDelta) {
+    ) public onlyProxy returns (int128 realBalanceDelta) {
         uint256 accountId = addressDriver.calcAccountId(_msgSender());
         // slither-disable-next-line unused-return
         (bytes32 currStreamsHash,,,,) = drips.streamsState(accountId, erc20);
@@ -138,7 +138,7 @@ contract AddressDriverDataProxy is ERC2771Context, Managed {
     /// This is usually unwanted, because if splitting is repeated,
     /// funds split to themselves will be again split using the current configuration.
     /// Splitting 100% to self effectively blocks splitting unless the configuration is updated.
-    function setSplits(bytes32 splitsHash) public {
+    function setSplits(bytes32 splitsHash) public onlyProxy {
         bytes memory data =
             abi.encodeCall(addressDriver.setSplits, dripsDataStore.loadSplits(splitsHash));
         abi.decode(_callAddressDriver(data), ());
@@ -149,7 +149,7 @@ contract AddressDriverDataProxy is ERC2771Context, Managed {
     /// to establish and follow conventions to ensure compatibility with the consumers.
     /// @param accountMetadataHash The hash of the list of account metadata,
     /// the actual list must be stored in DripsDataStore.
-    function emitAccountMetadata(bytes32 accountMetadataHash) public {
+    function emitAccountMetadata(bytes32 accountMetadataHash) public onlyProxy {
         bytes memory data = abi.encodeCall(
             addressDriver.emitAccountMetadata,
             dripsDataStore.loadAccountMetadata(accountMetadataHash)

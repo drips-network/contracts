@@ -54,7 +54,11 @@ contract NFTDriverDataProxy is ERC2771Context, Managed {
     /// The keys and the values are not standardized by the protocol, it's up to the users
     /// to establish and follow conventions to ensure compatibility with the consumers.
     /// @return tokenId The minted token ID. It's equal to the account ID controlled by it.
-    function mint(address to, bytes32 accountMetadataHash) public returns (uint256 tokenId) {
+    function mint(address to, bytes32 accountMetadataHash)
+        public
+        onlyProxy
+        returns (uint256 tokenId)
+    {
         return nftDriver.mint(to, dripsDataStore.loadAccountMetadata(accountMetadataHash));
     }
 
@@ -67,7 +71,11 @@ contract NFTDriverDataProxy is ERC2771Context, Managed {
     /// The keys and the values are not standardized by the protocol, it's up to the users
     /// to establish and follow conventions to ensure compatibility with the consumers.
     /// @return tokenId The minted token ID. It's equal to the account ID controlled by it.
-    function safeMint(address to, bytes32 accountMetadataHash) public returns (uint256 tokenId) {
+    function safeMint(address to, bytes32 accountMetadataHash)
+        public
+        onlyProxy
+        returns (uint256 tokenId)
+    {
         return nftDriver.safeMint(to, dripsDataStore.loadAccountMetadata(accountMetadataHash));
     }
 
@@ -85,6 +93,7 @@ contract NFTDriverDataProxy is ERC2771Context, Managed {
     /// The ID is calculated using `calcTokenIdWithSalt` for the caller's address and the used salt.
     function mintWithSalt(uint64 salt, address to, bytes32 accountMetadataHash)
         public
+        onlyProxy
         returns (uint256 tokenId)
     {
         bytes memory data = abi.encodeCall(
@@ -108,6 +117,7 @@ contract NFTDriverDataProxy is ERC2771Context, Managed {
     /// The ID is calculated using `calcTokenIdWithSalt` for the caller's address and the used salt.
     function safeMintWithSalt(uint64 salt, address to, bytes32 accountMetadataHash)
         public
+        onlyProxy
         returns (uint256 tokenId)
     {
         bytes memory data = abi.encodeCall(
@@ -176,7 +186,7 @@ contract NFTDriverDataProxy is ERC2771Context, Managed {
         uint32 maxEndHint1,
         uint32 maxEndHint2,
         address transferTo
-    ) public returns (int128 realBalanceDelta) {
+    ) public onlyProxy returns (int128 realBalanceDelta) {
         // slither-disable-next-line unused-return
         (bytes32 currStreamsHash,,,,) = drips.streamsState(tokenId, erc20);
         bytes memory data = abi.encodeCall(
@@ -218,7 +228,7 @@ contract NFTDriverDataProxy is ERC2771Context, Managed {
     /// This is usually unwanted, because if splitting is repeated,
     /// funds split to themselves will be again split using the current configuration.
     /// Splitting 100% to self effectively blocks splitting unless the configuration is updated.
-    function setSplits(uint256 tokenId, bytes32 splitsHash) public {
+    function setSplits(uint256 tokenId, bytes32 splitsHash) public onlyProxy {
         bytes memory data =
             abi.encodeCall(nftDriver.setSplits, (tokenId, dripsDataStore.loadSplits(splitsHash)));
         abi.decode(_callNFTDriver(data), ());
@@ -232,7 +242,7 @@ contract NFTDriverDataProxy is ERC2771Context, Managed {
     /// The token ID is equal to the account ID controlled by it.
     /// @param accountMetadataHash The hash of the list of account metadata,
     /// the actual list must be stored in DripsDataStore.
-    function emitAccountMetadata(uint256 tokenId, bytes32 accountMetadataHash) public {
+    function emitAccountMetadata(uint256 tokenId, bytes32 accountMetadataHash) public onlyProxy {
         bytes memory data = abi.encodeCall(
             nftDriver.emitAccountMetadata,
             (tokenId, dripsDataStore.loadAccountMetadata(accountMetadataHash))
