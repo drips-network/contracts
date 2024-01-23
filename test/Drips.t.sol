@@ -34,7 +34,6 @@ contract DripsTest is Test {
     mapping(uint256 accountId => SplitsReceiver[]) internal currSplitsReceivers;
 
     address internal driver = address(1);
-    address internal admin = address(2);
 
     uint32 internal driverId;
 
@@ -55,7 +54,7 @@ contract DripsTest is Test {
         otherErc20 = new ERC20PresetFixedSupply("other", "other", 2 ** 128, address(this));
         erc20 = defaultErc20;
         Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, admin)));
+        drips = Drips(address(new ManagedProxy(dripsLogic, address(2))));
 
         driverId = drips.registerDriver(driver);
         uint256 baseAccountId = driverId << 224;
@@ -717,52 +716,5 @@ contract DripsTest is Test {
         drips.withdraw(erc20, address(this), 2);
 
         withdraw(1);
-    }
-
-    modifier canBePausedTest() {
-        vm.prank(admin);
-        drips.pause();
-        vm.expectRevert("Contract paused");
-        _;
-    }
-
-    function testReceiveStreamsCanBePaused() public canBePausedTest {
-        drips.receiveStreams(accountId, erc20, 1);
-    }
-
-    function testSqueezeStreamsCanBePaused() public canBePausedTest {
-        drips.squeezeStreams(accountId, erc20, accountId, 0, new StreamsHistory[](0));
-    }
-
-    function testSplitCanBePaused() public canBePausedTest {
-        drips.split(accountId, erc20, splitsReceivers());
-    }
-
-    function testCollectCanBePaused() public canBePausedTest {
-        drips.collect(accountId, erc20);
-    }
-
-    function testSetStreamsCanBePaused() public canBePausedTest {
-        drips.setStreams(accountId, erc20, streamsReceivers(), 1, streamsReceivers(), 0, 0);
-    }
-
-    function testGiveCanBePaused() public canBePausedTest {
-        drips.give(accountId, 0, erc20, 1);
-    }
-
-    function testSetSplitsCanBePaused() public canBePausedTest {
-        drips.setSplits(accountId, splitsReceivers());
-    }
-
-    function testEmitAccountMetadataCanBePaused() public canBePausedTest {
-        drips.emitAccountMetadata(accountId, new AccountMetadata[](0));
-    }
-
-    function testRegisterDriverCanBePaused() public canBePausedTest {
-        drips.registerDriver(address(0x1234));
-    }
-
-    function testUpdateDriverAddressCanBePaused() public canBePausedTest {
-        drips.updateDriverAddress(driverId, address(0x1234));
     }
 }

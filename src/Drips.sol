@@ -174,7 +174,7 @@ contract Drips is Managed, Streams, Splits {
     /// It should be a smart contract capable of dealing with the Drips API.
     /// It shouldn't be an EOA because the API requires making multiple calls per transaction.
     /// @return driverId The registered driver ID.
-    function registerDriver(address driverAddr) public whenNotPaused returns (uint32 driverId) {
+    function registerDriver(address driverAddr) public returns (uint32 driverId) {
         require(driverAddr != address(0), "Driver registered for 0 address");
         DripsStorage storage dripsStorage = _dripsStorage();
         driverId = dripsStorage.nextDriverId++;
@@ -195,7 +195,7 @@ contract Drips is Managed, Streams, Splits {
     /// @param newDriverAddr The new address of the driver.
     /// It should be a smart contract capable of dealing with the Drips API.
     /// It shouldn't be an EOA because the API requires making multiple calls per transaction.
-    function updateDriverAddress(uint32 driverId, address newDriverAddr) public whenNotPaused {
+    function updateDriverAddress(uint32 driverId, address newDriverAddr) public {
         _assertCallerIsDriver(driverId);
         _dripsStorage().driverAddresses[driverId] = newDriverAddr;
         emit DriverAddressUpdated(driverId, msg.sender, newDriverAddr);
@@ -371,7 +371,6 @@ contract Drips is Managed, Streams, Splits {
     /// @return receivedAmt The received amount
     function receiveStreams(uint256 accountId, IERC20 erc20, uint32 maxCycles)
         public
-        whenNotPaused
         returns (uint128 receivedAmt)
     {
         receivedAmt = Streams._receiveStreams(accountId, erc20, maxCycles);
@@ -407,7 +406,7 @@ contract Drips is Managed, Streams, Splits {
         uint256 senderId,
         bytes32 historyHash,
         StreamsHistory[] memory streamsHistory
-    ) public whenNotPaused returns (uint128 amt) {
+    ) public returns (uint128 amt) {
         amt = Streams._squeezeStreams(accountId, erc20, senderId, historyHash, streamsHistory);
         if (amt != 0) {
             _moveBalanceFromStreamsToSplits(erc20, amt);
@@ -496,7 +495,6 @@ contract Drips is Managed, Streams, Splits {
     /// @return splitAmt The amount split to the account's splits receivers
     function split(uint256 accountId, IERC20 erc20, SplitsReceiver[] memory currReceivers)
         public
-        whenNotPaused
         returns (uint128 collectableAmt, uint128 splitAmt)
     {
         return Splits._split(accountId, erc20, currReceivers);
@@ -528,7 +526,6 @@ contract Drips is Managed, Streams, Splits {
     /// @return amt The collected amount
     function collect(uint256 accountId, IERC20 erc20)
         public
-        whenNotPaused
         onlyDriver(accountId)
         returns (uint128 amt)
     {
@@ -552,7 +549,6 @@ contract Drips is Managed, Streams, Splits {
     /// @param amt The given amount
     function give(uint256 accountId, uint256 receiver, IERC20 erc20, uint128 amt)
         public
-        whenNotPaused
         onlyDriver(accountId)
     {
         if (amt != 0) _increaseSplitsBalance(erc20, amt);
@@ -671,7 +667,7 @@ contract Drips is Managed, Streams, Splits {
         // slither-disable-next-line similar-names
         uint32 maxEndHint1,
         uint32 maxEndHint2
-    ) public whenNotPaused onlyDriver(accountId) returns (int128 realBalanceDelta) {
+    ) public onlyDriver(accountId) returns (int128 realBalanceDelta) {
         if (balanceDelta > 0) _increaseStreamsBalance(erc20, uint128(balanceDelta));
         realBalanceDelta = Streams._setStreams(
             accountId, erc20, currReceivers, balanceDelta, newReceivers, maxEndHint1, maxEndHint2
@@ -734,7 +730,6 @@ contract Drips is Managed, Streams, Splits {
     /// Splitting 100% to self effectively blocks splitting unless the configuration is updated.
     function setSplits(uint256 accountId, SplitsReceiver[] memory receivers)
         public
-        whenNotPaused
         onlyDriver(accountId)
     {
         Splits._setSplits(accountId, receivers);
@@ -766,7 +761,6 @@ contract Drips is Managed, Streams, Splits {
     /// @param accountMetadata The list of account metadata.
     function emitAccountMetadata(uint256 accountId, AccountMetadata[] calldata accountMetadata)
         public
-        whenNotPaused
         onlyDriver(accountId)
     {
         unchecked {

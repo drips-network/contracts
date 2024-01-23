@@ -24,9 +24,8 @@ contract AddressDriverTest is Test {
     AddressDriver internal driver;
     IERC20 internal erc20;
 
-    address internal admin = address(1);
     uint256 internal thisId;
-    address internal user = address(2);
+    address internal user = address(1);
     uint256 internal accountId;
 
     function setUp() public {
@@ -39,7 +38,7 @@ contract AddressDriverTest is Test {
         drips.registerDriver(address(1));
         drips.registerDriver(address(1));
         AddressDriver driverLogic = new AddressDriver(drips, address(caller), drips.nextDriverId());
-        driver = AddressDriver(address(new ManagedProxy(driverLogic, admin)));
+        driver = AddressDriver(address(new ManagedProxy(driverLogic, address(1))));
         drips.registerDriver(address(driver));
 
         thisId = driver.calcAccountId(address(this));
@@ -168,32 +167,5 @@ contract AddressDriverTest is Test {
         caller.callAs(user, address(driver), giveData);
 
         assertEq(drips.splittable(accountId, erc20), amt, "Invalid splittable after give");
-    }
-
-    modifier canBePausedTest() {
-        vm.prank(admin);
-        driver.pause();
-        vm.expectRevert("Contract paused");
-        _;
-    }
-
-    function testCollectCanBePaused() public canBePausedTest {
-        driver.collect(erc20, user);
-    }
-
-    function testGiveCanBePaused() public canBePausedTest {
-        driver.give(accountId, erc20, 0);
-    }
-
-    function testSetStreamsCanBePaused() public canBePausedTest {
-        driver.setStreams(erc20, new StreamReceiver[](0), 0, new StreamReceiver[](0), 0, 0, user);
-    }
-
-    function testSetSplitsCanBePaused() public canBePausedTest {
-        driver.setSplits(new SplitsReceiver[](0));
-    }
-
-    function testEmitAccountMetadataCanBePaused() public canBePausedTest {
-        driver.emitAccountMetadata(new AccountMetadata[](0));
     }
 }
