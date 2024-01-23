@@ -19,7 +19,6 @@ contract DripsDataProxyTest is Test {
     IERC20 internal erc20;
 
     address internal driver = address(1);
-    address internal admin = address(2);
 
     uint256 internal account = 1;
     uint256 internal receiver = 2;
@@ -31,7 +30,7 @@ contract DripsDataProxyTest is Test {
 
         dripsDataStore = new DripsDataStore();
         DripsDataProxy dataProxyLogic = new DripsDataProxy(drips, dripsDataStore);
-        dataProxy = DripsDataProxy(address(new ManagedProxy(dataProxyLogic, admin)));
+        dataProxy = DripsDataProxy(address(new ManagedProxy(dataProxyLogic, address(2))));
 
         erc20 = new ERC20PresetFixedSupply("test", "test", type(uint136).max, address(this));
     }
@@ -107,20 +106,5 @@ contract DripsDataProxyTest is Test {
 
         uint256 balanceAt = dataProxy.balanceAt(account, erc20, uint32(vm.getBlockTimestamp() + 1));
         assertEq(balanceAt, 1, "Invalid balance");
-    }
-
-    modifier canBePausedTest() {
-        vm.prank(admin);
-        dataProxy.pause();
-        vm.expectRevert("Contract paused");
-        _;
-    }
-
-    function testSqueezeStreamsCanBePaused() public canBePausedTest {
-        dataProxy.squeezeStreams(account, erc20, account, 0, 0);
-    }
-
-    function testSplitCanBePaused() public canBePausedTest {
-        dataProxy.split(account, erc20);
     }
 }

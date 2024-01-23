@@ -70,7 +70,7 @@ contract ImmutableSplitsDriver is Managed {
     function createSplits(
         SplitsReceiver[] calldata receivers,
         AccountMetadata[] calldata accountMetadata
-    ) public whenNotPaused returns (uint256 accountId) {
+    ) public returns (uint256 accountId) {
         accountId = nextAccountId();
         StorageSlot.getUint256Slot(_counterSlot).value++;
         uint256 weightSum = 0;

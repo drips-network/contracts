@@ -15,12 +15,11 @@ import {Test} from "forge-std/Test.sol";
 contract DripsDataStoreTest is Test {
     DripsDataStore internal dripsDataStore;
     Drips internal drips;
-    address internal admin = address(1);
 
     function setUp() public {
         dripsDataStore = new DripsDataStore();
         Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, admin)));
+        drips = Drips(address(new ManagedProxy(dripsLogic, address(1))));
     }
 
     function hashUint(uint256 input) public pure returns (uint256) {

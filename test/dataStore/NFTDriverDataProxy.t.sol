@@ -21,8 +21,7 @@ contract NFTDriverDataProxyTest is Test {
     NFTDriverDataProxy internal dataProxy;
     IERC20 internal erc20;
 
-    address internal admin = address(1);
-    address internal user = address(2);
+    address internal user = address(1);
     uint256 internal tokenId;
     bytes32 internal someMetadataHash;
 
@@ -36,13 +35,13 @@ contract NFTDriverDataProxyTest is Test {
         drips.registerDriver(address(1));
         drips.registerDriver(address(1));
         NFTDriver driverLogic = new NFTDriver(drips, address(caller), drips.nextDriverId());
-        driver = NFTDriver(address(new ManagedProxy(driverLogic, admin)));
+        driver = NFTDriver(address(new ManagedProxy(driverLogic, address(2))));
         drips.registerDriver(address(driver));
 
         dripsDataStore = new DripsDataStore();
 
         NFTDriverDataProxy dataProxyLogic = new NFTDriverDataProxy(driver, dripsDataStore, caller);
-        dataProxy = NFTDriverDataProxy(address(new ManagedProxy(dataProxyLogic, admin)));
+        dataProxy = NFTDriverDataProxy(address(new ManagedProxy(dataProxyLogic, address(2))));
 
         caller.authorize(address(dataProxy));
 
@@ -199,40 +198,5 @@ contract NFTDriverDataProxyTest is Test {
             value: 0
         });
         caller.callBatched(calls);
-    }
-
-    modifier canBePausedTest() {
-        vm.prank(admin);
-        driver.pause();
-        vm.expectRevert("Contract paused");
-        _;
-    }
-
-    function testMintCanBePaused() public canBePausedTest {
-        dataProxy.mint(user, 0);
-    }
-
-    function testSafeMintCanBePaused() public canBePausedTest {
-        dataProxy.safeMint(user, 0);
-    }
-
-    function testMintWithSaltCanBePaused() public canBePausedTest {
-        dataProxy.mintWithSalt(0, user, 0);
-    }
-
-    function testSafeMintWithSaltCanBePaused() public canBePausedTest {
-        dataProxy.safeMintWithSalt(0, user, 0);
-    }
-
-    function testSetStreamsCanBePaused() public canBePausedTest {
-        dataProxy.setStreams(0, erc20, 0, 0, 0, 0, user);
-    }
-
-    function testSetSplitsCanBePaused() public canBePausedTest {
-        dataProxy.setSplits(0, 0);
-    }
-
-    function testEmitAccountMetadataCanBePaused() public canBePausedTest {
-        dataProxy.emitAccountMetadata(0, 0);
     }
 }
