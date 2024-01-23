@@ -106,7 +106,7 @@ contract GiversRegistry is Managed {
     /// If it's the zero address, `Giver` wraps all the native tokens it holds using
     /// `nativeTokenWrapper`, and then `give`s to the account all the wrapped tokens it holds.
     /// @param amt The amount of tokens that were `give`n.
-    function give(uint256 accountId, IERC20 erc20) public whenNotPaused returns (uint256 amt) {
+    function give(uint256 accountId, IERC20 erc20) public returns (uint256 amt) {
         address giver_ = giver(accountId);
         if (!Address.isContract(giver_)) {
             // slither-disable-next-line unused-return

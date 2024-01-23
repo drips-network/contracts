@@ -25,9 +25,8 @@ contract AddressDriverDataProxyTest is Test {
     AddressDriverDataProxy internal dataProxy;
     IERC20 internal erc20;
 
-    address internal admin = address(1);
     uint256 internal thisId;
-    address internal user = address(2);
+    address internal user = address(1);
 
     function setUp() public {
         Drips dripsLogic = new Drips(10);
@@ -40,14 +39,14 @@ contract AddressDriverDataProxyTest is Test {
         drips.registerDriver(address(1));
         AddressDriver addressDriverLogic =
             new AddressDriver(drips, address(caller), drips.nextDriverId());
-        addressDriver = AddressDriver(address(new ManagedProxy(addressDriverLogic, admin)));
+        addressDriver = AddressDriver(address(new ManagedProxy(addressDriverLogic, address(2))));
         drips.registerDriver(address(addressDriver));
 
         dripsDataStore = new DripsDataStore();
 
         AddressDriverDataProxy dataProxyLogic =
             new AddressDriverDataProxy(addressDriver, dripsDataStore, caller);
-        dataProxy = AddressDriverDataProxy(address(new ManagedProxy(dataProxyLogic, admin)));
+        dataProxy = AddressDriverDataProxy(address(new ManagedProxy(dataProxyLogic, address(2))));
 
         caller.authorize(address(dataProxy));
 
@@ -150,24 +149,5 @@ contract AddressDriverDataProxyTest is Test {
             value: 0
         });
         caller.callBatched(calls);
-    }
-
-    modifier canBePausedTest() {
-        vm.prank(admin);
-        dataProxy.pause();
-        vm.expectRevert("Contract paused");
-        _;
-    }
-
-    function testSetStreamsCanBePaused() public canBePausedTest {
-        dataProxy.setStreams(erc20, 0, 0, 0, 0, user);
-    }
-
-    function testSetSplitsCanBePaused() public canBePausedTest {
-        dataProxy.setSplits(0);
-    }
-
-    function testEmitAccountMetadataCanBePaused() public canBePausedTest {
-        dataProxy.emitAccountMetadata(0);
     }
 }

@@ -24,7 +24,6 @@ contract NFTDriverTest is Test {
     NFTDriver internal driver;
     IERC20 internal erc20;
 
-    address internal admin = address(1);
     address internal user = address(2);
     uint256 internal tokenId;
     uint256 internal tokenId1;
@@ -44,7 +43,7 @@ contract NFTDriverTest is Test {
         drips.registerDriver(address(1));
         drips.registerDriver(address(1));
         NFTDriver driverLogic = new NFTDriver(drips, address(caller), drips.nextDriverId());
-        driver = NFTDriver(address(new ManagedProxy(driverLogic, admin)));
+        driver = NFTDriver(address(new ManagedProxy(driverLogic, address(1))));
         drips.registerDriver(address(driver));
 
         tokenId = driver.mint(address(this), noMetadata());
@@ -317,72 +316,5 @@ contract NFTDriverTest is Test {
         caller.callAs(user, address(driver), giveData);
 
         assertEq(drips.splittable(tokenId, erc20), amt, "Invalid splittable after give");
-    }
-
-    modifier canBePausedTest() {
-        vm.prank(admin);
-        driver.pause();
-        vm.expectRevert("Contract paused");
-        _;
-    }
-
-    function testMintCanBePaused() public canBePausedTest {
-        driver.mint(user, noMetadata());
-    }
-
-    function testSafeMintCanBePaused() public canBePausedTest {
-        driver.safeMint(user, noMetadata());
-    }
-
-    function testMintWithSaltCanBePaused() public canBePausedTest {
-        driver.mintWithSalt(0, user, noMetadata());
-    }
-
-    function testSafeMintWithSaltCanBePaused() public canBePausedTest {
-        driver.safeMintWithSalt(0, user, noMetadata());
-    }
-
-    function testCollectCanBePaused() public canBePausedTest {
-        driver.collect(0, erc20, user);
-    }
-
-    function testGiveCanBePaused() public canBePausedTest {
-        driver.give(0, 0, erc20, 0);
-    }
-
-    function testSetStreamsCanBePaused() public canBePausedTest {
-        driver.setStreams(0, erc20, new StreamReceiver[](0), 0, new StreamReceiver[](0), 0, 0, user);
-    }
-
-    function testSetSplitsCanBePaused() public canBePausedTest {
-        driver.setSplits(0, new SplitsReceiver[](0));
-    }
-
-    function testEmitAccountMetadataCanBePaused() public canBePausedTest {
-        driver.emitAccountMetadata(0, noMetadata());
-    }
-
-    function testBurnCanBePaused() public canBePausedTest {
-        driver.burn(0);
-    }
-
-    function testApproveCanBePaused() public canBePausedTest {
-        driver.approve(user, 0);
-    }
-
-    function testSafeTransferFromCanBePaused() public canBePausedTest {
-        driver.safeTransferFrom(user, user, 0);
-    }
-
-    function testSafeTransferFromWithDataCanBePaused() public canBePausedTest {
-        driver.safeTransferFrom(user, user, 0, new bytes(0));
-    }
-
-    function testSetApprovalForAllCanBePaused() public canBePausedTest {
-        driver.setApprovalForAll(user, false);
-    }
-
-    function testTransferFromCanBePaused() public canBePausedTest {
-        driver.transferFrom(user, user, 0);
     }
 }

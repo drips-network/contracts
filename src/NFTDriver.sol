@@ -107,7 +107,6 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     /// @return tokenId The minted token ID. It's equal to the account ID controlled by it.
     function mint(address to, AccountMetadata[] calldata accountMetadata)
         public
-        whenNotPaused
         returns (uint256 tokenId)
     {
         tokenId = _registerTokenId();
@@ -125,7 +124,6 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     /// @return tokenId The minted token ID. It's equal to the account ID controlled by it.
     function safeMint(address to, AccountMetadata[] calldata accountMetadata)
         public
-        whenNotPaused
         returns (uint256 tokenId)
     {
         tokenId = _registerTokenId();
@@ -153,7 +151,6 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     /// The ID is calculated using `calcTokenIdWithSalt` for the caller's address and the used salt.
     function mintWithSalt(uint64 salt, address to, AccountMetadata[] calldata accountMetadata)
         public
-        whenNotPaused
         returns (uint256 tokenId)
     {
         tokenId = _registerTokenIdWithSalt(salt);
@@ -174,7 +171,6 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     /// The ID is calculated using `calcTokenIdWithSalt` for the caller's address and the used salt.
     function safeMintWithSalt(uint64 salt, address to, AccountMetadata[] calldata accountMetadata)
         public
-        whenNotPaused
         returns (uint256 tokenId)
     {
         tokenId = _registerTokenIdWithSalt(salt);
@@ -207,7 +203,6 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     /// @return amt The collected amount
     function collect(uint256 tokenId, IERC20 erc20, address transferTo)
         public
-        whenNotPaused
         onlyApprovedOrOwner(tokenId)
         returns (uint128 amt)
     {
@@ -230,7 +225,6 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     /// @param amt The given amount
     function give(uint256 tokenId, uint256 receiver, IERC20 erc20, uint128 amt)
         public
-        whenNotPaused
         onlyApprovedOrOwner(tokenId)
     {
         _giveAndTransfer(drips, tokenId, receiver, erc20, amt);
@@ -297,7 +291,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
         uint32 maxEndHint1,
         uint32 maxEndHint2,
         address transferTo
-    ) public whenNotPaused onlyApprovedOrOwner(tokenId) returns (int128 realBalanceDelta) {
+    ) public onlyApprovedOrOwner(tokenId) returns (int128 realBalanceDelta) {
         return _setStreamsAndTransfer(
             drips,
             tokenId,
@@ -335,7 +329,6 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     /// Splitting 100% to self effectively blocks splitting unless the configuration is updated.
     function setSplits(uint256 tokenId, SplitsReceiver[] calldata receivers)
         public
-        whenNotPaused
         onlyApprovedOrOwner(tokenId)
     {
         drips.setSplits(tokenId, receivers);
@@ -350,7 +343,6 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     /// @param accountMetadata The list of account metadata.
     function emitAccountMetadata(uint256 tokenId, AccountMetadata[] calldata accountMetadata)
         public
-        whenNotPaused
         onlyApprovedOrOwner(tokenId)
     {
         _emitAccountMetadata(tokenId, accountMetadata);
@@ -381,21 +373,17 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     }
 
     /// @inheritdoc ERC721Burnable
-    function burn(uint256 tokenId) public override whenNotPaused {
+    function burn(uint256 tokenId) public override {
         super.burn(tokenId);
     }
 
     /// @inheritdoc IERC721
-    function approve(address to, uint256 tokenId) public override whenNotPaused {
+    function approve(address to, uint256 tokenId) public override {
         super.approve(to, tokenId);
     }
 
     /// @inheritdoc IERC721
-    function safeTransferFrom(address from, address to, uint256 tokenId)
-        public
-        override
-        whenNotPaused
-    {
+    function safeTransferFrom(address from, address to, uint256 tokenId) public override {
         super.safeTransferFrom(from, to, tokenId);
     }
 
@@ -403,22 +391,17 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     function safeTransferFrom(address from, address to, uint256 tokenId, bytes memory data)
         public
         override
-        whenNotPaused
     {
         super.safeTransferFrom(from, to, tokenId, data);
     }
 
     /// @inheritdoc IERC721
-    function setApprovalForAll(address operator, bool approved) public override whenNotPaused {
+    function setApprovalForAll(address operator, bool approved) public override {
         super.setApprovalForAll(operator, approved);
     }
 
     /// @inheritdoc IERC721
-    function transferFrom(address from, address to, uint256 tokenId)
-        public
-        override
-        whenNotPaused
-    {
+    function transferFrom(address from, address to, uint256 tokenId) public override {
         super.transferFrom(from, to, tokenId);
     }
 

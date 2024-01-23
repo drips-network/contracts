@@ -58,21 +58,20 @@ contract GiversRegistryTest is Test {
     IERC20 internal erc20;
     IERC20 internal nativeTokenWrapper;
     GiversRegistry internal giversRegistry;
-    address internal admin = address(1);
     uint256 internal accountId;
     address payable internal giver;
 
     function setUp() public {
         Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, admin)));
+        drips = Drips(address(new ManagedProxy(dripsLogic, address(1))));
         drips.registerDriver(address(1));
         AddressDriver addressDriverLogic =
             new AddressDriver(drips, address(0), drips.nextDriverId());
-        addressDriver = AddressDriver(address(new ManagedProxy(addressDriverLogic, admin)));
+        addressDriver = AddressDriver(address(new ManagedProxy(addressDriverLogic, address(1))));
         drips.registerDriver(address(addressDriver));
 
         GiversRegistry giversRegistryLogic = new GiversRegistry(addressDriver);
-        giversRegistry = GiversRegistry(address(new ManagedProxy(giversRegistryLogic, admin)));
+        giversRegistry = GiversRegistry(address(new ManagedProxy(giversRegistryLogic, address(1))));
         giversRegistry.initialize();
         nativeTokenWrapper = giversRegistry.nativeTokenWrapper();
         vm.etch(address(nativeTokenWrapper), address(new NativeTokenWrapper()).code);
@@ -160,13 +159,6 @@ contract GiversRegistryTest is Test {
 
     function testGiveZeroWrapped() public {
         giveNative(0, 0);
-    }
-
-    function testGiveCanBePaused() public {
-        vm.prank(admin);
-        giversRegistry.pause();
-        vm.expectRevert("Contract paused");
-        giversRegistry.give(accountId, erc20);
     }
 
     function testGiveImplReverts() public {

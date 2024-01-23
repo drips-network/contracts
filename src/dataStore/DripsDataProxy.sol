@@ -55,7 +55,7 @@ contract DripsDataProxy is Managed {
         uint256 senderId,
         bytes32 historyStartHash,
         bytes32 streamsHistoryHash
-    ) public whenNotPaused returns (uint128 amt) {
+    ) public returns (uint128 amt) {
         return drips.squeezeStreams(
             accountId,
             erc20,
@@ -134,7 +134,6 @@ contract DripsDataProxy is Managed {
     /// @return splitAmt The amount split to the account's splits receivers
     function split(uint256 accountId, IERC20 erc20)
         public
-        whenNotPaused
         returns (uint128 collectableAmt, uint128 splitAmt)
     {
         bytes32 splitsHash = drips.splitsHash(accountId);

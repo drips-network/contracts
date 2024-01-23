@@ -265,7 +265,6 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     /// @return accountId The ID of the account.
     function requestUpdateOwner(Forge forge, bytes memory name)
         public
-        whenNotPaused
         returns (uint256 accountId)
     {
         uint256 fee = _repoDriverAnyApiStorage().defaultFee;
@@ -286,10 +285,7 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     /// It must be a valid ABI-encoded calldata for `requestUpdateOwner`.
     /// The call parameters will be used the same way as when calling `requestUpdateOwner`,
     /// to determine which account's ownership update is requested.
-    function onTokenTransfer(address, /* sender */ uint256 amount, bytes calldata data)
-        public
-        whenNotPaused
-    {
+    function onTokenTransfer(address, /* sender */ uint256 amount, bytes calldata data) public {
         require(msg.sender == address(linkToken), "Callable only by the Link token");
         require(data.length >= 4, "Data not a valid calldata");
         require(bytes4(data[:4]) == this.requestUpdateOwner.selector, "Data not requestUpdateOwner");
@@ -377,7 +373,7 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     /// Must be the same as the request ID generated when requesting an owner update,
     /// this function will update the account ownership that was requested back then.
     /// @param ownerRaw The new owner of the account. Must be a 20 bytes long address.
-    function updateOwnerByAnyApi(bytes32 requestId, bytes calldata ownerRaw) public whenNotPaused {
+    function updateOwnerByAnyApi(bytes32 requestId, bytes calldata ownerRaw) public {
         RepoDriverAnyApiStorage storage storageRef = _repoDriverAnyApiStorage();
         require(msg.sender == address(storageRef.operator), "Callable only by the operator");
         uint256 accountId = storageRef.requestedUpdates[requestId];
@@ -403,7 +399,6 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     /// @return amt The collected amount
     function collect(uint256 accountId, IERC20 erc20, address transferTo)
         public
-        whenNotPaused
         onlyOwner(accountId)
         returns (uint128 amt)
     {
@@ -424,7 +419,6 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     /// @param amt The given amount
     function give(uint256 accountId, uint256 receiver, IERC20 erc20, uint128 amt)
         public
-        whenNotPaused
         onlyOwner(accountId)
     {
         _giveAndTransfer(drips, accountId, receiver, erc20, amt);
@@ -490,7 +484,7 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         uint32 maxEndHint1,
         uint32 maxEndHint2,
         address transferTo
-    ) public whenNotPaused onlyOwner(accountId) returns (int128 realBalanceDelta) {
+    ) public onlyOwner(accountId) returns (int128 realBalanceDelta) {
         return _setStreamsAndTransfer(
             drips,
             accountId,
@@ -527,7 +521,6 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     /// Splitting 100% to self effectively blocks splitting unless the configuration is updated.
     function setSplits(uint256 accountId, SplitsReceiver[] calldata receivers)
         public
-        whenNotPaused
         onlyOwner(accountId)
     {
         drips.setSplits(accountId, receivers);
@@ -541,7 +534,6 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     /// @param accountMetadata The list of account metadata.
     function emitAccountMetadata(uint256 accountId, AccountMetadata[] calldata accountMetadata)
         public
-        whenNotPaused
         onlyOwner(accountId)
     {
         if (accountMetadata.length != 0) {

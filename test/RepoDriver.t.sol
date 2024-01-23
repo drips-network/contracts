@@ -650,43 +650,4 @@ contract RepoDriverTest is Test {
         caller.callAs(user, address(driver), giveData);
         assertEq(drips.splittable(accountId, erc20), amt, "Invalid splittable after give");
     }
-
-    modifier canBePausedTest() {
-        vm.prank(admin);
-        driver.pause();
-        vm.expectRevert("Contract paused");
-        _;
-    }
-
-    function testRequestUpdateOwnerCanBePaused() public canBePausedTest {
-        driver.requestUpdateOwner(Forge.GitHub, "");
-    }
-
-    function testOnTokenTransferCanBePaused() public canBePausedTest {
-        driver.onTokenTransfer(address(0), 0, "");
-    }
-
-    function testUpdateOwnerByAnyApiCanBePaused() public canBePausedTest {
-        driver.updateOwnerByAnyApi(0, "");
-    }
-
-    function testCollectCanBePaused() public canBePausedTest {
-        driver.collect(0, erc20, user);
-    }
-
-    function testGiveCanBePaused() public canBePausedTest {
-        driver.give(0, 0, erc20, 0);
-    }
-
-    function testSetStreamsCanBePaused() public canBePausedTest {
-        driver.setStreams(0, erc20, new StreamReceiver[](0), 0, new StreamReceiver[](0), 0, 0, user);
-    }
-
-    function testSetSplitsCanBePaused() public canBePausedTest {
-        driver.setSplits(0, new SplitsReceiver[](0));
-    }
-
-    function testEmitAccountMetadataCanBePaused() public canBePausedTest {
-        driver.emitAccountMetadata(0, noMetadata());
-    }
 }

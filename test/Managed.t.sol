@@ -21,28 +21,13 @@ contract ManagedTest is Test {
     Logic internal proxy;
 
     address internal admin = address(1);
-    address internal pauser = address(2);
-    address internal user = address(3);
+    address internal user = address(2);
 
     bytes internal constant ERROR_NOT_ADMIN = "Caller not the admin";
-    bytes internal constant ERROR_NOT_ADMIN_OR_PAUSER = "Caller not the admin or a pauser";
 
     function setUp() public {
         logic = new Logic(0);
         proxy = Logic(address(new ManagedProxy(logic, admin)));
-        vm.prank(admin);
-        proxy.grantPauser(pauser);
-    }
-
-    function pause() internal {
-        vm.prank(pauser);
-        proxy.pause();
-    }
-
-    function testLogicContractIsPausedForever() public {
-        assertTrue(logic.isPaused(), "Not paused");
-        assertEq(logic.admin(), address(0), "Admin not zero");
-        assertEq(logic.allPausers(), new address[](0), "Pausers not empty");
     }
 
     function testAdminCanProposeNewAdmin() public {
@@ -57,13 +42,7 @@ contract ManagedTest is Test {
         assertEq(proxy.proposedAdmin(), address(0));
     }
 
-    function testPauserCanNotProposeNewAdmin() public {
-        vm.prank(pauser);
-        vm.expectRevert(ERROR_NOT_ADMIN);
-        proxy.proposeNewAdmin(user);
-    }
-
-    function testArbitraryUserCanNotProposeNewAdmin() public {
+    function testUserCanNotProposeNewAdmin() public {
         vm.expectRevert(ERROR_NOT_ADMIN);
         proxy.proposeNewAdmin(user);
     }
@@ -79,7 +58,7 @@ contract ManagedTest is Test {
         assertEq(proxy.proposedAdmin(), address(0));
     }
 
-    function testArbitraryUserCanNotAcceptAdmin() public {
+    function testUserCanNotAcceptAdmin() public {
         vm.prank(admin);
         proxy.proposeNewAdmin(user);
         vm.expectRevert("Caller not the proposed admin");
@@ -97,13 +76,7 @@ contract ManagedTest is Test {
         assertEq(proxy.proposedAdmin(), address(0));
     }
 
-    function testPauserCanNotRenounceAdmin() public {
-        vm.prank(pauser);
-        vm.expectRevert(ERROR_NOT_ADMIN);
-        proxy.renounceAdmin();
-    }
-
-    function testArbitraryUserCanNotRenounceAdmin() public {
+    function testUserCanNotRenounceAdmin() public {
         vm.expectRevert(ERROR_NOT_ADMIN);
         proxy.renounceAdmin();
     }
@@ -118,118 +91,10 @@ contract ManagedTest is Test {
         assertEq(proxy.instanceId(), newInstanceId, "Invalid new instance ID");
     }
 
-    function testPauserCanNotUpgradeContract() public {
-        Logic newLogic = new Logic(0);
-        vm.prank(pauser);
-        vm.expectRevert(ERROR_NOT_ADMIN);
-        proxy.upgradeTo(address(newLogic));
-    }
-
-    function testArbitraryUserCanNotUpgradeContract() public {
+    function testUserCanNotUpgradeContract() public {
         Logic newLogic = new Logic(0);
         vm.expectRevert(ERROR_NOT_ADMIN);
         proxy.upgradeTo(address(newLogic));
-    }
-
-    function testAdminCanGrantPauser() public {
-        vm.prank(admin);
-        proxy.grantPauser(user);
-        assertTrue(proxy.isPauser(user), "Pauser not granted");
-        address[] memory allPausers = new address[](2);
-        allPausers[0] = pauser;
-        allPausers[1] = user;
-        assertEq(proxy.allPausers(), allPausers, "Invalid pausers");
-    }
-
-    function testPauserCanNotGrantPauser() public {
-        vm.prank(pauser);
-        vm.expectRevert(ERROR_NOT_ADMIN);
-        proxy.grantPauser(user);
-    }
-
-    function testArbitraryUserCanNotGrantPauser() public {
-        vm.expectRevert(ERROR_NOT_ADMIN);
-        proxy.grantPauser(user);
-    }
-
-    function testAdminCanRevokePauser() public {
-        vm.prank(admin);
-        proxy.revokePauser(pauser);
-        assertFalse(proxy.isPauser(pauser), "Pauser not revoked");
-        assertEq(proxy.allPausers(), new address[](0), "Invalid pausers");
-    }
-
-    function testPauserCanNotRevokePauser() public {
-        vm.prank(pauser);
-        vm.expectRevert(ERROR_NOT_ADMIN);
-        proxy.revokePauser(pauser);
-    }
-
-    function testArbitraryUserCanNotRevokePauser() public {
-        vm.expectRevert(ERROR_NOT_ADMIN);
-        proxy.revokePauser(pauser);
-    }
-
-    function testGrantingPauserToPauserReverts() public {
-        vm.prank(admin);
-        vm.expectRevert("Address already is a pauser");
-        proxy.grantPauser(pauser);
-    }
-
-    function testRevokingPauserFromNotPauserReverts() public {
-        vm.prank(admin);
-        vm.expectRevert("Address is not a pauser");
-        proxy.revokePauser(user);
-    }
-
-    function testAdminCanPause() public {
-        vm.prank(admin);
-        proxy.pause();
-        assertTrue(proxy.isPaused(), "Pausing failed");
-    }
-
-    function testPauserCanPause() public {
-        vm.prank(pauser);
-        proxy.pause();
-        assertTrue(proxy.isPaused(), "Pausing failed");
-    }
-
-    function testArbitraryUserCanNotPause() public {
-        vm.expectRevert(ERROR_NOT_ADMIN_OR_PAUSER);
-        proxy.pause();
-    }
-
-    function testAdminCanUnpause() public {
-        pause();
-        vm.prank(admin);
-        proxy.unpause();
-        assertFalse(proxy.isPaused(), "Unpausing failed");
-    }
-
-    function testPauserCanUnpause() public {
-        pause();
-        vm.prank(pauser);
-        proxy.unpause();
-        assertFalse(proxy.isPaused(), "Unpausing failed");
-    }
-
-    function testArbitraryUserCanNotUnpause() public {
-        pause();
-        vm.expectRevert(ERROR_NOT_ADMIN_OR_PAUSER);
-        proxy.unpause();
-    }
-
-    function testOnlyUnpausedContractCanBePaused() public {
-        pause();
-        vm.prank(admin);
-        vm.expectRevert("Contract paused");
-        proxy.pause();
-    }
-
-    function testOnlyPausedContractCanBeUnpaused() public {
-        vm.prank(admin);
-        vm.expectRevert("Contract not paused");
-        proxy.unpause();
     }
 
     function testErc1967Slot() public {
