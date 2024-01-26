@@ -170,7 +170,7 @@ abstract contract Streams {
     /// @notice Emitted when the streams configuration of an account is updated.
     /// @param accountId The account ID.
     /// @param erc20 The used ERC-20 token.
-    /// @param receiversHash The streams receivers list hash
+    /// @param receiversHash The streams receivers list hash.
     /// @param streamsHistoryHash The streams history hash that was valid right before the update.
     /// @param balance The account's streams balance. These funds will be streamed to the receivers.
     /// @param maxEnd The maximum end time of streaming, when funds run out.
@@ -185,13 +185,10 @@ abstract contract Streams {
         uint32 maxEnd
     );
 
-    /// @notice Emitted when an account is seen in a streams receivers list.
+    /// @notice Emitted when a streams receivers list may be used for the first time.
     /// @param receiversHash The streams receivers list hash
-    /// @param accountId The account ID.
-    /// @param config The streams configuration.
-    event StreamReceiverSeen(
-        bytes32 indexed receiversHash, uint256 indexed accountId, StreamConfig config
-    );
+    /// @param receivers The list of the streams receivers.
+    event StreamReceiversSeen(bytes32 indexed receiversHash, StreamReceiver[] receivers);
 
     /// @notice Emitted when streams are received.
     /// @param accountId The account ID.
@@ -766,15 +763,12 @@ abstract contract Streams {
             bytes32 newStreamsHash = _hashStreams(newReceivers);
             state.streamsHistoryHash =
                 _hashStreamsHistory(streamsHistory, newStreamsHash, _currTimestamp(), newMaxEnd);
-            emit StreamsSet(accountId, erc20, newStreamsHash, streamsHistory, newBalance, newMaxEnd);
             // slither-disable-next-line timestamp
-            if (newStreamsHash != state.streamsHash) {
+            if (state.streamsHash != newStreamsHash) {
                 state.streamsHash = newStreamsHash;
-                for (uint256 i = 0; i < newReceivers.length; i++) {
-                    StreamReceiver memory receiver = newReceivers[i];
-                    emit StreamReceiverSeen(newStreamsHash, receiver.accountId, receiver.config);
-                }
+                emit StreamReceiversSeen(newStreamsHash, newReceivers);
             }
+            emit StreamsSet(accountId, erc20, newStreamsHash, streamsHistory, newBalance, newMaxEnd);
         }
     }
 
