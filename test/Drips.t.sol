@@ -192,7 +192,7 @@ contract DripsTest is Test {
         list = new SplitsReceiver[](0);
     }
 
-    function splitsReceivers(uint256 splitsReceiver, uint32 weight)
+    function splitsReceivers(uint256 splitsReceiver, uint256 weight)
         internal
         pure
         returns (SplitsReceiver[] memory list)
@@ -203,9 +203,9 @@ contract DripsTest is Test {
 
     function splitsReceivers(
         uint256 splitsReceiver1,
-        uint32 weight1,
+        uint256 weight1,
         uint256 splitsReceiver2,
-        uint32 weight2
+        uint256 weight2
     ) internal pure returns (SplitsReceiver[] memory list) {
         list = new SplitsReceiver[](2);
         list[0] = SplitsReceiver(splitsReceiver1, weight1);
@@ -418,7 +418,7 @@ contract DripsTest is Test {
     }
 
     function testUncollectedFundsAreSplitUsingCurrentConfig() public {
-        uint32 totalWeight = drips.TOTAL_SPLITS_WEIGHT();
+        uint256 totalWeight = drips.TOTAL_SPLITS_WEIGHT();
         setSplits(accountId1, splitsReceivers(receiver1, totalWeight));
         setStreams(accountId2, 0, 5, streamsReceivers(accountId1, 5));
         skipToCycleEnd();
@@ -508,7 +508,7 @@ contract DripsTest is Test {
     }
 
     function testSplitSplitsFundsReceivedFromAllSources() public {
-        uint32 totalWeight = drips.TOTAL_SPLITS_WEIGHT();
+        uint256 totalWeight = drips.TOTAL_SPLITS_WEIGHT();
         // Gives
         give(accountId2, accountId1, 1);
 

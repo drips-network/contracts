@@ -27,7 +27,7 @@ contract SplitsTest is Test, Splits {
         list = new SplitsReceiver[](0);
     }
 
-    function splitsReceivers(uint256 usedAccountId, uint32 weight)
+    function splitsReceivers(uint256 usedAccountId, uint256 weight)
         internal
         pure
         returns (SplitsReceiver[] memory list)
@@ -36,7 +36,7 @@ contract SplitsTest is Test, Splits {
         list[0] = SplitsReceiver(usedAccountId, weight);
     }
 
-    function splitsReceivers(uint256 account1, uint32 weight1, uint256 account2, uint32 weight2)
+    function splitsReceivers(uint256 account1, uint256 weight1, uint256 account2, uint256 weight2)
         internal
         pure
         returns (SplitsReceiver[] memory list)
@@ -190,10 +190,20 @@ contract SplitsTest is Test, Splits {
     }
 
     function testRejectsTooHighTotalWeightSplitsReceivers() public {
-        uint32 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
+        uint256 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
         setSplits(accountId, splitsReceivers(receiver, totalWeight));
         assertSetSplitsReverts(
             accountId, splitsReceivers(receiver, totalWeight + 1), "Splits weights sum too high"
+        );
+    }
+
+    function testRejectsOverflowingTotalWeightSplitsReceivers() public {
+        uint256 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
+        setSplits(accountId, splitsReceivers(receiver, totalWeight));
+        assertSetSplitsReverts(
+            accountId,
+            splitsReceivers(receiver1, type(uint256).max, receiver2, 4),
+            "Splits weights sum too high"
         );
     }
 
@@ -216,7 +226,7 @@ contract SplitsTest is Test, Splits {
     }
 
     function testCanSplitAllWhenCollectedDoesNotSplitEvenly() public {
-        uint32 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
+        uint256 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
         // 3 waiting for accountId
         addSplittable(accountId, 3);
 
@@ -239,7 +249,7 @@ contract SplitsTest is Test, Splits {
     }
 
     function testSplittingSplitsAllFundsEvenWhenTheyDoNotDivideEvenly() public {
-        uint32 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
+        uint256 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
         setSplits(
             accountId, splitsReceivers(receiver1, (totalWeight / 5) * 2, receiver2, totalWeight / 5)
         );
@@ -251,7 +261,7 @@ contract SplitsTest is Test, Splits {
     }
 
     function testAccountCanSplitToItself() public {
-        uint32 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
+        uint256 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
         // receiver1 receives 30%, gets 50% split to themselves and receiver2 gets split 20%
         setSplits(
             receiver1, splitsReceivers(receiver1, totalWeight / 2, receiver2, totalWeight / 5)
@@ -280,7 +290,7 @@ contract SplitsTest is Test, Splits {
     }
 
     function testSplitsConfigurationIsCommonBetweenTokens() public {
-        uint32 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
+        uint256 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
         setSplits(accountId, splitsReceivers(receiver1, totalWeight / 10));
         erc20 = defaultErc20;
         addSplittable(accountId, 30);
@@ -298,7 +308,7 @@ contract SplitsTest is Test, Splits {
     }
 
     function testForwardSplits() public {
-        uint32 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
+        uint256 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
 
         addSplittable(accountId, 10);
         setSplits(accountId, splitsReceivers(receiver1, totalWeight));
@@ -315,7 +325,7 @@ contract SplitsTest is Test, Splits {
     }
 
     function testSplitMultipleReceivers() public {
-        uint32 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
+        uint256 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
         addSplittable(accountId, 10);
 
         setSplits(
@@ -352,6 +362,7 @@ contract SplitsTest is Test, Splits {
         uint256 weightSum = 0;
         for (uint256 i = 0; i < receivers.length; i++) {
             receivers[i] = receiversRaw[i];
+            receivers[i].weight %= _TOTAL_SPLITS_WEIGHT;
             weightSum += receivers[i].weight;
         }
         if (weightSum == 0) weightSum = 1;
@@ -360,8 +371,7 @@ contract SplitsTest is Test, Splits {
         for (uint256 i = 0; i < receivers.length; i++) {
             uint256 usedTotalWeight = totalWeight * usedWeight / weightSum;
             usedWeight += receivers[i].weight;
-            receivers[i].weight =
-                uint32((totalWeight * usedWeight / weightSum) - usedTotalWeight + 1);
+            receivers[i].weight = (totalWeight * usedWeight / weightSum) - usedTotalWeight + 1;
         }
     }
 

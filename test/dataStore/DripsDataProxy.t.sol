@@ -63,7 +63,7 @@ contract DripsDataProxyTest is Test {
     }
 
     function testSplit() public {
-        uint32 splitWeight = drips.TOTAL_SPLITS_WEIGHT() / 4;
+        uint256 splitWeight = drips.TOTAL_SPLITS_WEIGHT() / 4;
         uint128 totalAmt = 8;
         uint128 splitAmt = 2;
         uint128 collectableAmt = 6;

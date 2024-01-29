@@ -10,7 +10,7 @@ struct SplitsReceiver {
     /// @notice The splits weight. Must never be zero.
     /// The account will be getting `weight / _TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the splitting account.
-    uint32 weight;
+    uint256 weight;
 }
 
 /// @notice Splits can keep track of at most `type(uint128).max`
@@ -22,7 +22,7 @@ abstract contract Splits {
     /// Limits the cost of splitting.
     uint256 internal constant _MAX_SPLITS_RECEIVERS = 200;
     /// @notice The total splits weight of an account.
-    uint32 internal constant _TOTAL_SPLITS_WEIGHT = 1_000_000;
+    uint256 internal constant _TOTAL_SPLITS_WEIGHT = 1_000_000;
     /// @notice The amount the contract can keep track of each ERC-20 token.
     // slither-disable-next-line unused-state
     uint128 internal constant _MAX_SPLITS_BALANCE = _SPLITTABLE_MASK;
@@ -127,6 +127,8 @@ abstract contract Splits {
         unchecked {
             uint256 splitsWeight = 0;
             for (uint256 i = currReceivers.length; i != 0;) {
+                // This will not overflow because the receivers list
+                // is verified to add up to no more than _TOTAL_SPLITS_WEIGHT
                 splitsWeight += currReceivers[--i].weight;
             }
             splitAmt = uint128(amount * splitsWeight / _TOTAL_SPLITS_WEIGHT);
@@ -164,6 +166,8 @@ abstract contract Splits {
         unchecked {
             uint256 splitsWeight = 0;
             for (uint256 i = 0; i < currReceivers.length; i++) {
+                // This will not overflow because the receivers list
+                // is verified to add up to no more than _TOTAL_SPLITS_WEIGHT
                 splitsWeight += currReceivers[i].weight;
                 uint128 currSplitAmt = splitAmt;
                 splitAmt = uint128(splittable * splitsWeight / _TOTAL_SPLITS_WEIGHT);
@@ -247,8 +251,9 @@ abstract contract Splits {
             uint256 prevAccountId = 0;
             for (uint256 i = 0; i < receivers.length; i++) {
                 SplitsReceiver memory receiver = receivers[i];
-                uint32 weight = receiver.weight;
+                uint256 weight = receiver.weight;
                 require(weight != 0, "Splits receiver weight is zero");
+                if (weight > _TOTAL_SPLITS_WEIGHT) weight = _TOTAL_SPLITS_WEIGHT + 1;
                 totalWeight += weight;
                 uint256 accountId = receiver.accountId;
                 if (accountId <= prevAccountId) require(i == 0, "Splits receivers not sorted");
