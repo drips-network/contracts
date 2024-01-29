@@ -64,7 +64,7 @@ contract Drips is Managed, Streams, Splits {
     /// Limits the cost of splitting.
     uint256 public constant MAX_SPLITS_RECEIVERS = _MAX_SPLITS_RECEIVERS;
     /// @notice The total splits weight of an account
-    uint32 public constant TOTAL_SPLITS_WEIGHT = _TOTAL_SPLITS_WEIGHT;
+    uint256 public constant TOTAL_SPLITS_WEIGHT = _TOTAL_SPLITS_WEIGHT;
     /// @notice The offset of the controlling driver ID in the account ID.
     /// In other words the controlling driver ID is the highest 32 bits of the account ID.
     /// Every account ID is a 256-bit integer constructed by concatenating:
