@@ -17,7 +17,7 @@ contract ImmutableSplitsDriver is Managed {
     /// @notice The driver ID which this driver uses when calling Drips.
     uint32 public immutable driverId;
     /// @notice The required total splits weight of each splits configuration
-    uint32 public immutable totalSplitsWeight;
+    uint256 public immutable totalSplitsWeight;
     /// @notice The ERC-1967 storage slot holding a single `uint256` counter of created identities.
     bytes32 private immutable _counterSlot = _erc1967Slot("eip1967.immutableSplitsDriver.storage");
 
@@ -76,7 +76,9 @@ contract ImmutableSplitsDriver is Managed {
         uint256 weightSum = 0;
         unchecked {
             for (uint256 i = 0; i < receivers.length; i++) {
-                weightSum += receivers[i].weight;
+                uint256 weight = receivers[i].weight;
+                if (weight > totalSplitsWeight) weight = totalSplitsWeight + 1;
+                weightSum += weight;
             }
         }
         require(weightSum == totalSplitsWeight, "Invalid total receivers weight");

@@ -9,7 +9,7 @@ import {Test} from "forge-std/Test.sol";
 contract ImmutableSplitsDriverTest is Test {
     Drips internal drips;
     ImmutableSplitsDriver internal driver;
-    uint32 internal totalSplitsWeight;
+    uint256 internal totalSplitsWeight;
 
     function setUp() public {
         Drips dripsLogic = new Drips(10);
@@ -25,10 +25,18 @@ contract ImmutableSplitsDriverTest is Test {
         totalSplitsWeight = driver.totalSplitsWeight();
     }
 
+    function splitsReceivers(uint256 weight1, uint256 weight2)
+        internal
+        pure
+        returns (SplitsReceiver[] memory list)
+    {
+        list = new SplitsReceiver[](2);
+        list[0] = SplitsReceiver(1, weight1);
+        list[1] = SplitsReceiver(2, weight2);
+    }
+
     function testCreateSplits() public {
-        SplitsReceiver[] memory receivers = new SplitsReceiver[](2);
-        receivers[0] = SplitsReceiver({accountId: 1, weight: totalSplitsWeight - 1});
-        receivers[1] = SplitsReceiver({accountId: 2, weight: 1});
+        SplitsReceiver[] memory receivers = splitsReceivers(totalSplitsWeight - 1, 1);
         uint256 nextAccountId = driver.nextAccountId();
         AccountMetadata[] memory metadata = new AccountMetadata[](1);
         metadata[0] = AccountMetadata("key", "value");
@@ -43,10 +51,20 @@ contract ImmutableSplitsDriverTest is Test {
     }
 
     function testCreateSplitsRevertsWhenWeightsSumTooLow() public {
-        SplitsReceiver[] memory receivers = new SplitsReceiver[](2);
-        receivers[0] = SplitsReceiver({accountId: 1, weight: totalSplitsWeight - 2});
-        receivers[1] = SplitsReceiver({accountId: 2, weight: 1});
+        SplitsReceiver[] memory receivers = splitsReceivers(totalSplitsWeight - 2, 1);
+        vm.expectRevert("Invalid total receivers weight");
+        driver.createSplits(receivers, new AccountMetadata[](0));
+    }
 
+    function testCreateSplitsRevertsWhenWeightsSumTooHigh() public {
+        SplitsReceiver[] memory receivers = splitsReceivers(totalSplitsWeight - 1, 2);
+        vm.expectRevert("Invalid total receivers weight");
+        driver.createSplits(receivers, new AccountMetadata[](0));
+    }
+
+    function testCreateSplitsRevertsWhenWeightsSumOverflows() public {
+        SplitsReceiver[] memory receivers =
+            splitsReceivers(totalSplitsWeight + 1, type(uint256).max);
         vm.expectRevert("Invalid total receivers weight");
         driver.createSplits(receivers, new AccountMetadata[](0));
     }
