@@ -69,23 +69,26 @@ pretty_amt() {
 }
 
 # args: address, minimum amount (optional)
-set_token() {
-    TOKEN="$1"
-    MIN_AMT_RAW="$2"
-    DECIMALS=$(cast call "$TOKEN" "decimals()(uint8)" | cut -f 1 -d " ")
-    SYMBOL=$(cast call "$TOKEN" "symbol()(string)" | sed 's/^"//;s/"$//')
-    MIN_AMT=0
+process_token() {
+    local TOKEN="$1"
+    local MIN_AMT_RAW="$2"
+    local DECIMALS=$(cast call "$TOKEN" "decimals()(uint8)" | cut -f 1 -d " ")
+    local MIN_AMT=0
     if [ -n "$MIN_AMT_RAW" ]; then
         MIN_AMT=$(cast from-fixed-point "$DECIMALS" "$MIN_AMT_RAW")
     fi
-    echo
-    echo =============================================================================
-    echo "Using token $TOKEN ($(cast call "$TOKEN" "name()(string)" | sed 's/^"//;s/"$//'))"
-    echo "The minimum amount to process is $(pretty_amt "$MIN_AMT")"
+    ALL_TOKENS+=("$TOKEN")
+    ALL_DECIMALS+=("$DECIMALS")
+    ALL_SYMBOLS+=("$(cast call "$TOKEN" "symbol()(string)" | sed 's/^"//;s/"$//')")
+    ALL_NAMES+=("$(cast call "$TOKEN" "name()(string)" | sed 's/^"//;s/"$//')")
+    ALL_MIN_AMTS+=("$MIN_AMT")
 }
 
 # args: amount
 is_below_min_amt() {
+    if [ "$1" == 0 ]; then
+        return 0
+    fi
     local AMT_FLOAT=$(cast to-fixed-point 18 "$1")
     local AMT_HIGH=$(echo "$AMT_FLOAT" | sed 's/\..*//')
     local AMT_LOW=$(echo "$AMT_FLOAT" | sed 's/[^.]*\.//')
@@ -101,19 +104,31 @@ is_below_min_amt() {
 
 # args: account ID
 process_account() {
-    if [ -z "$TOKEN" ]; then
-        echo "No token set, unclear how to process the account"
-        exit 1
-    fi
     ACCOUNT_ID="$1"
     echo
-    echo -----------------------------------------------------------------------------
-    echo "Processing account ID $ACCOUNT_ID"
+    echo =============================================================================
     echo
+    echo "Processing account ID $ACCOUNT_ID"
+    for i in "${!ALL_TOKENS[@]}"; do
+        TOKEN=${ALL_TOKENS[i]}
+        DECIMALS=${ALL_DECIMALS[i]}
+        SYMBOL=${ALL_SYMBOLS[i]}
+        NAME=${ALL_NAMES[i]}
+        MIN_AMT=${ALL_MIN_AMTS[i]}
+        echo
+        echo -----------------------------------------------------------------------------
+        echo
+        echo "Using token $TOKEN ($NAME)"
+        echo "The minimum amount to process is $(pretty_amt "$MIN_AMT")"
+        process_account_for_token
+    done
+}
 
+process_account_for_token() {
     # Receive streams
     local CYCLES=52
     RECEIVABLE=$(cast call "$DRIPS" "receiveStreamsResult(uint256,address,uint32)(uint128)" "$ACCOUNT_ID" "$TOKEN" "$CYCLES" | cut -f 1 -d " ")
+    echo
     if is_below_min_amt "$RECEIVABLE" ; then
         echo "$(pretty_amt "$RECEIVABLE") receivable from streams, skipping."
     else
@@ -153,7 +168,7 @@ echo "Running on chain $(cast chain) using Drips contract $DRIPS"
 
 cat "$1" | while read FIRST SECOND; do
     if (echo "$FIRST" | grep -Eq '^0x[[:xdigit:]]{40}$'); then
-        set_token "$FIRST" "$SECOND"
+        process_token "$FIRST" "$SECOND"
     elif (echo "$FIRST" | grep -Eq '^[[:digit:]]+$') && [ -z "$SECOND" ]; then
         process_account "$FIRST"
     fi
