@@ -55,7 +55,7 @@ contract SplitsTest is Test, Splits {
         assertSplits(usedAccountId, currSplits);
     }
 
-    function setSplitsExternal(uint256 usedAccountId, SplitsReceiver[] memory newReceivers)
+    function setSplitsExternal(uint256 usedAccountId, SplitsReceiver[] calldata newReceivers)
         external
     {
         Splits._setSplits(usedAccountId, newReceivers);
@@ -74,6 +74,13 @@ contract SplitsTest is Test, Splits {
         internal
         view
     {
+        this.assertSplitsExternal(usedAccountId, expectedReceivers);
+    }
+
+    function assertSplitsExternal(
+        uint256 usedAccountId,
+        SplitsReceiver[] calldata expectedReceivers
+    ) external view {
         Splits._assertCurrSplits(usedAccountId, expectedReceivers);
     }
 
@@ -84,7 +91,7 @@ contract SplitsTest is Test, Splits {
 
     function setSplits(uint256 usedAccountId, SplitsReceiver[] memory newReceivers) internal {
         assertSplits(usedAccountId, currSplitsReceivers[usedAccountId]);
-        Splits._setSplits(usedAccountId, newReceivers);
+        this.setSplitsExternal(usedAccountId, newReceivers);
         assertSplits(usedAccountId, newReceivers);
         delete currSplitsReceivers[usedAccountId];
         for (uint256 i = 0; i < newReceivers.length; i++) {
@@ -95,17 +102,17 @@ contract SplitsTest is Test, Splits {
     function splitExternal(
         uint256 usedAccountId,
         IERC20 usedErc20,
-        SplitsReceiver[] memory currReceivers
-    ) external {
-        Splits._split(usedAccountId, usedErc20, currReceivers);
+        SplitsReceiver[] calldata currReceivers
+    ) external returns (uint128 collectableAmt, uint128 splitAmt) {
+        return Splits._split(usedAccountId, usedErc20, currReceivers);
     }
 
     function splitResultExternal(
         uint256 usedAccountId,
-        SplitsReceiver[] memory currReceivers,
+        SplitsReceiver[] calldata currReceivers,
         uint128 amount
-    ) external view {
-        Splits._splitResult(usedAccountId, currReceivers, amount);
+    ) external view returns (uint128 collectableAmt, uint128 splitAmt) {
+        return Splits._splitResult(usedAccountId, currReceivers, amount);
     }
 
     function split(uint256 usedAccountId, uint128 expectedCollectable, uint128 expectedSplit)
@@ -116,11 +123,12 @@ contract SplitsTest is Test, Splits {
         SplitsReceiver[] memory receivers = getCurrSplitsReceivers(usedAccountId);
         uint128 amt = Splits._splittable(usedAccountId, erc20);
         (uint128 collectableRes, uint128 splitRes) =
-            Splits._splitResult(usedAccountId, receivers, amt);
+            this.splitResultExternal(usedAccountId, receivers, amt);
         assertEq(collectableRes, expectedCollectable, "Invalid result collectable amount");
         assertEq(splitRes, expectedSplit, "Invalid result split amount");
 
-        (uint128 collectableAmt, uint128 splitAmt) = Splits._split(usedAccountId, erc20, receivers);
+        (uint128 collectableAmt, uint128 splitAmt) =
+            this.splitExternal(usedAccountId, erc20, receivers);
 
         assertEq(collectableAmt, expectedCollectable, "Invalid collectable amount");
         assertEq(splitAmt, expectedSplit, "Invalid split amount");
@@ -269,7 +277,7 @@ contract SplitsTest is Test, Splits {
         addSplittable(receiver1, 20);
 
         (uint128 collectableAmt, uint128 splitAmt) =
-            Splits._split(receiver1, erc20, getCurrSplitsReceivers(receiver1));
+            this.splitExternal(receiver1, erc20, getCurrSplitsReceivers(receiver1));
 
         assertEq(collectableAmt, 6, "Invalid collectable amount");
         assertEq(splitAmt, 14, "Invalid split amount");
@@ -280,7 +288,7 @@ contract SplitsTest is Test, Splits {
 
         // Splitting 10 which has been split to receiver1 themselves in the previous step
         (collectableAmt, splitAmt) =
-            Splits._split(receiver1, erc20, getCurrSplitsReceivers(receiver1));
+            this.splitExternal(receiver1, erc20, getCurrSplitsReceivers(receiver1));
 
         assertEq(collectableAmt, 3, "Invalid collectable amount");
         assertEq(splitAmt, 7, "Invalid split amount");
@@ -387,9 +395,9 @@ contract SplitsTest is Test, Splits {
         SplitsReceiver[] memory receivers =
             sanitizeReceivers(receiversRaw, receiversLengthRaw, totalWeightRaw);
         Splits._addSplittable(usedAccountId, usedErc20, amt);
-        Splits._setSplits(usedAccountId, receivers);
+        this.setSplitsExternal(usedAccountId, receivers);
         (uint128 collectableAmt, uint128 splitAmt) =
-            Splits._split(usedAccountId, usedErc20, receivers);
+            this.splitExternal(usedAccountId, usedErc20, receivers);
         assertEq(collectableAmt + splitAmt, amt, "Invalid split results");
         uint128 collectedAmt = Splits._collect(usedAccountId, usedErc20);
         assertEq(collectedAmt, collectableAmt, "Invalid collected amount");
