@@ -471,7 +471,7 @@ contract Drips is Managed, Streams, Splits {
     /// @return collectableAmt The amount made collectable for the account
     /// on top of what was collectable before.
     /// @return splitAmt The amount split to the account's splits receivers
-    function splitResult(uint256 accountId, SplitsReceiver[] memory currReceivers, uint128 amount)
+    function splitResult(uint256 accountId, SplitsReceiver[] calldata currReceivers, uint128 amount)
         public
         view
         onlyProxy
@@ -503,7 +503,7 @@ contract Drips is Managed, Streams, Splits {
     /// @return collectableAmt The amount made collectable for the account
     /// on top of what was collectable before.
     /// @return splitAmt The amount split to the account's splits receivers
-    function split(uint256 accountId, IERC20 erc20, SplitsReceiver[] memory currReceivers)
+    function split(uint256 accountId, IERC20 erc20, SplitsReceiver[] calldata currReceivers)
         public
         onlyProxy
         returns (uint128 collectableAmt, uint128 splitAmt)
@@ -747,7 +747,7 @@ contract Drips is Managed, Streams, Splits {
     /// This is usually unwanted, because if splitting is repeated,
     /// funds split to themselves will be again split using the current configuration.
     /// Splitting 100% to self effectively blocks splitting unless the configuration is updated.
-    function setSplits(uint256 accountId, SplitsReceiver[] memory receivers)
+    function setSplits(uint256 accountId, SplitsReceiver[] calldata receivers)
         public
         onlyProxy
         onlyDriver(accountId)
@@ -766,7 +766,7 @@ contract Drips is Managed, Streams, Splits {
     /// @param receivers The list of the splits receivers.
     /// Must be sorted by the account IDs, without duplicate account IDs and without 0 weights.
     /// @return receiversHash The hash of the list of splits receivers.
-    function hashSplits(SplitsReceiver[] memory receivers)
+    function hashSplits(SplitsReceiver[] calldata receivers)
         public
         pure
         returns (bytes32 receiversHash)

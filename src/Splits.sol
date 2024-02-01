@@ -115,11 +115,11 @@ abstract contract Splits {
     /// @return collectableAmt The amount made collectable for the account
     /// on top of what was collectable before.
     /// @return splitAmt The amount split to the account's splits receivers
-    function _splitResult(uint256 accountId, SplitsReceiver[] memory currReceivers, uint128 amount)
-        internal
-        view
-        returns (uint128 collectableAmt, uint128 splitAmt)
-    {
+    function _splitResult(
+        uint256 accountId,
+        SplitsReceiver[] calldata currReceivers,
+        uint128 amount
+    ) internal view returns (uint128 collectableAmt, uint128 splitAmt) {
         _assertCurrSplits(accountId, currReceivers);
         if (amount == 0) {
             return (0, 0);
@@ -147,7 +147,7 @@ abstract contract Splits {
     /// @return collectableAmt The amount made collectable for the account
     /// on top of what was collectable before.
     /// @return splitAmt The amount split to the account's splits receivers
-    function _split(uint256 accountId, IERC20 erc20, SplitsReceiver[] memory currReceivers)
+    function _split(uint256 accountId, IERC20 erc20, SplitsReceiver[] calldata currReceivers)
         internal
         returns (uint128 collectableAmt, uint128 splitAmt)
     {
@@ -231,7 +231,7 @@ abstract contract Splits {
     /// This is usually unwanted, because if splitting is repeated,
     /// funds split to themselves will be again split using the current configuration.
     /// Splitting 100% to self effectively blocks splitting unless the configuration is updated.
-    function _setSplits(uint256 accountId, SplitsReceiver[] memory receivers) internal {
+    function _setSplits(uint256 accountId, SplitsReceiver[] calldata receivers) internal {
         SplitsState storage state = _splitsStorage().splitsStates[accountId];
         bytes32 newSplitsHash = _hashSplits(receivers);
         if (newSplitsHash == state.splitsHash) return;
@@ -244,13 +244,13 @@ abstract contract Splits {
     /// @notice Validates a list of splits receivers and emits events for them
     /// @param receivers The list of splits receivers
     /// Must be sorted by the account IDs, without duplicate account IDs and without 0 weights.
-    function _assertSplitsValid(SplitsReceiver[] memory receivers) private pure {
+    function _assertSplitsValid(SplitsReceiver[] calldata receivers) private pure {
         unchecked {
             require(receivers.length <= _MAX_SPLITS_RECEIVERS, "Too many splits receivers");
             uint256 totalWeight = 0;
             uint256 prevAccountId = 0;
             for (uint256 i = 0; i < receivers.length; i++) {
-                SplitsReceiver memory receiver = receivers[i];
+                SplitsReceiver calldata receiver = receivers[i];
                 uint256 weight = receiver.weight;
                 require(weight != 0, "Splits receiver weight is zero");
                 if (weight > _TOTAL_SPLITS_WEIGHT) weight = _TOTAL_SPLITS_WEIGHT + 1;
@@ -267,7 +267,7 @@ abstract contract Splits {
     /// @param accountId The account ID.
     /// @param currReceivers The list of the account's current splits receivers.
     /// If the splits have never been set, pass an empty array.
-    function _assertCurrSplits(uint256 accountId, SplitsReceiver[] memory currReceivers)
+    function _assertCurrSplits(uint256 accountId, SplitsReceiver[] calldata currReceivers)
         internal
         view
     {
@@ -287,7 +287,7 @@ abstract contract Splits {
     /// @param receivers The list of the splits receivers.
     /// If the splits have never been set, pass an empty array.
     /// @return receiversHash The hash of the list of splits receivers.
-    function _hashSplits(SplitsReceiver[] memory receivers)
+    function _hashSplits(SplitsReceiver[] calldata receivers)
         internal
         pure
         returns (bytes32 receiversHash)
