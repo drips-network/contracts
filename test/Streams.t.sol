@@ -4,11 +4,13 @@ pragma solidity ^0.8.24;
 import {Test} from "forge-std/Test.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {
-    Streams,
+    MaxEndHints,
+    MaxEndHintsImpl,
     StreamConfig,
-    StreamsHistory,
     StreamConfigImpl,
-    StreamReceiver
+    StreamReceiver,
+    Streams,
+    StreamsHistory
 } from "src/Streams.sol";
 
 contract PseudoRandomUtils {
@@ -43,6 +45,8 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     bytes internal constant ERROR_TIMESTAMP_EARLY = "Timestamp before the last update";
     bytes internal constant ERROR_HISTORY_INVALID = "Invalid streams history";
     bytes internal constant ERROR_HISTORY_UNCLEAR = "Entry with hash and receivers";
+
+    MaxEndHints internal immutable noHints = MaxEndHintsImpl.create();
 
     mapping(IERC20 erc20 => mapping(uint256 accountId => StreamReceiver[])) internal
         currReceiversStore;
@@ -282,14 +286,14 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         setStreams(accountId, balanceFrom, 0, loadCurrReceivers(accountId), 0);
     }
 
-    function setStreams(
-        uint256 accountId,
-        uint128 balanceFrom,
-        uint128 balanceTo,
-        StreamReceiver[] memory newReceivers,
-        uint256 expectedMaxEndFromNow
-    ) internal {
-        setStreams(accountId, balanceFrom, balanceTo, newReceivers, 0, 0, expectedMaxEndFromNow);
+    function createMaxEndHints(uint32 maxEndHint1, uint32 maxEndHint2)
+        internal
+        pure
+        returns (MaxEndHints maxEndHints)
+    {
+        maxEndHints = MaxEndHintsImpl.create();
+        if (maxEndHint1 != 0) maxEndHints = maxEndHints.push(maxEndHint1);
+        if (maxEndHint2 != 0) maxEndHints = maxEndHints.push(maxEndHint2);
     }
 
     function setStreams(
@@ -297,21 +301,24 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         uint128 balanceFrom,
         uint128 balanceTo,
         StreamReceiver[] memory newReceivers,
-        uint32 maxEndHint1,
-        uint32 maxEndHint2,
+        uint256 expectedMaxEndFromNow
+    ) internal {
+        setStreams(accountId, balanceFrom, balanceTo, newReceivers, noHints, expectedMaxEndFromNow);
+    }
+
+    function setStreams(
+        uint256 accountId,
+        uint128 balanceFrom,
+        uint128 balanceTo,
+        StreamReceiver[] memory newReceivers,
+        MaxEndHints maxEndHints,
         uint256 expectedMaxEndFromNow
     ) internal {
         (, bytes32 oldHistoryHash,,,) = Streams._streamsState(accountId, erc20);
         int128 balanceDelta = int128(balanceTo) - int128(balanceFrom);
 
         int128 realBalanceDelta = Streams._setStreams(
-            accountId,
-            erc20,
-            loadCurrReceivers(accountId),
-            balanceDelta,
-            newReceivers,
-            maxEndHint1,
-            maxEndHint2
+            accountId, erc20, loadCurrReceivers(accountId), balanceDelta, newReceivers, maxEndHints
         );
 
         assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
@@ -407,7 +414,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         int128 balanceDelta,
         StreamReceiver[] memory newReceivers
     ) external {
-        Streams._setStreams(accountId, erc20, currReceivers, balanceDelta, newReceivers, 0, 0);
+        Streams._setStreams(accountId, erc20, currReceivers, balanceDelta, newReceivers, noHints);
     }
 
     function receiveStreams(uint256 accountId, uint128 expectedAmt) internal {
@@ -579,6 +586,30 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         StreamConfig higherDuration = StreamConfigImpl.create(1, 1, 1, 2);
         assertTrue(config.lt(higherDuration), "Duration higher");
         assertFalse(higherDuration.lt(config), "Duration lower");
+    }
+
+    function testMaxEndHintsStoresHints() public {
+        uint32 hint;
+        MaxEndHints hints = MaxEndHintsImpl.create();
+        assertFalse(hints.hasHints(), "New hints not empty");
+
+        hints = hints.push(1);
+        assertTrue(hints.hasHints(), "Hints empty after push");
+
+        hints = hints.push(2);
+        assertTrue(hints.hasHints(), "Hints empty after 2 pushes");
+
+        (hints, hint) = hints.pop();
+        assertEq(hint, 2, "Invalid hint 1");
+        assertTrue(hints.hasHints(), "Hints empty after 1 pop");
+
+        (hints, hint) = hints.pop();
+        assertEq(hint, 1, "Invalid hint 2");
+        assertFalse(hints.hasHints(), "Hints not empty after 2 pops");
+
+        (hints, hint) = hints.pop();
+        assertEq(hint, 0, "Invalid unpushed hint");
+        assertFalse(hints.hasHints(), "Hints not empty after 3 pops");
     }
 
     function testAllowsStreamingToASingleReceiver() public {
@@ -1250,8 +1281,9 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
             receivers[i] = recv(senderId + 1 + i, 1, 0, 0)[0];
         }
         int128 amt = int128(int256((maxEnd - block.timestamp) * count));
+        MaxEndHints hints = createMaxEndHints(maxEndHint1, maxEndHint2);
         uint256 gas = gasleft();
-        Streams._setStreams(senderId, erc20, recv(), amt, receivers, maxEndHint1, maxEndHint2);
+        Streams._setStreams(senderId, erc20, recv(), amt, receivers, hints);
         gas -= gasleft();
         emit log_named_uint(string.concat("Gas used for ", testName), gas);
     }
@@ -1343,7 +1375,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
 
         StreamReceiver[] memory newReceivers = recv();
         int128 realBalanceDelta =
-            Streams._setStreams(sender, erc20, receivers, type(int128).min, newReceivers, 0, 0);
+            Streams._setStreams(sender, erc20, receivers, type(int128).min, newReceivers, noHints);
         storeCurrReceivers(sender, newReceivers);
         assertBalance(sender, 0);
         assertEq(realBalanceDelta, -6, "Invalid real balance delta");
@@ -1505,7 +1537,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         StreamReceiver[] memory receivers =
             genRandomRecv(amountReceivers, maxAmtPerSec, maxStart, maxDuration);
         emit log_named_uint("setStreams.updateTime", block.timestamp);
-        Streams._setStreams(sender, erc20, recv(), int128(maxCosts), receivers, 0, 0);
+        Streams._setStreams(sender, erc20, recv(), int128(maxCosts), receivers, noHints);
 
         (,, uint32 updateTime,, uint32 maxEnd) = Streams._streamsState(sender, erc20);
 
@@ -1618,11 +1650,12 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     ) public {
         uint128 balanceBefore = sanitizeStreamsBalance(balanceRaw);
         StreamReceiver[] memory receivers = sanitizeReceivers(receiversRaw, receiversLengthRaw);
-        Streams._setStreams(senderId, usedErc20, recv(), int128(balanceBefore), receivers, 0, 0);
+        Streams._setStreams(senderId, usedErc20, recv(), int128(balanceBefore), receivers, noHints);
 
         skip(sanitizeStreamingTime(streamingTimeRaw, 100));
-        int128 realBalanceDelta =
-            Streams._setStreams(senderId, usedErc20, receivers, type(int128).min, receivers, 0, 0);
+        int128 realBalanceDelta = Streams._setStreams(
+            senderId, usedErc20, receivers, type(int128).min, receivers, noHints
+        );
 
         skipToCycleEnd();
         uint256 balanceAfter = uint128(-realBalanceDelta);
@@ -1646,17 +1679,18 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     ) public {
         uint128 balanceBefore = sanitizeStreamsBalance(balanceRaw);
         StreamReceiver[] memory receivers1 = sanitizeReceivers(receiversRaw1, receiversLengthRaw1);
-        Streams._setStreams(senderId, usedErc20, recv(), int128(balanceBefore), receivers1, 0, 0);
+        Streams._setStreams(senderId, usedErc20, recv(), int128(balanceBefore), receivers1, noHints);
 
         skip(sanitizeStreamingTime(streamingTimeRaw1, 50));
         StreamReceiver[] memory receivers2 = sanitizeReceivers(receiversRaw2, receiversLengthRaw2);
         int128 realBalanceDelta =
-            Streams._setStreams(senderId, usedErc20, receivers1, 0, receivers2, 0, 0);
+            Streams._setStreams(senderId, usedErc20, receivers1, 0, receivers2, noHints);
         assertEq(realBalanceDelta, 0, "Zero balance delta changed balance");
 
         skip(sanitizeStreamingTime(streamingTimeRaw2, 50));
-        realBalanceDelta =
-            Streams._setStreams(senderId, usedErc20, receivers2, type(int128).min, receivers2, 0, 0);
+        realBalanceDelta = Streams._setStreams(
+            senderId, usedErc20, receivers2, type(int128).min, receivers2, noHints
+        );
 
         skipToCycleEnd();
         uint256 balanceAfter = uint128(-realBalanceDelta);
@@ -1685,7 +1719,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         for (uint256 i = 0; i < senders.length; i++) {
             Sender memory snd = senders[i];
             Streams._setStreams(
-                snd.accountId, usedErc20, recv(), int128(snd.balance), snd.receivers, 0, 0
+                snd.accountId, usedErc20, recv(), int128(snd.balance), snd.receivers, noHints
             );
         }
 
@@ -1694,7 +1728,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         for (uint256 i = 0; i < senders.length; i++) {
             Sender memory snd = senders[i];
             int128 realBalanceDelta = Streams._setStreams(
-                snd.accountId, usedErc20, snd.receivers, type(int128).min, snd.receivers, 0, 0
+                snd.accountId, usedErc20, snd.receivers, type(int128).min, snd.receivers, noHints
             );
             balanceAfter += uint128(-realBalanceDelta);
         }
@@ -1702,6 +1736,29 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         skipToCycleEnd();
         balanceAfter += Streams._receiveStreams(receiverId, usedErc20, type(uint32).max);
         assertEq(balanceAfter, balanceBefore, "Streamed funds don't add up");
+    }
+
+    function testAFullListOfMaxEndHintsDoesNotAffectMaxEnd() public {
+        MaxEndHints maxEndHints = MaxEndHintsImpl.create();
+        // Not enough hints
+        maxEndHints = maxEndHints.push(26);
+        maxEndHints = maxEndHints.push(25);
+        maxEndHints = maxEndHints.push(24);
+        maxEndHints = maxEndHints.push(23);
+        // Enough hints
+        maxEndHints = maxEndHints.push(15);
+        maxEndHints = maxEndHints.push(16);
+        maxEndHints = maxEndHints.push(17);
+        maxEndHints = maxEndHints.push(18);
+        skipTo(10);
+        setStreams({
+            accountId: sender,
+            balanceFrom: 0,
+            balanceTo: 10,
+            newReceivers: recv(receiver, 1),
+            maxEndHints: maxEndHints,
+            expectedMaxEndFromNow: 10
+        });
     }
 
     function testMaxEndHintsDoNotAffectMaxEnd() public {
@@ -1775,8 +1832,9 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     ) internal {
         emit log_named_uint("Setting streams with hint 1", maxEndHint1);
         emit log_named_uint("                 and hint 2", maxEndHint2);
+        MaxEndHints maxEndHints = createMaxEndHints(maxEndHint1, maxEndHint2);
         uint256 snapshot = vm.snapshot();
-        setStreams(sender, 0, amt, receivers, maxEndHint1, maxEndHint2, expectedMaxEndFromNow);
+        setStreams(sender, 0, amt, receivers, maxEndHints, expectedMaxEndFromNow);
         vm.revertTo(snapshot);
     }
 

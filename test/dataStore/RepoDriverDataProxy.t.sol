@@ -6,7 +6,13 @@ import {
 } from "src/dataStore/RepoDriverDataProxy.sol";
 import {Call, Caller} from "src/Caller.sol";
 import {
-    AccountMetadata, StreamConfigImpl, Drips, StreamReceiver, SplitsReceiver
+    AccountMetadata,
+    MaxEndHints,
+    MaxEndHintsImpl,
+    StreamConfigImpl,
+    Drips,
+    StreamReceiver,
+    SplitsReceiver
 } from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Forge} from "src/RepoDriver.sol";
@@ -34,6 +40,8 @@ contract RepoDriverDataProxyTest is Test {
 
     address internal user = address(1);
     uint256 internal accountId;
+
+    MaxEndHints internal immutable noHints = MaxEndHintsImpl.create();
 
     function setUp() public {
         Drips dripsLogic = new Drips(10);
@@ -80,7 +88,7 @@ contract RepoDriverDataProxyTest is Test {
         uint256 balance = erc20.balanceOf(address(this));
 
         int128 balanceDelta =
-            dataProxy.setStreams(accountId, erc20, int128(amt), hash, 0, 0, address(this));
+            dataProxy.setStreams(accountId, erc20, int128(amt), hash, noHints, address(this));
 
         assertEq(erc20.balanceOf(address(this)), balance - amt, "Invalid balance after top-up");
         assertEq(erc20.balanceOf(address(drips)), amt, "Invalid Drips balance after top-up");
@@ -92,7 +100,8 @@ contract RepoDriverDataProxyTest is Test {
         // Withdraw
         balance = erc20.balanceOf(address(user));
 
-        balanceDelta = dataProxy.setStreams(accountId, erc20, -int128(amt), 0, 0, 0, address(user));
+        balanceDelta =
+            dataProxy.setStreams(accountId, erc20, -int128(amt), 0, noHints, address(user));
 
         assertEq(erc20.balanceOf(address(user)), balance + amt, "Invalid balance after withdrawal");
         assertEq(erc20.balanceOf(address(drips)), 0, "Invalid Drips balance after withdrawal");
@@ -109,7 +118,7 @@ contract RepoDriverDataProxyTest is Test {
         calls[0] = Call({
             target: address(dataProxy),
             data: abi.encodeCall(
-                dataProxy.setStreams, (accountId, erc20, int128(amt), 0, 0, 0, address(this))
+                dataProxy.setStreams, (accountId, erc20, int128(amt), 0, noHints, address(this))
                 ),
             value: 0
         });
@@ -174,7 +183,7 @@ contract RepoDriverDataProxyTest is Test {
     }
 
     function testSetStreamsMustBeDelegated() public {
-        notDelegatedReverts().setStreams(0, erc20, 0, 0, 0, 0, user);
+        notDelegatedReverts().setStreams(0, erc20, 0, 0, noHints, user);
     }
 
     function testSetSplitsMustBeDelegated() public {
