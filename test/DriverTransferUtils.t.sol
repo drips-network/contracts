@@ -3,14 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Caller} from "src/Caller.sol";
 import {DriverTransferUtils} from "src/DriverTransferUtils.sol";
-import {
-    AccountMetadata,
-    Drips,
-    StreamConfigImpl,
-    StreamsHistory,
-    StreamReceiver,
-    SplitsReceiver
-} from "src/Drips.sol";
+import {Drips, MaxEndHints, MaxEndHintsImpl, StreamReceiver, SplitsReceiver} from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
 import {
@@ -43,9 +36,7 @@ contract DummyDriver is DriverTransferUtils {
         StreamReceiver[] calldata currReceivers,
         int128 balanceDelta,
         StreamReceiver[] calldata newReceivers,
-        // slither-disable-next-line similar-names
-        uint32 maxEndHint1,
-        uint32 maxEndHint2,
+        MaxEndHints maxEndHints,
         address transferTo
     ) public returns (int128 realBalanceDelta) {
         return _setStreamsAndTransfer(
@@ -55,8 +46,7 @@ contract DummyDriver is DriverTransferUtils {
             currReceivers,
             balanceDelta,
             newReceivers,
-            maxEndHint1,
-            maxEndHint2,
+            maxEndHints,
             transferTo
         );
     }
@@ -67,6 +57,8 @@ contract DriverTransferUtilsTest is Test {
     Caller internal caller;
     DummyDriver internal driver;
     IERC20 internal erc20;
+
+    MaxEndHints internal immutable noHints = MaxEndHintsImpl.create();
 
     uint256 accountId = 1;
     address userAddr = address(1234);
@@ -87,14 +79,10 @@ contract DriverTransferUtilsTest is Test {
         return new StreamReceiver[](0);
     }
 
-    function noSplitsReceivers() public pure returns (SplitsReceiver[] memory) {
-        return new SplitsReceiver[](0);
-    }
-
     function testCollectTransfersFundsToTheProvidedAddress() public {
         uint128 amt = 5;
         driver.give(accountId, accountId, erc20, amt);
-        drips.split(accountId, erc20, noSplitsReceivers());
+        drips.split(accountId, erc20, new SplitsReceiver[](0));
 
         uint128 collected = driver.collect(accountId, erc20, userAddr);
 
@@ -134,7 +122,13 @@ contract DriverTransferUtilsTest is Test {
         uint256 balance = erc20.balanceOf(address(this));
 
         int128 realBalanceDelta = driver.setStreams(
-            accountId, erc20, noStreamReceivers(), int128(amt), noStreamReceivers(), 0, 0, userAddr
+            accountId,
+            erc20,
+            noStreamReceivers(),
+            int128(amt),
+            noStreamReceivers(),
+            noHints,
+            userAddr
         );
 
         assertEq(realBalanceDelta, int128(amt), "Invalid streams balance delta");
@@ -148,11 +142,23 @@ contract DriverTransferUtilsTest is Test {
         uint128 amt = 5;
         uint256 balance = erc20.balanceOf(address(this));
         driver.setStreams(
-            accountId, erc20, noStreamReceivers(), int128(amt), noStreamReceivers(), 0, 0, userAddr
+            accountId,
+            erc20,
+            noStreamReceivers(),
+            int128(amt),
+            noStreamReceivers(),
+            noHints,
+            userAddr
         );
 
         int128 realBalanceDelta = driver.setStreams(
-            accountId, erc20, noStreamReceivers(), -int128(amt), noStreamReceivers(), 0, 0, userAddr
+            accountId,
+            erc20,
+            noStreamReceivers(),
+            -int128(amt),
+            noStreamReceivers(),
+            noHints,
+            userAddr
         );
 
         assertEq(realBalanceDelta, -int128(amt), "Invalid streams balance delta");
@@ -175,8 +181,7 @@ contract DriverTransferUtilsTest is Test {
                 noStreamReceivers(),
                 int128(amt),
                 noStreamReceivers(),
-                0,
-                0,
+                noHints,
                 userAddr
             )
         );

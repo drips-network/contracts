@@ -8,7 +8,13 @@ import {
 } from "src/dataStore/AddressDriverDataProxy.sol";
 import {Call, Caller} from "src/Caller.sol";
 import {
-    AccountMetadata, Drips, StreamConfigImpl, StreamReceiver, SplitsReceiver
+    AccountMetadata,
+    Drips,
+    MaxEndHints,
+    MaxEndHintsImpl,
+    StreamConfigImpl,
+    StreamReceiver,
+    SplitsReceiver
 } from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
@@ -27,6 +33,8 @@ contract AddressDriverDataProxyTest is Test {
 
     uint256 internal thisId;
     address internal user = address(1);
+
+    MaxEndHints internal immutable noHints = MaxEndHintsImpl.create();
 
     function setUp() public {
         Drips dripsLogic = new Drips(10);
@@ -65,7 +73,7 @@ contract AddressDriverDataProxyTest is Test {
         bytes32 hash = dripsDataStore.storeStreams(receivers);
         uint256 balance = erc20.balanceOf(address(this));
 
-        int128 balanceDelta = dataProxy.setStreams(erc20, int128(amt), hash, 0, 0, address(this));
+        int128 balanceDelta = dataProxy.setStreams(erc20, int128(amt), hash, noHints, address(this));
 
         assertEq(erc20.balanceOf(address(this)), balance - amt, "Invalid balance after top-up");
         assertEq(erc20.balanceOf(address(drips)), amt, "Invalid Drips balance after top-up");
@@ -77,7 +85,7 @@ contract AddressDriverDataProxyTest is Test {
         // Withdraw
         balance = erc20.balanceOf(user);
 
-        balanceDelta = dataProxy.setStreams(erc20, -int128(amt), 0, 0, 0, user);
+        balanceDelta = dataProxy.setStreams(erc20, -int128(amt), 0, noHints, user);
 
         assertEq(erc20.balanceOf(user), balance + amt, "Invalid balance after withdrawal");
         assertEq(erc20.balanceOf(address(drips)), 0, "Invalid Drips balance after withdrawal");
@@ -93,7 +101,7 @@ contract AddressDriverDataProxyTest is Test {
         Call[] memory calls = new Call[](1);
         calls[0] = Call({
             target: address(dataProxy),
-            data: abi.encodeCall(dataProxy.setStreams, (erc20, int128(amt), 0, 0, 0, address(this))),
+            data: abi.encodeCall(dataProxy.setStreams, (erc20, int128(amt), 0, noHints, address(this))),
             value: 0
         });
 
@@ -157,7 +165,7 @@ contract AddressDriverDataProxyTest is Test {
     }
 
     function testSetStreamsMustBeDelegated() public {
-        notDelegatedReverts().setStreams(erc20, 0, 0, 0, 0, user);
+        notDelegatedReverts().setStreams(erc20, 0, 0, noHints, user);
     }
 
     function testSetSplitsMustBeDelegated() public {

@@ -2,7 +2,8 @@
 pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
-import {AddressDriver, Drips, IERC20, StreamReceiver} from "src/AddressDriver.sol";
+import {AddressDriver} from "src/AddressDriver.sol";
+import {Drips, IERC20, MaxEndHintsImpl, StreamReceiver} from "src/Drips.sol";
 import {Address, Giver, GiversRegistry} from "src/Giver.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {
@@ -139,7 +140,12 @@ contract GiversRegistryTest is Test {
     function testGiveOverMaxBalance() public {
         erc20.approve(address(addressDriver), 15);
         addressDriver.setStreams(
-            erc20, new StreamReceiver[](0), 10, new StreamReceiver[](0), 0, 0, address(this)
+            erc20,
+            new StreamReceiver[](0),
+            10,
+            new StreamReceiver[](0),
+            MaxEndHintsImpl.create(),
+            address(this)
         );
         addressDriver.give(0, erc20, 5);
         give(drips.MAX_TOTAL_BALANCE(), drips.MAX_TOTAL_BALANCE() - 15);
