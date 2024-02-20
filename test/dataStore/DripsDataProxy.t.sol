@@ -3,7 +3,13 @@ pragma solidity ^0.8.24;
 
 import {DripsDataProxy, DripsDataStore} from "src/dataStore/DripsDataProxy.sol";
 import {
-    Drips, StreamConfigImpl, StreamReceiver, StreamsHistory, SplitsReceiver
+    Drips,
+    MaxEndHints,
+    MaxEndHintsImpl,
+    StreamConfigImpl,
+    StreamReceiver,
+    StreamsHistory,
+    SplitsReceiver
 } from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
@@ -22,6 +28,8 @@ contract DripsDataProxyTest is Test {
 
     uint256 internal account = 1;
     uint256 internal receiver = 2;
+
+    MaxEndHints internal immutable noHints = MaxEndHintsImpl.create();
 
     function setUp() public {
         Drips dripsLogic = new Drips(10);
@@ -43,7 +51,7 @@ contract DripsDataProxyTest is Test {
         );
         erc20.transfer(address(drips), 2);
         vm.prank(driver);
-        drips.setStreams(account, erc20, new StreamReceiver[](0), 2, streams, 0, 0);
+        drips.setStreams(account, erc20, new StreamReceiver[](0), 2, streams, noHints);
 
         // Create history
         (,, uint32 updateTime,, uint32 maxEnd) = drips.streamsState(account, erc20);
@@ -102,7 +110,7 @@ contract DripsDataProxyTest is Test {
         dripsDataStore.storeStreams(streams);
         erc20.transfer(address(drips), 2);
         vm.prank(driver);
-        drips.setStreams(account, erc20, new StreamReceiver[](0), 2, streams, 0, 0);
+        drips.setStreams(account, erc20, new StreamReceiver[](0), 2, streams, noHints);
 
         uint256 balanceAt = dataProxy.balanceAt(account, erc20, uint32(vm.getBlockTimestamp() + 1));
         assertEq(balanceAt, 1, "Invalid balance");

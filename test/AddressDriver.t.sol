@@ -6,6 +6,8 @@ import {AddressDriver} from "src/AddressDriver.sol";
 import {
     AccountMetadata,
     Drips,
+    MaxEndHints,
+    MaxEndHintsImpl,
     StreamConfigImpl,
     StreamsHistory,
     StreamReceiver,
@@ -27,6 +29,8 @@ contract AddressDriverTest is Test {
     uint256 internal thisId;
     address internal user = address(1);
     uint256 internal accountId;
+
+    MaxEndHints internal immutable noHints = MaxEndHintsImpl.create();
 
     function setUp() public {
         Drips dripsLogic = new Drips(10);
@@ -101,7 +105,7 @@ contract AddressDriverTest is Test {
         uint256 balance = erc20.balanceOf(address(this));
 
         int128 realBalanceDelta = driver.setStreams(
-            erc20, new StreamReceiver[](0), int128(amt), receivers, 0, 0, address(this)
+            erc20, new StreamReceiver[](0), int128(amt), receivers, noHints, address(this)
         );
 
         assertEq(erc20.balanceOf(address(this)), balance - amt, "Invalid balance after top-up");
@@ -115,7 +119,7 @@ contract AddressDriverTest is Test {
         balance = erc20.balanceOf(address(user));
 
         realBalanceDelta =
-            driver.setStreams(erc20, receivers, -int128(amt), receivers, 0, 0, address(user));
+            driver.setStreams(erc20, receivers, -int128(amt), receivers, noHints, address(user));
 
         assertEq(erc20.balanceOf(address(user)), balance + amt, "Invalid balance after withdrawal");
         assertEq(erc20.balanceOf(address(drips)), 0, "Invalid Drips balance after withdrawal");
@@ -127,11 +131,11 @@ contract AddressDriverTest is Test {
     function testSetStreamsDecreasingBalanceTransfersFundsToTheProvidedAddress() public {
         uint128 amt = 5;
         StreamReceiver[] memory receivers = new StreamReceiver[](0);
-        driver.setStreams(erc20, receivers, int128(amt), receivers, 0, 0, address(this));
+        driver.setStreams(erc20, receivers, int128(amt), receivers, noHints, address(this));
         address transferTo = address(1234);
 
         int128 realBalanceDelta =
-            driver.setStreams(erc20, receivers, -int128(amt), receivers, 0, 0, transferTo);
+            driver.setStreams(erc20, receivers, -int128(amt), receivers, noHints, transferTo);
 
         assertEq(erc20.balanceOf(transferTo), amt, "Invalid balance");
         assertEq(erc20.balanceOf(address(drips)), 0, "Invalid Drips balance");
@@ -188,7 +192,7 @@ contract AddressDriverTest is Test {
 
     function testSetStreamsMustBeDelegated() public {
         notDelegatedReverts().setStreams(
-            erc20, new StreamReceiver[](0), 0, new StreamReceiver[](0), 0, 0, user
+            erc20, new StreamReceiver[](0), 0, new StreamReceiver[](0), noHints, user
         );
     }
 

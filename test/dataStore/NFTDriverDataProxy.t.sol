@@ -4,7 +4,13 @@ pragma solidity ^0.8.24;
 import {DripsDataStore, NFTDriver, NFTDriverDataProxy} from "src/dataStore/NFTDriverDataProxy.sol";
 import {Call, Caller} from "src/Caller.sol";
 import {
-    AccountMetadata, StreamConfigImpl, Drips, StreamReceiver, SplitsReceiver
+    AccountMetadata,
+    MaxEndHints,
+    MaxEndHintsImpl,
+    StreamConfigImpl,
+    Drips,
+    StreamReceiver,
+    SplitsReceiver
 } from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
@@ -24,6 +30,8 @@ contract NFTDriverDataProxyTest is Test {
     address internal user = address(1);
     uint256 internal tokenId;
     bytes32 internal someMetadataHash;
+
+    MaxEndHints internal immutable noHints = MaxEndHintsImpl.create();
 
     function setUp() public {
         Drips dripsLogic = new Drips(10);
@@ -118,7 +126,7 @@ contract NFTDriverDataProxyTest is Test {
         uint256 balance = erc20.balanceOf(address(this));
 
         int128 balanceDelta =
-            dataProxy.setStreams(tokenId, erc20, int128(amt), hash, 0, 0, address(this));
+            dataProxy.setStreams(tokenId, erc20, int128(amt), hash, noHints, address(this));
 
         assertEq(erc20.balanceOf(address(this)), balance - amt, "Invalid balance after top-up");
         assertEq(erc20.balanceOf(address(drips)), amt, "Invalid Drips balance after top-up");
@@ -130,7 +138,7 @@ contract NFTDriverDataProxyTest is Test {
         // Withdraw
         balance = erc20.balanceOf(address(user));
 
-        balanceDelta = dataProxy.setStreams(tokenId, erc20, -int128(amt), 0, 0, 0, address(user));
+        balanceDelta = dataProxy.setStreams(tokenId, erc20, -int128(amt), 0, noHints, address(user));
 
         assertEq(erc20.balanceOf(address(user)), balance + amt, "Invalid balance after withdrawal");
         assertEq(erc20.balanceOf(address(drips)), 0, "Invalid Drips balance after withdrawal");
@@ -147,8 +155,8 @@ contract NFTDriverDataProxyTest is Test {
         calls[0] = Call({
             target: address(dataProxy),
             data: abi.encodeCall(
-                dataProxy.setStreams, (tokenId, erc20, int128(amt), 0, 0, 0, address(this))
-                ),
+                dataProxy.setStreams, (tokenId, erc20, int128(amt), 0, noHints, address(this))
+            ),
             value: 0
         });
 
@@ -222,7 +230,7 @@ contract NFTDriverDataProxyTest is Test {
     }
 
     function testSetStreamsMustBeDelegated() public {
-        notDelegatedReverts().setStreams(0, erc20, 0, 0, 0, 0, user);
+        notDelegatedReverts().setStreams(0, erc20, 0, 0, noHints, user);
     }
 
     function testSetSplitsMustBeDelegated() public {

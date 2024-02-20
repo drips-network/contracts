@@ -144,6 +144,59 @@ library StreamConfigImpl {
     }
 }
 
+/// @notice The list of 8 hints for max end time calculation.
+/// They are constructed as a concatenation of 8 32-bit values:
+/// `the leftmost hint (32 bits) | ... | the rightmost hint (32 bits)
+type MaxEndHints is uint256;
+
+using MaxEndHintsImpl for MaxEndHints global;
+
+library MaxEndHintsImpl {
+    /// @notice Create a list of 8 zero value hints.
+    /// @return hints The list of hints.
+    // slither-disable-next-line dead-code
+    function create() internal pure returns (MaxEndHints hints) {
+        return MaxEndHints.wrap(0);
+    }
+
+    /// @notice Add a hint to the list of hints as the rightmost and remove the leftmost.
+    /// @param hints The list of hints.
+    /// @param hint The added hint.
+    /// @return newHints The modified list of hints.
+    // slither-disable-next-line dead-code
+    function push(MaxEndHints hints, uint32 hint) internal pure returns (MaxEndHints newHints) {
+        // `hints` has value:
+        // `leftmost hint (32 bits) | other hints (224 bits)`
+        // By bit shifting we get value:
+        // `other hints (224 bits) | zeros (32 bits)`
+        // By bit masking we get value:
+        // `other hints (224 bits) | rightmost hint (32 bits)`
+        return MaxEndHints.wrap((MaxEndHints.unwrap(hints) << 32) | hint);
+    }
+
+    /// @notice Remove and return the rightmost hint, and add the zero value hint as the leftmost.
+    /// @param hints The list of hints.
+    /// @return newHints The modified list of hints.
+    /// @return hint The removed hint.
+    function pop(MaxEndHints hints) internal pure returns (MaxEndHints newHints, uint32 hint) {
+        // `hints` has value:
+        // `other hints (224 bits) | rightmost hint (32 bits)`
+        // By bit shifting we get value:
+        // `zeros (32 bits) | other hints (224 bits)`
+        // By casting down we get value:
+        // `rightmost hint (32 bits)`
+        return
+            (MaxEndHints.wrap(MaxEndHints.unwrap(hints) >> 32), uint32(MaxEndHints.unwrap(hints)));
+    }
+
+    /// @notice Check if the list contains any non-zero value hints.
+    /// @param hints The list of hints.
+    /// @return hasHints_ True if the list contains any non-zero value hints.
+    function hasHints(MaxEndHints hints) internal pure returns (bool hasHints_) {
+        return MaxEndHints.unwrap(hints) != 0;
+    }
+}
+
 /// @notice Streams can keep track of at most `type(int128).max`
 /// which is `2 ^ 127 - 1` units of each ERC-20 token.
 /// It's up to the caller to guarantee that this limit is never exceeded,
@@ -683,29 +736,31 @@ abstract contract Streams {
     /// @param newReceivers The list of the streams receivers of the account to be set.
     /// Must be sorted by the account IDs and then by the stream configurations,
     /// without identical elements and without 0 amtPerSecs.
-    /// @param maxEndHint1 An optional parameter allowing gas optimization, pass `0` to ignore it.
-    /// The first hint for finding the maximum end time when all streams stop due to funds
-    /// running out after the balance is updated and the new receivers list is applied.
+    /// @param maxEndHints An optional parameter allowing gas optimization.
+    /// To not use this feature pass an integer `0`, it represents a list of 8 zero value hints.
+    /// This argument is a list of hints for finding the timestamp when all streams stop
+    /// due to funds running out after the streams configuration is updated.
     /// Hints have no effect on the results of calling this function, except potentially saving gas.
     /// Hints are Unix timestamps used as the starting points for binary search for the time
     /// when funds run out in the range of timestamps from the current block's to `2^32`.
-    /// Hints lower than the current timestamp are ignored.
-    /// You can provide zero, one or two hints. The order of hints doesn't matter.
+    /// Hints lower than the current timestamp including the zero value hints are ignored.
+    /// If you provide fewer than 8 non-zero value hints make them the rightmost values to save gas.
+    /// It's the most beneficial to make the most risky and precise hints
+    /// the rightmost ones, but there's no strict ordering requirement.
     /// Hints are the most effective when one of them is lower than or equal to
     /// the last timestamp when funds are still streamed, and the other one is strictly larger
-    /// than that timestamp,the smaller the difference between such hints, the higher gas savings.
+    /// than that timestamp, the smaller the difference between such hints, the more gas is saved.
     /// The savings are the highest possible when one of the hints is equal to
     /// the last timestamp when funds are still streamed, and the other one is larger by 1.
     /// It's worth noting that the exact timestamp of the block in which this function is executed
-    /// may affect correctness of the hints, especially if they're precise.
+    /// may affect correctness of the hints, especially if they're precise,
+    /// which is why you may want to pass multiple hints with varying precision.
     /// Hints don't provide any benefits when balance is not enough to cover
     /// a single second of streaming or is enough to cover all streams until timestamp `2^32`.
     /// Even inaccurate hints can be useful, and providing a single hint
-    /// or two hints that don't enclose the time when funds run out can still save some gas.
+    /// or hints that don't enclose the time when funds run out can still save some gas.
     /// Providing poor hints that don't reduce the number of binary search steps
     /// may cause slightly higher gas usage than not providing any hints.
-    /// @param maxEndHint2 An optional parameter allowing gas optimization, pass `0` to ignore it.
-    /// The second hint for finding the maximum end time, see `maxEndHint1` docs for more details.
     /// @return realBalanceDelta The actually applied streams balance change.
     /// It's equal to the passed `balanceDelta`, unless it's negative
     /// and it gets capped at the current balance amount.
@@ -715,9 +770,7 @@ abstract contract Streams {
         StreamReceiver[] memory currReceivers,
         int128 balanceDelta,
         StreamReceiver[] memory newReceivers,
-        // slither-disable-next-line similar-names
-        uint32 maxEndHint1,
-        uint32 maxEndHint2
+        MaxEndHints maxEndHints
     ) internal returns (int128 realBalanceDelta) {
         unchecked {
             StreamsState storage state = _streamsStorage().states[erc20][accountId];
@@ -740,7 +793,7 @@ abstract contract Streams {
                 // This will not overflow if the requirement of tracking in the contract
                 // no more than `_MAX_STREAMS_BALANCE` of each token is followed.
                 newBalance = uint128(currBalance + realBalanceDelta);
-                newMaxEnd = _calcMaxEnd(newBalance, newReceivers, maxEndHint1, maxEndHint2);
+                newMaxEnd = _calcMaxEnd(newBalance, newReceivers, maxEndHints);
                 _updateReceiverStates(
                     _streamsStorage().states[erc20],
                     currReceivers,
@@ -787,16 +840,13 @@ abstract contract Streams {
     /// @param receivers The list of streams receivers.
     /// Must be sorted by the account IDs and then by the stream configurations,
     /// without identical elements and without 0 amtPerSecs.
-    /// @param hint1 The first hint for finding the maximum end time.
-    /// See `_setStreams` docs for `maxEndHint1` for more details.
-    /// @param hint2 The second hint for finding the maximum end time.
-    /// See `_setStreams` docs for `maxEndHint2` for more details.
+    /// @param maxEndHints The list of hints for finding the maximum end time.
+    /// See `_setStreams` docs for `maxEndHints` for more details.
     /// @return maxEnd The maximum end time of streaming.
     function _calcMaxEnd(
         uint128 balance,
         StreamReceiver[] memory receivers,
-        uint32 hint1,
-        uint32 hint2
+        MaxEndHints maxEndHints
     ) private view returns (uint32 maxEnd) {
         (uint256[] memory configs, uint256 configsLen) = _buildConfigs(receivers);
 
@@ -811,19 +861,14 @@ abstract contract Streams {
             return uint32(notEnoughEnd);
         }
 
-        if (hint1 > enoughEnd && hint1 < notEnoughEnd) {
-            if (_isBalanceEnough(balance, configs, configsLen, hint1)) {
-                enoughEnd = hint1;
+        while (maxEndHints.hasHints()) {
+            uint32 hint;
+            (maxEndHints, hint) = maxEndHints.pop();
+            if (hint <= enoughEnd || hint >= notEnoughEnd) continue;
+            if (_isBalanceEnough(balance, configs, configsLen, hint)) {
+                enoughEnd = hint;
             } else {
-                notEnoughEnd = hint1;
-            }
-        }
-
-        if (hint2 > enoughEnd && hint2 < notEnoughEnd) {
-            if (_isBalanceEnough(balance, configs, configsLen, hint2)) {
-                enoughEnd = hint2;
-            } else {
-                notEnoughEnd = hint2;
+                notEnoughEnd = hint;
             }
         }
 
