@@ -515,16 +515,15 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         StreamsHistory[] memory streamsHistory,
         uint256 expectedAmt
     ) internal {
-        (uint128 amtBefore,,,,) =
-            Streams._squeezeStreamsResult(accountId, erc20, senderId, historyHash, streamsHistory);
+        uint128 amtBefore =
+            this.squeezeStreamsResultExternal(accountId, senderId, historyHash, streamsHistory);
         assertEq(amtBefore, expectedAmt, "Invalid squeezable amount before squeezing");
 
-        uint128 amt =
-            Streams._squeezeStreams(accountId, erc20, senderId, historyHash, streamsHistory);
+        uint128 amt = this.squeezeStreamsExternal(accountId, senderId, historyHash, streamsHistory);
 
         assertEq(amt, expectedAmt, "Invalid squeezed amount");
-        (uint128 amtAfter,,,,) =
-            Streams._squeezeStreamsResult(accountId, erc20, senderId, historyHash, streamsHistory);
+        uint128 amtAfter =
+            this.squeezeStreamsResultExternal(accountId, senderId, historyHash, streamsHistory);
         assertEq(amtAfter, 0, "Squeezable amount after squeezing non-zero");
     }
 
@@ -546,8 +545,8 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         uint256 senderId,
         bytes32 historyHash,
         StreamsHistory[] memory streamsHistory
-    ) external {
-        Streams._squeezeStreams(accountId, erc20, senderId, historyHash, streamsHistory);
+    ) external returns (uint128 amt) {
+        return Streams._squeezeStreams(accountId, erc20, senderId, historyHash, streamsHistory);
     }
 
     function squeezeStreamsResultExternal(
@@ -555,8 +554,9 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         uint256 senderId,
         bytes32 historyHash,
         StreamsHistory[] memory streamsHistory
-    ) external view {
-        Streams._squeezeStreamsResult(accountId, erc20, senderId, historyHash, streamsHistory);
+    ) external view returns (uint128 amt) {
+        (amt,,,,) =
+            Streams._squeezeStreamsResult(accountId, erc20, senderId, historyHash, streamsHistory);
     }
 
     function testStreamsConfigStoresParameters() public {
