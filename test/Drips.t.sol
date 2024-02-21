@@ -643,7 +643,7 @@ contract DripsTest is Test {
     }
 
     function testMaxBalanceIsNotTooHigh() public {
-        uint128 maxBalance = drips.MAX_TOTAL_BALANCE();
+        uint256 maxBalance = drips.MAX_TOTAL_BALANCE();
         Constants consts = new Constants();
         assertLe(maxBalance, consts.MAX_SPLITS_BALANCE(), "Max balance over max splits balance");
         assertLe(maxBalance, consts.MAX_STREAMS_BALANCE(), "Max balance over max streams balance");
