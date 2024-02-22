@@ -6,6 +6,7 @@ import {NFTDriver} from "src/NFTDriver.sol";
 import {
     AccountMetadata,
     Drips,
+    DripsLib,
     MaxEndHints,
     MaxEndHintsImpl,
     SplitsReceiver,
@@ -222,8 +223,9 @@ contract NFTDriverTest is Test {
 
         // Top-up
         StreamReceiver[] memory receivers = new StreamReceiver[](1);
-        receivers[0] =
-            StreamReceiver(tokenId2, StreamConfigImpl.create(0, drips.minAmtPerSec(), 0, 0));
+        receivers[0] = StreamReceiver(
+            tokenId2, StreamConfigImpl.create(0, DripsLib.minAmtPerSec(drips.cycleSecs()), 0, 0)
+        );
         uint256 balance = erc20.balanceOf(address(this));
 
         int128 realBalanceDelta = driver.setStreams(

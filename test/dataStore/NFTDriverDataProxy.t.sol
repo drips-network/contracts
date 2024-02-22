@@ -5,12 +5,13 @@ import {DripsDataStore, NFTDriver, NFTDriverDataProxy} from "src/dataStore/NFTDr
 import {Call, Caller} from "src/Caller.sol";
 import {
     AccountMetadata,
+    Drips,
+    DripsLib,
     MaxEndHints,
     MaxEndHintsImpl,
+    SplitsReceiver,
     StreamConfigImpl,
-    Drips,
-    StreamReceiver,
-    SplitsReceiver
+    StreamReceiver
 } from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
@@ -121,7 +122,9 @@ contract NFTDriverDataProxyTest is Test {
 
         // Top-up
         StreamReceiver[] memory receivers = new StreamReceiver[](1);
-        receivers[0] = StreamReceiver(123, StreamConfigImpl.create(0, drips.minAmtPerSec(), 0, 0));
+        receivers[0] = StreamReceiver(
+            123, StreamConfigImpl.create(0, DripsLib.minAmtPerSec(drips.cycleSecs()), 0, 0)
+        );
         bytes32 hash = dripsDataStore.storeStreams(receivers);
         uint256 balance = erc20.balanceOf(address(this));
 

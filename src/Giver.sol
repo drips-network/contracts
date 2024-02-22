@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {AddressDriver, Drips, IERC20} from "./AddressDriver.sol";
+import {DripsLib} from "./DripsLib.sol";
 import {Managed} from "./Managed.sol";
 import {Clones} from "openzeppelin-contracts/proxy/Clones.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
@@ -45,14 +46,11 @@ contract GiversRegistry is Managed {
     AddressDriver public immutable addressDriver;
     /// @notice The `Drips` contract used by `addressDriver`.
     Drips internal immutable _drips;
-    /// @notice The maximum balance of each token that Drips can hold.
-    uint256 internal immutable _maxTotalBalance;
 
     /// @param addressDriver_ The driver to use to `give`.
     constructor(AddressDriver addressDriver_) {
         addressDriver = addressDriver_;
         _drips = addressDriver.drips();
-        _maxTotalBalance = _drips.MAX_TOTAL_BALANCE();
 
         address nativeTokenWrapper_;
         if (block.chainid == 1 /* Mainnet */ ) {
@@ -137,7 +135,7 @@ contract GiversRegistry is Managed {
             );
         }
         (uint256 streamsBalance, uint256 splitsBalance) = _drips.balances(erc20);
-        uint256 maxAmt = _maxTotalBalance - streamsBalance - splitsBalance;
+        uint256 maxAmt = DripsLib.MAX_TOTAL_BALANCE - streamsBalance - splitsBalance;
         // The balance of the `Giver` clone contract.
         amt = erc20.balanceOf(address(this));
         if (amt > maxAmt) amt = maxAmt;

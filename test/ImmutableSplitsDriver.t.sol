@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {ImmutableSplitsDriver} from "src/ImmutableSplitsDriver.sol";
-import {AccountMetadata, Drips, SplitsReceiver} from "src/Drips.sol";
+import {AccountMetadata, Drips, DripsLib, SplitsReceiver} from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
 
@@ -22,7 +22,7 @@ contract ImmutableSplitsDriverTest is Test {
         ImmutableSplitsDriver driverLogic = new ImmutableSplitsDriver(drips, driverId);
         driver = ImmutableSplitsDriver(address(new ManagedProxy(driverLogic, address(1))));
         drips.updateDriverAddress(driverId, address(driver));
-        totalSplitsWeight = driver.totalSplitsWeight();
+        totalSplitsWeight = DripsLib.TOTAL_SPLITS_WEIGHT;
     }
 
     function splitsReceivers(uint256 weight1, uint256 weight2)

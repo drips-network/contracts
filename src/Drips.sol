@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
+import {DripsLib, IERC20} from "./DripsLib.sol";
 import {
     MaxEndHints,
     MaxEndHintsImpl,
@@ -12,7 +13,7 @@ import {
 } from "./Streams.sol";
 import {Managed} from "./Managed.sol";
 import {Splits, SplitsReceiver} from "./Splits.sol";
-import {IERC20, SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
+import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
 using SafeERC20 for IERC20;
 
@@ -59,32 +60,10 @@ struct AccountMetadata {
 ///
 /// The contract can store at most `type(int128).max` which is `2 ^ 127 - 1` units of each token.
 contract Drips is Managed, Streams, Splits {
-    /// @notice Maximum number of streams receivers of a single account.
-    /// Limits cost of changes in streams configuration.
-    uint256 public constant MAX_STREAMS_RECEIVERS = _MAX_STREAMS_RECEIVERS;
-    /// @notice The additional decimals for all amtPerSec values.
-    uint8 public constant AMT_PER_SEC_EXTRA_DECIMALS = _AMT_PER_SEC_EXTRA_DECIMALS;
-    /// @notice The multiplier for all amtPerSec values.
-    uint160 public constant AMT_PER_SEC_MULTIPLIER = _AMT_PER_SEC_MULTIPLIER;
-    /// @notice Maximum number of splits receivers of a single account.
-    /// Limits the cost of splitting.
-    uint256 public constant MAX_SPLITS_RECEIVERS = _MAX_SPLITS_RECEIVERS;
-    /// @notice The total splits weight of an account
-    uint256 public constant TOTAL_SPLITS_WEIGHT = _TOTAL_SPLITS_WEIGHT;
-    /// @notice The offset of the controlling driver ID in the account ID.
-    /// In other words the controlling driver ID is the highest 32 bits of the account ID.
-    /// Every account ID is a 256-bit integer constructed by concatenating:
-    /// `driverId (32 bits) | driverCustomData (224 bits)`.
-    uint8 public constant DRIVER_ID_OFFSET = 224;
-    /// @notice The total amount the protocol can store of each token.
-    /// It's the minimum of _MAX_STREAMS_BALANCE and _MAX_SPLITS_BALANCE.
-    uint256 public constant MAX_TOTAL_BALANCE = _MAX_STREAMS_BALANCE;
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
     /// gain access to steams received during `T - cycleSecs` to `T - 1`.
     /// Always higher than 1.
     uint32 public immutable cycleSecs;
-    /// @notice The minimum amtPerSec of a stream. It's 1 token per cycle.
-    uint160 public immutable minAmtPerSec;
     /// @notice The ERC-1967 storage slot holding a single `DripsStorage` structure.
     bytes32 private immutable _dripsStorageSlot = _erc1967Slot("eip1967.drips.storage");
 
@@ -146,7 +125,6 @@ contract Drips is Managed, Streams, Splits {
         Splits(_erc1967Slot("eip1967.splits.storage"))
     {
         cycleSecs = Streams._cycleSecs;
-        minAmtPerSec = Streams._minAmtPerSec;
     }
 
     /// @notice A modifier making functions callable only by the driver controlling the account.
@@ -158,7 +136,7 @@ contract Drips is Managed, Streams, Splits {
         // `zeros (224 bits) | driverId (32 bits)`
         // By casting down we get value:
         // `driverId (32 bits)`
-        uint32 driverId = uint32(accountId >> DRIVER_ID_OFFSET);
+        uint32 driverId = uint32(accountId >> DripsLib.DRIVER_ID_OFFSET);
         _assertCallerIsDriver(driverId);
         _;
     }
@@ -214,7 +192,7 @@ contract Drips is Managed, Streams, Splits {
     }
 
     /// @notice Returns the amount currently stored in the protocol of the given token.
-    /// The sum of streaming and splitting balances can never exceed `MAX_TOTAL_BALANCE`.
+    /// The sum of streaming and splitting balances can never exceed `DripsLib.MAX_TOTAL_BALANCE`.
     /// The amount of tokens held by the Drips contract exceeding the sum of
     /// streaming and splitting balances can be `withdraw`n.
     /// @param erc20 The used ERC-20 token.
@@ -241,7 +219,7 @@ contract Drips is Managed, Streams, Splits {
     /// @notice Increases the balance of the given token currently stored in streams.
     /// No funds are transferred, all the tokens are expected to be already held by Drips.
     /// The new total balance is verified to have coverage in the held tokens
-    /// and to be within the limit of `MAX_TOTAL_BALANCE`.
+    /// and to be within the limit of `DripsLib.MAX_TOTAL_BALANCE`.
     /// @param erc20 The used ERC-20 token.
     /// @param amt The amount to increase the streams balance by.
     function _increaseStreamsBalance(IERC20 erc20, uint128 amt) internal {
@@ -261,7 +239,7 @@ contract Drips is Managed, Streams, Splits {
     /// @notice Increases the balance of the given token currently stored in splits.
     /// No funds are transferred, all the tokens are expected to be already held by Drips.
     /// The new total balance is verified to have coverage in the held tokens
-    /// and to be within the limit of `MAX_TOTAL_BALANCE`.
+    /// and to be within the limit of `DripsLib.MAX_TOTAL_BALANCE`.
     /// @param erc20 The used ERC-20 token.
     /// @param amt The amount to increase the splits balance by.
     function _increaseSplitsBalance(IERC20 erc20, uint128 amt) internal {
@@ -290,13 +268,13 @@ contract Drips is Managed, Streams, Splits {
 
     /// @notice Verifies that the balance of streams or splits can be increased by the given amount.
     /// The sum of streaming and splitting balances is checked to not exceed
-    /// `MAX_TOTAL_BALANCE` or the amount of tokens held by the Drips.
+    /// `DripsLib.MAX_TOTAL_BALANCE` or the amount of tokens held by the Drips.
     /// @param erc20 The used ERC-20 token.
     /// @param amt The amount to increase the streams or splits balance by.
     function _verifyBalanceIncrease(IERC20 erc20, uint128 amt) internal view {
         (uint256 streamsBalance, uint256 splitsBalance) = balances(erc20);
         uint256 newTotalBalance = streamsBalance + splitsBalance + amt;
-        require(newTotalBalance <= MAX_TOTAL_BALANCE, "Total balance too high");
+        require(newTotalBalance <= DripsLib.MAX_TOTAL_BALANCE, "Total balance too high");
         require(newTotalBalance <= erc20.balanceOf(address(this)), "Token balance too low");
     }
 
@@ -742,7 +720,7 @@ contract Drips is Managed, Streams, Splits {
     /// Must be sorted by the account IDs, without duplicate account IDs and without 0 weights.
     /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the account.
-    /// If the sum of weights of all receivers is less than `_TOTAL_SPLITS_WEIGHT`,
+    /// If the sum of weights of all receivers is less than `DripsLib.TOTAL_SPLITS_WEIGHT`,
     /// some funds won't be split, but they will be left for the account to collect.
     /// Fractions of tokens are always rounded either up or down depending on the amount
     /// being split, the receiver's position on the list and the other receivers' weights.

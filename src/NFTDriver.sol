@@ -329,7 +329,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     /// Must be sorted by the account IDs, without duplicate account IDs and without 0 weights.
     /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the account.
-    /// If the sum of weights of all receivers is less than `_TOTAL_SPLITS_WEIGHT`,
+    /// If the sum of weights of all receivers is less than `DripsLib.TOTAL_SPLITS_WEIGHT`,
     /// some funds won't be split, but they will be left for the account to collect.
     /// Fractions of tokens are always rounded either up or down depending on the amount
     /// being split, the receiver's position on the list and the other receivers' weights.

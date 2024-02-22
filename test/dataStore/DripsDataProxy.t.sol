@@ -4,6 +4,8 @@ pragma solidity ^0.8.24;
 import {DripsDataProxy, DripsDataStore} from "src/dataStore/DripsDataProxy.sol";
 import {
     Drips,
+    DripsLib,
+    IERC20,
     MaxEndHints,
     MaxEndHintsImpl,
     StreamConfigImpl,
@@ -13,10 +15,8 @@ import {
 } from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
-import {
-    IERC20,
-    ERC20PresetFixedSupply
-} from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
+import {ERC20PresetFixedSupply} from
+    "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
 contract DripsDataProxyTest is Test {
     Drips internal drips;
@@ -47,7 +47,7 @@ contract DripsDataProxyTest is Test {
         // Start streaming
         StreamReceiver[] memory streams = new StreamReceiver[](1);
         streams[0] = StreamReceiver(
-            receiver, StreamConfigImpl.create(0, 1 * drips.AMT_PER_SEC_MULTIPLIER(), 0, 0)
+            receiver, StreamConfigImpl.create(0, 1 * DripsLib.AMT_PER_SEC_MULTIPLIER, 0, 0)
         );
         erc20.transfer(address(drips), 2);
         vm.prank(driver);
@@ -71,7 +71,7 @@ contract DripsDataProxyTest is Test {
     }
 
     function testSplit() public {
-        uint256 splitWeight = drips.TOTAL_SPLITS_WEIGHT() / 4;
+        uint256 splitWeight = DripsLib.TOTAL_SPLITS_WEIGHT / 4;
         uint128 totalAmt = 8;
         uint128 splitAmt = 2;
         uint128 collectableAmt = 6;
@@ -105,7 +105,7 @@ contract DripsDataProxyTest is Test {
     function testBalanceAt() public {
         StreamReceiver[] memory streams = new StreamReceiver[](1);
         streams[0] = StreamReceiver(
-            receiver, StreamConfigImpl.create(0, 1 * drips.AMT_PER_SEC_MULTIPLIER(), 0, 0)
+            receiver, StreamConfigImpl.create(0, 1 * DripsLib.AMT_PER_SEC_MULTIPLIER, 0, 0)
         );
         dripsDataStore.storeStreams(streams);
         erc20.transfer(address(drips), 2);

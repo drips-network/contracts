@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {AccountMetadata, Drips, SplitsReceiver} from "./Drips.sol";
+import {AccountMetadata, Drips, DripsLib, SplitsReceiver} from "./Drips.sol";
 import {Managed} from "./Managed.sol";
 import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 
@@ -16,8 +16,6 @@ contract ImmutableSplitsDriver is Managed {
     Drips public immutable drips;
     /// @notice The driver ID which this driver uses when calling Drips.
     uint32 public immutable driverId;
-    /// @notice The required total splits weight of each splits configuration
-    uint256 public immutable totalSplitsWeight;
     /// @notice The ERC-1967 storage slot holding a single `uint256` counter of created identities.
     bytes32 private immutable _counterSlot = _erc1967Slot("eip1967.immutableSplitsDriver.storage");
 
@@ -31,7 +29,6 @@ contract ImmutableSplitsDriver is Managed {
     constructor(Drips _drips, uint32 _driverId) {
         drips = _drips;
         driverId = _driverId;
-        totalSplitsWeight = _drips.TOTAL_SPLITS_WEIGHT();
     }
 
     /// @notice The ID of the next account to be created.
@@ -57,11 +54,11 @@ contract ImmutableSplitsDriver is Managed {
     /// Calling this function is the only way and the only chance to emit metadata for that account.
     /// @param receivers The list of the account's splits receivers to be set.
     /// Must be sorted by the account IDs, without duplicate account IDs and without 0 weights.
-    /// Each splits receiver will be getting `weight / totalSplitsWeight`
+    /// Each splits receiver will be getting `weight / DripsLib.TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the account.
     /// Fractions of tokens are always rounded either up or down depending on the amount
     /// being split, the receiver's position on the list and the other receivers' weights.
-    /// The sum of the receivers' weights must be equal to `totalSplitsWeight`,
+    /// The sum of the receivers' weights must be equal to `DripsLib.TOTAL_SPLITS_WEIGHT`,
     /// or in other words the configuration must be splitting 100% of received funds.
     /// @param accountMetadata The list of account metadata to emit for the created account.
     /// The keys and the values are not standardized by the protocol, it's up to the users
@@ -73,15 +70,16 @@ contract ImmutableSplitsDriver is Managed {
     ) public onlyProxy returns (uint256 accountId) {
         accountId = nextAccountId();
         StorageSlot.getUint256Slot(_counterSlot).value++;
+        uint256 weightSumTarget = DripsLib.TOTAL_SPLITS_WEIGHT;
         uint256 weightSum = 0;
         unchecked {
             for (uint256 i = 0; i < receivers.length; i++) {
                 uint256 weight = receivers[i].weight;
-                if (weight > totalSplitsWeight) weight = totalSplitsWeight + 1;
+                if (weight > weightSumTarget) weight = weightSumTarget + 1;
                 weightSum += weight;
             }
         }
-        require(weightSum == totalSplitsWeight, "Invalid total receivers weight");
+        require(weightSum == weightSumTarget, "Invalid total receivers weight");
         emit CreatedSplits(accountId, drips.hashSplits(receivers));
         drips.setSplits(accountId, receivers);
         if (accountMetadata.length != 0) drips.emitAccountMetadata(accountId, accountMetadata);
