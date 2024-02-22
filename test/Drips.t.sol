@@ -4,6 +4,8 @@ pragma solidity ^0.8.24;
 import {
     AccountMetadata,
     Drips,
+    DripsLib,
+    IERC20,
     MaxEndHints,
     MaxEndHintsImpl,
     Splits,
@@ -15,15 +17,8 @@ import {
 } from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
-import {
-    IERC20,
-    ERC20PresetFixedSupply
-} from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
-
-contract Constants is Splits(0), Streams(2, 0) {
-    uint128 public constant MAX_STREAMS_BALANCE = _MAX_STREAMS_BALANCE;
-    uint128 public constant MAX_SPLITS_BALANCE = _MAX_SPLITS_BALANCE;
-}
+import {ERC20PresetFixedSupply} from
+    "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
 contract DripsTest is Test {
     Drips internal drips;
@@ -110,13 +105,13 @@ contract DripsTest is Test {
 
     function streamsReceivers(uint256 streamReceiver, uint128 amtPerSec)
         internal
-        view
+        pure
         returns (StreamReceiver[] memory list)
     {
         list = new StreamReceiver[](1);
         list[0] = StreamReceiver(
             streamReceiver,
-            StreamConfigImpl.create(0, uint160(amtPerSec * drips.AMT_PER_SEC_MULTIPLIER()), 0, 0)
+            StreamConfigImpl.create(0, amtPerSec * DripsLib.AMT_PER_SEC_MULTIPLIER, 0, 0)
         );
     }
 
@@ -125,7 +120,7 @@ contract DripsTest is Test {
         uint128 amtPerSec1,
         uint256 streamReceiver2,
         uint128 amtPerSec2
-    ) internal view returns (StreamReceiver[] memory list) {
+    ) internal pure returns (StreamReceiver[] memory list) {
         list = new StreamReceiver[](2);
         list[0] = streamsReceivers(streamReceiver1, amtPerSec1)[0];
         list[1] = streamsReceivers(streamReceiver2, amtPerSec2)[0];
@@ -422,7 +417,7 @@ contract DripsTest is Test {
     }
 
     function testUncollectedFundsAreSplitUsingCurrentConfig() public {
-        uint256 totalWeight = drips.TOTAL_SPLITS_WEIGHT();
+        uint256 totalWeight = DripsLib.TOTAL_SPLITS_WEIGHT;
         setSplits(accountId1, splitsReceivers(receiver1, totalWeight));
         setStreams(accountId2, 0, 5, streamsReceivers(accountId1, 5));
         skipToCycleEnd();
@@ -512,7 +507,7 @@ contract DripsTest is Test {
     }
 
     function testSplitSplitsFundsReceivedFromAllSources() public {
-        uint256 totalWeight = drips.TOTAL_SPLITS_WEIGHT();
+        uint256 totalWeight = DripsLib.TOTAL_SPLITS_WEIGHT;
         // Gives
         give(accountId2, accountId1, 1);
 
@@ -642,17 +637,10 @@ contract DripsTest is Test {
         drips.emitAccountMetadata(accountId, accountMetadata);
     }
 
-    function testMaxBalanceIsNotTooHigh() public {
-        uint256 maxBalance = drips.MAX_TOTAL_BALANCE();
-        Constants consts = new Constants();
-        assertLe(maxBalance, consts.MAX_SPLITS_BALANCE(), "Max balance over max splits balance");
-        assertLe(maxBalance, consts.MAX_STREAMS_BALANCE(), "Max balance over max streams balance");
-    }
-
     function testSetStreamsLimitsTotalBalance() public {
-        uint128 splitsBalance = uint128(drips.MAX_TOTAL_BALANCE()) / 10;
+        uint128 splitsBalance = uint128(DripsLib.MAX_TOTAL_BALANCE) / 10;
         give(accountId, receiver, splitsBalance);
-        uint128 maxBalance = uint128(drips.MAX_TOTAL_BALANCE()) - splitsBalance;
+        uint128 maxBalance = uint128(DripsLib.MAX_TOTAL_BALANCE) - splitsBalance;
         assertBalances(0, splitsBalance);
         setStreams(accountId1, 0, maxBalance, streamsReceivers());
         assertBalances(maxBalance, splitsBalance);
@@ -680,9 +668,9 @@ contract DripsTest is Test {
     }
 
     function testGiveLimitsTotalBalance() public {
-        uint128 streamsBalance = uint128(drips.MAX_TOTAL_BALANCE()) / 10;
+        uint128 streamsBalance = uint128(DripsLib.MAX_TOTAL_BALANCE) / 10;
         setStreams(accountId, 0, streamsBalance, streamsReceivers());
-        uint128 maxBalance = uint128(drips.MAX_TOTAL_BALANCE()) - streamsBalance;
+        uint128 maxBalance = uint128(DripsLib.MAX_TOTAL_BALANCE) - streamsBalance;
         assertBalances(streamsBalance, 0);
         give(accountId, receiver1, maxBalance - 1);
         assertBalances(streamsBalance, maxBalance - 1);

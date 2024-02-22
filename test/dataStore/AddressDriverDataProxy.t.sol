@@ -10,6 +10,7 @@ import {Call, Caller} from "src/Caller.sol";
 import {
     AccountMetadata,
     Drips,
+    DripsLib,
     MaxEndHints,
     MaxEndHintsImpl,
     StreamConfigImpl,
@@ -69,7 +70,9 @@ contract AddressDriverDataProxyTest is Test {
 
         // Top-up
         StreamReceiver[] memory receivers = new StreamReceiver[](1);
-        receivers[0] = StreamReceiver(123, StreamConfigImpl.create(0, drips.minAmtPerSec(), 0, 0));
+        receivers[0] = StreamReceiver(
+            123, StreamConfigImpl.create(0, DripsLib.minAmtPerSec(drips.cycleSecs()), 0, 0)
+        );
         bytes32 hash = dripsDataStore.storeStreams(receivers);
         uint256 balance = erc20.balanceOf(address(this));
 

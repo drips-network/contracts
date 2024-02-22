@@ -2,8 +2,9 @@
 pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
-import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {
+    DripsLib,
+    IERC20,
     MaxEndHints,
     MaxEndHintsImpl,
     StreamConfig,
@@ -31,14 +32,6 @@ contract PseudoRandomUtils {
     }
 }
 
-contract AssertMinAmtPerSec is Test, Streams {
-    constructor(uint32 cycleSecs, uint160 expectedMinAmtPerSec) Streams(cycleSecs, 0) {
-        string memory assertMessage =
-            string.concat("Invalid minAmtPerSec for cycleSecs ", vm.toString(cycleSecs));
-        assertEq(_minAmtPerSec, expectedMinAmtPerSec, assertMessage);
-    }
-}
-
 contract StreamsTest is Test, PseudoRandomUtils, Streams {
     bytes internal constant ERROR_NOT_SORTED = "Streams receivers not sorted";
     bytes internal constant ERROR_INVALID_STREAMS_LIST = "Invalid streams receivers list";
@@ -46,6 +39,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     bytes internal constant ERROR_HISTORY_INVALID = "Invalid streams history";
     bytes internal constant ERROR_HISTORY_UNCLEAR = "Entry with hash and receivers";
 
+    uint160 internal immutable minAmtPerSec;
     MaxEndHints internal immutable noHints = MaxEndHintsImpl.create();
 
     mapping(IERC20 erc20 => mapping(uint256 accountId => StreamReceiver[])) internal
@@ -64,7 +58,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     uint256 internal receiver4 = 8;
 
     constructor() Streams(10, bytes32(uint256(1000))) {
-        return;
+        minAmtPerSec = DripsLib.minAmtPerSec(_cycleSecs);
     }
 
     function setUp() public {
@@ -142,7 +136,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         uint256 duration
     ) internal pure returns (StreamReceiver[] memory receivers) {
         receivers = new StreamReceiver[](1);
-        uint256 amtPerSecFull = amtPerSec * Streams._AMT_PER_SEC_MULTIPLIER + amtPerSecFrac;
+        uint256 amtPerSecFull = amtPerSec * DripsLib.AMT_PER_SEC_MULTIPLIER + amtPerSecFrac;
         StreamConfig config = StreamConfigImpl.create(
             uint32(streamId), uint160(amtPerSecFull), uint32(start), uint32(duration)
         );
@@ -205,7 +199,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         StreamReceiver[] memory receivers = new StreamReceiver[](amountReceiver);
         for (uint256 i = 0; i < amountReceiver; i++) {
             uint256 streamId = random(type(uint32).max + uint256(1));
-            uint256 amtPerSec = _minAmtPerSec + random(maxAmtPerSec - _minAmtPerSec);
+            uint256 amtPerSec = minAmtPerSec + random(maxAmtPerSec - minAmtPerSec);
             uint256 start = random(maxStart);
             if (start % 100 <= probStartNow) {
                 start = 0;
@@ -557,6 +551,12 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     ) external view returns (uint128 amt) {
         (amt,,,,) =
             Streams._squeezeStreamsResult(accountId, erc20, senderId, historyHash, streamsHistory);
+    }
+
+    function testMaxTotalBalanceIsValid() public {
+        assertLe(
+            DripsLib.MAX_TOTAL_BALANCE, uint128(type(int128).max), "Max total balance too high"
+        );
     }
 
     function testStreamsConfigStoresParameters() public {
@@ -1034,7 +1034,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     }
 
     function testStreamingFractions() public {
-        uint256 onePerCycle = Streams._AMT_PER_SEC_MULTIPLIER / _cycleSecs + 1;
+        uint256 onePerCycle = DripsLib.minAmtPerSec(_cycleSecs);
         setStreams(sender, 0, 2, recv(receiver, 0, onePerCycle), _cycleSecs * 3 - 1);
         skipToCycleEnd();
         receiveStreams(receiver, 1);
@@ -1046,7 +1046,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
 
     function testStreamingFractionsWithFundsEnoughForHalfCycle() public {
         assertEq(_cycleSecs, 10, "Unexpected cycle length");
-        uint256 onePerCycle = Streams._AMT_PER_SEC_MULTIPLIER / _cycleSecs + 1;
+        uint256 onePerCycle = DripsLib.minAmtPerSec(_cycleSecs);
         // Full units are streamed on cycle timestamps 4 and 9
         setStreams(sender, 0, 1, recv(receiver, 0, onePerCycle * 2), 9);
         skipToCycleEnd();
@@ -1058,7 +1058,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
 
     function testStreamingFractionsWithFundsEnoughForOneCycle() public {
         assertEq(_cycleSecs, 10, "Unexpected cycle length");
-        uint256 onePerCycle = Streams._AMT_PER_SEC_MULTIPLIER / _cycleSecs + 1;
+        uint256 onePerCycle = DripsLib.minAmtPerSec(_cycleSecs);
         // Full units are streamed on cycle timestamps 4 and 9
         setStreams(sender, 0, 2, recv(receiver, 0, onePerCycle * 2), 14);
         skipToCycleEnd();
@@ -1070,7 +1070,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
 
     function testStreamingFractionsWithFundsEnoughForTwoCycles() public {
         assertEq(_cycleSecs, 10, "Unexpected cycle length");
-        uint256 onePerCycle = Streams._AMT_PER_SEC_MULTIPLIER / _cycleSecs + 1;
+        uint256 onePerCycle = DripsLib.minAmtPerSec(_cycleSecs);
         // Full units are streamed on cycle timestamps 4 and 9
         setStreams(sender, 0, 4, recv(receiver, 0, onePerCycle * 2), 24);
         skipToCycleEnd();
@@ -1087,7 +1087,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         assertEq(_cycleSecs, 10, "Unexpected cycle length");
         // Rate of 0.25 per second
         // Full units are streamed on cycle timestamps 3 and 7
-        setStreams(sender, 0, 3, recv(receiver, 0, Streams._AMT_PER_SEC_MULTIPLIER / 4 + 1), 17);
+        setStreams(sender, 0, 3, recv(receiver, 0, DripsLib.AMT_PER_SEC_MULTIPLIER / 4 + 1), 17);
         skipToCycleEnd();
         assertBalance(sender, 1);
         receiveStreams(receiver, 2);
@@ -1102,7 +1102,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         assertEq(_cycleSecs, 10, "Unexpected cycle length");
         // Rate of 0.25 per second
         // Full units are streamed on cycle timestamps 3 and 7
-        setStreams(sender, 0, 3, recv(receiver, 0, Streams._AMT_PER_SEC_MULTIPLIER / 4 + 1), 17);
+        setStreams(sender, 0, 3, recv(receiver, 0, DripsLib.AMT_PER_SEC_MULTIPLIER / 4 + 1), 17);
         assertBalanceAt(sender, 3, block.timestamp + 3);
         assertBalanceAt(sender, 2, block.timestamp + 4);
         assertBalanceAt(sender, 2, block.timestamp + 7);
@@ -1116,7 +1116,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         skip(3);
         // Rate of 0.4 per second
         // Full units are streamed on cycle timestamps 3, 5 and 8
-        setStreams(sender, 0, 1, recv(receiver, 0, Streams._AMT_PER_SEC_MULTIPLIER / 10 * 4 + 1), 4);
+        setStreams(sender, 0, 1, recv(receiver, 0, DripsLib.AMT_PER_SEC_MULTIPLIER / 10 * 4 + 1), 4);
         assertBalanceAt(sender, 1, block.timestamp + 1);
         assertBalanceAt(sender, 0, block.timestamp + 2);
     }
@@ -1125,7 +1125,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         assertEq(_cycleSecs, 10, "Unexpected cycle length");
         // Rate of 0.25 per second
         StreamReceiver[] memory receivers =
-            recv(receiver, 0, Streams._AMT_PER_SEC_MULTIPLIER / 4 + 1);
+            recv(receiver, 0, DripsLib.AMT_PER_SEC_MULTIPLIER / 4 + 1);
         // Full units are streamed on cycle timestamps 3 and 7
         setStreams(sender, 0, 2, receivers, 13);
         // Top up 2
@@ -1148,8 +1148,8 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
             0,
             5,
             recv(
-                recv(receiver1, 0, Streams._AMT_PER_SEC_MULTIPLIER / 4 + 1),
-                recv(receiver2, 0, (Streams._AMT_PER_SEC_MULTIPLIER / 100 + 1) * 33)
+                recv(receiver1, 0, DripsLib.AMT_PER_SEC_MULTIPLIER / 4 + 1),
+                recv(receiver2, 0, (DripsLib.AMT_PER_SEC_MULTIPLIER / 100 + 1) * 33)
             ),
             13
         );
@@ -1175,10 +1175,10 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     function testFractionsDoNotCumulateOnReceiver() public {
         assertEq(_cycleSecs, 10, "Unexpected cycle length");
         // Rate of 0.25 per second or 2.5 per cycle
-        setStreams(sender1, 0, 3, recv(receiver, 0, Streams._AMT_PER_SEC_MULTIPLIER / 4 + 1), 17);
+        setStreams(sender1, 0, 3, recv(receiver, 0, DripsLib.AMT_PER_SEC_MULTIPLIER / 4 + 1), 17);
         // Rate of 0.66 per second or 6.6 per cycle
         setStreams(
-            sender2, 0, 7, recv(receiver, 0, (Streams._AMT_PER_SEC_MULTIPLIER / 100 + 1) * 66), 13
+            sender2, 0, 7, recv(receiver, 0, (DripsLib.AMT_PER_SEC_MULTIPLIER / 100 + 1) * 66), 13
         );
         skipToCycleEnd();
         assertBalance(sender1, 1);
@@ -1193,19 +1193,15 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     }
 
     function testLimitsTheTotalReceiversCount() public {
-        uint256 countMax = Streams._MAX_STREAMS_RECEIVERS;
+        uint128 countMax = uint128(DripsLib.MAX_STREAMS_RECEIVERS);
         StreamReceiver[] memory receivers = new StreamReceiver[](countMax);
         for (uint160 i = 0; i < countMax; i++) {
             receivers[i] = recv(i, 1, 0, 0)[0];
         }
-        setStreams(sender, 0, uint128(countMax), receivers, 1);
+        setStreams(sender, 0, countMax, receivers, 1);
         receivers = recv(receivers, recv(countMax, 1, 0, 0));
         assertSetStreamsReverts(
-            sender,
-            uint128(countMax),
-            uint128(countMax + 1),
-            receivers,
-            "Too many streams receivers"
+            sender, countMax, countMax + 1, receivers, "Too many streams receivers"
         );
     }
 
@@ -1288,25 +1284,14 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         emit log_named_uint(string.concat("Gas used for ", testName), gas);
     }
 
-    function testMinAmtPerSec() public {
-        new AssertMinAmtPerSec(2, 500_000_000);
-        new AssertMinAmtPerSec(3, 333_333_334);
-        new AssertMinAmtPerSec(10, 100_000_000);
-        new AssertMinAmtPerSec(11, 90_909_091);
-        new AssertMinAmtPerSec(999_999_999, 2);
-        new AssertMinAmtPerSec(1_000_000_000, 1);
-        new AssertMinAmtPerSec(1_000_000_001, 1);
-        new AssertMinAmtPerSec(2_000_000_000, 1);
-    }
-
     function testRejectsTooLowAmtPerSecReceivers() public {
         assertSetStreamsReverts(
-            sender, 0, 0, recv(receiver, 0, _minAmtPerSec - 1), "Stream receiver amtPerSec too low"
+            sender, 0, 0, recv(receiver, 0, minAmtPerSec - 1), "Stream receiver amtPerSec too low"
         );
     }
 
     function testAcceptMinAmtPerSecReceivers() public {
-        setStreams(sender, 0, 2, recv(receiver, 0, _minAmtPerSec), 3 * _cycleSecs - 1);
+        setStreams(sender, 0, 2, recv(receiver, 0, minAmtPerSec), 3 * _cycleSecs - 1);
         skipToCycleEnd();
         drainBalance(sender, 1);
         receiveStreams(receiver, 1);
@@ -1525,12 +1510,12 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     function testFuzzStreamReceivers(bytes32 seed) public {
         initSeed(seed);
         uint8 amountReceivers = 10;
-        uint160 maxAmtPerSec = _minAmtPerSec + 50;
+        uint160 maxAmtPerSec = minAmtPerSec + 50;
         uint32 maxDuration = 100;
         uint32 maxStart = 100;
 
         uint128 maxCosts =
-            amountReceivers * uint128(maxAmtPerSec / _AMT_PER_SEC_MULTIPLIER) * maxDuration;
+            amountReceivers * uint128(maxAmtPerSec / DripsLib.AMT_PER_SEC_MULTIPLIER) * maxDuration;
         emit log_named_uint("topUp", maxCosts);
         uint128 maxAllStreamsFinished = maxStart + maxDuration;
 
@@ -1551,11 +1536,13 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         receiveStreams(receivers, maxEnd, updateTime);
     }
 
-    function sanitizeReceivers(
-        StreamReceiver[_MAX_STREAMS_RECEIVERS] memory receiversRaw,
-        uint256 receiversLengthRaw
-    ) internal view returns (StreamReceiver[] memory receivers) {
-        receivers = new StreamReceiver[](bound(receiversLengthRaw, 0, receiversRaw.length));
+    function sanitizeReceivers(StreamReceiver[] memory receiversRaw)
+        internal
+        view
+        returns (StreamReceiver[] memory receivers)
+    {
+        receivers =
+            new StreamReceiver[](bound(receiversRaw.length, 0, DripsLib.MAX_STREAMS_RECEIVERS));
         for (uint256 i = 0; i < receivers.length; i++) {
             receivers[i] = receiversRaw[i];
         }
@@ -1567,7 +1554,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
             }
             StreamConfig cfg = receivers[i].config;
             uint160 amtPerSec = cfg.amtPerSec();
-            if (amtPerSec < _minAmtPerSec) amtPerSec = _minAmtPerSec;
+            if (amtPerSec < minAmtPerSec) amtPerSec = minAmtPerSec;
             receivers[i].config = StreamConfigImpl.create(i, amtPerSec, cfg.start(), cfg.duration());
         }
     }
@@ -1595,7 +1582,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
             senders[i].receivers = new StreamReceiver[](1);
             senders[i].receivers[0].accountId = receiverId;
             uint160 amtPerSec = cfg.amtPerSec();
-            if (amtPerSec < _minAmtPerSec) amtPerSec = _minAmtPerSec;
+            if (amtPerSec < minAmtPerSec) amtPerSec = minAmtPerSec;
             senders[i].receivers[0].config =
                 StreamConfigImpl.create(i, amtPerSec, cfg.start(), cfg.duration());
         }
@@ -1637,19 +1624,18 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     }
 
     function sanitizeStreamsBalance(uint256 balanceRaw) internal view returns (uint128 balance) {
-        return uint128(bound(balanceRaw, 0, _MAX_STREAMS_BALANCE));
+        return uint128(bound(balanceRaw, 0, DripsLib.MAX_TOTAL_BALANCE));
     }
 
     function testFundsStreamedToReceiversAddUp(
         uint256 senderId,
         IERC20 usedErc20,
         uint256 balanceRaw,
-        StreamReceiver[_MAX_STREAMS_RECEIVERS] memory receiversRaw,
-        uint256 receiversLengthRaw,
+        StreamReceiver[] memory receiversRaw,
         uint256 streamingTimeRaw
     ) public {
         uint128 balanceBefore = sanitizeStreamsBalance(balanceRaw);
-        StreamReceiver[] memory receivers = sanitizeReceivers(receiversRaw, receiversLengthRaw);
+        StreamReceiver[] memory receivers = sanitizeReceivers(receiversRaw);
         Streams._setStreams(senderId, usedErc20, recv(), int128(balanceBefore), receivers, noHints);
 
         skip(sanitizeStreamingTime(streamingTimeRaw, 100));
@@ -1670,19 +1656,17 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         uint256 senderId,
         IERC20 usedErc20,
         uint256 balanceRaw,
-        StreamReceiver[_MAX_STREAMS_RECEIVERS] memory receiversRaw1,
-        uint256 receiversLengthRaw1,
+        StreamReceiver[] memory receiversRaw1,
         uint256 streamingTimeRaw1,
-        StreamReceiver[_MAX_STREAMS_RECEIVERS] memory receiversRaw2,
-        uint256 receiversLengthRaw2,
+        StreamReceiver[] memory receiversRaw2,
         uint256 streamingTimeRaw2
     ) public {
         uint128 balanceBefore = sanitizeStreamsBalance(balanceRaw);
-        StreamReceiver[] memory receivers1 = sanitizeReceivers(receiversRaw1, receiversLengthRaw1);
+        StreamReceiver[] memory receivers1 = sanitizeReceivers(receiversRaw1);
         Streams._setStreams(senderId, usedErc20, recv(), int128(balanceBefore), receivers1, noHints);
 
         skip(sanitizeStreamingTime(streamingTimeRaw1, 50));
-        StreamReceiver[] memory receivers2 = sanitizeReceivers(receiversRaw2, receiversLengthRaw2);
+        StreamReceiver[] memory receivers2 = sanitizeReceivers(receiversRaw2);
         int128 realBalanceDelta =
             Streams._setStreams(senderId, usedErc20, receivers1, 0, receivers2, noHints);
         assertEq(realBalanceDelta, 0, "Zero balance delta changed balance");

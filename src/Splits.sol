@@ -1,35 +1,27 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
+import {DripsLib, IERC20} from "./DripsLib.sol";
 
 /// @notice A splits receiver
 struct SplitsReceiver {
     /// @notice The account ID.
     uint256 accountId;
     /// @notice The splits weight. Must never be zero.
-    /// The account will be getting `weight / _TOTAL_SPLITS_WEIGHT`
+    /// The account will be getting `weight / DripsLib.TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the splitting account.
     uint256 weight;
 }
 
-/// @notice Splits can keep track of at most `type(uint128).max`
-/// which is `2 ^ 128 - 1` units of each ERC-20 token.
+/// @notice The splitting logic for Drips.
+/// Splits can keep track of at most `DripsLib.TOTAL_SPLITS_WEIGHT` units of each ERC-20 token.
 /// It's up to the caller to guarantee that this limit is never exceeded,
 /// failing to do so may result in a total protocol collapse.
 abstract contract Splits {
-    /// @notice Maximum number of splits receivers of a single account.
-    /// Limits the cost of splitting.
-    uint256 internal constant _MAX_SPLITS_RECEIVERS = 200;
-    /// @notice The total splits weight of an account.
-    uint256 internal constant _TOTAL_SPLITS_WEIGHT = 1_000_000;
-    /// @notice The amount the contract can keep track of each ERC-20 token.
-    // slither-disable-next-line unused-state
-    uint128 internal constant _MAX_SPLITS_BALANCE = _SPLITTABLE_MASK;
     /// @notice The storage slot holding a single `SplitsStorage` structure.
     bytes32 private immutable _splitsStorageSlot;
     /// @notice The mask for `SplitsBalance.splittable` where the actual value is stored.
-    uint128 private constant _SPLITTABLE_MASK = type(uint128).max >> 1;
+    uint128 internal constant _SPLITTABLE_MASK = uint128(DripsLib.MAX_TOTAL_BALANCE);
 
     /// @notice Emitted when an account collects funds
     /// @param accountId The account ID.
@@ -91,7 +83,7 @@ abstract contract Splits {
     function _addSplittable(uint256 accountId, IERC20 erc20, uint128 amt) internal {
         unchecked {
             // This will not overflow if the requirement of tracking in the contract
-            // no more than `_MAX_SPLITS_BALANCE` of each token is followed.
+            // no more than `DripsLib.MAX_TOTAL_BALANCE` of each token is followed.
             _splitsStorage().splitsStates[accountId].balances[erc20].splittable += amt;
         }
     }
@@ -128,10 +120,10 @@ abstract contract Splits {
             uint256 splitsWeight = 0;
             for (uint256 i = currReceivers.length; i != 0;) {
                 // This will not overflow because the receivers list
-                // is verified to add up to no more than _TOTAL_SPLITS_WEIGHT
+                // is verified to add up to no more than DripsLib.TOTAL_SPLITS_WEIGHT
                 splitsWeight += currReceivers[--i].weight;
             }
-            splitAmt = uint128(amount * splitsWeight / _TOTAL_SPLITS_WEIGHT);
+            splitAmt = uint128(amount * splitsWeight / DripsLib.TOTAL_SPLITS_WEIGHT);
             collectableAmt = amount - splitAmt;
         }
     }
@@ -167,17 +159,17 @@ abstract contract Splits {
             uint256 splitsWeight = 0;
             for (uint256 i = 0; i < currReceivers.length; i++) {
                 // This will not overflow because the receivers list
-                // is verified to add up to no more than _TOTAL_SPLITS_WEIGHT
+                // is verified to add up to no more than DripsLib.TOTAL_SPLITS_WEIGHT
                 splitsWeight += currReceivers[i].weight;
                 uint128 currSplitAmt = splitAmt;
-                splitAmt = uint128(splittable * splitsWeight / _TOTAL_SPLITS_WEIGHT);
+                splitAmt = uint128(splittable * splitsWeight / DripsLib.TOTAL_SPLITS_WEIGHT);
                 currSplitAmt = splitAmt - currSplitAmt;
                 uint256 receiver = currReceivers[i].accountId;
                 _addSplittable(receiver, erc20, currSplitAmt);
             }
             collectableAmt = splittable - splitAmt;
             // This will not overflow if the requirement of tracking in the contract
-            // no more than `_MAX_SPLITS_BALANCE` of each token is followed.
+            // no more than `DripsLib.MAX_TOTAL_BALANCE` of each token is followed.
             balance.collectable += collectableAmt;
         }
         emit Split(accountId, erc20, splittable);
@@ -220,9 +212,9 @@ abstract contract Splits {
     /// @param accountId The account ID.
     /// @param receivers The list of the account's splits receivers to be set.
     /// Must be sorted by the account IDs, without duplicate account IDs and without 0 weights.
-    /// Each splits receiver will be getting `weight / _TOTAL_SPLITS_WEIGHT`
+    /// Each splits receiver will be getting `weight / DripsLib.TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the account.
-    /// If the sum of weights of all receivers is less than `_TOTAL_SPLITS_WEIGHT`,
+    /// If the sum of weights of all receivers is less than `DripsLib.TOTAL_SPLITS_WEIGHT`,
     /// some funds won't be split, but they will be left for the account to collect.
     /// Fractions of tokens are always rounded either up or down depending on the amount
     /// being split, the receiver's position on the list and the other receivers' weights.
@@ -246,20 +238,21 @@ abstract contract Splits {
     /// Must be sorted by the account IDs, without duplicate account IDs and without 0 weights.
     function _assertSplitsValid(SplitsReceiver[] calldata receivers) private pure {
         unchecked {
-            require(receivers.length <= _MAX_SPLITS_RECEIVERS, "Too many splits receivers");
+            require(receivers.length <= DripsLib.MAX_SPLITS_RECEIVERS, "Too many splits receivers");
+            uint256 totalWeightMax = DripsLib.TOTAL_SPLITS_WEIGHT;
             uint256 totalWeight = 0;
             uint256 prevAccountId = 0;
             for (uint256 i = 0; i < receivers.length; i++) {
                 SplitsReceiver calldata receiver = receivers[i];
                 uint256 weight = receiver.weight;
                 require(weight != 0, "Splits receiver weight is zero");
-                if (weight > _TOTAL_SPLITS_WEIGHT) weight = _TOTAL_SPLITS_WEIGHT + 1;
+                if (weight > totalWeightMax) weight = totalWeightMax + 1;
                 totalWeight += weight;
                 uint256 accountId = receiver.accountId;
                 if (accountId <= prevAccountId) require(i == 0, "Splits receivers not sorted");
                 prevAccountId = accountId;
             }
-            require(totalWeight <= _TOTAL_SPLITS_WEIGHT, "Splits weights sum too high");
+            require(totalWeight <= totalWeightMax, "Splits weights sum too high");
         }
     }
 

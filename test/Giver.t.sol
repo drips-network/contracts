@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {AddressDriver} from "src/AddressDriver.sol";
-import {Drips, IERC20, MaxEndHintsImpl, StreamReceiver} from "src/Drips.sol";
+import {Drips, DripsLib, IERC20, MaxEndHintsImpl, StreamReceiver} from "src/Drips.sol";
 import {Address, Giver, GiversRegistry} from "src/Giver.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {
@@ -133,7 +133,7 @@ contract GiversRegistryTest is Test {
     }
 
     function testGiveMaxBalance() public {
-        give(drips.MAX_TOTAL_BALANCE());
+        give(DripsLib.MAX_TOTAL_BALANCE);
         give(1, 0);
     }
 
@@ -148,7 +148,7 @@ contract GiversRegistryTest is Test {
             address(this)
         );
         addressDriver.give(0, erc20, 5);
-        give(drips.MAX_TOTAL_BALANCE(), drips.MAX_TOTAL_BALANCE() - 15);
+        give(DripsLib.MAX_TOTAL_BALANCE, DripsLib.MAX_TOTAL_BALANCE - 15);
     }
 
     function testGiveNative() public {

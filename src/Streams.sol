@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
+import {DripsLib, IERC20} from "./DripsLib.sol";
 
 /// @notice A stream receiver
 struct StreamReceiver {
@@ -38,8 +38,8 @@ struct StreamsHistory {
 /// `streamId` is an arbitrary number used to identify a stream.
 /// It's a part of the configuration but the protocol doesn't use it.
 /// `amtPerSec` is the amount per second being streamed. Must never be zero.
-/// It must have additional `Streams._AMT_PER_SEC_EXTRA_DECIMALS` decimals and can have fractions.
-/// To achieve that its value must be multiplied by `Streams._AMT_PER_SEC_MULTIPLIER`.
+/// It must have additional `DripsLib.AMT_PER_SEC_EXTRA_DECIMALS` decimals and can have fractions.
+/// To achieve that its value must be multiplied by `DripsLib.AMT_PER_SEC_MULTIPLIER`.
 /// `start` is the timestamp when streaming should start.
 /// If zero, use the timestamp when the stream is configured.
 /// `duration` is the duration of streaming.
@@ -53,9 +53,9 @@ library StreamConfigImpl {
     /// @param streamId_ An arbitrary number used to identify a stream.
     /// It's a part of the configuration but the protocol doesn't use it.
     /// @param amtPerSec_ The amount per second being streamed. Must never be zero.
-    /// It must have additional `Streams._AMT_PER_SEC_EXTRA_DECIMALS`
+    /// It must have additional `DripsLib.AMT_PER_SEC_EXTRA_DECIMALS`
     /// decimals and can have fractions.
-    /// To achieve that the passed value must be multiplied by `Streams._AMT_PER_SEC_MULTIPLIER`.
+    /// To achieve that the passed value must be multiplied by `DripsLib.AMT_PER_SEC_MULTIPLIER`.
     /// @param start_ The timestamp when streaming should start.
     /// If zero, use the timestamp when the stream is configured.
     /// @param duration_ The duration of streaming. If zero, stream until the balance runs out.
@@ -197,26 +197,15 @@ library MaxEndHintsImpl {
     }
 }
 
-/// @notice Streams can keep track of at most `type(int128).max`
-/// which is `2 ^ 127 - 1` units of each ERC-20 token.
+/// @notice The streaming logic for Drips.
+/// Streams can keep track of at most `DripsLib.TOTAL_SPLITS_WEIGHT` units of each ERC-20 token.
 /// It's up to the caller to guarantee that this limit is never exceeded,
 /// failing to do so may result in a total protocol collapse.
 abstract contract Streams {
-    /// @notice Maximum number of streams receivers of a single account.
-    /// Limits cost of changes in streams configuration.
-    uint256 internal constant _MAX_STREAMS_RECEIVERS = 100;
-    /// @notice The additional decimals for all amtPerSec values.
-    uint8 internal constant _AMT_PER_SEC_EXTRA_DECIMALS = 9;
-    /// @notice The multiplier for all amtPerSec values. It's `10 ** _AMT_PER_SEC_EXTRA_DECIMALS`.
-    uint160 internal constant _AMT_PER_SEC_MULTIPLIER = 1_000_000_000;
-    /// @notice The amount the contract can keep track of each ERC-20 token.
-    uint128 internal constant _MAX_STREAMS_BALANCE = uint128(type(int128).max);
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
     /// gain access to streams received during `T - cycleSecs` to `T - 1`.
     /// Always higher than 1.
     uint32 internal immutable _cycleSecs;
-    /// @notice The minimum amtPerSec of a stream. It's 1 token per cycle.
-    uint160 internal immutable _minAmtPerSec;
     /// @notice The storage slot holding a single `StreamsStorage` structure.
     bytes32 private immutable _streamsStorageSlot;
 
@@ -325,7 +314,6 @@ abstract contract Streams {
     constructor(uint32 cycleSecs, bytes32 streamsStorageSlot) {
         require(cycleSecs > 1, "Cycle length too low");
         _cycleSecs = cycleSecs;
-        _minAmtPerSec = (_AMT_PER_SEC_MULTIPLIER + cycleSecs - 1) / cycleSecs;
         _streamsStorageSlot = streamsStorageSlot;
     }
 
@@ -399,7 +387,7 @@ abstract contract Streams {
                 AmtDelta memory amtDelta = amtDeltas[cycle];
                 amtPerCycle += amtDelta.thisCycle;
                 // This will not overflow if the requirement of tracking in the contract
-                // no more than `_MAX_STREAMS_BALANCE` of each token is followed.
+                // no more than `DripsLib.MAX_TOTAL_BALANCE` of each token is followed.
                 receivedAmt += uint128(amtPerCycle);
                 amtPerCycle += amtDelta.nextCycle;
             }
@@ -483,7 +471,7 @@ abstract contract Streams {
             }
             uint32 cycleStart = _currCycleStart();
             _addDeltaRange(
-                state, cycleStart, cycleStart + 1, -int160(amt * _AMT_PER_SEC_MULTIPLIER)
+                state, cycleStart, cycleStart + 1, -int160(amt * DripsLib.AMT_PER_SEC_MULTIPLIER)
             );
             emit SqueezedStreams(accountId, erc20, senderId, amt, squeezedHistoryHashes);
         }
@@ -557,7 +545,7 @@ abstract contract Streams {
                     if (squeezeStartCap < squeezeEndCap) {
                         squeezedRevIdxs[squeezedNum++] = i;
                         // This will not overflow if the requirement of tracking in the contract
-                        // no more than `_MAX_STREAMS_BALANCE` of each token is followed.
+                        // no more than `DripsLib.MAX_TOTAL_BALANCE` of each token is followed.
                         amt += _squeezedAmt(accountId, historyEntry, squeezeStartCap, squeezeEndCap);
                     }
                 }
@@ -630,7 +618,7 @@ abstract contract Streams {
                 (uint32 start, uint32 end) =
                     _streamRange(receiver, updateTime, maxEnd, squeezeStartCap, squeezeEndCap);
                 // This will not overflow if the requirement of tracking in the contract
-                // no more than `_MAX_STREAMS_BALANCE` of each token is followed.
+                // no more than `DripsLib.MAX_TOTAL_BALANCE` of each token is followed.
                 amt += _streamedAmt(receiver.config.amtPerSec(), start, end);
             }
             return uint128(amt);
@@ -789,7 +777,7 @@ abstract contract Streams {
                     realBalanceDelta = -currBalance;
                 }
                 // This will not overflow if the requirement of tracking in the contract
-                // no more than `_MAX_STREAMS_BALANCE` of each token is followed.
+                // no more than `DripsLib.MAX_TOTAL_BALANCE` of each token is followed.
                 newBalance = uint128(currBalance + realBalanceDelta);
                 newMaxEnd = _calcMaxEnd(newBalance, newReceivers, maxEndHints);
                 _updateReceiverStates(
@@ -932,10 +920,16 @@ abstract contract Streams {
         returns (uint256[] memory configs, uint256 configsLen)
     {
         unchecked {
-            require(receivers.length <= _MAX_STREAMS_RECEIVERS, "Too many streams receivers");
+            require(
+                receivers.length <= DripsLib.MAX_STREAMS_RECEIVERS, "Too many streams receivers"
+            );
             configs = new uint256[](receivers.length);
+            uint160 minAmtPerSec = DripsLib.minAmtPerSec(_cycleSecs);
             for (uint256 i = 0; i < receivers.length; i++) {
                 StreamReceiver memory receiver = receivers[i];
+                require(
+                    receiver.config.amtPerSec() >= minAmtPerSec, "Stream receiver amtPerSec too low"
+                );
                 if (i > 0) {
                     require(_isOrdered(receivers[i - 1], receiver), "Streams receivers not sorted");
                 }
@@ -954,8 +948,6 @@ abstract contract Streams {
         uint256 configsLen,
         StreamReceiver memory receiver
     ) private view returns (uint256 newConfigsLen) {
-        uint160 amtPerSec = receiver.config.amtPerSec();
-        require(amtPerSec >= _minAmtPerSec, "Stream receiver amtPerSec too low");
         (uint32 start, uint32 end) =
             _streamRangeInFuture(receiver, _currTimestamp(), type(uint32).max);
         // slither-disable-next-line incorrect-equality,timestamp
@@ -964,7 +956,7 @@ abstract contract Streams {
         }
         // By assignment we get `config` value:
         // `zeros (96 bits) | amtPerSec (160 bits)`
-        uint256 config = amtPerSec;
+        uint256 config = receiver.config.amtPerSec();
         // By bit shifting we get `config` value:
         // `zeros (64 bits) | amtPerSec (160 bits) | zeros (32 bits)`
         // By bit masking we get `config` value:
@@ -1239,7 +1231,7 @@ abstract contract Streams {
         unchecked {
             // In order to set a delta on a specific timestamp it must be introduced in two cycles.
             // These formulas follow the logic from `_streamedAmt`, see it for more details.
-            int256 amtPerSecMultiplier = int160(_AMT_PER_SEC_MULTIPLIER);
+            int256 amtPerSecMultiplier = int160(DripsLib.AMT_PER_SEC_MULTIPLIER);
             int256 fullCycle = (int256(uint256(_cycleSecs)) * amtPerSec) / amtPerSecMultiplier;
             // slither-disable-next-line weak-prng
             int256 nextCycle = (int256(timestamp % _cycleSecs) * amtPerSec) / amtPerSecMultiplier;
@@ -1298,17 +1290,18 @@ abstract contract Streams {
         // per transaction and it needs to be optimized as much as possible.
         // As of Solidity 0.8.13, rewriting it in unchecked Solidity triples its gas cost.
         uint256 cycleSecs = _cycleSecs;
+        uint256 amtPerSecMultiplier = DripsLib.AMT_PER_SEC_MULTIPLIER;
         // slither-disable-next-line assembly
         assembly {
             let endedCycles := sub(div(end, cycleSecs), div(start, cycleSecs))
             // slither-disable-next-line divide-before-multiply
-            let amtPerCycle := div(mul(cycleSecs, amtPerSec), _AMT_PER_SEC_MULTIPLIER)
+            let amtPerCycle := div(mul(cycleSecs, amtPerSec), amtPerSecMultiplier)
             amt := mul(endedCycles, amtPerCycle)
             // slither-disable-next-line weak-prng
-            let amtEnd := div(mul(mod(end, cycleSecs), amtPerSec), _AMT_PER_SEC_MULTIPLIER)
+            let amtEnd := div(mul(mod(end, cycleSecs), amtPerSec), amtPerSecMultiplier)
             amt := add(amt, amtEnd)
             // slither-disable-next-line weak-prng
-            let amtStart := div(mul(mod(start, cycleSecs), amtPerSec), _AMT_PER_SEC_MULTIPLIER)
+            let amtStart := div(mul(mod(start, cycleSecs), amtPerSec), amtPerSecMultiplier)
             amt := sub(amt, amtStart)
         }
     }

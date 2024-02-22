@@ -8,7 +8,7 @@ import {
     StreamsHistory,
     StreamReceiver
 } from "src/dataStore/DripsDataStore.sol";
-import {Drips, StreamConfig} from "src/Drips.sol";
+import {Drips, DripsLib, StreamConfig} from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
 
@@ -128,7 +128,7 @@ contract DripsDataStoreTest is Test {
 
     function generateStreamsHistory(uint256 length)
         public
-        view
+        pure
         returns (StreamsHistory[] memory streamsHistory)
     {
         uint256 salt = hashUint(length);
@@ -143,7 +143,7 @@ contract DripsDataStoreTest is Test {
             if (hashUint(salt + 2) % 2 == 0) {
                 streamsHistory[i].streamsHash = bytes32(hashUint(salt + 3));
             } else {
-                uint256 receiversLength = hashUint(salt + 3) % (drips.MAX_STREAMS_RECEIVERS() + 1);
+                uint256 receiversLength = hashUint(salt + 3) % (DripsLib.MAX_STREAMS_RECEIVERS + 1);
                 streamsHistory[i].receivers = new StreamReceiver[](receiversLength);
                 for (uint256 j = 0; j < receiversLength; j++) {
                     streamsHistory[i].receivers[j] = StreamReceiver({

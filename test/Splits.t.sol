@@ -2,8 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
-import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
-import {Splits, SplitsReceiver} from "src/Splits.sol";
+import {DripsLib, IERC20, Splits, SplitsReceiver} from "src/Splits.sol";
 
 contract SplitsTest is Test, Splits {
     bytes internal constant ERROR_NOT_SORTED = "Splits receivers not sorted";
@@ -160,6 +159,19 @@ contract SplitsTest is Test, Splits {
         collect(usedAccountId, expectedCollected);
     }
 
+    function testMaxTotalBalanceIsValid() public {
+        assertLe(DripsLib.MAX_TOTAL_BALANCE, type(uint128).max, "Max total balance too high");
+    }
+
+    function testSplittableMaskIsAValidMask() public {
+        uint128 mask = _SPLITTABLE_MASK;
+        assertGe(mask, DripsLib.MAX_TOTAL_BALANCE, "The masked value can't hold the total balance");
+        assertNotEq(mask, type(uint128).max, "The mask covers everything");
+        assertNotEq(mask, 0, "The mask covers nothing");
+        while (mask & 1 == 1) mask >>= 1;
+        assertEq(mask, 0, "The mask has gaps");
+    }
+
     function testGive() public {
         Splits._give(accountId, receiver, erc20, 5);
         assertSplittable(receiver, 5);
@@ -167,14 +179,14 @@ contract SplitsTest is Test, Splits {
 
     function testSimpleSplit() public {
         // 60% split
-        setSplits(accountId, splitsReceivers(receiver, (Splits._TOTAL_SPLITS_WEIGHT / 10) * 6));
+        setSplits(accountId, splitsReceivers(receiver, (DripsLib.TOTAL_SPLITS_WEIGHT / 10) * 6));
         addSplittable(accountId, 10);
         split(accountId, 4, 6);
     }
 
     function testSplitTwice() public {
         // 60% split
-        setSplits(accountId, splitsReceivers(receiver, (Splits._TOTAL_SPLITS_WEIGHT / 10) * 6));
+        setSplits(accountId, splitsReceivers(receiver, (DripsLib.TOTAL_SPLITS_WEIGHT / 10) * 6));
         // Split for the first time
         addSplittable(accountId, 5);
         splitCollect(accountId, 2, 3);
@@ -184,7 +196,7 @@ contract SplitsTest is Test, Splits {
     }
 
     function testLimitsTheTotalSplitsReceiversCount() public {
-        uint256 countMax = Splits._MAX_SPLITS_RECEIVERS;
+        uint256 countMax = DripsLib.MAX_SPLITS_RECEIVERS;
         SplitsReceiver[] memory receiversGood = new SplitsReceiver[](countMax);
         SplitsReceiver[] memory receiversBad = new SplitsReceiver[](countMax + 1);
         for (uint256 i = 0; i < countMax; i++) {
@@ -198,7 +210,7 @@ contract SplitsTest is Test, Splits {
     }
 
     function testRejectsTooHighTotalWeightSplitsReceivers() public {
-        uint256 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
+        uint256 totalWeight = DripsLib.TOTAL_SPLITS_WEIGHT;
         setSplits(accountId, splitsReceivers(receiver, totalWeight));
         assertSetSplitsReverts(
             accountId, splitsReceivers(receiver, totalWeight + 1), "Splits weights sum too high"
@@ -206,7 +218,7 @@ contract SplitsTest is Test, Splits {
     }
 
     function testRejectsOverflowingTotalWeightSplitsReceivers() public {
-        uint256 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
+        uint256 totalWeight = DripsLib.TOTAL_SPLITS_WEIGHT;
         setSplits(accountId, splitsReceivers(receiver, totalWeight));
         assertSetSplitsReverts(
             accountId,
@@ -234,7 +246,7 @@ contract SplitsTest is Test, Splits {
     }
 
     function testCanSplitAllWhenCollectedDoesNotSplitEvenly() public {
-        uint256 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
+        uint256 totalWeight = DripsLib.TOTAL_SPLITS_WEIGHT;
         // 3 waiting for accountId
         addSplittable(accountId, 3);
 
@@ -257,7 +269,7 @@ contract SplitsTest is Test, Splits {
     }
 
     function testSplittingSplitsAllFundsEvenWhenTheyDoNotDivideEvenly() public {
-        uint256 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
+        uint256 totalWeight = DripsLib.TOTAL_SPLITS_WEIGHT;
         setSplits(
             accountId, splitsReceivers(receiver1, (totalWeight / 5) * 2, receiver2, totalWeight / 5)
         );
@@ -269,7 +281,7 @@ contract SplitsTest is Test, Splits {
     }
 
     function testAccountCanSplitToItself() public {
-        uint256 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
+        uint256 totalWeight = DripsLib.TOTAL_SPLITS_WEIGHT;
         // receiver1 receives 30%, gets 50% split to themselves and receiver2 gets split 20%
         setSplits(
             receiver1, splitsReceivers(receiver1, totalWeight / 2, receiver2, totalWeight / 5)
@@ -298,7 +310,7 @@ contract SplitsTest is Test, Splits {
     }
 
     function testSplitsConfigurationIsCommonBetweenTokens() public {
-        uint256 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
+        uint256 totalWeight = DripsLib.TOTAL_SPLITS_WEIGHT;
         setSplits(accountId, splitsReceivers(receiver1, totalWeight / 10));
         erc20 = defaultErc20;
         addSplittable(accountId, 30);
@@ -316,7 +328,7 @@ contract SplitsTest is Test, Splits {
     }
 
     function testForwardSplits() public {
-        uint256 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
+        uint256 totalWeight = DripsLib.TOTAL_SPLITS_WEIGHT;
 
         addSplittable(accountId, 10);
         setSplits(accountId, splitsReceivers(receiver1, totalWeight));
@@ -333,7 +345,7 @@ contract SplitsTest is Test, Splits {
     }
 
     function testSplitMultipleReceivers() public {
-        uint256 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
+        uint256 totalWeight = DripsLib.TOTAL_SPLITS_WEIGHT;
         addSplittable(accountId, 10);
 
         setSplits(
@@ -349,11 +361,11 @@ contract SplitsTest is Test, Splits {
         splitCollect(receiver2, 5, 0);
     }
 
-    function sanitizeReceivers(
-        SplitsReceiver[_MAX_SPLITS_RECEIVERS] memory receiversRaw,
-        uint256 receiversLengthRaw,
-        uint256 totalWeightRaw
-    ) internal view returns (SplitsReceiver[] memory receivers) {
+    function sanitizeReceivers(SplitsReceiver[] memory receiversRaw, uint256 totalWeightRaw)
+        internal
+        view
+        returns (SplitsReceiver[] memory receivers)
+    {
         for (uint256 i = 0; i < receiversRaw.length; i++) {
             for (uint256 j = i + 1; j < receiversRaw.length; j++) {
                 if (receiversRaw[i].accountId > receiversRaw[j].accountId) {
@@ -366,15 +378,16 @@ contract SplitsTest is Test, Splits {
             if (receiversRaw[i].accountId != receiversRaw[unique].accountId) unique++;
             receiversRaw[unique] = receiversRaw[i];
         }
-        receivers = new SplitsReceiver[](bound(receiversLengthRaw, 0, unique));
+        receivers = new SplitsReceiver[](bound(unique, 0, DripsLib.MAX_SPLITS_RECEIVERS));
         uint256 weightSum = 0;
         for (uint256 i = 0; i < receivers.length; i++) {
             receivers[i] = receiversRaw[i];
-            receivers[i].weight %= _TOTAL_SPLITS_WEIGHT;
+            receivers[i].weight %= DripsLib.TOTAL_SPLITS_WEIGHT;
             weightSum += receivers[i].weight;
         }
         if (weightSum == 0) weightSum = 1;
-        uint256 totalWeight = bound(totalWeightRaw, 0, (_TOTAL_SPLITS_WEIGHT - receivers.length));
+        uint256 totalWeight =
+            bound(totalWeightRaw, 0, (DripsLib.TOTAL_SPLITS_WEIGHT - receivers.length));
         uint256 usedWeight = 0;
         for (uint256 i = 0; i < receivers.length; i++) {
             uint256 usedTotalWeight = totalWeight * usedWeight / weightSum;
@@ -387,13 +400,11 @@ contract SplitsTest is Test, Splits {
         uint256 usedAccountId,
         IERC20 usedErc20,
         uint128 amt,
-        SplitsReceiver[_MAX_SPLITS_RECEIVERS] memory receiversRaw,
-        uint256 receiversLengthRaw,
+        SplitsReceiver[] memory receiversRaw,
         uint256 totalWeightRaw
     ) public {
-        amt %= _MAX_SPLITS_BALANCE + 1;
-        SplitsReceiver[] memory receivers =
-            sanitizeReceivers(receiversRaw, receiversLengthRaw, totalWeightRaw);
+        amt %= uint128(DripsLib.MAX_TOTAL_BALANCE) + 1;
+        SplitsReceiver[] memory receivers = sanitizeReceivers(receiversRaw, totalWeightRaw);
         Splits._addSplittable(usedAccountId, usedErc20, amt);
         this.setSplitsExternal(usedAccountId, receivers);
         (uint128 collectableAmt, uint128 splitAmt) =
