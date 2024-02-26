@@ -3,17 +3,16 @@ pragma solidity ^0.8.24;
 
 import {Caller} from "src/Caller.sol";
 import {Forge, RepoDriver} from "src/RepoDriver.sol";
+import {Drips} from "src/Drips.sol";
+import {DripsLib, MaxEndHintsImpl, StreamConfigImpl} from "src/DripsLib.sol";
 import {
     AccountMetadata,
-    Drips,
-    DripsLib,
+    IDrips,
     MaxEndHints,
-    MaxEndHintsImpl,
     SplitsReceiver,
-    StreamConfigImpl,
     StreamReceiver,
     StreamsHistory
-} from "src/Drips.sol";
+} from "src/IDrips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {BufferChainlink, CBORChainlink} from "chainlink/Chainlink.sol";
 import {ERC677ReceiverInterface} from "chainlink/interfaces/ERC677ReceiverInterface.sol";
@@ -50,7 +49,7 @@ contract MockDummy {
 }
 
 contract RepoDriverTest is Test {
-    Drips internal drips;
+    IDrips internal drips;
     Caller internal caller;
     RepoDriver internal driver;
     uint256 internal driverNonce;
@@ -73,8 +72,7 @@ contract RepoDriverTest is Test {
     uint256 internal constant CHAIN_ID_SEPOLIA = 11155111;
 
     function setUp() public {
-        Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, address(this))));
+        drips = IDrips(address(new ManagedProxy(new Drips(10), address(this))));
 
         caller = new Caller();
 

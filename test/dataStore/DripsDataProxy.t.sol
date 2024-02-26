@@ -1,25 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {DripsDataProxy, DripsDataStore} from "src/dataStore/DripsDataProxy.sol";
+import {DripsDataProxy} from "src/dataStore/DripsDataProxy.sol";
+import {DripsDataStore} from "src/dataStore/DripsDataStore.sol";
+import {Drips} from "src/Drips.sol";
+import {DripsLib, MaxEndHintsImpl, StreamConfigImpl} from "src/DripsLib.sol";
 import {
-    Drips,
-    DripsLib,
+    IDrips,
     IERC20,
     MaxEndHints,
-    MaxEndHintsImpl,
-    StreamConfigImpl,
     StreamReceiver,
     StreamsHistory,
     SplitsReceiver
-} from "src/Drips.sol";
+} from "src/IDrips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
 import {ERC20PresetFixedSupply} from
     "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
 contract DripsDataProxyTest is Test {
-    Drips internal drips;
+    IDrips internal drips;
     DripsDataStore internal dripsDataStore;
     DripsDataProxy internal dataProxy;
     IERC20 internal erc20;
@@ -32,8 +32,7 @@ contract DripsDataProxyTest is Test {
     MaxEndHints internal immutable noHints = MaxEndHintsImpl.create();
 
     function setUp() public {
-        Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, address(this))));
+        drips = IDrips(address(new ManagedProxy(new Drips(10), address(this))));
         drips.registerDriver(driver);
 
         dripsDataStore = new DripsDataStore();

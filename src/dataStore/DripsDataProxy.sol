@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {DripsDataStore} from "./DripsDataStore.sol";
-import {Drips, StreamReceiver, IERC20, SplitsReceiver} from "../Drips.sol";
+import {IDrips, StreamReceiver, IERC20, SplitsReceiver} from "../IDrips.sol";
 import {Managed} from "../Managed.sol";
 
 /// @notice A data proxy for `Drips`.
@@ -17,13 +17,13 @@ import {Managed} from "../Managed.sol";
 /// and calldata is much smaller when large lists are substituted with their hashes.
 contract DripsDataProxy is Managed {
     /// @notice The Drips contract used by this proxy.
-    Drips public immutable drips;
+    IDrips public immutable drips;
     /// @notice The DripsDataStore contract used by this proxy.
     DripsDataStore public immutable dripsDataStore;
 
     /// @param drips_ The Drips contract to use.
     /// @param dripsDataStore_ The DripsDataStore contract to use.
-    constructor(Drips drips_, DripsDataStore dripsDataStore_) {
+    constructor(IDrips drips_, DripsDataStore dripsDataStore_) {
         drips = drips_;
         dripsDataStore = dripsDataStore_;
     }

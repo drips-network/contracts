@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {AccountMetadata, SplitsReceiver, StreamsHistory, StreamReceiver} from "../Drips.sol";
+import {AccountMetadata, SplitsReceiver, StreamsHistory, StreamReceiver} from "../IDrips.sol";
 
 /// @notice `DripsDataStore` is a helper contract allowing storing large `Drips` data structures
 /// on-chain, that would normally be kept off-chain, in events or in calldata.

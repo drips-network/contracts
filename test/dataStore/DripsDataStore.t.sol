@@ -1,25 +1,27 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
+import {DripsDataStore} from "src/dataStore/DripsDataStore.sol";
+import {Drips} from "src/Drips.sol";
+import {DripsLib} from "src/DripsLib.sol";
 import {
     AccountMetadata,
-    DripsDataStore,
+    IDrips,
     SplitsReceiver,
-    StreamsHistory,
-    StreamReceiver
-} from "src/dataStore/DripsDataStore.sol";
-import {Drips, DripsLib, StreamConfig} from "src/Drips.sol";
+    StreamConfig,
+    StreamReceiver,
+    StreamsHistory
+} from "src/IDrips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
 
 contract DripsDataStoreTest is Test {
     DripsDataStore internal dripsDataStore;
-    Drips internal drips;
+    IDrips internal drips;
 
     function setUp() public {
         dripsDataStore = new DripsDataStore();
-        Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, address(1))));
+        drips = IDrips(address(new ManagedProxy(new Drips(10), address(1))));
     }
 
     function hashUint(uint256 input) public pure returns (uint256) {

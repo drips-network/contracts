@@ -3,12 +3,12 @@ pragma solidity ^0.8.24;
 
 import {
     AccountMetadata,
-    Drips,
+    IDrips,
     MaxEndHints,
     StreamReceiver,
     IERC20,
     SplitsReceiver
-} from "./Drips.sol";
+} from "./IDrips.sol";
 import {Managed} from "./Managed.sol";
 import {DriverTransferUtils} from "./DriverTransferUtils.sol";
 
@@ -18,14 +18,16 @@ import {DriverTransferUtils} from "./DriverTransferUtils.sol";
 /// for each address is available upfront.
 contract AddressDriver is DriverTransferUtils, Managed {
     /// @notice The Drips address used by this driver.
-    Drips public immutable drips;
+    IDrips public immutable drips;
     /// @notice The driver ID which this driver uses when calling Drips.
     uint32 public immutable driverId;
 
     /// @param drips_ The Drips contract to use.
     /// @param forwarder The ERC-2771 forwarder to trust. May be the zero address.
     /// @param driverId_ The driver ID to use when calling Drips.
-    constructor(Drips drips_, address forwarder, uint32 driverId_) DriverTransferUtils(forwarder) {
+    constructor(IDrips drips_, address forwarder, uint32 driverId_)
+        DriverTransferUtils(forwarder)
+    {
         drips = drips_;
         driverId = driverId_;
     }

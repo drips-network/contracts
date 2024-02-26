@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {AddressDriver, Drips, IERC20} from "./AddressDriver.sol";
+import {AddressDriver, IDrips, IERC20} from "./AddressDriver.sol";
 import {DripsLib} from "./DripsLib.sol";
 import {Managed} from "./Managed.sol";
 import {Clones} from "openzeppelin-contracts/proxy/Clones.sol";
@@ -45,7 +45,7 @@ contract GiversRegistry is Managed {
     /// @notice The driver to use to `give`.
     AddressDriver public immutable addressDriver;
     /// @notice The `Drips` contract used by `addressDriver`.
-    Drips internal immutable _drips;
+    IDrips internal immutable _drips;
 
     /// @param addressDriver_ The driver to use to `give`.
     constructor(AddressDriver addressDriver_) {

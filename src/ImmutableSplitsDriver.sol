@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {AccountMetadata, Drips, DripsLib, SplitsReceiver} from "./Drips.sol";
+import {AccountMetadata, IDrips, SplitsReceiver} from "./IDrips.sol";
+import {DripsLib} from "./DripsLib.sol";
 import {Managed} from "./Managed.sol";
 import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 
@@ -13,7 +14,7 @@ import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 /// configurations always give away 100% funds, so there's never anything left to collect.
 contract ImmutableSplitsDriver is Managed {
     /// @notice The Drips address used by this driver.
-    Drips public immutable drips;
+    IDrips public immutable drips;
     /// @notice The driver ID which this driver uses when calling Drips.
     uint32 public immutable driverId;
     /// @notice The ERC-1967 storage slot holding a single `uint256` counter of created identities.
@@ -26,7 +27,7 @@ contract ImmutableSplitsDriver is Managed {
 
     /// @param _drips The Drips contract to use.
     /// @param _driverId The driver ID to use when calling Drips.
-    constructor(Drips _drips, uint32 _driverId) {
+    constructor(IDrips _drips, uint32 _driverId) {
         drips = _drips;
         driverId = _driverId;
     }

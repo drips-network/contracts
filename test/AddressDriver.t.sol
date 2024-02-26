@@ -5,15 +5,14 @@ import {Caller} from "src/Caller.sol";
 import {AddressDriver} from "src/AddressDriver.sol";
 import {
     AccountMetadata,
-    Drips,
-    DripsLib,
+    IDrips,
     MaxEndHints,
-    MaxEndHintsImpl,
-    StreamConfigImpl,
     StreamsHistory,
     StreamReceiver,
     SplitsReceiver
-} from "src/Drips.sol";
+} from "src/IDrips.sol";
+import {DripsLib, MaxEndHintsImpl, StreamConfigImpl} from "src/DripsLib.sol";
+import {Drips} from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
 import {
@@ -22,7 +21,7 @@ import {
 } from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
 contract AddressDriverTest is Test {
-    Drips internal drips;
+    IDrips internal drips;
     Caller internal caller;
     AddressDriver internal driver;
     IERC20 internal erc20;
@@ -34,8 +33,7 @@ contract AddressDriverTest is Test {
     MaxEndHints internal immutable noHints = MaxEndHintsImpl.create();
 
     function setUp() public {
-        Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, address(this))));
+        drips = IDrips(address(new ManagedProxy(new Drips(10), address(this))));
 
         caller = new Caller();
 

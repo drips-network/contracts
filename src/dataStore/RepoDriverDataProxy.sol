@@ -5,12 +5,12 @@ import {DripsDataStore} from "./DripsDataStore.sol";
 import {Caller} from "../Caller.sol";
 import {
     AccountMetadata,
-    Drips,
+    IDrips,
     MaxEndHints,
     StreamReceiver,
     IERC20,
     SplitsReceiver
-} from "../Drips.sol";
+} from "../IDrips.sol";
 import {Managed} from "../Managed.sol";
 import {RepoDriver} from "../RepoDriver.sol";
 import {ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
@@ -32,7 +32,7 @@ import {ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
 /// and calldata is much smaller when large lists are substituted with their hashes.
 contract RepoDriverDataProxy is ERC2771Context, Managed {
     /// @notice The Drips contract used by this proxy.
-    Drips public immutable drips;
+    IDrips public immutable drips;
     /// @notice The RepoDriver contract used by this proxy.
     RepoDriver public immutable repoDriver;
     /// @notice The DripsDataStore contract used by this proxy.

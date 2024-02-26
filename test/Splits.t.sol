@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {Test} from "forge-std/Test.sol";
 import {DripsLib, IERC20, Splits, SplitsReceiver} from "src/Splits.sol";
+import {Test} from "forge-std/Test.sol";
 
 contract SplitsTest is Test, Splits {
     bytes internal constant ERROR_NOT_SORTED = "Splits receivers not sorted";

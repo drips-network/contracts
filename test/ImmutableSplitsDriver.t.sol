@@ -2,18 +2,19 @@
 pragma solidity ^0.8.24;
 
 import {ImmutableSplitsDriver} from "src/ImmutableSplitsDriver.sol";
-import {AccountMetadata, Drips, DripsLib, SplitsReceiver} from "src/Drips.sol";
+import {Drips} from "src/Drips.sol";
+import {DripsLib} from "src/DripsLib.sol";
+import {AccountMetadata, IDrips, SplitsReceiver} from "src/IDrips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
 
 contract ImmutableSplitsDriverTest is Test {
-    Drips internal drips;
+    IDrips internal drips;
     ImmutableSplitsDriver internal driver;
     uint256 internal totalSplitsWeight;
 
     function setUp() public {
-        Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, address(this))));
+        drips = IDrips(address(new ManagedProxy(new Drips(10), address(this))));
 
         // Make the driver ID non-0 to test if it's respected by the driver
         drips.registerDriver(address(1));

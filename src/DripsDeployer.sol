@@ -5,7 +5,7 @@ import {AddressDriver} from "./AddressDriver.sol";
 import {Caller} from "./Caller.sol";
 import {Drips} from "./Drips.sol";
 import {ImmutableSplitsDriver} from "./ImmutableSplitsDriver.sol";
-import {Managed, ManagedProxy} from "./Managed.sol";
+import {ManagedProxy} from "./Managed.sol";
 import {NFTDriver} from "./NFTDriver.sol";
 import {OperatorInterface, RepoDriver} from "./RepoDriver.sol";
 import {Ownable2Step} from "openzeppelin-contracts/access/Ownable2Step.sol";

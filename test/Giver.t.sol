@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {Test} from "forge-std/Test.sol";
 import {AddressDriver} from "src/AddressDriver.sol";
-import {Drips, DripsLib, IERC20, MaxEndHintsImpl, StreamReceiver} from "src/Drips.sol";
-import {Address, Giver, GiversRegistry} from "src/Giver.sol";
+import {Drips} from "src/Drips.sol";
+import {DripsLib, MaxEndHintsImpl} from "src/DripsLib.sol";
+import {IDrips, IERC20, StreamReceiver} from "src/IDrips.sol";
+import {Giver, GiversRegistry} from "src/Giver.sol";
 import {ManagedProxy} from "src/Managed.sol";
+import {Test} from "forge-std/Test.sol";
 import {
     ERC20,
     ERC20PresetFixedSupply
 } from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
+import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
 contract NativeTokenWrapper is ERC20("Native token wrapper", "NTW") {
     receive() external payable {
@@ -54,7 +57,7 @@ contract GiverTest is Test {
 }
 
 contract GiversRegistryTest is Test {
-    Drips internal drips;
+    IDrips internal drips;
     AddressDriver internal addressDriver;
     IERC20 internal erc20;
     IERC20 internal nativeTokenWrapper;
@@ -63,8 +66,7 @@ contract GiversRegistryTest is Test {
     address payable internal giver;
 
     function setUp() public {
-        Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, address(1))));
+        drips = IDrips(address(new ManagedProxy(new Drips(10), address(1))));
         drips.registerDriver(address(1));
         AddressDriver addressDriverLogic =
             new AddressDriver(drips, address(0), drips.nextDriverId());

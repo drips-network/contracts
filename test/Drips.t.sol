@@ -1,27 +1,24 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
+import {Drips} from "src/Drips.sol";
+import {DripsLib, MaxEndHintsImpl, StreamConfigImpl} from "src/DripsLib.sol";
 import {
     AccountMetadata,
-    Drips,
-    DripsLib,
+    IDrips,
     IERC20,
     MaxEndHints,
-    MaxEndHintsImpl,
-    Splits,
     SplitsReceiver,
-    StreamConfigImpl,
     StreamReceiver,
-    Streams,
     StreamsHistory
-} from "src/Drips.sol";
+} from "src/IDrips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
 import {ERC20PresetFixedSupply} from
     "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
 contract DripsTest is Test {
-    Drips internal drips;
+    IDrips internal drips;
     // The ERC-20 token used in all helper functions
     IERC20 internal erc20;
     IERC20 internal defaultErc20;
@@ -52,8 +49,7 @@ contract DripsTest is Test {
         defaultErc20 = new ERC20PresetFixedSupply("default", "default", 2 ** 128, address(this));
         otherErc20 = new ERC20PresetFixedSupply("other", "other", 2 ** 128, address(this));
         erc20 = defaultErc20;
-        Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, address(2))));
+        drips = IDrips(address(new ManagedProxy(new Drips(10), address(2))));
 
         driverId = drips.registerDriver(driver);
         uint256 baseAccountId = driverId << 224;
@@ -710,8 +706,8 @@ contract DripsTest is Test {
         withdraw(1);
     }
 
-    function notDelegatedReverts() internal returns (Drips drips_) {
-        drips_ = Drips(drips.implementation());
+    function notDelegatedReverts() internal returns (IDrips drips_) {
+        drips_ = IDrips(Drips(address(drips)).implementation());
         vm.expectRevert("Function must be called through delegatecall");
     }
 

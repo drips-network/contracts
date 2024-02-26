@@ -3,13 +3,12 @@ pragma solidity ^0.8.24;
 
 import {
     AccountMetadata,
-    Drips,
+    IDrips,
     MaxEndHints,
     StreamReceiver,
     IERC20,
-    SafeERC20,
     SplitsReceiver
-} from "./Drips.sol";
+} from "./IDrips.sol";
 import {DriverTransferUtils, ERC2771Context} from "./DriverTransferUtils.sol";
 import {Managed} from "./Managed.sol";
 import {
@@ -26,10 +25,8 @@ import {
 /// Only the current holder of the token can control its account ID.
 /// The token ID and the account ID controlled by it are always equal.
 contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
-    using SafeERC20 for IERC20;
-
     /// @notice The Drips address used by this driver.
-    Drips public immutable drips;
+    IDrips public immutable drips;
     /// @notice The driver ID which this driver uses when calling Drips.
     uint32 public immutable driverId;
     /// @notice The ERC-1967 storage slot holding a single `NFTDriverStorage` structure.
@@ -45,7 +42,7 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     /// @param drips_ The Drips contract to use.
     /// @param forwarder The ERC-2771 forwarder to trust. May be the zero address.
     /// @param driverId_ The driver ID to use when calling Drips.
-    constructor(Drips drips_, address forwarder, uint32 driverId_)
+    constructor(IDrips drips_, address forwarder, uint32 driverId_)
         DriverTransferUtils(forwarder)
         ERC721("", "")
     {

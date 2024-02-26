@@ -3,13 +3,12 @@ pragma solidity ^0.8.24;
 
 import {
     AccountMetadata,
-    Drips,
+    IDrips,
     MaxEndHints,
     StreamReceiver,
     IERC20,
-    SafeERC20,
     SplitsReceiver
-} from "./Drips.sol";
+} from "./IDrips.sol";
 import {DriverTransferUtils} from "./DriverTransferUtils.sol";
 import {Managed} from "./Managed.sol";
 import {ERC677ReceiverInterface} from "chainlink/interfaces/ERC677ReceiverInterface.sol";
@@ -29,11 +28,10 @@ enum Forge {
 /// By default the repositories have no owner and their accounts can't be controlled by anybody,
 /// use `requestUpdateOwner` to update the owner.
 contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
-    using SafeERC20 for IERC20;
     using CBORChainlink for BufferChainlink.buffer;
 
     /// @notice The Drips address used by this driver.
-    Drips public immutable drips;
+    IDrips public immutable drips;
     /// @notice The driver ID which this driver uses when calling Drips.
     uint32 public immutable driverId;
     /// @notice The Link token used for paying the operators.
@@ -95,7 +93,9 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     /// @param drips_ The Drips contract to use.
     /// @param forwarder The ERC-2771 forwarder to trust. May be the zero address.
     /// @param driverId_ The driver ID to use when calling Drips.
-    constructor(Drips drips_, address forwarder, uint32 driverId_) DriverTransferUtils(forwarder) {
+    constructor(IDrips drips_, address forwarder, uint32 driverId_)
+        DriverTransferUtils(forwarder)
+    {
         drips = drips_;
         driverId = driverId_;
         string memory chainName;

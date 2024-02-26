@@ -1,27 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {
-    DripsDataStore, RepoDriver, RepoDriverDataProxy
-} from "src/dataStore/RepoDriverDataProxy.sol";
+import {DripsDataStore} from "src/dataStore/DripsDataStore.sol";
+import {RepoDriverDataProxy} from "src/dataStore/RepoDriverDataProxy.sol";
 import {Call, Caller} from "src/Caller.sol";
+import {Drips} from "src/Drips.sol";
+import {DripsLib, MaxEndHintsImpl, StreamConfigImpl} from "src/DripsLib.sol";
 import {
     AccountMetadata,
-    Drips,
-    DripsLib,
+    IDrips,
+    IERC20,
     MaxEndHints,
-    MaxEndHintsImpl,
     SplitsReceiver,
-    StreamConfigImpl,
     StreamReceiver
-} from "src/Drips.sol";
+} from "src/IDrips.sol";
 import {ManagedProxy} from "src/Managed.sol";
-import {Forge} from "src/RepoDriver.sol";
+import {Forge, RepoDriver} from "src/RepoDriver.sol";
 import {OperatorInterface} from "chainlink/interfaces/OperatorInterface.sol";
 import {Test} from "forge-std/Test.sol";
 import {
     ERC20,
-    IERC20,
     ERC20PresetFixedSupply
 } from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
@@ -32,7 +30,7 @@ contract TestLinkToken is ERC20("", "") {
 }
 
 contract RepoDriverDataProxyTest is Test {
-    Drips internal drips;
+    IDrips internal drips;
     Caller internal caller;
     RepoDriver internal driver;
     DripsDataStore internal dripsDataStore;
@@ -45,8 +43,7 @@ contract RepoDriverDataProxyTest is Test {
     MaxEndHints internal immutable noHints = MaxEndHintsImpl.create();
 
     function setUp() public {
-        Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, address(this))));
+        drips = IDrips(address(new ManagedProxy(new Drips(10), address(this))));
 
         caller = new Caller();
 

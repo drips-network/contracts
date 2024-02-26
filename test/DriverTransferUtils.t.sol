@@ -3,7 +3,9 @@ pragma solidity ^0.8.24;
 
 import {Caller} from "src/Caller.sol";
 import {DriverTransferUtils} from "src/DriverTransferUtils.sol";
-import {Drips, MaxEndHints, MaxEndHintsImpl, StreamReceiver, SplitsReceiver} from "src/Drips.sol";
+import {Drips} from "src/Drips.sol";
+import {MaxEndHintsImpl} from "src/DripsLib.sol";
+import {IDrips, MaxEndHints, SplitsReceiver, StreamReceiver} from "src/IDrips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
 import {
@@ -12,9 +14,9 @@ import {
 } from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
 contract DummyDriver is DriverTransferUtils {
-    Drips public immutable drips;
+    IDrips public immutable drips;
 
-    constructor(Drips drips_, address forwarder) DriverTransferUtils(forwarder) {
+    constructor(IDrips drips_, address forwarder) DriverTransferUtils(forwarder) {
         drips = drips_;
         drips.registerDriver(address(this));
     }
@@ -53,7 +55,7 @@ contract DummyDriver is DriverTransferUtils {
 }
 
 contract DriverTransferUtilsTest is Test {
-    Drips internal drips;
+    IDrips internal drips;
     Caller internal caller;
     DummyDriver internal driver;
     IERC20 internal erc20;
@@ -64,8 +66,7 @@ contract DriverTransferUtilsTest is Test {
     address userAddr = address(1234);
 
     function setUp() public {
-        Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, address(this))));
+        drips = IDrips(address(new ManagedProxy(new Drips(10), address(this))));
 
         caller = new Caller();
 

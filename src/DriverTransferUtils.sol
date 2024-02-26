@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {Drips, MaxEndHints, StreamReceiver, IERC20, SafeERC20} from "./Drips.sol";
+import {IDrips, MaxEndHints, StreamReceiver, IERC20} from "./IDrips.sol";
 import {ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
+import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @notice ERC-20 token transfer utilities for drivers.
 /// Encapsulates the logic for token transfers made by drivers implementing user identities.
@@ -24,7 +25,7 @@ abstract contract DriverTransferUtils is ERC2771Context {
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param transferTo The address to send collected funds to
     /// @return amt The collected amount
-    function _collectAndTransfer(Drips drips, uint256 accountId, IERC20 erc20, address transferTo)
+    function _collectAndTransfer(IDrips drips, uint256 accountId, IERC20 erc20, address transferTo)
         internal
         returns (uint128 amt)
     {
@@ -45,7 +46,7 @@ abstract contract DriverTransferUtils is ERC2771Context {
     /// If you use such tokens in the protocol, they can get stuck or lost.
     /// @param amt The given amount
     function _giveAndTransfer(
-        Drips drips,
+        IDrips drips,
         uint256 accountId,
         uint256 receiver,
         IERC20 erc20,
@@ -105,7 +106,7 @@ abstract contract DriverTransferUtils is ERC2771Context {
     /// It's equal to the passed `balanceDelta`, unless it's negative
     /// and it gets capped at the current balance amount.
     function _setStreamsAndTransfer(
-        Drips drips,
+        IDrips drips,
         uint256 accountId,
         IERC20 erc20,
         StreamReceiver[] calldata currReceivers,
@@ -125,7 +126,7 @@ abstract contract DriverTransferUtils is ERC2771Context {
     /// @param drips The Drips contract to use.
     /// @param erc20 The used ERC-20 token.
     /// @param amt The transferred amount
-    function _transferFromCaller(Drips drips, IERC20 erc20, uint128 amt) internal {
+    function _transferFromCaller(IDrips drips, IERC20 erc20, uint128 amt) internal {
         SafeERC20.safeTransferFrom(erc20, _msgSender(), address(drips), amt);
     }
 }

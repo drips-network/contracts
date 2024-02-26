@@ -1,17 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {DripsLib, IERC20} from "./DripsLib.sol";
-
-/// @notice A splits receiver
-struct SplitsReceiver {
-    /// @notice The account ID.
-    uint256 accountId;
-    /// @notice The splits weight. Must never be zero.
-    /// The account will be getting `weight / DripsLib.TOTAL_SPLITS_WEIGHT`
-    /// share of the funds collected by the splitting account.
-    uint256 weight;
-}
+import {DripsLib} from "./DripsLib.sol";
+import {IDrips, IERC20, SplitsReceiver} from "./IDrips.sol";
 
 /// @notice The splitting logic for Drips.
 /// Splits can keep track of at most `DripsLib.TOTAL_SPLITS_WEIGHT` units of each ERC-20 token.
@@ -22,37 +13,6 @@ abstract contract Splits {
     bytes32 private immutable _splitsStorageSlot;
     /// @notice The mask for `SplitsBalance.splittable` where the actual value is stored.
     uint128 internal constant _SPLITTABLE_MASK = uint128(DripsLib.MAX_TOTAL_BALANCE);
-
-    /// @notice Emitted when an account collects funds
-    /// @param accountId The account ID.
-    /// @param erc20 The used ERC-20 token.
-    /// @param collected The collected amount
-    event Collected(uint256 indexed accountId, IERC20 indexed erc20, uint128 collected);
-
-    /// @notice Emitted when an account splits funds.
-    /// @param accountId The account ID.
-    /// @param erc20 The used ERC-20 token.
-    /// @param amt The amount that was split.
-    event Split(uint256 indexed accountId, IERC20 indexed erc20, uint128 amt);
-
-    /// @notice Emitted when funds are given from the account to the receiver.
-    /// @param accountId The account ID.
-    /// @param receiver The receiver account ID.
-    /// @param erc20 The used ERC-20 token.
-    /// @param amt The given amount
-    event Given(
-        uint256 indexed accountId, uint256 indexed receiver, IERC20 indexed erc20, uint128 amt
-    );
-
-    /// @notice Emitted when the account's splits are updated.
-    /// @param accountId The account ID.
-    /// @param receiversHash The splits receivers list hash.
-    event SplitsSet(uint256 indexed accountId, bytes32 indexed receiversHash);
-
-    /// @notice Emitted when a splits receivers list may be used for the first time.
-    /// @param receiversHash The splits receivers list hash
-    /// @param receivers The list of the splits receivers.
-    event SplitsReceiversSeen(bytes32 indexed receiversHash, SplitsReceiver[] receivers);
 
     struct SplitsStorage {
         /// @notice Account splits states.
@@ -172,7 +132,7 @@ abstract contract Splits {
             // no more than `DripsLib.MAX_TOTAL_BALANCE` of each token is followed.
             balance.collectable += collectableAmt;
         }
-        emit Split(accountId, erc20, splittable);
+        emit IDrips.Split(accountId, erc20, splittable);
     }
 
     /// @notice Returns account's received funds already split and ready to be collected.
@@ -191,7 +151,7 @@ abstract contract Splits {
         SplitsBalance storage balance = _splitsStorage().splitsStates[accountId].balances[erc20];
         amt = balance.collectable;
         balance.collectable = 0;
-        emit Collected(accountId, erc20, amt);
+        emit IDrips.Collected(accountId, erc20, amt);
     }
 
     /// @notice Gives funds from the account to the receiver.
@@ -202,7 +162,7 @@ abstract contract Splits {
     /// @param amt The given amount
     function _give(uint256 accountId, uint256 receiver, IERC20 erc20, uint128 amt) internal {
         _addSplittable(receiver, erc20, amt);
-        emit Given(accountId, receiver, erc20, amt);
+        emit IDrips.Given(accountId, receiver, erc20, amt);
     }
 
     /// @notice Sets the account splits configuration.
@@ -229,8 +189,8 @@ abstract contract Splits {
         if (newSplitsHash == state.splitsHash) return;
         _assertSplitsValid(receivers);
         state.splitsHash = newSplitsHash;
-        emit SplitsReceiversSeen(newSplitsHash, receivers);
-        emit SplitsSet(accountId, newSplitsHash);
+        emit IDrips.SplitsReceiversSeen(newSplitsHash, receivers);
+        emit IDrips.SplitsSet(accountId, newSplitsHash);
     }
 
     /// @notice Validates a list of splits receivers and emits events for them

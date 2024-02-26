@@ -1,262 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {DripsLib, IERC20} from "./DripsLib.sol";
-
-/// @notice A stream receiver
-struct StreamReceiver {
-    /// @notice The account ID.
-    uint256 accountId;
-    /// @notice The stream configuration.
-    StreamConfig config;
-}
-
-/// @notice The sender streams history entry, used when squeezing streams.
-struct StreamsHistory {
-    /// @notice Streams receivers list hash, see `_hashStreams`.
-    /// If it's non-zero, `receivers` must be empty.
-    bytes32 streamsHash;
-    /// @notice The streams receivers. If it's non-empty, `streamsHash` must be `0`.
-    /// If it's empty, this history entry will be skipped when squeezing streams
-    /// and `streamsHash` will be used when verifying the streams history validity.
-    /// Skipping a history entry allows cutting gas usage on analysis
-    /// of parts of the streams history which are not worth squeezing.
-    /// The hash of an empty receivers list is `0`, so when the sender updates
-    /// their receivers list to be empty, the new `StreamsHistory` entry will have
-    /// both the `streamsHash` equal to `0` and the `receivers` empty making it always skipped.
-    /// This is fine, because there can't be any funds to squeeze from that entry anyway.
-    StreamReceiver[] receivers;
-    /// @notice The time when streams have been configured
-    uint32 updateTime;
-    /// @notice The maximum end time of streaming.
-    uint32 maxEnd;
-}
-
-/// @notice Describes a streams configuration.
-/// It's a 256-bit integer constructed by concatenating the configuration parameters:
-/// `streamId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`.
-/// `streamId` is an arbitrary number used to identify a stream.
-/// It's a part of the configuration but the protocol doesn't use it.
-/// `amtPerSec` is the amount per second being streamed. Must never be zero.
-/// It must have additional `DripsLib.AMT_PER_SEC_EXTRA_DECIMALS` decimals and can have fractions.
-/// To achieve that its value must be multiplied by `DripsLib.AMT_PER_SEC_MULTIPLIER`.
-/// `start` is the timestamp when streaming should start.
-/// If zero, use the timestamp when the stream is configured.
-/// `duration` is the duration of streaming.
-/// If zero, stream until balance runs out.
-type StreamConfig is uint256;
-
-using StreamConfigImpl for StreamConfig global;
-
-library StreamConfigImpl {
-    /// @notice Create a new StreamConfig.
-    /// @param streamId_ An arbitrary number used to identify a stream.
-    /// It's a part of the configuration but the protocol doesn't use it.
-    /// @param amtPerSec_ The amount per second being streamed. Must never be zero.
-    /// It must have additional `DripsLib.AMT_PER_SEC_EXTRA_DECIMALS`
-    /// decimals and can have fractions.
-    /// To achieve that the passed value must be multiplied by `DripsLib.AMT_PER_SEC_MULTIPLIER`.
-    /// @param start_ The timestamp when streaming should start.
-    /// If zero, use the timestamp when the stream is configured.
-    /// @param duration_ The duration of streaming. If zero, stream until the balance runs out.
-    // slither-disable-next-line dead-code
-    function create(uint32 streamId_, uint160 amtPerSec_, uint32 start_, uint32 duration_)
-        internal
-        pure
-        returns (StreamConfig)
-    {
-        // By assignment we get `config` value:
-        // `zeros (224 bits) | streamId (32 bits)`
-        uint256 config = streamId_;
-        // By bit shifting we get `config` value:
-        // `zeros (64 bits) | streamId (32 bits) | zeros (160 bits)`
-        // By bit masking we get `config` value:
-        // `zeros (64 bits) | streamId (32 bits) | amtPerSec (160 bits)`
-        config = (config << 160) | amtPerSec_;
-        // By bit shifting we get `config` value:
-        // `zeros (32 bits) | streamId (32 bits) | amtPerSec (160 bits) | zeros (32 bits)`
-        // By bit masking we get `config` value:
-        // `zeros (32 bits) | streamId (32 bits) | amtPerSec (160 bits) | start (32 bits)`
-        config = (config << 32) | start_;
-        // By bit shifting we get `config` value:
-        // `streamId (32 bits) | amtPerSec (160 bits) | start (32 bits) | zeros (32 bits)`
-        // By bit masking we get `config` value:
-        // `streamId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
-        config = (config << 32) | duration_;
-        return StreamConfig.wrap(config);
-    }
-
-    /// @notice Extracts streamId from a `StreamConfig`
-    // slither-disable-next-line dead-code
-    function streamId(StreamConfig config) internal pure returns (uint32) {
-        // `config` has value:
-        // `streamId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
-        // By bit shifting we get value:
-        // `zeros (224 bits) | streamId (32 bits)`
-        // By casting down we get value:
-        // `streamId (32 bits)`
-        return uint32(StreamConfig.unwrap(config) >> 224);
-    }
-
-    /// @notice Extracts amtPerSec from a `StreamConfig`
-    function amtPerSec(StreamConfig config) internal pure returns (uint160) {
-        // `config` has value:
-        // `streamId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
-        // By bit shifting we get value:
-        // `zeros (64 bits) | streamId (32 bits) | amtPerSec (160 bits)`
-        // By casting down we get value:
-        // `amtPerSec (160 bits)`
-        return uint160(StreamConfig.unwrap(config) >> 64);
-    }
-
-    /// @notice Extracts start from a `StreamConfig`
-    function start(StreamConfig config) internal pure returns (uint32) {
-        // `config` has value:
-        // `streamId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
-        // By bit shifting we get value:
-        // `zeros (32 bits) | streamId (32 bits) | amtPerSec (160 bits) | start (32 bits)`
-        // By casting down we get value:
-        // `start (32 bits)`
-        return uint32(StreamConfig.unwrap(config) >> 32);
-    }
-
-    /// @notice Extracts duration from a `StreamConfig`
-    function duration(StreamConfig config) internal pure returns (uint32) {
-        // `config` has value:
-        // `streamId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
-        // By casting down we get value:
-        // `duration (32 bits)`
-        return uint32(StreamConfig.unwrap(config));
-    }
-
-    /// @notice Compares two `StreamConfig`s.
-    /// First compares `streamId`s, then `amtPerSec`s, then `start`s and finally `duration`s.
-    /// @return isLower True if `config` is strictly lower than `otherConfig`.
-    function lt(StreamConfig config, StreamConfig otherConfig)
-        internal
-        pure
-        returns (bool isLower)
-    {
-        // Both configs have value:
-        // `streamId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`
-        // Comparing them as integers is equivalent to comparing their fields from left to right.
-        return StreamConfig.unwrap(config) < StreamConfig.unwrap(otherConfig);
-    }
-}
-
-/// @notice The list of 8 hints for max end time calculation.
-/// They are constructed as a concatenation of 8 32-bit values:
-/// `the leftmost hint (32 bits) | ... | the rightmost hint (32 bits)
-type MaxEndHints is uint256;
-
-using MaxEndHintsImpl for MaxEndHints global;
-
-library MaxEndHintsImpl {
-    /// @notice Create a list of 8 zero value hints.
-    /// @return hints The list of hints.
-    // slither-disable-next-line dead-code
-    function create() internal pure returns (MaxEndHints hints) {
-        return MaxEndHints.wrap(0);
-    }
-
-    /// @notice Add a hint to the list of hints as the rightmost and remove the leftmost.
-    /// @param hints The list of hints.
-    /// @param hint The added hint.
-    /// @return newHints The modified list of hints.
-    // slither-disable-next-line dead-code
-    function push(MaxEndHints hints, uint32 hint) internal pure returns (MaxEndHints newHints) {
-        // `hints` has value:
-        // `leftmost hint (32 bits) | other hints (224 bits)`
-        // By bit shifting we get value:
-        // `other hints (224 bits) | zeros (32 bits)`
-        // By bit masking we get value:
-        // `other hints (224 bits) | rightmost hint (32 bits)`
-        return MaxEndHints.wrap((MaxEndHints.unwrap(hints) << 32) | hint);
-    }
-
-    /// @notice Remove and return the rightmost hint, and add the zero value hint as the leftmost.
-    /// @param hints The list of hints.
-    /// @return newHints The modified list of hints.
-    /// @return hint The removed hint.
-    function pop(MaxEndHints hints) internal pure returns (MaxEndHints newHints, uint32 hint) {
-        // `hints` has value:
-        // `other hints (224 bits) | rightmost hint (32 bits)`
-        // By bit shifting we get value:
-        // `zeros (32 bits) | other hints (224 bits)`
-        // By casting down we get value:
-        // `rightmost hint (32 bits)`
-        return
-            (MaxEndHints.wrap(MaxEndHints.unwrap(hints) >> 32), uint32(MaxEndHints.unwrap(hints)));
-    }
-
-    /// @notice Check if the list contains any non-zero value hints.
-    /// @param hints The list of hints.
-    /// @return hasHints_ True if the list contains any non-zero value hints.
-    function hasHints(MaxEndHints hints) internal pure returns (bool hasHints_) {
-        return MaxEndHints.unwrap(hints) != 0;
-    }
-}
+import {DripsLib, MaxEndHintsImpl, StreamConfigImpl} from "./DripsLib.sol";
+import {
+    IDrips, IERC20, MaxEndHints, StreamConfig, StreamsHistory, StreamReceiver
+} from "./IDrips.sol";
 
 /// @notice The streaming logic for Drips.
 /// Streams can keep track of at most `DripsLib.TOTAL_SPLITS_WEIGHT` units of each ERC-20 token.
 /// It's up to the caller to guarantee that this limit is never exceeded,
-/// failing to do so may result in a total protocol collapse.
+/// failing to do so may result in a total ped like a drunk non-American trying to say Texas.rotocol collapse.
 abstract contract Streams {
-    /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
+    /// @notice The length of the cycle in seconds. Always higher than 1.
+    /// On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
     /// gain access to streams received during `T - cycleSecs` to `T - 1`.
-    /// Always higher than 1.
     uint32 internal immutable _cycleSecs;
     /// @notice The storage slot holding a single `StreamsStorage` structure.
     bytes32 private immutable _streamsStorageSlot;
-
-    /// @notice Emitted when the streams configuration of an account is updated.
-    /// @param accountId The account ID.
-    /// @param erc20 The used ERC-20 token.
-    /// @param receiversHash The streams receivers list hash.
-    /// @param streamsHistoryHash The streams history hash that was valid right before the update.
-    /// @param balance The account's streams balance. These funds will be streamed to the receivers.
-    /// @param maxEnd The maximum end time of streaming, when funds run out.
-    /// If funds run out after the timestamp `type(uint32).max`, it's set to `type(uint32).max`.
-    /// If the balance is 0 or there are no receivers, it's set to the current timestamp.
-    event StreamsSet(
-        uint256 indexed accountId,
-        IERC20 indexed erc20,
-        bytes32 indexed receiversHash,
-        bytes32 streamsHistoryHash,
-        uint128 balance,
-        uint32 maxEnd
-    );
-
-    /// @notice Emitted when a streams receivers list may be used for the first time.
-    /// @param receiversHash The streams receivers list hash
-    /// @param receivers The list of the streams receivers.
-    event StreamReceiversSeen(bytes32 indexed receiversHash, StreamReceiver[] receivers);
-
-    /// @notice Emitted when streams are received.
-    /// @param accountId The account ID.
-    /// @param erc20 The used ERC-20 token.
-    /// @param amt The received amount.
-    /// @param receivableCycles The number of cycles which still can be received.
-    event ReceivedStreams(
-        uint256 indexed accountId, IERC20 indexed erc20, uint128 amt, uint32 receivableCycles
-    );
-
-    /// @notice Emitted when streams are squeezed.
-    /// @param accountId The squeezing account ID.
-    /// @param erc20 The used ERC-20 token.
-    /// @param senderId The ID of the streaming account from whom funds are squeezed.
-    /// @param amt The squeezed amount.
-    /// @param streamsHistoryHashes The history hashes of all squeezed streams history entries.
-    /// Each history hash matches `streamsHistoryHash` emitted in its `StreamsSet`
-    /// when the squeezed streams configuration was set.
-    /// Sorted in the oldest streams configuration to the newest.
-    event SqueezedStreams(
-        uint256 indexed accountId,
-        IERC20 indexed erc20,
-        uint256 indexed senderId,
-        uint128 amt,
-        bytes32[] streamsHistoryHashes
-    );
 
     struct StreamsStorage {
         /// @notice Account streams states.
@@ -350,7 +110,7 @@ abstract contract Streams {
                 }
             }
         }
-        emit ReceivedStreams(accountId, erc20, receivedAmt, receivableCycles);
+        emit IDrips.ReceivedStreams(accountId, erc20, receivedAmt, receivableCycles);
     }
 
     /// @notice Calculate effects of calling `_receiveStreams` with the given parameters.
@@ -473,7 +233,7 @@ abstract contract Streams {
             _addDeltaRange(
                 state, cycleStart, cycleStart + 1, -int160(amt * DripsLib.AMT_PER_SEC_MULTIPLIER)
             );
-            emit SqueezedStreams(accountId, erc20, senderId, amt, squeezedHistoryHashes);
+            emit IDrips.SqueezedStreams(accountId, erc20, senderId, amt, squeezedHistoryHashes);
         }
     }
 
@@ -805,9 +565,11 @@ abstract contract Streams {
             // slither-disable-next-line timestamp
             if (state.streamsHash != newStreamsHash) {
                 state.streamsHash = newStreamsHash;
-                emit StreamReceiversSeen(newStreamsHash, newReceivers);
+                emit IDrips.StreamReceiversSeen(newStreamsHash, newReceivers);
             }
-            emit StreamsSet(accountId, erc20, newStreamsHash, streamsHistory, newBalance, newMaxEnd);
+            emit IDrips.StreamsSet(
+                accountId, erc20, newStreamsHash, streamsHistory, newBalance, newMaxEnd
+            );
         }
     }
 

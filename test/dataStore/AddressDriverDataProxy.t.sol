@@ -1,31 +1,27 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {
-    AddressDriver,
-    AddressDriverDataProxy,
-    DripsDataStore
-} from "src/dataStore/AddressDriverDataProxy.sol";
+import {AddressDriverDataProxy} from "src/dataStore/AddressDriverDataProxy.sol";
+import {DripsDataStore} from "src/dataStore/DripsDataStore.sol";
+import {AddressDriver} from "src/AddressDriver.sol";
 import {Call, Caller} from "src/Caller.sol";
+import {Drips} from "src/Drips.sol";
+import {DripsLib, MaxEndHintsImpl, StreamConfigImpl} from "src/DripsLib.sol";
 import {
     AccountMetadata,
-    Drips,
-    DripsLib,
+    IDrips,
+    IERC20,
     MaxEndHints,
-    MaxEndHintsImpl,
-    StreamConfigImpl,
     StreamReceiver,
     SplitsReceiver
-} from "src/Drips.sol";
+} from "src/IDrips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
-import {
-    IERC20,
-    ERC20PresetFixedSupply
-} from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
+import {ERC20PresetFixedSupply} from
+    "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
 contract AddressDriverDataProxyTest is Test {
-    Drips internal drips;
+    IDrips internal drips;
     Caller internal caller;
     AddressDriver internal addressDriver;
     DripsDataStore internal dripsDataStore;
@@ -38,8 +34,7 @@ contract AddressDriverDataProxyTest is Test {
     MaxEndHints internal immutable noHints = MaxEndHintsImpl.create();
 
     function setUp() public {
-        Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, address(this))));
+        drips = IDrips(address(new ManagedProxy(new Drips(10), address(this))));
 
         caller = new Caller();
 

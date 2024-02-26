@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {Test} from "forge-std/Test.sol";
 import {
     DripsLib,
     IERC20,
@@ -13,6 +12,7 @@ import {
     Streams,
     StreamsHistory
 } from "src/Streams.sol";
+import {Test} from "forge-std/Test.sol";
 
 contract PseudoRandomUtils {
     bytes32 private seed;

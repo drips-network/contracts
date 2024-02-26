@@ -2,19 +2,18 @@
 pragma solidity ^0.8.24;
 
 import {Caller} from "src/Caller.sol";
-import {NFTDriver} from "src/NFTDriver.sol";
+import {Drips} from "src/Drips.sol";
+import {DripsLib, MaxEndHintsImpl, StreamConfigImpl} from "src/DripsLib.sol";
 import {
     AccountMetadata,
-    Drips,
-    DripsLib,
+    IDrips,
     MaxEndHints,
-    MaxEndHintsImpl,
     SplitsReceiver,
-    StreamConfigImpl,
     StreamReceiver,
     StreamsHistory
-} from "src/Drips.sol";
+} from "src/IDrips.sol";
 import {ManagedProxy} from "src/Managed.sol";
+import {NFTDriver} from "src/NFTDriver.sol";
 import {Test} from "forge-std/Test.sol";
 import {
     IERC20,
@@ -22,7 +21,7 @@ import {
 } from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
 contract NFTDriverTest is Test {
-    Drips internal drips;
+    IDrips internal drips;
     Caller internal caller;
     NFTDriver internal driver;
     IERC20 internal erc20;
@@ -39,8 +38,7 @@ contract NFTDriverTest is Test {
     bytes internal constant ERROR_ALREADY_MINTED = "ERC721: token already minted";
 
     function setUp() public {
-        Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, address(this))));
+        drips = IDrips(address(new ManagedProxy(new Drips(10), address(this))));
 
         caller = new Caller();
 

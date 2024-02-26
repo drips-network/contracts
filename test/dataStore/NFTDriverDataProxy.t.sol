@@ -1,27 +1,27 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {DripsDataStore, NFTDriver, NFTDriverDataProxy} from "src/dataStore/NFTDriverDataProxy.sol";
+import {DripsDataStore} from "src/dataStore/DripsDataStore.sol";
+import {NFTDriverDataProxy} from "src/dataStore/NFTDriverDataProxy.sol";
 import {Call, Caller} from "src/Caller.sol";
+import {Drips} from "src/Drips.sol";
+import {DripsLib, MaxEndHintsImpl, StreamConfigImpl} from "src/DripsLib.sol";
 import {
     AccountMetadata,
-    Drips,
-    DripsLib,
-    MaxEndHints,
-    MaxEndHintsImpl,
-    SplitsReceiver,
-    StreamConfigImpl,
-    StreamReceiver
-} from "src/Drips.sol";
-import {ManagedProxy} from "src/Managed.sol";
-import {Test} from "forge-std/Test.sol";
-import {
+    IDrips,
     IERC20,
-    ERC20PresetFixedSupply
-} from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
+    MaxEndHints,
+    SplitsReceiver,
+    StreamReceiver
+} from "src/IDrips.sol";
+import {ManagedProxy} from "src/Managed.sol";
+import {NFTDriver} from "src/NFTDriver.sol";
+import {Test} from "forge-std/Test.sol";
+import {ERC20PresetFixedSupply} from
+    "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
 contract NFTDriverDataProxyTest is Test {
-    Drips internal drips;
+    IDrips internal drips;
     Caller internal caller;
     NFTDriver internal driver;
     DripsDataStore internal dripsDataStore;
@@ -35,8 +35,7 @@ contract NFTDriverDataProxyTest is Test {
     MaxEndHints internal immutable noHints = MaxEndHintsImpl.create();
 
     function setUp() public {
-        Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, address(this))));
+        drips = IDrips(address(new ManagedProxy(new Drips(10), address(this))));
 
         caller = new Caller();
 
