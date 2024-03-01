@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {ImmutableSplitsDriver} from "src/ImmutableSplitsDriver.sol";
 import {Drips} from "src/Drips.sol";
 import {DripsLib} from "src/DripsLib.sol";
-import {AccountMetadata, IDrips, SplitsReceiver} from "src/IDrips.sol";
+import {AccountMetadata, IDrips, SplitsReceiver} from "src/IImmutableSplitsDriver.sol";
+import {ImmutableSplitsDriver} from "src/ImmutableSplitsDriver.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
 
