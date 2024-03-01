@@ -3,6 +3,8 @@ pragma solidity ^0.8.24;
 
 import {Caller} from "src/Caller.sol";
 import {AddressDriver} from "src/AddressDriver.sol";
+import {DripsLib, MaxEndHintsImpl, StreamConfigImpl} from "src/DripsLib.sol";
+import {Drips} from "src/Drips.sol";
 import {
     AccountMetadata,
     IDrips,
@@ -10,9 +12,7 @@ import {
     StreamsHistory,
     StreamReceiver,
     SplitsReceiver
-} from "src/IDrips.sol";
-import {DripsLib, MaxEndHintsImpl, StreamConfigImpl} from "src/DripsLib.sol";
-import {Drips} from "src/Drips.sol";
+} from "src/IAddressDriver.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
 import {

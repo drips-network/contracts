@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import {AddressDriver} from "src/AddressDriver.sol";
 import {Drips} from "src/Drips.sol";
 import {DripsLib, MaxEndHintsImpl} from "src/DripsLib.sol";
-import {IDrips, IERC20, StreamReceiver} from "src/IDrips.sol";
+import {IAddressDriver, IDrips, IERC20, StreamReceiver} from "src/IAddressDriver.sol";
 import {Giver, GiversRegistry} from "src/Giver.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
@@ -58,7 +58,7 @@ contract GiverTest is Test {
 
 contract GiversRegistryTest is Test {
     IDrips internal drips;
-    AddressDriver internal addressDriver;
+    IAddressDriver internal addressDriver;
     IERC20 internal erc20;
     IERC20 internal nativeTokenWrapper;
     GiversRegistry internal giversRegistry;
@@ -70,7 +70,7 @@ contract GiversRegistryTest is Test {
         drips.registerDriver(address(1));
         AddressDriver addressDriverLogic =
             new AddressDriver(drips, address(0), drips.nextDriverId());
-        addressDriver = AddressDriver(address(new ManagedProxy(addressDriverLogic, address(1))));
+        addressDriver = IAddressDriver(address(new ManagedProxy(addressDriverLogic, address(1))));
         drips.registerDriver(address(addressDriver));
 
         GiversRegistry giversRegistryLogic = new GiversRegistry(addressDriver);

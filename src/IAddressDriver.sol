@@ -1,74 +1,72 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {DripsDataStore} from "./DripsDataStore.sol";
-import {Caller} from "../Caller.sol";
-import {
-    AccountMetadata,
-    IAddressDriver,
-    IDrips,
-    MaxEndHints,
-    StreamReceiver,
-    IERC20,
-    SplitsReceiver
-} from "../IAddressDriver.sol";
-import {Managed} from "../Managed.sol";
-import {ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
+import "./IDrips.sol";
 
-/// @notice A data proxy for `AddressDriver`.
-/// Large parameters aren't passed in calldata, but instead their hashes are accepted,
-/// and the actual data is loaded from `DripsDataStore`.
-/// The data must be explicitly stored in `DripsDataStore` before its usage.
-///
-/// All calls to the proxy are forwarded to the actual driver via `Caller`'s `callAs` on behalf of
-/// the message sender, so the sender must have the proxy address `authorize`d in `Caller`.
-/// The proxy treats `Caller` as the trusted ERC-2771 forwarder.
-///
-/// In some cases using the proxy is easier and cheaper than calling the driver directly.
-/// For example multisigs and governance contracts often need the whole calldata
-/// provided as a binary blob, which then sometimes needs to be stored on-chain.
-/// It's easier to build calldata consisting of a flat list of scalar parameters,
-/// and calldata is much smaller when large lists are substituted with their hashes.
-contract AddressDriverDataProxy is ERC2771Context, Managed {
-    /// @notice The Drips contract used by this proxy.
-    IDrips public immutable drips;
-    /// @notice The AddressDriver contract used by this proxy.
-    IAddressDriver public immutable addressDriver;
-    /// @notice The DripsDataStore contract used by this proxy.
-    DripsDataStore public immutable dripsDataStore;
-    // @notice The Caller contract used by this proxy. It's also the trusted ERC-2771 forwarder.
-    Caller public immutable caller;
+/// @notice A Drips driver implementing address-based account identification.
+/// Each address can use `AddressDriver` to control a single account ID derived from that address.
+/// No registration is required, an `AddressDriver`-based account ID
+/// for each address is available upfront.
+interface IAddressDriver {
+    /// @notice The Drips address used by this driver.
+    /// @return drips_ The Drips address.
+    function drips() external view returns (IDrips drips_);
 
-    /// @param addressDriver_ The AddressDriver contract to use.
-    /// @param dripsDataStore_ The DripsDataStore contract to use.
-    /// @param caller_ The Caller contract to use. It's also the trusted ERC-2771 forwarder.
-    constructor(IAddressDriver addressDriver_, DripsDataStore dripsDataStore_, Caller caller_)
-        ERC2771Context(address(caller_))
-    {
-        drips = addressDriver_.drips();
-        addressDriver = addressDriver_;
-        dripsDataStore = dripsDataStore_;
-        caller = caller_;
-    }
+    /// @notice The driver ID which this driver uses when calling Drips.
+    /// @return driverId_ The driver ID.
+    function driverId() external view returns (uint32 driverId_);
 
-    /// @notice Sets the message sender's streams configuration.
-    /// Transfers funds between the message sender's wallet and the Drips contract
-    /// to fulfil the change of the streams balance.
-    /// The currently set list of stream receivers must be stored in DripsDataStore.
+    /// @notice Calculates the account ID for an address.
+    /// Every account ID is a 256-bit integer constructed by concatenating:
+    /// `driverId (32 bits) | zeros (64 bits) | addr (160 bits)`.
+    /// @param addr The address
+    /// @return accountId The account ID
+    function calcAccountId(address addr) external view returns (uint256 accountId);
+
+    /// @notice Collects the account's received already split funds
+    /// and transfers them out of the Drips contract.
     /// @param erc20 The used ERC-20 token.
     /// It must preserve amounts, so if some amount of tokens is transferred to
     /// an address, then later the same amount must be transferable from that address.
     /// Tokens which rebase the holders' balances, collect taxes on transfers,
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
+    /// @param transferTo The address to send collected funds to
+    /// @return amt The collected amount
+    function collect(IERC20 erc20, address transferTo) external returns (uint128 amt);
+
+    /// @notice Gives funds from the message sender to the receiver.
+    /// The receiver can split and collect them immediately.
+    /// Transfers the funds to be given from the message sender's wallet to the Drips contract.
+    /// @param receiver The receiver account ID.
+    /// @param erc20 The used ERC-20 token.
+    /// It must preserve amounts, so if some amount of tokens is transferred to
+    /// an address, then later the same amount must be transferable from that address.
+    /// Tokens which rebase the holders' balances, collect taxes on transfers,
+    /// or impose any restrictions on holding or transferring tokens are not supported.
+    /// If you use such tokens in the protocol, they can get stuck or lost.
+    /// @param amt The given amount
+    function give(uint256 receiver, IERC20 erc20, uint128 amt) external;
+
+    /// @notice Sets the message sender's streams configuration.
+    /// Transfers funds between the message sender's wallet and the Drips contract
+    /// to fulfil the change of the streams balance.
+    /// @param erc20 The used ERC-20 token.
+    /// It must preserve amounts, so if some amount of tokens is transferred to
+    /// an address, then later the same amount must be transferable from that address.
+    /// Tokens which rebase the holders' balances, collect taxes on transfers,
+    /// or impose any restrictions on holding or transferring tokens are not supported.
+    /// If you use such tokens in the protocol, they can get stuck or lost.
+    /// @param currReceivers The current streams receivers list.
+    /// It must be exactly the same as the last list set for the sender with `setStreams`.
+    /// If this is the first update, pass an empty array.
     /// @param balanceDelta The streams balance change to be applied.
     /// If it's positive, the balance is increased by `balanceDelta`.
     /// If it's zero, the balance doesn't change.
     /// If it's negative, the balance is decreased by `balanceDelta`,
     /// but the change is capped at the current balance amount, so it doesn't go below 0.
     /// Passing `type(int128).min` always decreases the current balance to 0.
-    /// @param newStreamsHash The hash of the list of the streams receivers of the sender to be set,
-    /// the actual list must be stored in DripsDataStore.
+    /// @param newReceivers The list of the streams receivers of the sender to be set.
     /// Must be sorted by the account IDs and then by the stream configurations,
     /// without identical elements and without 0 amtPerSecs.
     /// @param maxEndHints An optional parameter allowing gas optimization.
@@ -94,43 +92,26 @@ contract AddressDriverDataProxy is ERC2771Context, Managed {
     /// or hints that don't enclose the time when funds run out can still save some gas.
     /// Providing poor hints that don't reduce the number of binary search steps
     /// may cause slightly higher gas usage than not providing any hints.
-    /// The second hint for finding the maximum end time, see `maxEndHint1` docs for more details.
     /// @param transferTo The address to send funds to in case of decreasing balance
     /// @return realBalanceDelta The actually applied streams balance change.
     /// It's equal to the passed `balanceDelta`, unless it's negative
     /// and it gets capped at the current balance amount.
     function setStreams(
         IERC20 erc20,
+        StreamReceiver[] calldata currReceivers,
         int128 balanceDelta,
-        bytes32 newStreamsHash,
+        StreamReceiver[] calldata newReceivers,
         MaxEndHints maxEndHints,
         address transferTo
-    ) public onlyProxy returns (int128 realBalanceDelta) {
-        uint256 accountId = addressDriver.calcAccountId(_msgSender());
-        // slither-disable-next-line unused-return
-        (bytes32 currStreamsHash,,,,) = drips.streamsState(accountId, erc20);
-        bytes memory data = abi.encodeCall(
-            addressDriver.setStreams,
-            (
-                erc20,
-                dripsDataStore.loadStreams(currStreamsHash),
-                balanceDelta,
-                dripsDataStore.loadStreams(newStreamsHash),
-                maxEndHints,
-                transferTo
-            )
-        );
-        return abi.decode(_callAddressDriver(data), (int128));
-    }
+    ) external returns (int128 realBalanceDelta);
 
-    /// @notice Sets the message sender's splits configuration.
+    /// @notice Sets the account splits configuration.
     /// The configuration is common for all ERC-20 tokens.
     /// Nothing happens to the currently splittable funds, but when they are split
     /// after this function finishes, the new splits configuration will be used.
     /// Because anybody can call `split` on `Drips`, calling this function may be frontrun
     /// and all the currently splittable funds will be split using the old splits configuration.
-    /// @param splitsHash The hash of the list of the sender's splits receivers to be set,
-    /// the actual list must be stored in DripsDataStore.
+    /// @param receivers The list of the account's splits receivers to be set.
     /// Must be sorted by the account IDs, without duplicate account IDs and without 0 weights.
     /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
     /// share of the funds collected by the account.
@@ -143,29 +124,11 @@ contract AddressDriverDataProxy is ERC2771Context, Managed {
     /// This is usually unwanted, because if splitting is repeated,
     /// funds split to themselves will be again split using the current configuration.
     /// Splitting 100% to self effectively blocks splitting unless the configuration is updated.
-    function setSplits(bytes32 splitsHash) public onlyProxy {
-        bytes memory data =
-            abi.encodeCall(addressDriver.setSplits, dripsDataStore.loadSplits(splitsHash));
-        abi.decode(_callAddressDriver(data), ());
-    }
+    function setSplits(SplitsReceiver[] calldata receivers) external;
 
     /// @notice Emits the account metadata for the message sender.
     /// The keys and the values are not standardized by the protocol, it's up to the users
     /// to establish and follow conventions to ensure compatibility with the consumers.
-    /// @param accountMetadataHash The hash of the list of account metadata,
-    /// the actual list must be stored in DripsDataStore.
-    function emitAccountMetadata(bytes32 accountMetadataHash) public onlyProxy {
-        bytes memory data = abi.encodeCall(
-            addressDriver.emitAccountMetadata,
-            dripsDataStore.loadAccountMetadata(accountMetadataHash)
-        );
-        abi.decode(_callAddressDriver(data), ());
-    }
-
-    /// @notice Calls the `AddressDriver` via Caller on behalf of the `msg.sender`.
-    /// @param data The raw calldata to use when calling `AddressDriver`.
-    /// @return returnData The raw data returned from `AddressDriver`.
-    function _callAddressDriver(bytes memory data) internal returns (bytes memory returnData) {
-        return caller.callAs(_msgSender(), address(addressDriver), data);
-    }
+    /// @param accountMetadata The list of account metadata.
+    function emitAccountMetadata(AccountMetadata[] calldata accountMetadata) external;
 }
