@@ -78,7 +78,7 @@ contract Drips is Managed, Streams, Splits {
     uint8 public constant DRIVER_ID_OFFSET = 224;
     /// @notice The total amount the protocol can store of each token.
     /// It's the minimum of _MAX_STREAMS_BALANCE and _MAX_SPLITS_BALANCE.
-    uint128 public constant MAX_TOTAL_BALANCE = _MAX_STREAMS_BALANCE;
+    uint256 public constant MAX_TOTAL_BALANCE = _MAX_STREAMS_BALANCE;
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
     /// gain access to steams received during `T - cycleSecs` to `T - 1`.
     /// Always higher than 1.
@@ -232,7 +232,7 @@ contract Drips is Managed, Streams, Splits {
         public
         view
         onlyProxy
-        returns (uint128 streamsBalance, uint128 splitsBalance)
+        returns (uint256 streamsBalance, uint256 splitsBalance)
     {
         Balance storage balance = _dripsStorage().balances[erc20];
         return (balance.streams, balance.splits);
@@ -294,7 +294,7 @@ contract Drips is Managed, Streams, Splits {
     /// @param erc20 The used ERC-20 token.
     /// @param amt The amount to increase the streams or splits balance by.
     function _verifyBalanceIncrease(IERC20 erc20, uint128 amt) internal view {
-        (uint256 streamsBalance, uint128 splitsBalance) = balances(erc20);
+        (uint256 streamsBalance, uint256 splitsBalance) = balances(erc20);
         uint256 newTotalBalance = streamsBalance + splitsBalance + amt;
         require(newTotalBalance <= MAX_TOTAL_BALANCE, "Total balance too high");
         require(newTotalBalance <= erc20.balanceOf(address(this)), "Token balance too low");
@@ -316,7 +316,7 @@ contract Drips is Managed, Streams, Splits {
     /// It must be at most the difference between the balance of the token held by the Drips
     /// contract address and the sum of balances managed by the protocol as indicated by `balances`.
     function withdraw(IERC20 erc20, address receiver, uint256 amt) public onlyProxy {
-        (uint128 streamsBalance, uint128 splitsBalance) = balances(erc20);
+        (uint256 streamsBalance, uint256 splitsBalance) = balances(erc20);
         uint256 withdrawable = erc20.balanceOf(address(this)) - streamsBalance - splitsBalance;
         require(amt <= withdrawable, "Withdrawal amount too high");
         emit Withdrawn(erc20, receiver, amt);

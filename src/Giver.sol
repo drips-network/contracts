@@ -46,7 +46,7 @@ contract GiversRegistry is Managed {
     /// @notice The `Drips` contract used by `addressDriver`.
     Drips internal immutable _drips;
     /// @notice The maximum balance of each token that Drips can hold.
-    uint128 internal immutable _maxTotalBalance;
+    uint256 internal immutable _maxTotalBalance;
 
     /// @param addressDriver_ The driver to use to `give`.
     constructor(AddressDriver addressDriver_) {
@@ -136,7 +136,7 @@ contract GiversRegistry is Managed {
                 address(erc20), "", address(this).balance, "Failed to wrap native tokens"
             );
         }
-        (uint128 streamsBalance, uint128 splitsBalance) = _drips.balances(erc20);
+        (uint256 streamsBalance, uint256 splitsBalance) = _drips.balances(erc20);
         uint256 maxAmt = _maxTotalBalance - streamsBalance - splitsBalance;
         // The balance of the `Giver` clone contract.
         amt = erc20.balanceOf(address(this));
