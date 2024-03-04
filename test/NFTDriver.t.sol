@@ -11,7 +11,7 @@ import {
     SplitsReceiver,
     StreamReceiver,
     StreamsHistory
-} from "src/IDrips.sol";
+} from "src/INFTDriver.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {NFTDriver} from "src/NFTDriver.sol";
 import {Test} from "forge-std/Test.sol";
