@@ -1,21 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {IAddressDriver, IDrips, IERC20} from "./IAddressDriver.sol";
 import {DripsLib} from "./DripsLib.sol";
+import "./IGiver.sol";
+import {IDrips} from "./IDrips.sol";
 import {Managed} from "./Managed.sol";
 import {Clones} from "openzeppelin-contracts/proxy/Clones.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
-/// @notice Each Drips account ID has a single `Giver` contract assigned to it,
-/// and each `Giver` has a single account ID assigned.
-/// Any ERC-20 tokens or native tokens sent to `Giver` will
-/// eventually be `give`n to the account assigned to it.
-/// This contract should never be called directly, it can only be called by its owner.
-/// For most practical purposes the address of a `Giver` should be treated like an EOA address.
-contract Giver {
-    /// @notice The owner of this contract, allowed to call it.
+/// @notice The implementation of `IGiver`, see its documentation for more details.
+contract Giver is IGiver {
+    /// @inheritdoc IGiver
     address public immutable owner = msg.sender;
 
     receive() external payable {}
@@ -34,15 +30,11 @@ contract Giver {
     }
 }
 
-/// @notice This contract deploys and calls `Giver` contracts.
-/// Each Drips account ID has a single `Giver` contract assigned to it,
-/// and each `Giver` has a single account ID assigned.
-/// Any ERC-20 tokens or native tokens sent to `Giver` will
-/// eventually be `give`n to the account assigned to it.
-contract GiversRegistry is Managed {
-    /// @notice The ERC-20 contract used to wrap the native tokens before `give`ing.
+/// @notice The implementation of `IGiversRegistry`, see its documentation for more details.
+contract GiversRegistry is IGiversRegistry, Managed {
+    /// @inheritdoc IGiversRegistry
     IERC20 public immutable nativeTokenWrapper;
-    /// @notice The driver to use to `give`.
+    /// @inheritdoc IGiversRegistry
     IAddressDriver public immutable addressDriver;
     /// @notice The `Drips` contract used by `addressDriver`.
     IDrips internal immutable _drips;
@@ -70,11 +62,7 @@ contract GiversRegistry is Managed {
         if (!Address.isContract(_giverLogic(address(this)))) new Giver();
     }
 
-    /// @notice Calculate the address of the `Giver` assigned to the account ID.
-    /// The `Giver` may not be deployed yet, but the tokens sent
-    /// to its address will be `give`n when `give` is called.
-    /// @param accountId The ID of the account to which the `Giver` is assigned.
-    /// @return giver_ The address of the `Giver`.
+    /// @inheritdoc IGiversRegistry
     function giver(uint256 accountId) public view onlyProxy returns (address giver_) {
         return _giver(accountId, address(this));
     }
@@ -98,12 +86,7 @@ contract GiversRegistry is Managed {
         return address(uint160(uint256(hash)));
     }
 
-    /// @notice `give` to the account all the tokens held by the `Giver` assigned to that account.
-    /// @param accountId The ID of the account to `give` tokens to.
-    /// @param erc20 The token to `give` to the account.
-    /// If it's the zero address, `Giver` wraps all the native tokens it holds using
-    /// `nativeTokenWrapper`, and then `give`s to the account all the wrapped tokens it holds.
-    /// @param amt The amount of tokens that were `give`n.
+    /// @inheritdoc IGiversRegistry
     function give(uint256 accountId, IERC20 erc20) public onlyProxy returns (uint256 amt) {
         address giver_ = giver(accountId);
         if (!Address.isContract(giver_)) {

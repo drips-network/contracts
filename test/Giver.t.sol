@@ -4,8 +4,9 @@ pragma solidity ^0.8.24;
 import {AddressDriver} from "src/AddressDriver.sol";
 import {Drips} from "src/Drips.sol";
 import {DripsLib, MaxEndHintsImpl} from "src/DripsLib.sol";
-import {IAddressDriver, IDrips, IERC20, StreamReceiver} from "src/IAddressDriver.sol";
 import {Giver, GiversRegistry} from "src/Giver.sol";
+import {IDrips, StreamReceiver} from "src/IDrips.sol";
+import "src/IGiver.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
 import {
