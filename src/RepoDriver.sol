@@ -1,40 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {
-    AccountMetadata,
-    IDrips,
-    MaxEndHints,
-    StreamReceiver,
-    IERC20,
-    SplitsReceiver
-} from "./IDrips.sol";
+import "./IRepoDriverAnyApi.sol";
 import {DriverTransferUtils} from "./DriverTransferUtils.sol";
 import {Managed} from "./Managed.sol";
-import {ERC677ReceiverInterface} from "chainlink/interfaces/ERC677ReceiverInterface.sol";
-import {LinkTokenInterface} from "chainlink/interfaces/LinkTokenInterface.sol";
-import {OperatorInterface} from "chainlink/interfaces/OperatorInterface.sol";
 import {BufferChainlink, CBORChainlink} from "chainlink/Chainlink.sol";
 import {ShortString, ShortStrings} from "openzeppelin-contracts/utils/ShortStrings.sol";
 
-/// @notice The supported forges where repositories are stored.
-enum Forge {
-    GitHub,
-    GitLab
-}
-
-/// @notice A Drips driver implementing repository-based account identification.
-/// Each repository stored in one of the supported forges has a deterministic account ID assigned.
-/// By default the repositories have no owner and their accounts can't be controlled by anybody,
-/// use `requestUpdateOwner` to update the owner.
-contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
+/// @notice The implementation of `IRepoDriverAnyApi`, see its documentation for more details.
+contract RepoDriver is IRepoDriverAnyApi, DriverTransferUtils, Managed {
     using CBORChainlink for BufferChainlink.buffer;
 
-    /// @notice The Drips address used by this driver.
+    /// @inheritdoc IRepoDriver
     IDrips public immutable drips;
-    /// @notice The driver ID which this driver uses when calling Drips.
+    /// @inheritdoc IRepoDriver
     uint32 public immutable driverId;
-    /// @notice The Link token used for paying the operators.
+    /// @inheritdoc IRepoDriverAnyApi
     LinkTokenInterface public immutable linkToken;
     /// @notice The JSON path inside `FUNDING.json` where the account ID owner is stored.
     ShortString internal immutable jsonPath;
@@ -44,28 +25,6 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     /// @notice The ERC-1967 storage slot holding a single `RepoDriverAnyApiStorage` structure.
     bytes32 private immutable _repoDriverAnyApiStorageSlot =
         _erc1967Slot("eip1967.repoDriver.anyApi.storage");
-
-    /// @notice Emitted when the AnyApi operator configuration is updated.
-    /// @param operator The new address of the AnyApi operator.
-    /// @param jobId The new AnyApi job ID used for requesting account owner updates.
-    /// @param defaultFee The new fee in Link for each account owner
-    /// update request when the driver is covering the cost.
-    /// The fee must be high enough for the operator to accept the requests,
-    /// refer to their documentation to see what's the minimum value.
-    event AnyApiOperatorUpdated(
-        OperatorInterface indexed operator, bytes32 indexed jobId, uint96 defaultFee
-    );
-
-    /// @notice Emitted when the account ownership update is requested.
-    /// @param accountId The ID of the account.
-    /// @param forge The forge where the repository is stored.
-    /// @param name The name of the repository.
-    event OwnerUpdateRequested(uint256 indexed accountId, Forge forge, bytes name);
-
-    /// @notice Emitted when the account ownership is updated.
-    /// @param accountId The ID of the account.
-    /// @param owner The new owner of the repository.
-    event OwnerUpdated(uint256 indexed accountId, address owner);
 
     struct RepoDriverStorage {
         /// @notice The owners of the accounts.
@@ -122,23 +81,7 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         _;
     }
 
-    /// @notice Calculates the account ID.
-    /// Every account ID is a 256-bit integer constructed by concatenating:
-    /// `driverId (32 bits) | forgeId (8 bits) | nameEncoded (216 bits)`.
-    /// When `forge` is GitHub and `name` is at most 27 bytes long,
-    /// `forgeId` is 0 and `nameEncoded` is `name` right-padded with zeros
-    /// When `forge` is GitHub and `name` is longer than 27 bytes,
-    /// `forgeId` is 1 and `nameEncoded` is the lower 27 bytes of the hash of `name`.
-    /// When `forge` is GitLab and `name` is at most 27 bytes long,
-    /// `forgeId` is 2 and `nameEncoded` is `name` right-padded with zeros
-    /// When `forge` is GitLab and `name` is longer than 27 bytes,
-    /// `forgeId` is 3 and `nameEncoded` is the lower 27 bytes of the hash of `name`.
-    /// @param forge The forge where the repository is stored.
-    /// @param name The name of the repository.
-    /// For GitHub and GitLab it must follow the `user_name/repository_name` structure
-    /// and it must be formatted identically as in the repository's URL,
-    /// including the case of each letter and special characters being removed.
-    /// @return accountId The account ID.
+    /// @inheritdoc IRepoDriver
     function calcAccountId(Forge forge, bytes memory name)
         public
         view
@@ -230,13 +173,7 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         emit AnyApiOperatorUpdated(operator, jobId, defaultFee);
     }
 
-    /// @notice Gets the current AnyApi operator configuration.
-    /// @return operator The address of the AnyApi operator.
-    /// @return jobId The AnyApi job ID used for requesting account owner updates.
-    /// @return defaultFee The fee in Link for each account owner
-    /// update request when the driver is covering the cost.
-    /// The fee must be high enough for the operator to accept the requests,
-    /// refer to their documentation to see what's the minimum value.
+    /// @inheritdoc IRepoDriverAnyApi
     function anyApiOperator()
         public
         view
@@ -249,30 +186,12 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         defaultFee = storageRef.defaultFee;
     }
 
-    /// @notice Gets the account owner.
-    /// @param accountId The ID of the account.
-    /// @return owner The owner of the account.
+    /// @inheritdoc IRepoDriver
     function ownerOf(uint256 accountId) public view onlyProxy returns (address owner) {
         return _repoDriverStorage().accountOwners[accountId];
     }
 
-    /// @notice Requests an update of the ownership of the account representing the repository.
-    /// The actual update of the owner will be made in a future transaction.
-    /// The driver will cover the fee in Link that must be paid to the operator.
-    /// If you want to cover the fee yourself, use `onTokenTransfer`.
-    ///
-    /// The repository must contain a `FUNDING.json` file in the project root in the default branch.
-    /// The file must be a valid JSON with arbitrary data, but it must contain the owner address
-    /// as a hexadecimal string under `drips` -> `<CHAIN NAME>` -> `ownedBy`, a minimal example:
-    /// `{ "drips": { "ethereum": { "ownedBy": "0x0123456789abcDEF0123456789abCDef01234567" } } }`.
-    /// If the operator can't read the owner when processing the update request,
-    /// it ignores the request and no change to the account ownership is made.
-    /// @param forge The forge where the repository is stored.
-    /// @param name The name of the repository.
-    /// For GitHub and GitLab it must follow the `user_name/repository_name` structure
-    /// and it must be formatted identically as in the repository's URL,
-    /// including the case of each letter and special characters being removed.
-    /// @return accountId The ID of the account.
+    /// @inheritdoc IRepoDriverAnyApi
     function requestUpdateOwner(Forge forge, bytes memory name)
         public
         onlyProxy
@@ -283,19 +202,7 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         return _requestUpdateOwner(forge, name, fee);
     }
 
-    /// @notice The function called when receiving funds from ERC-677 `transferAndCall`.
-    /// Only supports receiving Link tokens, callable only by the Link token smart contract.
-    /// The only supported usage is requesting account ownership updates,
-    /// the transferred tokens are then used for paying the AnyApi operator fee,
-    /// see `requestUpdateOwner` for more details.
-    /// The received tokens are never refunded, so make sure that
-    /// the amount isn't too low to cover the fee, isn't too high and wasteful,
-    /// and the repository's content is valid so its ownership can be verified.
-    /// @param amount The transferred amount, it will be used as the AnyApi operator fee.
-    /// @param data The `transferAndCall` payload.
-    /// It must be a valid ABI-encoded calldata for `requestUpdateOwner`.
-    /// The call parameters will be used the same way as when calling `requestUpdateOwner`,
-    /// to determine which account's ownership update is requested.
+    /// @inheritdoc IRepoDriverAnyApi
     function onTokenTransfer(address, /* sender */ uint256 amount, bytes calldata data)
         public
         onlyProxy
@@ -399,18 +306,7 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         emit OwnerUpdated(accountId, owner);
     }
 
-    /// @notice Collects the account's received already split funds
-    /// and transfers them out of the Drips contract.
-    /// @param accountId The ID of the collecting account.
-    /// The caller must be the owner of the account.
-    /// @param erc20 The used ERC-20 token.
-    /// It must preserve amounts, so if some amount of tokens is transferred to
-    /// an address, then later the same amount must be transferable from that address.
-    /// Tokens which rebase the holders' balances, collect taxes on transfers,
-    /// or impose any restrictions on holding or transferring tokens are not supported.
-    /// If you use such tokens in the protocol, they can get stuck or lost.
-    /// @param transferTo The address to send collected funds to
-    /// @return amt The collected amount
+    /// @inheritdoc IRepoDriver
     function collect(uint256 accountId, IERC20 erc20, address transferTo)
         public
         onlyProxy
@@ -420,18 +316,7 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         return _collectAndTransfer(drips, accountId, erc20, transferTo);
     }
 
-    /// @notice Gives funds from the account to the receiver.
-    /// The receiver can split and collect them immediately.
-    /// Transfers the funds to be given from the message sender's wallet to the Drips contract.
-    /// @param accountId The ID of the giving account. The caller must be the owner of the account.
-    /// @param receiver The receiver account ID.
-    /// @param erc20 The used ERC-20 token.
-    /// It must preserve amounts, so if some amount of tokens is transferred to
-    /// an address, then later the same amount must be transferable from that address.
-    /// Tokens which rebase the holders' balances, collect taxes on transfers,
-    /// or impose any restrictions on holding or transferring tokens are not supported.
-    /// If you use such tokens in the protocol, they can get stuck or lost.
-    /// @param amt The given amount
+    /// @inheritdoc IRepoDriver
     function give(uint256 accountId, uint256 receiver, IERC20 erc20, uint128 amt)
         public
         onlyProxy
@@ -440,56 +325,7 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         _giveAndTransfer(drips, accountId, receiver, erc20, amt);
     }
 
-    /// @notice Sets the account's streams configuration.
-    /// Transfers funds between the message sender's wallet and the Drips contract
-    /// to fulfil the change of the streams balance.
-    /// @param accountId The ID of the configured account.
-    /// The caller must be the owner of the account.
-    /// @param erc20 The used ERC-20 token.
-    /// It must preserve amounts, so if some amount of tokens is transferred to
-    /// an address, then later the same amount must be transferable from that address.
-    /// Tokens which rebase the holders' balances, collect taxes on transfers,
-    /// or impose any restrictions on holding or transferring tokens are not supported.
-    /// If you use such tokens in the protocol, they can get stuck or lost.
-    /// @param currReceivers The current streams receivers list.
-    /// It must be exactly the same as the last list set for the account with `setStreams`.
-    /// If this is the first update, pass an empty array.
-    /// @param balanceDelta The streams balance change to be applied.
-    /// If it's positive, the balance is increased by `balanceDelta`.
-    /// If it's zero, the balance doesn't change.
-    /// If it's negative, the balance is decreased by `balanceDelta`,
-    /// but the change is capped at the current balance amount, so it doesn't go below 0.
-    /// Passing `type(int128).min` always decreases the current balance to 0.
-    /// @param newReceivers The list of the streams receivers of the sender to be set.
-    /// Must be sorted by the account IDs and then by the stream configurations,
-    /// without identical elements and without 0 amtPerSecs.
-    /// @param maxEndHints An optional parameter allowing gas optimization.
-    /// Pass a list of 8 zero value hints to ignore it, it's represented as an integer `0`.
-    /// The list of hints for finding the maximum end time when all streams stop due to funds
-    /// running out after the balance is updated and the new receivers list is applied.
-    /// Hints have no effect on the results of calling this function, except potentially saving gas.
-    /// Hints are Unix timestamps used as the starting points for binary search for the time
-    /// when funds run out in the range of timestamps from the current block's to `2^32`.
-    /// Hints lower than the current timestamp including the zero value hints are ignored.
-    /// If you provide fewer than 8 non-zero value hints make them the rightmost values to save gas.
-    /// It's the best approach to make the most risky and precise hints the rightmost ones.
-    /// Hints are the most effective when one of them is lower than or equal to
-    /// the last timestamp when funds are still streamed, and the other one is strictly larger
-    /// than that timestamp, the smaller the difference between such hints, the more gas is saved.
-    /// The savings are the highest possible when one of the hints is equal to
-    /// the last timestamp when funds are still streamed, and the other one is larger by 1.
-    /// It's worth noting that the exact timestamp of the block in which this function is executed
-    /// may affect correctness of the hints, especially if they're precise.
-    /// Hints don't provide any benefits when balance is not enough to cover
-    /// a single second of streaming or is enough to cover all streams until timestamp `2^32`.
-    /// Even inaccurate hints can be useful, and providing a single hint
-    /// or hints that don't enclose the time when funds run out can still save some gas.
-    /// Providing poor hints that don't reduce the number of binary search steps
-    /// may cause slightly higher gas usage than not providing any hints.
-    /// @param transferTo The address to send funds to in case of decreasing balance
-    /// @return realBalanceDelta The actually applied streams balance change.
-    /// It's equal to the passed `balanceDelta`, unless it's negative
-    /// and it gets capped at the current balance amount.
+    /// @inheritdoc IRepoDriver
     function setStreams(
         uint256 accountId,
         IERC20 erc20,
@@ -511,27 +347,7 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         );
     }
 
-    /// @notice Sets the account splits configuration.
-    /// The configuration is common for all ERC-20 tokens.
-    /// Nothing happens to the currently splittable funds, but when they are split
-    /// after this function finishes, the new splits configuration will be used.
-    /// Because anybody can call `split` on `Drips`, calling this function may be frontrun
-    /// and all the currently splittable funds will be split using the old splits configuration.
-    /// @param accountId The ID of the configured account.
-    /// The caller must be the owner of the account.
-    /// @param receivers The list of the account's splits receivers to be set.
-    /// Must be sorted by the account IDs, without duplicate account IDs and without 0 weights.
-    /// Each splits receiver will be getting `weight / TOTAL_SPLITS_WEIGHT`
-    /// share of the funds collected by the account.
-    /// If the sum of weights of all receivers is less than `DripsLib.TOTAL_SPLITS_WEIGHT`,
-    /// some funds won't be split, but they will be left for the account to collect.
-    /// Fractions of tokens are always rounded either up or down depending on the amount
-    /// being split, the receiver's position on the list and the other receivers' weights.
-    /// It's valid to include the account's own `accountId` in the list of receivers,
-    /// but funds split to themselves return to their splittable balance and are not collectable.
-    /// This is usually unwanted, because if splitting is repeated,
-    /// funds split to themselves will be again split using the current configuration.
-    /// Splitting 100% to self effectively blocks splitting unless the configuration is updated.
+    /// @inheritdoc IRepoDriver
     function setSplits(uint256 accountId, SplitsReceiver[] calldata receivers)
         public
         onlyProxy
@@ -540,12 +356,7 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         drips.setSplits(accountId, receivers);
     }
 
-    /// @notice Emits the account's metadata.
-    /// The keys and the values are not standardized by the protocol, it's up to the users
-    /// to establish and follow conventions to ensure compatibility with the consumers.
-    /// @param accountId The ID of the emitting account.
-    /// The caller must be the owner of the account.
-    /// @param accountMetadata The list of account metadata.
+    /// @inheritdoc IRepoDriver
     function emitAccountMetadata(uint256 accountId, AccountMetadata[] calldata accountMetadata)
         public
         onlyProxy
