@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {Call, Caller} from "src/Caller.sol";
+import {Call, ICaller} from "src/ICaller.sol";
+import {Caller} from "src/Caller.sol";
 import {Test} from "forge-std/Test.sol";
 import {ECDSA} from "openzeppelin-contracts/utils/cryptography/ECDSA.sol";
 import {ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
@@ -20,7 +21,7 @@ contract CallerTest is Test {
         "address sender,address target,bytes data,uint256 value,uint256 nonce,uint256 deadline)";
     bytes32 internal immutable callSignedTypeHash = keccak256(bytes(CALL_SIGNED_TYPE_NAME));
 
-    Caller internal caller;
+    ICaller internal caller;
     Target internal target;
     Target internal targetOtherForwarder;
     bytes32 internal callerDomainSeparator;
