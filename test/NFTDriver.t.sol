@@ -5,11 +5,13 @@ import {Caller} from "src/Caller.sol";
 import {NFTDriver} from "src/NFTDriver.sol";
 import {
     AccountMetadata,
-    StreamConfigImpl,
     Drips,
-    StreamsHistory,
+    MaxEndHints,
+    MaxEndHintsImpl,
+    SplitsReceiver,
+    StreamConfigImpl,
     StreamReceiver,
-    SplitsReceiver
+    StreamsHistory
 } from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
@@ -29,6 +31,8 @@ contract NFTDriverTest is Test {
     uint256 internal tokenId1;
     uint256 internal tokenId2;
     uint256 internal tokenIdUser;
+
+    MaxEndHints internal immutable noHints = MaxEndHintsImpl.create();
 
     bytes internal constant ERROR_NOT_OWNER = "ERC721: caller is not token owner or approved";
     bytes internal constant ERROR_ALREADY_MINTED = "ERC721: token already minted";
@@ -223,7 +227,7 @@ contract NFTDriverTest is Test {
         uint256 balance = erc20.balanceOf(address(this));
 
         int128 realBalanceDelta = driver.setStreams(
-            tokenId1, erc20, new StreamReceiver[](0), int128(amt), receivers, 0, 0, address(this)
+            tokenId1, erc20, new StreamReceiver[](0), int128(amt), receivers, noHints, address(this)
         );
 
         assertEq(erc20.balanceOf(address(this)), balance - amt, "Invalid balance after top-up");
@@ -237,7 +241,7 @@ contract NFTDriverTest is Test {
         balance = erc20.balanceOf(address(user));
 
         realBalanceDelta = driver.setStreams(
-            tokenId1, erc20, receivers, -int128(amt), receivers, 0, 0, address(user)
+            tokenId1, erc20, receivers, -int128(amt), receivers, noHints, address(user)
         );
 
         assertEq(erc20.balanceOf(address(user)), balance + amt, "Invalid balance after withdrawal");
@@ -250,11 +254,12 @@ contract NFTDriverTest is Test {
     function testSetStreamsDecreasingBalanceTransfersFundsToTheProvidedAddress() public {
         uint128 amt = 5;
         StreamReceiver[] memory receivers = new StreamReceiver[](0);
-        driver.setStreams(tokenId, erc20, receivers, int128(amt), receivers, 0, 0, address(this));
+        driver.setStreams(tokenId, erc20, receivers, int128(amt), receivers, noHints, address(this));
         address transferTo = address(1234);
 
-        int128 realBalanceDelta =
-            driver.setStreams(tokenId, erc20, receivers, -int128(amt), receivers, 0, 0, transferTo);
+        int128 realBalanceDelta = driver.setStreams(
+            tokenId, erc20, receivers, -int128(amt), receivers, noHints, transferTo
+        );
 
         assertEq(erc20.balanceOf(transferTo), amt, "Invalid balance");
         assertEq(erc20.balanceOf(address(drips)), 0, "Invalid Drips balance");
@@ -266,7 +271,7 @@ contract NFTDriverTest is Test {
     function testSetStreamsRevertsWhenNotTokenHolder() public {
         StreamReceiver[] memory noReceivers = new StreamReceiver[](0);
         vm.expectRevert(ERROR_NOT_OWNER);
-        driver.setStreams(tokenIdUser, erc20, noReceivers, 0, noReceivers, 0, 0, address(this));
+        driver.setStreams(tokenIdUser, erc20, noReceivers, 0, noReceivers, noHints, address(this));
     }
 
     function testSetSplits() public {
@@ -361,7 +366,7 @@ contract NFTDriverTest is Test {
 
     function testSetStreamsMustBeDelegated() public {
         notDelegatedReverts().setStreams(
-            0, erc20, new StreamReceiver[](0), 0, new StreamReceiver[](0), 0, 0, user
+            0, erc20, new StreamReceiver[](0), 0, new StreamReceiver[](0), noHints, user
         );
     }
 

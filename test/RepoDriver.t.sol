@@ -5,11 +5,13 @@ import {Caller} from "src/Caller.sol";
 import {Forge, RepoDriver} from "src/RepoDriver.sol";
 import {
     AccountMetadata,
-    StreamConfigImpl,
     Drips,
-    StreamsHistory,
+    MaxEndHints,
+    MaxEndHintsImpl,
+    SplitsReceiver,
+    StreamConfigImpl,
     StreamReceiver,
-    SplitsReceiver
+    StreamsHistory
 } from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {BufferChainlink, CBORChainlink} from "chainlink/Chainlink.sol";
@@ -59,6 +61,8 @@ contract RepoDriverTest is Test {
     uint256 internal accountId1;
     uint256 internal accountId2;
     uint256 internal accountIdUser;
+
+    MaxEndHints internal immutable noHints = MaxEndHintsImpl.create();
 
     bytes internal constant ERROR_NOT_OWNER = "Caller is not the account owner";
     bytes internal constant ERROR_ALREADY_INITIALIZED = "Already initialized";
@@ -575,7 +579,13 @@ contract RepoDriverTest is Test {
             StreamReceiver(accountId2, StreamConfigImpl.create(0, drips.minAmtPerSec(), 0, 0));
         uint256 balance = erc20.balanceOf(address(this));
         int128 realBalanceDelta = driver.setStreams(
-            accountId1, erc20, new StreamReceiver[](0), int128(amt), receivers, 0, 0, address(this)
+            accountId1,
+            erc20,
+            new StreamReceiver[](0),
+            int128(amt),
+            receivers,
+            noHints,
+            address(this)
         );
         assertEq(erc20.balanceOf(address(this)), balance - amt, "Invalid balance after top-up");
         assertEq(erc20.balanceOf(address(drips)), amt, "Invalid Drips balance after top-up");
@@ -587,7 +597,7 @@ contract RepoDriverTest is Test {
         // Withdraw
         balance = erc20.balanceOf(address(user));
         realBalanceDelta = driver.setStreams(
-            accountId1, erc20, receivers, -int128(amt), receivers, 0, 0, address(user)
+            accountId1, erc20, receivers, -int128(amt), receivers, noHints, address(user)
         );
         assertEq(erc20.balanceOf(address(user)), balance + amt, "Invalid balance after withdrawal");
         assertEq(erc20.balanceOf(address(drips)), 0, "Invalid Drips balance after withdrawal");
@@ -599,10 +609,12 @@ contract RepoDriverTest is Test {
     function testSetStreamsDecreasingBalanceTransfersFundsToTheProvidedAddress() public {
         uint128 amt = 5;
         StreamReceiver[] memory receivers = new StreamReceiver[](0);
-        driver.setStreams(accountId, erc20, receivers, int128(amt), receivers, 0, 0, address(this));
+        driver.setStreams(
+            accountId, erc20, receivers, int128(amt), receivers, noHints, address(this)
+        );
         address transferTo = address(1234);
         int128 realBalanceDelta = driver.setStreams(
-            accountId, erc20, receivers, -int128(amt), receivers, 0, 0, transferTo
+            accountId, erc20, receivers, -int128(amt), receivers, noHints, transferTo
         );
         assertEq(erc20.balanceOf(transferTo), amt, "Invalid balance");
         assertEq(erc20.balanceOf(address(drips)), 0, "Invalid Drips balance");
@@ -614,7 +626,7 @@ contract RepoDriverTest is Test {
     function testSetStreamsRevertsWhenNotAccountOwner() public {
         StreamReceiver[] memory noReceivers = new StreamReceiver[](0);
         vm.expectRevert(ERROR_NOT_OWNER);
-        driver.setStreams(accountIdUser, erc20, noReceivers, 0, noReceivers, 0, 0, address(this));
+        driver.setStreams(accountIdUser, erc20, noReceivers, 0, noReceivers, noHints, address(this));
     }
 
     function testSetSplits() public {
@@ -698,7 +710,7 @@ contract RepoDriverTest is Test {
 
     function testSetStreamsMustBeDelegated() public {
         notDelegatedReverts().setStreams(
-            0, erc20, new StreamReceiver[](0), 0, new StreamReceiver[](0), 0, 0, user
+            0, erc20, new StreamReceiver[](0), 0, new StreamReceiver[](0), noHints, user
         );
     }
 

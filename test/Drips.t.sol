@@ -4,6 +4,8 @@ pragma solidity ^0.8.24;
 import {
     AccountMetadata,
     Drips,
+    MaxEndHints,
+    MaxEndHintsImpl,
     Splits,
     SplitsReceiver,
     StreamConfigImpl,
@@ -44,6 +46,8 @@ contract DripsTest is Test {
     uint256 internal accountId2;
     uint256 internal receiver2;
     uint256 internal receiver3;
+
+    MaxEndHints internal immutable noHints = MaxEndHintsImpl.create();
 
     bytes internal constant ERROR_NOT_DRIVER = "Callable only by the driver";
     bytes internal constant ERROR_BALANCE_TOO_HIGH = "Total balance too high";
@@ -142,7 +146,7 @@ contract DripsTest is Test {
         if (balanceDelta > 0) transferToDrips(uint128(balanceDelta));
         vm.prank(driver);
         int128 realBalanceDelta =
-            drips.setStreams(forAccount, erc20, currReceivers, balanceDelta, newReceivers, 0, 0);
+            drips.setStreams(forAccount, erc20, currReceivers, balanceDelta, newReceivers, noHints);
         if (balanceDelta < 0) withdraw(uint128(-balanceDelta));
 
         storeStreams(forAccount, newReceivers);
@@ -405,7 +409,7 @@ contract DripsTest is Test {
 
         vm.prank(driver);
         int128 realBalanceDelta = drips.setStreams(
-            accountId, erc20, receivers, -int128(streamsBalance) - 1, receivers, 0, 0
+            accountId, erc20, receivers, -int128(streamsBalance) - 1, receivers, noHints
         );
         withdraw(uint128(-realBalanceDelta));
 
@@ -618,7 +622,7 @@ contract DripsTest is Test {
 
     function testSetStreamsRevertsWhenNotCalledByTheDriver() public {
         vm.expectRevert(ERROR_NOT_DRIVER);
-        drips.setStreams(accountId, erc20, streamsReceivers(), 0, streamsReceivers(), 0, 0);
+        drips.setStreams(accountId, erc20, streamsReceivers(), 0, streamsReceivers(), noHints);
     }
 
     function testGiveRevertsWhenNotCalledByTheDriver() public {
@@ -656,7 +660,7 @@ contract DripsTest is Test {
         transferToDrips(1);
         vm.prank(driver);
         vm.expectRevert(ERROR_BALANCE_TOO_HIGH);
-        drips.setStreams(accountId2, erc20, streamsReceivers(), 1, streamsReceivers(), 0, 0);
+        drips.setStreams(accountId2, erc20, streamsReceivers(), 1, streamsReceivers(), noHints);
         withdraw(1);
 
         setStreams(accountId1, maxBalance, maxBalance - 1, streamsReceivers());
@@ -670,7 +674,7 @@ contract DripsTest is Test {
 
         vm.prank(driver);
         vm.expectRevert(ERROR_ERC_20_BALANCE_TOO_LOW);
-        drips.setStreams(accountId, erc20, streamsReceivers(), 1, streamsReceivers(), 0, 0);
+        drips.setStreams(accountId, erc20, streamsReceivers(), 1, streamsReceivers(), noHints);
 
         setStreams(accountId, 2, 3, streamsReceivers());
     }
@@ -800,7 +804,9 @@ contract DripsTest is Test {
     }
 
     function testSetStreamsMustBeDelegated() public {
-        notDelegatedReverts().setStreams(0, erc20, streamsReceivers(), 0, streamsReceivers(), 0, 0);
+        notDelegatedReverts().setStreams(
+            0, erc20, streamsReceivers(), 0, streamsReceivers(), noHints
+        );
     }
 
     function testSetSplitsMustBeDelegated() public {
