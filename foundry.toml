@@ -4,6 +4,7 @@ evm_version = 'shanghai'
 optimizer = false
 verbosity = 1
 fuzz_runs = 5
+script = 'scripts'
 [profile.optimized]
 via_ir = true
 optimizer = true
