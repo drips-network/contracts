@@ -110,7 +110,7 @@ contract RepoDriverDataProxyTest is Test {
             target: address(dataProxy),
             data: abi.encodeCall(
                 dataProxy.setStreams, (accountId, erc20, int128(amt), 0, 0, 0, address(this))
-                ),
+            ),
             value: 0
         });
 
