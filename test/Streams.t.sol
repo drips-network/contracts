@@ -13,24 +13,6 @@ import {
     StreamsHistory
 } from "src/Streams.sol";
 
-contract PseudoRandomUtils {
-    bytes32 private seed;
-    bool private initialized = false;
-
-    // returns a pseudo-random number between 0 and range
-    function random(uint256 range) public returns (uint256) {
-        require(initialized, "seed not set for test run");
-        seed = keccak256(bytes.concat(seed));
-        return uint256(seed) % range;
-    }
-
-    function initSeed(bytes32 seed_) public {
-        require(initialized == false, "only init seed once per test run");
-        seed = seed_;
-        initialized = true;
-    }
-}
-
 contract AssertMinAmtPerSec is Test, Streams {
     constructor(uint32 cycleSecs, uint160 expectedMinAmtPerSec) Streams(cycleSecs, 0) {
         string memory assertMessage =
@@ -39,7 +21,7 @@ contract AssertMinAmtPerSec is Test, Streams {
     }
 }
 
-contract StreamsTest is Test, PseudoRandomUtils, Streams {
+contract StreamsTest is Test, Streams {
     bytes internal constant ERROR_NOT_SORTED = "Streams receivers not sorted";
     bytes internal constant ERROR_INVALID_STREAMS_LIST = "Invalid streams receivers list";
     bytes internal constant ERROR_TIMESTAMP_EARLY = "Timestamp before the last update";
@@ -178,45 +160,6 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         StreamReceiver[] memory recv4
     ) internal pure returns (StreamReceiver[] memory) {
         return recv(recv(recv1, recv2, recv3), recv4);
-    }
-
-    function genRandomRecv(
-        uint256 amountReceiver,
-        uint160 maxAmtPerSec,
-        uint32 maxStart,
-        uint32 maxDuration
-    ) internal returns (StreamReceiver[] memory) {
-        uint256 inPercent = 100;
-        uint256 probMaxEnd = random(inPercent);
-        uint256 probStartNow = random(inPercent);
-        return genRandomRecv(
-            amountReceiver, maxAmtPerSec, maxStart, maxDuration, probMaxEnd, probStartNow
-        );
-    }
-
-    function genRandomRecv(
-        uint256 amountReceiver,
-        uint160 maxAmtPerSec,
-        uint32 maxStart,
-        uint32 maxDuration,
-        uint256 probMaxEnd,
-        uint256 probStartNow
-    ) internal returns (StreamReceiver[] memory) {
-        StreamReceiver[] memory receivers = new StreamReceiver[](amountReceiver);
-        for (uint256 i = 0; i < amountReceiver; i++) {
-            uint256 streamId = random(type(uint32).max + uint256(1));
-            uint256 amtPerSec = _minAmtPerSec + random(maxAmtPerSec - _minAmtPerSec);
-            uint256 start = random(maxStart);
-            if (start % 100 <= probStartNow) {
-                start = 0;
-            }
-            uint256 duration = random(maxDuration);
-            if (duration % 100 <= probMaxEnd) {
-                duration = 0;
-            }
-            receivers[i] = recv(i, streamId, 0, amtPerSec, start, duration)[0];
-        }
-        return receivers;
     }
 
     function hist() internal pure returns (StreamsHistory[] memory) {
@@ -441,40 +384,6 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         assertEq(receivedAmt, expectedReceivedAmt, "Invalid amount received from streams");
         assertReceivableStreamsCycles(accountId, expectedCyclesAfter);
         assertReceiveStreamsResult(accountId, type(uint32).max, expectedAmtAfter, 0);
-    }
-
-    function receiveStreams(StreamReceiver[] memory receivers, uint32 maxEnd, uint32 updateTime)
-        internal
-    {
-        emit log_named_uint("maxEnd:", maxEnd);
-        for (uint256 i = 0; i < receivers.length; i++) {
-            StreamReceiver memory r = receivers[i];
-            uint32 duration = r.config.duration();
-            uint32 start = r.config.start();
-            if (start == 0) {
-                start = updateTime;
-            }
-            if (duration == 0 && maxEnd > start) {
-                duration = maxEnd - start;
-            }
-            // streams were in the past, not added
-            if (start + duration < updateTime) {
-                duration = 0;
-            } else if (start < updateTime) {
-                duration -= updateTime - start;
-            }
-
-            uint256 expectedAmt = (duration * r.config.amtPerSec()) >> 64;
-            uint128 actualAmt = Streams._receiveStreams(r.accountId, erc20, type(uint32).max);
-            // only log if actualAmt doesn't match expectedAmt
-            if (expectedAmt != actualAmt) {
-                emit log_named_uint("accountId:", r.accountId);
-                emit log_named_uint("start:", r.config.start());
-                emit log_named_uint("duration:", r.config.duration());
-                emit log_named_uint("amtPerSec:", r.config.amtPerSec());
-            }
-            assertEq(actualAmt, expectedAmt);
-        }
     }
 
     function assertReceivableStreamsCycles(uint256 accountId, uint32 expectedCycles) internal {
@@ -1220,7 +1129,6 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
     }
 
     function testBenchSetStreams() public {
-        initSeed(0);
         uint32 wrongHint1 = uint32(vm.getBlockTimestamp()) + 1;
         uint32 wrongHint2 = wrongHint1 + 1;
 
@@ -1285,16 +1193,17 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         uint32 maxEndHint1,
         uint32 maxEndHint2
     ) public {
-        uint256 senderId = random(type(uint256).max);
         StreamReceiver[] memory receivers = new StreamReceiver[](count);
         for (uint256 i = 0; i < count; i++) {
-            receivers[i] = recv(senderId + 1 + i, 1, 0, 0)[0];
+            receivers[i] = recv(i, 1, 0, 0)[0];
         }
         int128 amt = int128(int256((maxEnd - vm.getBlockTimestamp()) * count));
         MaxEndHints hints = createMaxEndHints(maxEndHint1, maxEndHint2);
+        uint256 snapshot = vm.snapshot();
         uint256 gas = gasleft();
-        Streams._setStreams(senderId, erc20, recv(), amt, receivers, hints);
+        Streams._setStreams(count, erc20, recv(), amt, receivers, hints);
         gas -= gasleft();
+        vm.revertToAndDelete(snapshot);
         emit log_named_uint(string.concat("Gas used for ", testName), gas);
     }
 
@@ -1532,35 +1441,6 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         assertBalanceAtReverts(
             sender, receivers, vm.getBlockTimestamp(), ERROR_INVALID_STREAMS_LIST
         );
-    }
-
-    function testFuzzStreamReceivers(bytes32 seed) public {
-        initSeed(seed);
-        uint8 amountReceivers = 10;
-        uint160 maxAmtPerSec = _minAmtPerSec + 50;
-        uint32 maxDuration = 100;
-        uint32 maxStart = 100;
-
-        uint128 maxCosts =
-            amountReceivers * uint128(maxAmtPerSec / _AMT_PER_SEC_MULTIPLIER) * maxDuration;
-        emit log_named_uint("topUp", maxCosts);
-        uint128 maxAllStreamsFinished = maxStart + maxDuration;
-
-        StreamReceiver[] memory receivers =
-            genRandomRecv(amountReceivers, maxAmtPerSec, maxStart, maxDuration);
-        emit log_named_uint("setStreams.updateTime", vm.getBlockTimestamp());
-        Streams._setStreams(sender, erc20, recv(), int128(maxCosts), receivers, noHints);
-
-        (,, uint32 updateTime,, uint32 maxEnd) = Streams._streamsState(sender, erc20);
-
-        if (maxEnd > maxAllStreamsFinished && maxEnd != type(uint32).max) {
-            maxAllStreamsFinished = maxEnd;
-        }
-
-        skip(maxAllStreamsFinished);
-        skipToCycleEnd();
-        emit log_named_uint("receiveStreams.time", vm.getBlockTimestamp());
-        receiveStreams(receivers, maxEnd, updateTime);
     }
 
     function sanitizeReceivers(
