@@ -303,7 +303,7 @@ contract RepoDriverModule is CallerDependentModule, DriverModule(3) {
         defaultFee = defaultFee_;
         // slither-disable-next-line too-many-digits
         _deployProxy(proxyAdmin_, type(RepoDriver).creationCode);
-        repoDriver().initializeAnyApiOperator(operator, jobId, defaultFee);
+        // repoDriver().initializeAnyApiOperator(operator, jobId, defaultFee);
     }
 
     function logicArgs() public view override returns (bytes memory) {

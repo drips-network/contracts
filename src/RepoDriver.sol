@@ -10,11 +10,17 @@ import {ERC677ReceiverInterface} from "chainlink/interfaces/ERC677ReceiverInterf
 import {LinkTokenInterface} from "chainlink/interfaces/LinkTokenInterface.sol";
 import {OperatorInterface} from "chainlink/interfaces/OperatorInterface.sol";
 import {BufferChainlink, CBORChainlink} from "chainlink/Chainlink.sol";
-import {ETH} from "gelato-automate/functions/FUtils.sol";
-import {IAutomate, IGelato, IProxyModule, Module, ModuleData} from "gelato-automate/integrations/Types.sol";
+// import {ETH} from "gelato-automate/functions/FUtils.sol";
+import {
+    IAutomate,
+    IGelato,
+    IProxyModule,
+    Module,
+    ModuleData
+} from "gelato-automate/integrations/Types.sol";
 import {IOpsProxyFactory} from "gelato-automate/interfaces/IOpsProxyFactory.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
-import {ShortString, ShortStrings} from "openzeppelin-contracts/utils/ShortStrings.sol";
+import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
 
 /// @notice The supported forges where repositories are stored.
 enum Forge {
@@ -23,12 +29,13 @@ enum Forge {
 }
 
 IAutomate constant GELATO_AUTOMATE = IAutomate(0x2A6C106ae13B558BB9E2Ec64Bd2f1f7BEFF3A5E0);
+address constant NATIVE_TOKEN = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
 contract GelatoTaskCreator {
     // TODO + move to RepoDriver?
     constructor(Forge forge, bytes memory name) {
         Module[] memory modules = new Module[](3);
-        bytes memory[] args = new bytes[](3);
+        bytes[] memory args = new bytes[](3);
 
         modules[0] = Module.PROXY;
         args[0] = "";
@@ -37,23 +44,19 @@ contract GelatoTaskCreator {
         args[1] = "";
 
         modules[2] = Module.WEB3_FUNCTION;
-        args[2] = abi.encode(
-            "???",
-            abi.encode(msg.sender, forge, name)
-        );
+        args[2] = abi.encode("???", abi.encode(Strings.toHexString(msg.sender), forge, name));
 
         GELATO_AUTOMATE.createTask(
-            address(0), // ??? msg.sender,
-            bytes4(0), // ??? RepoDriver.updateOwnerByGelato.selector,
+            address(0),
+            new bytes(4),
             ModuleData(modules, args),
-            ETH
+            NATIVE_TOKEN
         );
 
         assembly {
-            return(0,0)
+            return(0, 0)
         }
     }
-
 
     // TODO the user pays for themselves
 }
@@ -62,7 +65,7 @@ contract GelatoTaskCreator {
 /// Each repository stored in one of the supported forges has a deterministic account ID assigned.
 /// By default the repositories have no owner and their accounts can't be controlled by anybody,
 /// use `requestUpdateOwner` to update the owner.
-contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
+contract RepoDriver is /* ERC677ReceiverInterface, */ DriverTransferUtils, Managed {
     using SafeERC20 for IERC20;
     using CBORChainlink for BufferChainlink.buffer;
 
@@ -76,22 +79,22 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     // ShortString internal immutable jsonPath;
 
     // TODO
-    payable internal immutable feeCollector;
+    address payable internal immutable feeCollector;
+    IOpsProxyFactory internal immutable proxyFactory;
 
     /// @notice The ERC-1967 storage slot holding a single `RepoDriverStorage` structure.
     bytes32 private immutable _repoDriverStorageSlot = _erc1967Slot("eip1967.repoDriver.storage");
-    /// @notice The ERC-1967 storage slot holding a single `RepoDriverGelatoStorage` structure.
-    bytes32 private immutable _repoDriverGelatoStorageSlot =
-        _erc1967Slot("eip1967.repoDriver.gelato.storage");
+    /// @notice The ERC-1967 storage slot holding a single `GelatoStorage` structure.
+    bytes32 private immutable _gelatoStorageSlot = _erc1967Slot("eip1967.repoDriver.gelato.storage");
 
-    /// @notice Emitted when the AnyApi operator configuration is updated.
-    /// @param operator The new address of the AnyApi operator.
-    /// @param jobId The new AnyApi job ID used for requesting account owner updates.
-    /// @param defaultFee The new fee in Link for each account owner.
-    /// update request when the driver is covering the cost.
-    event AnyApiOperatorUpdated(
-        OperatorInterface indexed operator, bytes32 indexed jobId, uint96 defaultFee
-    );
+    // /// @notice Emitted when the AnyApi operator configuration is updated.
+    // /// @param operator The new address of the AnyApi operator.
+    // /// @param jobId The new AnyApi job ID used for requesting account owner updates.
+    // /// @param defaultFee The new fee in Link for each account owner.
+    // /// update request when the driver is covering the cost.
+    // event AnyApiOperatorUpdated(
+    //     OperatorInterface indexed operator, bytes32 indexed jobId, uint96 defaultFee
+    // );
 
     /// @notice Emitted when the account ownership update is requested.
     /// @param accountId The ID of the account.
@@ -104,12 +107,22 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     /// @param owner The new owner of the repository.
     event OwnerUpdated(uint256 indexed accountId, address owner);
 
+    // TODO
+    event LockedFunds(address indexed user, uint256 amount);
+    event UnlockedFunds(address indexed user, uint256 amount, address payable indexed transferTo);
+    event LockedFundsUsed(address indexed user, uint256 amount);
+
     struct RepoDriverStorage {
         /// @notice The owners of the accounts.
-        mapping(uint256 accountId => address) accountOwners;
+        mapping(uint256 accountId => AccountOwner) accountOwners;
     }
 
-    struct RepoDriverGelatoStorage {
+    struct AccountOwner {
+        address owner;
+        uint32 checkTimestamp;
+    }
+
+    struct GelatoStorage {
         // /// @notice The requested account owner updates.
         // mapping(bytes32 requestId => uint256 accountId) requestedUpdates;
         // /// @notice The new address of the AnyApi operator.
@@ -124,8 +137,16 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         // // / @notice The AnyApi requests counter used as a nonce when calculating the request ID.
         // // uint248 nonce;
 
-        mapping(address proxy => uint256 accountId) gelatoProxies;
-        uint128 nonce;
+        // TODO
+        mapping(address proxy => Request request) requests;
+        mapping(address user => uint256 lockedAmt) lockedFunds;
+        uint192 lockedFundsTotal;
+        uint64 nonce;
+    }
+
+    struct Request {
+        address user;
+        uint32 timestamp;
     }
 
     /// @param drips_ The Drips contract to use.
@@ -134,12 +155,10 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     constructor(Drips drips_, address forwarder, uint32 driverId_) DriverTransferUtils(forwarder) {
         drips = drips_;
         driverId = driverId_;
-
-
         IGelato gelato = IGelato(GELATO_AUTOMATE.gelato());
-
-        feeCollector = gelato.feeCollector();
-
+        feeCollector = payable(gelato.feeCollector());
+        IProxyModule proxyModule = IProxyModule(GELATO_AUTOMATE.taskModuleAddresses(Module.PROXY));
+        proxyFactory = IOpsProxyFactory(proxyModule.opsProxyFactory());
 
         // string memory chainName;
         // address _linkToken;
@@ -191,7 +210,7 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         public
         view
         returns (uint256 accountId)
-    {
+    { // TODO calldata?
         uint8 forgeId;
         uint216 nameEncoded;
         if (forge == Forge.GitHub) {
@@ -291,7 +310,7 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     /// @param accountId The ID of the account.
     /// @return owner The owner of the account.
     function ownerOf(uint256 accountId) public view returns (address owner) {
-        return _repoDriverStorage().accountOwners[accountId];
+        return _repoDriverStorage().accountOwners[accountId].owner;
     }
 
     // TODO
@@ -317,21 +336,24 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         whenNotPaused
         returns (uint256 accountId)
     {
-        RepoDriverGelatoStorage storage storageRef = _repoDriverGelatoStorage();
+        GelatoStorage storage gelatoStorage = _gelatoStorage();
 
         // By bit shifting we get `salt` value:
-        // `chainid (128 bits) | zeros (128 bits)`
+        // `chainid (192 bits) | zeros (64 bits)`
         // By bit masking we get `salt` value:
-        // `chainid (128 bits) | nonce (128 bits)`
-        bytes32 salt = bytes32((block.chainid << 128) | (storageRef.nonce++));
+        // `chainid (192 bits) | nonce (64 bits)`
+        bytes32 salt = bytes32((block.chainid << 64) | (gelatoStorage.nonce++));
         address taskCreator = address(new GelatoTaskCreator{salt: salt}(forge, name));
 
-        IProxyModule proxyModule = IProxyModule(GELATO_AUTOMATE.taskModuleAddresses(Module.PROXY));
-        IOpsProxyFactory proxyFactory = IOpsProxyFactory(proxyModule.opsProxyFactory());
+        // IProxyModule proxyModule = IProxyModule(GELATO_AUTOMATE.taskModuleAddresses(Module.PROXY));
+        // IOpsProxyFactory proxyFactory = IOpsProxyFactory(proxyModule.opsProxyFactory());
         (address proxy, bool isDeployed) = proxyFactory.getProxyOf(taskCreator);
-        if(!isDeployed) proxyFactory.deployFor(taskCreator);
+        if (!isDeployed) proxyFactory.deployFor(taskCreator);
         accountId = calcAccountId(forge, name);
-        storageRef.gelatoProxies[proxy] = accountId;
+
+        Request storage request = gelatoStorage.requests[proxy];
+        request.user = _msgSender();
+        request.timestamp = uint32(block.timestamp);
 
         emit OwnerUpdateRequested(accountId, forge, name);
     }
@@ -339,18 +361,71 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
     /// @notice Updates the account owner.
     /// Callable only by the Gelato task proxy deployed when requesting the update.
     /// @param newOwner The new owner of the account.
-    function updateOwnerByGelato(address newOwner) public whenNotPaused {
-        mapping(address => uint256) storage proxies = _repoDriverGelatoStorage().gelatoProxies;
-        uint256 accountId = proxies[msg.sender];
-        require(accountId != 0, "Callable only by the task proxy");
-        (uint256 amt, address token) = GELATO_AUTOMATE.getFeeDetails();
-        if(amt != 0) {
-            require(token == ETH, "Payment must be in native tokens");
+    function updateOwnerByGelato(Forge forge, bytes memory name, address newOwner) public whenNotPaused {
+        GelatoStorage storage gelatoStorage = _gelatoStorage();
+        Request storage request = _gelatoStorage().requests[msg.sender];
+        address user = request.user;
+        uint32 timestamp = request.timestamp;
 
-        }
-        delete proxies[msg.sender];
-        _repoDriverStorage().accountOwners[accountId] = newOwner;
+        require(user != address(0), "Callable only by the task proxy");
+
+        uint256 accountId = calcAccountId(forge, name);
+        AccountOwner storage accountOwner = _repoDriverStorage().accountOwners[accountId];
+        require(timestamp > accountOwner.checkTimestamp, "Request outdated");
+        accountOwner.owner = newOwner;
+        accountOwner.checkTimestamp = timestamp;
+        request.user = address(0);
+        request.timestamp = 0;
         emit OwnerUpdated(accountId, newOwner);
+
+        // Pay the Gelato fee
+        (uint256 amount, address token) = GELATO_AUTOMATE.getFeeDetails();
+        if(amount == 0) return;
+        require(token == NATIVE_TOKEN, "Payment must be in native tokens");
+        uint256 usedLockedFunds = gelatoStorage.lockedFunds[user];
+        if(usedLockedFunds >= amount) {
+            usedLockedFunds = amount;
+        }
+        else {
+            require(usedLockedFunds + unlockedFunds() >= amount, "Not enough funds");
+        }
+        if(usedLockedFunds != 0) {
+            gelatoStorage.lockedFunds[user] -= usedLockedFunds;
+            gelatoStorage.lockedFundsTotal -= uint192(usedLockedFunds);
+            emit LockedFundsUsed(user, usedLockedFunds);
+        }
+        Address.sendValue(feeCollector, amount);
+    }
+
+    receive() external payable {}
+
+    function lockedFunds(address user) public view returns (uint256 lockedAmount) {
+        return _gelatoStorage().lockedFunds[user];
+    }
+
+    function unlockedFunds() public view returns(uint256 unlockedAmount) {
+        return address(this).balance - _gelatoStorage().lockedFundsTotal;
+    }
+
+    function lockFunds(address user) public payable  whenNotPaused returns (uint256 lockedAmount) {
+        GelatoStorage storage gelatoStorage = _gelatoStorage();
+        lockedAmount = gelatoStorage.lockedFunds[user] + msg.value;
+        gelatoStorage.lockedFunds[user] = lockedAmount;
+        gelatoStorage.lockedFundsTotal += uint192(msg.value);
+        emit LockedFunds(user, msg.value);
+    }
+
+    function unlockFunds(uint256 amount, address payable transferTo) public whenNotPaused returns (uint256 unlockedAmount) {
+        address user = _msgSender();
+        GelatoStorage storage gelatoStorage = _gelatoStorage();
+        uint256 lockedAmount = gelatoStorage.lockedFunds[user];
+        if(amount == 0) amount = lockedAmount;
+        require(amount <= lockedAmount, "Not enough locked funds");
+        gelatoStorage.lockedFunds[user] -= amount;
+        gelatoStorage.lockedFundsTotal -= uint192(amount);
+        emit UnlockedFunds(user, amount, transferTo);
+        if(amount > 0) Address.sendValue(transferTo, amount);
+        return amount;
     }
 
     // /// @notice The function called when receiving funds from ERC-677 `transferAndCall`.
@@ -629,14 +704,10 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         }
     }
 
-    /// @notice Returns the RepoDriver storage specific to Gelato.
+    /// @notice Returns the Gelato storage.
     /// @return storageRef The storage.
-    function _repoDriverGelatoStorage()
-        internal
-        view
-        returns (RepoDriverGelatoStorage storage storageRef)
-    {
-        bytes32 slot = _repoDriverGelatoStorageSlot;
+    function _gelatoStorage() internal view returns (GelatoStorage storage storageRef) {
+        bytes32 slot = _gelatoStorageSlot;
         // slither-disable-next-line assembly
         assembly {
             storageRef.slot := slot
