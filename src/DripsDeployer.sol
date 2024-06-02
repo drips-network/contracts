@@ -7,7 +7,7 @@ import {Drips} from "./Drips.sol";
 import {ImmutableSplitsDriver} from "./ImmutableSplitsDriver.sol";
 import {Managed, ManagedProxy} from "./Managed.sol";
 import {NFTDriver} from "./NFTDriver.sol";
-import {OperatorInterface, RepoDriver} from "./RepoDriver.sol";
+import {RepoDriver} from "./RepoDriver.sol";
 import {Ownable2Step} from "openzeppelin-contracts/access/Ownable2Step.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
@@ -283,24 +283,24 @@ contract ImmutableSplitsDriverModule is DriverModule(2) {
 }
 
 contract RepoDriverModule is CallerDependentModule, DriverModule(3) {
-    OperatorInterface public immutable operator;
-    bytes32 public immutable jobId;
-    uint96 public immutable defaultFee;
+    // OperatorInterface public immutable operator;
+    // bytes32 public immutable jobId;
+    // uint96 public immutable defaultFee;
 
     function args() public view override returns (bytes memory) {
-        return abi.encode(dripsDeployer, proxyAdmin, operator, jobId, defaultFee);
+        return abi.encode(dripsDeployer/* , proxyAdmin, operator, jobId, defaultFee */);
     }
 
     constructor(
         DripsDeployer dripsDeployer_,
-        address proxyAdmin_,
-        OperatorInterface operator_,
-        bytes32 jobId_,
-        uint96 defaultFee_
+        address proxyAdmin_ //,
+        // OperatorInterface operator_,
+        // bytes32 jobId_,
+        // uint96 defaultFee_
     ) BaseModule(dripsDeployer_, "RepoDriver") {
-        operator = operator_;
-        jobId = jobId_;
-        defaultFee = defaultFee_;
+        // operator = operator_;
+        // jobId = jobId_;
+        // defaultFee = defaultFee_;
         // slither-disable-next-line too-many-digits
         _deployProxy(proxyAdmin_, type(RepoDriver).creationCode);
         // repoDriver().initializeAnyApiOperator(operator, jobId, defaultFee);
@@ -311,7 +311,7 @@ contract RepoDriverModule is CallerDependentModule, DriverModule(3) {
     }
 
     function repoDriver() public view returns (RepoDriver) {
-        return RepoDriver(proxy());
+        return RepoDriver(payable(proxy()));
     }
 }
 
