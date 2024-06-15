@@ -69,11 +69,6 @@ contract GiversRegistry is Managed {
         nativeTokenWrapper = IERC20(nativeTokenWrapper_);
     }
 
-    /// @notice Initialize this instance of the contract.
-    function initialize() public {
-        if (!Address.isContract(_giverLogic(address(this)))) new Giver();
-    }
-
     /// @notice Calculate the address of the `Giver` assigned to the account ID.
     /// The `Giver` may not be deployed yet, but the tokens sent
     /// to its address will be `give`n when `give` is called.
@@ -111,8 +106,11 @@ contract GiversRegistry is Managed {
     function give(uint256 accountId, IERC20 erc20) public whenNotPaused returns (uint256 amt) {
         address giver_ = giver(accountId);
         if (!Address.isContract(giver_)) {
+            address giverLogic = _giverLogic(address(this));
+            // `Giver` is deployed using nonce `0`, so under the `giverLogic` address
+            if (!Address.isContract(giverLogic)) new Giver();
             // slither-disable-next-line unused-return
-            Clones.cloneDeterministic(_giverLogic(address(this)), bytes32(accountId));
+            Clones.cloneDeterministic(giverLogic, bytes32(accountId));
         }
         bytes memory delegateCalldata = abi.encodeCall(this.giveImpl, (accountId, erc20));
         bytes memory returned = Giver(payable(giver_)).delegate(implementation(), delegateCalldata);

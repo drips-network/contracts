@@ -73,7 +73,6 @@ contract GiversRegistryTest is Test {
 
         GiversRegistry giversRegistryLogic = new GiversRegistry(addressDriver);
         giversRegistry = GiversRegistry(address(new ManagedProxy(giversRegistryLogic, admin)));
-        giversRegistry.initialize();
         nativeTokenWrapper = giversRegistry.nativeTokenWrapper();
         vm.etch(address(nativeTokenWrapper), address(new NativeTokenWrapper()).code);
         accountId = 1234;
