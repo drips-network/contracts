@@ -71,10 +71,9 @@ contract GiversRegistryTest is Test {
         addressDriver = AddressDriver(address(new ManagedProxy(addressDriverLogic, admin)));
         drips.registerDriver(address(addressDriver));
 
-        GiversRegistry giversRegistryLogic = new GiversRegistry(addressDriver);
+        nativeTokenWrapper = new NativeTokenWrapper();
+        GiversRegistry giversRegistryLogic = new GiversRegistry(addressDriver, nativeTokenWrapper);
         giversRegistry = GiversRegistry(address(new ManagedProxy(giversRegistryLogic, admin)));
-        nativeTokenWrapper = giversRegistry.nativeTokenWrapper();
-        vm.etch(address(nativeTokenWrapper), address(new NativeTokenWrapper()).code);
         accountId = 1234;
         giver = payable(giversRegistry.giver(accountId));
         emit log_named_address("GIVER", giver);

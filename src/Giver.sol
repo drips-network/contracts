@@ -39,7 +39,7 @@ contract Giver {
 /// Any ERC-20 tokens or native tokens sent to `Giver` will
 /// eventually be `give`n to the account assigned to it.
 contract GiversRegistry is Managed {
-    /// @notice The ERC-20 contract used to wrap the native tokens before `give`ing.
+    /// @notice The ERC-20 contract used to wrap the native tokens.
     IERC20 public immutable nativeTokenWrapper;
     /// @notice The driver to use to `give`.
     AddressDriver public immutable addressDriver;
@@ -51,22 +51,12 @@ contract GiversRegistry is Managed {
     uint128 internal immutable _maxTotalBalance;
 
     /// @param addressDriver_ The driver to use to `give`.
-    constructor(AddressDriver addressDriver_) {
+    /// @param nativeTokenWrapper_ The ERC-20 contract used to wrap the native tokens.
+    constructor(AddressDriver addressDriver_, IERC20 nativeTokenWrapper_) {
         addressDriver = addressDriver_;
+        nativeTokenWrapper = nativeTokenWrapper_;
         _drips = addressDriver.drips();
         _maxTotalBalance = _drips.MAX_TOTAL_BALANCE();
-
-        address nativeTokenWrapper_;
-        if (block.chainid == 1 /* Mainnet */ ) {
-            nativeTokenWrapper_ = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-        } else if (block.chainid == 5 /* Goerli */ ) {
-            nativeTokenWrapper_ = 0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6;
-        } else if (block.chainid == 11155111 /* Sepolia */ ) {
-            nativeTokenWrapper_ = 0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14;
-        } else {
-            nativeTokenWrapper_ = address(bytes20("native token wrapper"));
-        }
-        nativeTokenWrapper = IERC20(nativeTokenWrapper_);
     }
 
     /// @notice Calculate the address of the `Giver` assigned to the account ID.
