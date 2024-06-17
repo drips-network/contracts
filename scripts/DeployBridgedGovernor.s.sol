@@ -50,23 +50,15 @@ function requireSorted(address[] memory addresses) pure {
     }
 }
 
-function messageOptions(uint128 gas) pure returns (bytes memory) {
-    uint16 optionsType = 3;
-    return abi.encodePacked(optionsType, executorGasOption(gas), executorOrderedOption());
-}
-
-function executorGasOption(uint128 gas) pure returns (bytes memory) {
-    bytes memory payload = ExecutorOptions.encodeLzReceiveOption(gas, 0);
-    return executorOption(ExecutorOptions.OPTION_TYPE_LZRECEIVE, payload);
-}
-
-function executorOrderedOption() pure returns (bytes memory) {
-    return executorOption(ExecutorOptions.OPTION_TYPE_ORDERED_EXECUTION, "");
-}
-
-function executorOption(uint8 optionType, bytes memory payload) pure returns (bytes memory) {
-    uint16 length = uint16(1 + payload.length);
-    return abi.encodePacked(ExecutorOptions.WORKER_ID, length, optionType, payload);
+function messageOptions(uint128 gas, uint128 value) pure returns (bytes memory) {
+    bytes memory lzReceiveOption = ExecutorOptions.encodeLzReceiveOption(gas, value);
+    return abi.encodePacked(
+        uint16(3), // options type
+        ExecutorOptions.WORKER_ID,
+        uint16(1 + lzReceiveOption.length),
+        ExecutorOptions.OPTION_TYPE_LZRECEIVE,
+        lzReceiveOption
+    );
 }
 
 function addressToBytes32(address addr) pure returns (bytes32) {
@@ -185,8 +177,8 @@ contract SendToBscTestnet is Script {
         MessagingParams memory params = MessagingParams({
             dstEid: BSC_TESTNET_EID,
             receiver: addressToBytes32(0xc9241Cf4cD7d9569cA044d8202EF1080405Bc6C9),
-            message: abi.encode(calls),
-            options: messageOptions(50_000),
+            message: abi.encode( /* nonce */ 0, /* value */ 0, calls),
+            options: messageOptions(50_000, 0),
             payInLzToken: false
         });
 

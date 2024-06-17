@@ -31,8 +31,9 @@ contract BridgedGovernor is UUPSUpgradeable, ILayerZeroReceiver {
     uint32 public immutable ownerEid;
     bytes32 public immutable owner;
 
-    // slither-disable-next-line naming-convention
-    uint64 internal _lastNonce;
+    uint256 public nextMessageNonce;
+
+    event MessageExecuted(uint256 nonce);
 
     constructor(address endpoint_, uint32 ownerEid_, bytes32 owner_) {
         // slither-disable-next-line missing-zero-check
@@ -41,17 +42,24 @@ contract BridgedGovernor is UUPSUpgradeable, ILayerZeroReceiver {
         owner = owner_;
     }
 
-    function allowInitializePath(Origin calldata origin) public view onlyProxy returns (bool) {
+    function allowInitializePath(Origin calldata origin)
+        public
+        view
+        override
+        onlyProxy
+        returns (bool isAllowed)
+    {
         return origin.srcEid == ownerEid && origin.sender == owner;
     }
 
-    function nextNonce(uint32 srcEid, bytes32 sender)
+    function nextNonce(uint32, /* srcEid */ bytes32 /* sender */ )
         public
         view
+        override
         onlyProxy
-        returns (uint64 nextNonce_)
+        returns (uint64 nonce)
     {
-        if (srcEid == ownerEid && sender == owner) nextNonce_ = _lastNonce + 1;
+        return 0;
     }
 
     function lzReceive(
@@ -60,14 +68,19 @@ contract BridgedGovernor is UUPSUpgradeable, ILayerZeroReceiver {
         bytes calldata message,
         address, /* executor */
         bytes calldata /* extraData */
-    ) public payable onlyProxy {
+    ) public payable override onlyProxy {
         require(msg.sender == endpoint, "Must be called by the endpoint");
         require(origin.srcEid == ownerEid, "Invalid message source chain");
         require(origin.sender == owner, "Invalid message sender");
-        require(origin.nonce == _lastNonce + 1, "Invalid message nonce");
-        // slither-disable-next-line events-maths
-        _lastNonce = origin.nonce;
-        runCalls(abi.decode(message, (Call[])));
+
+        (uint256 nonce, uint256 value, Call[] memory calls) =
+            abi.decode(message, (uint256, uint256, Call[]));
+        require(nonce == nextMessageNonce, "Invalid message nonce");
+        require(msg.value >= value, "Called with too low value");
+
+        nextMessageNonce++;
+        runCalls(calls);
+        emit MessageExecuted(nonce);
     }
 
     function _authorizeUpgrade(address /* newImplementation */ ) internal view override {
