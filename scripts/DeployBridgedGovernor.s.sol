@@ -26,25 +26,23 @@ struct UlnConfig {
 }
 
 uint256 constant SEPOLIA_CHAIN_ID = 11155111;
-uint256 constant MUMBAI_CHAIN_ID = 80001;
+uint256 constant BSC_TESTNET_CHAIN_ID = 97;
 
 uint256 constant NO_GRACE_PERIOD = 0;
 
-// Taken from https://docs.layerzero.network/v2/developers/evm/technical-reference/endpoints
+// Taken from https://docs.layerzero.network/v2/developers/evm/technical-reference/deployed-contracts
 address constant SEPOLIA_ENDPOINT = 0x6EDCE65403992e310A62460808c4b910D972f10f;
 uint32 constant SEPOLIA_EID = 40161;
-address constant MUMBAI_ENDPOINT = 0x6EDCE65403992e310A62460808c4b910D972f10f;
-uint32 constant MUMBAI_EID = 40109;
-
-// Taken from https://docs.layerzero.network/v2/developers/evm/technical-reference/messagelibs
-address constant MUMBAI_RECEIVE_ULN_302 = 0xfa4Fbda8E809150eE1676ce675AC746Beb9aF379;
 address constant SEPOLIA_SEND_ULN_302 = 0xcc1ae8Cf5D3904Cef3360A9532B477529b177cCE;
+address constant BSC_TESTNET_ENDPOINT = 0x6EDCE65403992e310A62460808c4b910D972f10f;
+uint32 constant BSC_TESTNET_EID = 40102;
+address constant BSC_TESTNET_RECEIVE_ULN_302 = 0x188d4bbCeD671A7aA2b5055937F79510A32e9683;
 
 // Taken from https://docs.layerzero.network/v2/developers/evm/technical-reference/dvn-addresses
 address constant SEPOLIA_LAYER_ZERO_LABS_DVN = 0x8eebf8b423B73bFCa51a1Db4B7354AA0bFCA9193;
-address constant MUMBAI_LAYER_ZERO_LABS_DVN = 0x67a822F55C5F6E439550b9C4EA39E406480a40f3;
+address constant BSC_TESTNET_LAYER_ZERO_LABS_DVN = 0x0eE552262f7B562eFcED6DD4A7e2878AB897d405;
 address constant SEPOLIA_BWARE_LABS_DVN = 0xCA7a736be0Fe968A33Af62033B8b36D491f7999B;
-address constant MUMBAI_BWARE_LABS_DVN = 0x1cf01d5042d1ae231F918a2645f2762d663476E7;
+address constant BSC_TESTNET_BWARE_LABS_DVN = 0x35fa068eC18631719A7f6253710Ba29aB5C5F3b7;
 
 function requireSorted(address[] memory addresses) pure {
     for (uint256 i = 1; i < addresses.length; i++) {
@@ -88,7 +86,7 @@ contract ConfigureOnSepolia is Script {
 
         SetConfigParam[] memory params = new SetConfigParam[](1);
         params[0] = SetConfigParam({
-            eid: MUMBAI_EID,
+            eid: BSC_TESTNET_EID,
             configType: Constant.CONFIG_TYPE_ULN,
             config: abi.encode(
                 UlnConfig({
@@ -104,21 +102,21 @@ contract ConfigureOnSepolia is Script {
 
         vm.startBroadcast();
         ILayerZeroEndpointV2 endpoint = ILayerZeroEndpointV2(SEPOLIA_ENDPOINT);
-        endpoint.setSendLibrary(msg.sender, MUMBAI_EID, SEPOLIA_SEND_ULN_302);
+        endpoint.setSendLibrary(msg.sender, BSC_TESTNET_EID, SEPOLIA_SEND_ULN_302);
         endpoint.setConfig(msg.sender, SEPOLIA_SEND_ULN_302, params);
         vm.stopBroadcast();
     }
 }
 
-// forge script scripts/DeployBridgedGovernor.s.sol:DeployToMumbai $WALLET_ARGS -f "$ETH_RPC_URL"
+// forge script scripts/DeployBridgedGovernor.s.sol:DeployToBscTestnet $WALLET_ARGS -f "$ETH_RPC_URL"
 
-contract DeployToMumbai is Script {
+contract DeployToBscTestnet is Script {
     function run() public {
-        require(block.chainid == MUMBAI_CHAIN_ID, "Must be run on Polygon Mumbai");
+        require(block.chainid == BSC_TESTNET_CHAIN_ID, "Must be run on BSC testnet");
 
         address[] memory optionalDVNs = new address[](2);
-        optionalDVNs[0] = MUMBAI_BWARE_LABS_DVN;
-        optionalDVNs[1] = MUMBAI_LAYER_ZERO_LABS_DVN;
+        optionalDVNs[0] = BSC_TESTNET_LAYER_ZERO_LABS_DVN;
+        optionalDVNs[1] = BSC_TESTNET_BWARE_LABS_DVN;
         requireSorted(optionalDVNs);
 
         SetConfigParam[] memory params = new SetConfigParam[](1);
@@ -140,20 +138,20 @@ contract DeployToMumbai is Script {
         address governor = vm.computeCreateAddress(msg.sender, vm.getNonce(msg.sender) + 1);
         Call[] memory calls = new Call[](2);
         calls[0] = Call({
-            target: MUMBAI_ENDPOINT,
+            target: BSC_TESTNET_ENDPOINT,
             data: abi.encodeWithSelector(
                 IMessageLibManager.setReceiveLibrary.selector,
                 governor,
                 SEPOLIA_EID,
-                MUMBAI_RECEIVE_ULN_302,
+                BSC_TESTNET_RECEIVE_ULN_302,
                 NO_GRACE_PERIOD
             ),
             value: 0
         });
         calls[1] = Call({
-            target: MUMBAI_ENDPOINT,
+            target: BSC_TESTNET_ENDPOINT,
             data: abi.encodeWithSelector(
-                IMessageLibManager.setConfig.selector, governor, MUMBAI_RECEIVE_ULN_302, params
+                IMessageLibManager.setConfig.selector, governor, BSC_TESTNET_RECEIVE_ULN_302, params
             ),
             value: 0
         });
@@ -161,7 +159,8 @@ contract DeployToMumbai is Script {
         bytes32 owner = addressToBytes32(msg.sender);
 
         vm.startBroadcast();
-        address governorLogic = address(new BridgedGovernor(MUMBAI_ENDPOINT, SEPOLIA_EID, owner));
+        address governorLogic =
+            address(new BridgedGovernor(BSC_TESTNET_ENDPOINT, SEPOLIA_EID, owner));
         address governorProxy = address(new BridgedGovernorProxy(governorLogic, calls));
         vm.stopBroadcast();
 
@@ -170,22 +169,22 @@ contract DeployToMumbai is Script {
     }
 }
 
-// forge script scripts/DeployBridgedGovernor.sol:SendToMumbai $WALLET_ARGS -f "$ETH_RPC_URL"
+// forge script scripts/DeployBridgedGovernor.s.sol:SendToBscTestnet $WALLET_ARGS -f "$ETH_RPC_URL"
 
-contract SendToMumbai is Script {
+contract SendToBscTestnet is Script {
     function run() public {
         require(block.chainid == SEPOLIA_CHAIN_ID, "Must be run on Sepolia");
 
         Call[] memory calls = new Call[](1);
         calls[0] = Call({
-            target: 0x6D8873f56a56f0Af376091beddDD149f3592e854,
+            target: 0xeD24FC36d5Ee211Ea25A80239Fb8C4Cfd80f12Ee,
             data: abi.encodeWithSignature("approve(address,uint256)", address(0x1234), 5678),
             value: 0
         });
 
         MessagingParams memory params = MessagingParams({
-            dstEid: MUMBAI_EID,
-            receiver: addressToBytes32(0xf3Fb9312d0b2413f0C79DbcaFfCfCF70Bef95fc5),
+            dstEid: BSC_TESTNET_EID,
+            receiver: addressToBytes32(0xc9241Cf4cD7d9569cA044d8202EF1080405Bc6C9),
             message: abi.encode(calls),
             options: messageOptions(50_000),
             payInLzToken: false
