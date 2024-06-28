@@ -2,7 +2,7 @@
 set -eo pipefail
 
 # Parameters: splits file path
-# Env variables: ETH_RPC_URL, WALLET_ARGS, SUBGRAPH_API
+# Env variables: ETH_RPC_URL, WALLET_ARGS, DRIPS
 
 # Required programs on the machine: foundry, curl, jq
 # This script is standalone, it may be copied and run outside of this repository.
@@ -17,10 +17,6 @@ set -eo pipefail
 # which will be processed for the currently used token, for example:
 # 390153557637010290125401600086462573573670190927
 # Lines not following these patterns are ignored, they may be used as comments.
-
-# SUBGRAPH_API is the subgraph API to use to collect information.
-# As of writing this script the URL of the subgraph of Drips on Ethereum is:
-# https://api.thegraph.com/subgraphs/name/drips-network-dev/drips-on-ethereum
 
 # WALLET_ARGS are the Foundry wallet arguments. They will be passed to all commands needing signing.
 # Examples:
@@ -55,12 +51,6 @@ verify_parameter() {
         echo "Error: '$1' variable not set"
         exit 1
     fi
-}
-
-# args: subgraph query, jq filter
-query_subgraph() {
-    curl "$SUBGRAPH_API" -s -X POST -H 'content-type: application/json' -d "{\"query\": \"$1\"}" \
-        | jq -r "$2"
 }
 
 # args: amount
@@ -105,9 +95,6 @@ is_below_min_amt() {
 # args: account ID
 process_account() {
     ACCOUNT_ID="$1"
-    echo
-    echo =============================================================================
-    echo
     echo "Processing account ID $ACCOUNT_ID"
     for i in "${!ALL_TOKENS[@]}"; do
         TOKEN=${ALL_TOKENS[i]}
@@ -122,6 +109,9 @@ process_account() {
         echo "The minimum amount to process is $(pretty_amt "$MIN_AMT")"
         process_account_for_token
     done
+    echo
+    echo =============================================================================
+    echo
 }
 
 process_account_for_token() {
@@ -143,33 +133,33 @@ process_account_for_token() {
         echo "$(pretty_amt "$SPLITTABLE") splittable, skipping."
     else
         echo "$(pretty_amt "$SPLITTABLE") splittable, splitting..."
-        SPLITS=$(query_subgraph \
-            "{ account(id: \\\"$ACCOUNT_ID\\\") { splitsEntries { accountId, weight}}}" \
-            `# First, pad the account IDs to a maximum length with 0s.` \
-            `# Then, sort the receivers by the account IDs.` \
-            `# Finally, concatenate all the receivers into a single argument for Foundry.` \
-            '.data.account.splitsEntries // []
-                | map(.accountId |= (78 - (. | length)) * "0" + .)
-                | sort_by(.accountId)
-                | map("(\(.accountId),\(.weight))") | join(",") | "[\(.)]"
-            ')
+        SPLITS_HASH=$(cast call "$DRIPS" "splitsHash(uint256 accountId)(bytes32 currSplitsHash)" "$ACCOUNT_ID")
+        SPLITS=$(cast logs --json --from-block earliest --address "$DRIPS" \
+            "SplitsReceiverSeen(bytes32 indexed receiversHash, uint256 indexed accountId, uint32 weight)" \
+            `# Query only entries with 'receiversHash' equal to 'SPLITS_HASH'.` \
+            "$SPLITS_HASH" \
+            `# Deduplicate entries using 'accountId', which also sorts the entries by that field.` \
+            `# This is safe because splits receivers list can't contain duplicate receivers.`
+            `# Then, append data which in this case is just the ABI-encoded 'weight'.` \
+            `# Finally, format all the entries as a single string '[(accountId,weight),...]'` \
+            | jq -r 'unique_by(.topics[2]) | map("(\(.topics[2]),\(.data))") | join(",") | "[\(.)]"')
         cast send $WALLET_ARGS "$DRIPS" "split(uint256,address,(uint256,uint32)[])" "$ACCOUNT_ID" "$TOKEN" "$SPLITS"
     fi
 }
 
 verify_parameter ETH_RPC_URL
 verify_parameter WALLET_ARGS
-verify_parameter SUBGRAPH_API
+verify_parameter DRIPS
 
 unset TOKEN
-ADDRESS_DRIVER=$(query_subgraph '{ app(id: 0) { appAddress } }' '.data.app.appAddress')
-DRIPS=$(cast call "$ADDRESS_DRIVER" "drips()(address)" | cut -f 1 -d " ")
 echo "Running on chain $(cast chain) using Drips contract $DRIPS"
+echo
 
-cat "$1" | while read FIRST SECOND; do
+cat "${1:--}" | while read FIRST SECOND; do
     if (echo "$FIRST" | grep -Eq '^0x[[:xdigit:]]{40}$'); then
         process_token "$FIRST" "$SECOND"
-    elif (echo "$FIRST" | grep -Eq '^[[:digit:]]+$') && [ -z "$SECOND" ]; then
+    elif (echo "$FIRST" | grep -Eq '^0x[[:xdigit:]]{64}$') && [ -z "$SECOND" ]; then
         process_account "$FIRST"
     fi
 done
+echo "Finished successfully"
