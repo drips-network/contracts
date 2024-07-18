@@ -69,7 +69,7 @@ contract RepoDriverTest is Test {
 
     function setUp() public {
         Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, address(this))));
+        drips = Drips(address(new ManagedProxy(dripsLogic, address(this), "")));
 
         caller = new Caller();
 
@@ -105,7 +105,7 @@ contract RepoDriverTest is Test {
     function deployDriverUninitialized() internal {
         uint32 driverId = drips.registerDriver(address(this));
         RepoDriver driverLogic = new RepoDriver(drips, address(caller), driverId);
-        driver = RepoDriver(address(new ManagedProxy(driverLogic, admin)));
+        driver = RepoDriver(address(new ManagedProxy(driverLogic, admin, "")));
         drips.updateDriverAddress(driverId, address(driver));
         driverNonce = 0;
     }

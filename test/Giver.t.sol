@@ -64,16 +64,16 @@ contract GiversRegistryTest is Test {
 
     function setUp() public {
         Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, admin)));
+        drips = Drips(address(new ManagedProxy(dripsLogic, admin, "")));
         drips.registerDriver(address(1));
         AddressDriver addressDriverLogic =
             new AddressDriver(drips, address(0), drips.nextDriverId());
-        addressDriver = AddressDriver(address(new ManagedProxy(addressDriverLogic, admin)));
+        addressDriver = AddressDriver(address(new ManagedProxy(addressDriverLogic, admin, "")));
         drips.registerDriver(address(addressDriver));
 
         nativeTokenWrapper = new NativeTokenWrapper();
         GiversRegistry giversRegistryLogic = new GiversRegistry(addressDriver, nativeTokenWrapper);
-        giversRegistry = GiversRegistry(address(new ManagedProxy(giversRegistryLogic, admin)));
+        giversRegistry = GiversRegistry(address(new ManagedProxy(giversRegistryLogic, admin, "")));
         accountId = 1234;
         giver = payable(giversRegistry.giver(accountId));
         emit log_named_address("GIVER", giver);

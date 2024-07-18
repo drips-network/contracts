@@ -36,7 +36,7 @@ contract NFTDriverTest is Test {
 
     function setUp() public {
         Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, address(this))));
+        drips = Drips(address(new ManagedProxy(dripsLogic, address(this), "")));
 
         caller = new Caller();
 
@@ -45,7 +45,7 @@ contract NFTDriverTest is Test {
         drips.registerDriver(address(1));
         uint32 driverId = drips.registerDriver(address(this));
         NFTDriver driverLogic = new NFTDriver(drips, address(caller), driverId);
-        driver = NFTDriver(address(new ManagedProxy(driverLogic, admin)));
+        driver = NFTDriver(address(new ManagedProxy(driverLogic, admin, "")));
         drips.updateDriverAddress(driverId, address(driver));
 
         tokenId = driver.mint(address(this), noMetadata());

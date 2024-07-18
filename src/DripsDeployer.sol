@@ -102,19 +102,28 @@ abstract contract ProxyDeployerModule is BaseModule {
     bytes32 public immutable proxySalt = "proxy";
     address public proxyAdmin;
     address public logic;
+    bytes public proxyDelegateCalldata;
 
     function proxy() public view returns (address) {
         return Create3Factory.getDeployed(proxySalt);
     }
 
     function proxyArgs() public view returns (bytes memory) {
-        return abi.encode(logic, proxyAdmin);
+        return abi.encode(logic, proxyAdmin, proxyDelegateCalldata);
     }
 
     function logicArgs() public view virtual returns (bytes memory);
 
-    // slither-disable-next-line reentrancy-benign
     function _deployProxy(address proxyAdmin_, bytes memory logicCreationCode) internal {
+        _deployProxy(proxyAdmin_, logicCreationCode, "");
+    }
+
+    // slither-disable-next-line reentrancy-benign
+    function _deployProxy(
+        address proxyAdmin_,
+        bytes memory logicCreationCode,
+        bytes memory proxyDelegateCalldata_
+    ) internal {
         // Deploy logic
         address logic_;
         bytes memory logicInitCode = abi.encodePacked(logicCreationCode, logicArgs());
@@ -126,6 +135,7 @@ abstract contract ProxyDeployerModule is BaseModule {
         logic = logic_;
         // Deploy proxy
         proxyAdmin = proxyAdmin_;
+        proxyDelegateCalldata = proxyDelegateCalldata_;
         // slither-disable-next-line too-many-digits
         bytes memory proxyInitCode = abi.encodePacked(type(ManagedProxy).creationCode, proxyArgs());
         Create3Factory.deploy(0, proxySalt, proxyInitCode);
