@@ -299,11 +299,17 @@ contract RepoDriverModule is CallerDependentModule, DriverModule(3) {
         return abi.encode(dripsDeployer, proxyAdmin, ipfsCid);
     }
 
-    constructor(DripsDeployer dripsDeployer_, address proxyAdmin_, string memory ipfsCid_)
-        BaseModule(dripsDeployer_, "RepoDriver")
-    {
+    constructor(
+        DripsDeployer dripsDeployer_,
+        address proxyAdmin_,
+        string memory ipfsCid_,
+        uint32 maxRequestsPerBlock,
+        uint32 maxRequestsPer31Days
+    ) BaseModule(dripsDeployer_, "RepoDriver") {
         ipfsCid = ipfsCid_;
-        bytes memory data = abi.encodeCall(RepoDriver.updateGelatoTask, (ipfsCid_));
+        bytes memory data = abi.encodeCall(
+            RepoDriver.updateGelatoTask, (ipfsCid_, maxRequestsPerBlock, maxRequestsPer31Days)
+        );
         // slither-disable-next-line too-many-digits
         _deployProxy(proxyAdmin_, type(RepoDriver).creationCode, data);
     }

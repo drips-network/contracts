@@ -38,6 +38,8 @@ contract RepoDriver is DriverTransferUtils, Managed {
     address payable internal immutable gelatoFeeCollector;
     /// @notice The placeholder address meaning that the Gelato fee is paid in native tokens.
     address internal constant GELATO_NATIVE_TOKEN = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+    /// @notice The maximum possible request penalty which is the entire block gas limit.
+    uint256 internal constant MAX_PENALTY = type(uint72).max;
 
     /// @notice The ERC-1967 storage slot holding a single `RepoDriverStorage` structure.
     bytes32 private immutable _repoDriverStorageSlot = _erc1967Slot("eip1967.repoDriver.storage");
@@ -63,7 +65,17 @@ contract RepoDriver is DriverTransferUtils, Managed {
     /// @param taskId The ID of the created Gelato task.
     /// @param ipfsCid The IPFS CID of the code to be run
     /// by the  Gelato Web3 Function task to lookup the account ownership.
-    event GelatoTaskUpdated(bytes32 taskId, string ipfsCid);
+    /// @param maxRequestsPerBlock The maximum number of Gelato task runs triggerable in a block.
+    /// The limit is disabled if both `maxRequestsPerBlock` and `maxRequestsPer31Days` are `0`.
+    /// The limit is enforced by adding an artificial gas cost penalty
+    /// to each call trigerring a task run.
+    /// The penalty increases by a constant amount after each call
+    /// and decreases linearly over time until it returns to `0`.
+    /// @param maxRequestsPer31Days The maximum number of Gelato task runs
+    /// triggerable in the rolling window of 31 days.
+    event GelatoTaskUpdated(
+        bytes32 taskId, string ipfsCid, uint32 maxRequestsPerBlock, uint32 maxRequestsPer31Days
+    );
 
     /// @notice Emitted when native tokens are deposited for the user.
     /// These funds will be used to pay Gelato fees for that user's requests.
@@ -103,6 +115,20 @@ contract RepoDriver is DriverTransferUtils, Managed {
         uint256 userFundsTotal;
         /// @notice The address of the proxy delivering Gelato responses.
         address gelatoProxy;
+        /// @notice The current state and configuration of the requests penalty.
+        RequestsPenalty requestsPenalty;
+    }
+
+    /// @notice The current state and configuration of the requests penalty.
+    struct RequestsPenalty {
+        /// @notice The last request timestamp.
+        uint40 lastRequestTimestamp;
+        /// @notice The last request penalty.
+        uint72 lastRequestPenalty;
+        /// @notice The penalty increase whenever a request is made.
+        uint72 penaltyIncreasePerRequest;
+        /// @notice The penalty decrease per second.
+        uint72 penaltyDecreasePerSecond;
     }
 
     modifier onlyOwner(uint256 accountId) {
@@ -203,11 +229,82 @@ contract RepoDriver is DriverTransferUtils, Managed {
     /// by the  Gelato Web3 Function task to lookup the account ownership.
     /// It must accept no arguments, expect `OwnerUpdateRequested` events when executed,
     /// and call `updateOwnerByGelato` with the results.
-    function updateGelatoTask(string calldata ipfsCid) public onlyAdminOrConstructor {
+    /// @param maxRequestsPerBlock The maximum number of Gelato task runs triggerable in a block.
+    /// To disable limits set both `maxRequestsPerBlock` and `maxRequestsPer31Days` to `0`.
+    /// The limit is enforced by adding an artificial gas cost penalty
+    /// to each call trigerring a task run.
+    /// The penalty increases by a constant amount after each call
+    /// and decreases linearly over time until it returns to `0`.
+    /// @param maxRequestsPer31Days The maximum number of Gelato task runs
+    /// triggerable in the rolling window of 31 days.
+    function updateGelatoTask(
+        string calldata ipfsCid,
+        uint32 maxRequestsPerBlock,
+        uint32 maxRequestsPer31Days
+    ) public onlyAdminOrConstructor {
+        _updateRequestsPenalty(maxRequestsPerBlock, maxRequestsPer31Days);
         _initGelatoProxy();
         _cancelAllGelatoTasks();
         bytes32 taskId = _createGelatoTask(ipfsCid);
-        emit GelatoTaskUpdated(taskId, ipfsCid);
+        emit GelatoTaskUpdated(taskId, ipfsCid, maxRequestsPerBlock, maxRequestsPer31Days);
+    }
+
+    /// @notice Updates the requests penalty.
+    /// @param maxRequestsPerBlock The maximum number of Gelato task runs triggerable in a block.
+    /// To disable limits set both `maxRequestsPerBlock` and `maxRequestsPer31Days` to `0`.
+    /// The limit is enforced by adding an artificial gas cost penalty
+    /// to each call trigerring a task run.
+    /// The penalty increases by a constant amount after each call
+    /// and decreases linearly over time until it returns to `0`.
+    /// @param maxRequestsPer31Days The maximum number of Gelato task runs
+    /// triggerable in the rolling window of 31 days.
+    function _updateRequestsPenalty(uint32 maxRequestsPerBlock, uint32 maxRequestsPer31Days)
+        internal
+    {
+        if (maxRequestsPerBlock == 0 && maxRequestsPer31Days == 0) {
+            delete _gelatoStorage().requestsPenalty;
+            return;
+        }
+        require(maxRequestsPerBlock > 0, "maxRequestsPerBlock too low");
+        // Each request has the penalty of the previous request plus `increasePerRequest`.
+        // The maximum number of requests in a single block is possible when
+        // the first request has no penalty, the next one has `increasePerRequest`,
+        // the next one `2 * increasePerRequest` and so on.
+        // The target is to fit at most `maxRequestsPerBlock` requests in `MAX_PENALTY`.
+        // To do that calculate `increasePerRequest` so that
+        // `maxRequestsPerBlock + 1` penalties fit in `MAX_PENALTY`
+        // and then add `1` to `increasePerRequest` so only `maxRequestsPerBlock` penalties fit.
+        //
+        // The formula for `increasePerRequest` fitting `maxRequestsPerBlock + 1` penalties:
+        // ```
+        // 0 * increasePerRequest + 1 * increasePerRequest + ...
+        //      + maxRequestsPerBlock * increasePerRequest == MAX_PENALTY
+        // increasePerRequest * (0 + 1 + ... + maxRequestsPerBlock) == MAX_PENALTY
+        // increasePerRequest * maxRequestsPerBlock * (maxRequestsPerBlock + 1) / 2 == MAX_PENALTY
+        // increasePerRequest == MAX_PENALTY * 2 / (maxRequestsPerBlock * (maxRequestsPerBlock + 1))
+        // ```
+        uint256 increasePerRequest =
+            MAX_PENALTY * 2 / (maxRequestsPerBlock * (maxRequestsPerBlock + uint256(1))) + 1;
+        // The number of requests that can be made in a row before
+        // the penalty becomes higher than `MAX_PENALTY`.
+        uint256 maxRequestsInRow = MAX_PENALTY / increasePerRequest + 1;
+        require(maxRequestsInRow < maxRequestsPer31Days, "maxRequestsPer31Days too low");
+        // The maximum number of requests in the 31-day window is possible when
+        // at the beginning the penalty is `0` and the first requests is made.
+        // Next, for the entire 31-day period a request is made whenever the penalty returns to `0`.
+        // Finally, exactly at the end of the window `maxRequestsInRow` requests are made
+        // so the penalty of `MAX_PENALTY` is reached.
+        // `decreasePerSecond` is calculated so that this scenario
+        // allows no more than `maxRequestsPer31Days` requests in the 31-day window.
+        uint256 decreasePerSecond =
+            (maxRequestsPer31Days - maxRequestsInRow) * increasePerRequest / 31 days;
+        if (decreasePerSecond > MAX_PENALTY) decreasePerSecond = MAX_PENALTY;
+        _gelatoStorage().requestsPenalty = RequestsPenalty({
+            lastRequestTimestamp: 0,
+            lastRequestPenalty: 0,
+            penaltyIncreasePerRequest: uint72(increasePerRequest),
+            penaltyDecreasePerSecond: uint72(decreasePerSecond)
+        });
     }
 
     /// @notice Deploys and stores the address of the proxy delivering Gelato responses.
@@ -269,13 +366,54 @@ contract RepoDriver is DriverTransferUtils, Managed {
     /// as a hexadecimal string under `drips` -> `<CHAIN NAME>` -> `ownedBy`, a minimal example:
     /// `{ "drips": { "ethereum": { "ownedBy": "0x0123456789abcDEF0123456789abCDef01234567" } } }`.
     /// If for whatever reason the owner address can't be obtained, it's assumed to be address zero.
+    ///
+    /// This function applies an artificial gas cost penalty to limit the number of calls.
+    /// The penalty increases by a constant amount after each call
+    /// and decreases linearly over time until it returns to `0`.
     /// @param forge The forge where the repository is stored.
     /// @param name The name of the repository.
     /// For GitHub and GitLab it must follow the `user_name/repository_name` structure
     /// and it must be formatted identically as in the repository's URL,
     /// including the case of each letter and special characters being removed.
     function requestUpdateOwner(Forge forge, bytes calldata name) public whenNotPaused {
+        _applyRequestUpdateOwnerGasPenalty();
         emit OwnerUpdateRequested(calcAccountId(forge, name), forge, name, _msgSender());
+    }
+
+    /// @notice Applies an artificial gas cost penalty to limit the number of calls.
+    /// The penalty increases by a constant amount after each call
+    /// and decreases linearly over time until it returns to `0`.
+    function _applyRequestUpdateOwnerGasPenalty() internal {
+        uint72 penalty = _requestUpdateOwnerPenalty();
+        uint256 gasPenalty = _penaltyToGas(penalty);
+        for (uint256 initialGasLeft = gasleft(); initialGasLeft - gasleft() < gasPenalty;) {
+            continue;
+        }
+        _gelatoStorage().requestsPenalty.lastRequestPenalty = penalty;
+        _gelatoStorage().requestsPenalty.lastRequestTimestamp = uint40(block.timestamp);
+    }
+
+    /// @notice Calculates the current gas cost penalty of `requestUpdateOwner`.
+    /// @return gasPenalty The gas cost penalty.
+    function requestUpdateOwnerGasPenalty() public view returns (uint256 gasPenalty) {
+        return _penaltyToGas(_requestUpdateOwnerPenalty());
+    }
+
+    /// @notice Calculates the unitless penalty of `requestUpdateOwner`.
+    /// @return penalty The penalty.
+    function _requestUpdateOwnerPenalty() internal view returns (uint72 penalty) {
+        RequestsPenalty storage requestsPenalty = _gelatoStorage().requestsPenalty;
+        penalty = requestsPenalty.lastRequestPenalty + requestsPenalty.penaltyIncreasePerRequest;
+        uint256 penaltyDecrease = (block.timestamp - requestsPenalty.lastRequestTimestamp)
+            * requestsPenalty.penaltyDecreasePerSecond;
+        if (penaltyDecrease > penalty) penaltyDecrease = penalty;
+        penalty -= uint72(penaltyDecrease);
+    }
+
+    /// @notice Calculates the gas cost penalty from the unitless penalty.
+    /// @return gasPenalty The gas cost penalty.
+    function _penaltyToGas(uint72 penalty) internal view returns (uint256 gasPenalty) {
+        return block.gaslimit * penalty / MAX_PENALTY;
     }
 
     /// @notice Updates the account owner.

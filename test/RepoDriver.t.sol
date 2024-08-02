@@ -12,7 +12,7 @@ import {
     SplitsReceiver
 } from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
-import {console2, StdAssertions, Test} from "forge-std/Test.sol";
+import {StdAssertions, Test} from "forge-std/Test.sol";
 import {
     IAutomate,
     IGelato,
@@ -221,7 +221,7 @@ contract RepoDriverTest is Test, Events {
 
         string memory ipfsCid = "Gelato Function";
         automate_.expectIpfsCid(ipfsCid);
-        bytes memory data = abi.encodeCall(RepoDriver.updateGelatoTask, (ipfsCid));
+        bytes memory data = abi.encodeCall(RepoDriver.updateGelatoTask, (ipfsCid, 0, 0));
 
         RepoDriver driverLogic =
             new RepoDriver(drips, address(caller), driverId, IAutomate(address(automate_)));
@@ -445,15 +445,16 @@ contract RepoDriverTest is Test, Events {
         automate().pushTaskId(hex"1234");
         string memory ipfsCid = "The new Gelato Function";
         automate().expectIpfsCid(ipfsCid);
+        vm.expectCall(address(automate()), bytes.concat(Automate.createTask.selector));
         vm.prank(admin);
-        driver.updateGelatoTask(ipfsCid);
+        driver.updateGelatoTask(ipfsCid, 0, 0);
     }
 
     function testUpdateGelatoTaskRevertsIfNotCalledByAdmin() public {
         string memory ipfsCid = "The new Gelato Function";
         automate().expectIpfsCid(ipfsCid);
         vm.expectRevert("Caller not the admin");
-        driver.updateGelatoTask(ipfsCid);
+        driver.updateGelatoTask(ipfsCid, 0, 0);
     }
 
     function testRequestUpdateOwner() public {
@@ -475,6 +476,36 @@ contract RepoDriverTest is Test, Events {
         vm.expectEmit(address(driver));
         emit OwnerUpdateRequested(driver.calcAccountId(forge, name), forge, name, user);
         caller.callAs(user, address(driver), data);
+    }
+
+    function testRequestUpdateOwnerAppliesGasPenalty() public {
+        string memory ipfsCid = "The new Gelato Function";
+        automate().expectIpfsCid(ipfsCid);
+        vm.prank(admin);
+        // The penalty increase of 1/6 of the block gas results in maximum 3 requests per block.
+        // Decrease of the penalty by 1 increase per day results in 31 requests per 31 days
+        // on top of the 6 requests maxing out the penalty.
+        uint256 penaltyIncrease = block.gaslimit / 6;
+        driver.updateGelatoTask(ipfsCid, 3, 31 + 6);
+
+        // Move away from timestamp 0 by the time it takes to decrease the penalty by 1 increase.
+        vm.warp(1 days);
+        requestWithGasPenalty(0 * penaltyIncrease);
+        requestWithGasPenalty(1 * penaltyIncrease);
+        requestWithGasPenalty(2 * penaltyIncrease);
+        // Decrease the penalty by 2 increases.
+        vm.warp(vm.getBlockTimestamp() + 2 days);
+        requestWithGasPenalty(1 * penaltyIncrease);
+    }
+
+    function requestWithGasPenalty(uint256 gasPenalty) internal {
+        assertApproxEqAbs(gasPenalty, driver.requestUpdateOwnerGasPenalty(), 1, "Invalid penalty");
+        uint256 gasUsed = gasleft();
+        driver.requestUpdateOwner(Forge.GitHub, "this/repo");
+        gasUsed -= gasleft();
+        uint256 gasBase = 8_000;
+        uint256 gasDelta = 4_000;
+        assertApproxEqAbs(gasUsed, gasBase + gasPenalty, gasDelta, "Invalid applied penalty");
     }
 
     function testReceivedNativeTokensAreAddedToCommonFunds() public {
