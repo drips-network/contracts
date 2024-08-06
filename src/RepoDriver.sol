@@ -97,14 +97,7 @@ contract RepoDriver is DriverTransferUtils, Managed {
 
     struct RepoDriverStorage {
         /// @notice The owners of the accounts.
-        mapping(uint256 accountId => AccountOwner) accountOwners;
-    }
-
-    struct AccountOwner {
-        /// @notice The address of the account owner.
-        address owner;
-        /// @notice The block height at which the account ownership was looked up off-chain.
-        uint96 fromBlock;
+        mapping(uint256 accountId => address) accountOwners;
     }
 
     struct GelatoStorage {
@@ -219,7 +212,7 @@ contract RepoDriver is DriverTransferUtils, Managed {
     /// @param accountId The ID of the account.
     /// @return owner The owner of the account.
     function ownerOf(uint256 accountId) public view returns (address owner) {
-        return _repoDriverStorage().accountOwners[accountId].owner;
+        return _repoDriverStorage().accountOwners[accountId];
     }
 
     /// @notice Updates the Gelato task performing account ownership lookups.
@@ -420,22 +413,18 @@ contract RepoDriver is DriverTransferUtils, Managed {
     /// Callable only via the Gelato proxy by the Gelato task created by this contract.
     /// @param accountId The ID of the account having the ownership updated.
     /// @param owner The new owner of the account.
-    /// @param fromBlock The block height at which the account ownership was looked up off-chain.
     /// @param payer The address of the user paying the fees.
     /// The Gelato fee will be paid in native tokens when the actual owner update is made.
     /// The fee is paid from the funds deposited for the message sender calling this function.
     /// If these funds aren't enough, the missing part is paid from the common funds.
-    function updateOwnerByGelato(uint256 accountId, address owner, uint96 fromBlock, address payer)
+    function updateOwnerByGelato(uint256 accountId, address owner, address payer)
         public
         whenNotPaused
     {
         require(msg.sender == _gelatoStorage().gelatoProxy, "Callable only by Gelato");
-        AccountOwner storage accountOwner = _repoDriverStorage().accountOwners[accountId];
-        if (accountOwner.fromBlock < fromBlock) {
-            accountOwner.owner = owner;
-            accountOwner.fromBlock = fromBlock;
-            emit OwnerUpdated(accountId, owner);
-        }
+        require(_repoDriverStorage().accountOwners[accountId] != owner, "New owner is the same");
+        _repoDriverStorage().accountOwners[accountId] = owner;
+        emit OwnerUpdated(accountId, owner);
         _payGelatoFee(payer);
     }
 

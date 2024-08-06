@@ -263,97 +263,85 @@ contract RepoDriverTest is Test, Events {
         returns (uint256 accountId_)
     {
         accountId_ = driver.calcAccountId(Forge.GitHub, name);
-        updateOwnerByGelato(accountId_, owner, 1, address(0));
-        assertOwner(accountId_, owner);
+        updateOwnerByGelato(accountId_, owner, address(0));
     }
 
-    function updateOwnerByGelato(uint256 accountId_, address owner, uint96 fromBlock, address payer)
-        internal
-    {
-        updateOwnerByGelato(accountId_, owner, fromBlock, payer, 0);
+    function updateOwnerByGelato(uint256 accountId_, address owner, address payer) internal {
+        updateOwnerByGelato(accountId_, owner, payer, 0);
     }
 
     function updateOwnerByGelato(
         uint256 accountId_,
         address owner,
-        uint96 fromBlock,
         address payer,
         uint256 feeAmount
     ) internal {
+        address feeCollector = automate().gelato().feeCollector();
         automate().setFeeDetails(feeAmount, GELATO_NATIVE_TOKEN);
+        uint256 balanceBefore = feeCollector.balance;
+        vm.expectCall(address(automate()), bytes.concat(IAutomate.getFeeDetails.selector));
         vm.prank(gelatoProxy());
-        driver.updateOwnerByGelato(accountId_, owner, fromBlock, payer);
+
+        driver.updateOwnerByGelato(accountId_, owner, payer);
+
+        assertEq(feeCollector.balance, balanceBefore + feeAmount, "Invalid fee collector balance");
+        assertOwner(accountId_, owner);
     }
 
     function testUpgradeOwnerByGelato() public {
-        updateOwnerByGelato(accountIdUnclaimed, user, 1, address(this));
-
-        assertOwner(accountIdUnclaimed, user);
+        updateOwnerByGelato(accountIdUnclaimed, user, address(this));
     }
 
     function testUpgradeOwnerByGelatoPaidByCommonFunds() public {
         Address.sendValue(payable(driver), 3);
 
-        updateOwnerByGelato(accountIdUnclaimed, user, 1, address(this), 2);
+        updateOwnerByGelato(accountIdUnclaimed, user, address(this), 2);
 
-        assertOwner(accountIdUnclaimed, user);
         assertCommonFunds(1);
-        assertFeeCollectorBalance(2);
     }
 
     function testUpgradeOwnerByGelatoPaidByUserFunds() public {
         driver.depositUserFunds{value: 3}(address(this));
 
-        updateOwnerByGelato(accountIdUnclaimed, user, 1, address(this), 2);
+        updateOwnerByGelato(accountIdUnclaimed, user, address(this), 2);
 
-        assertOwner(accountIdUnclaimed, user);
         assertUserFunds(address(this), 1);
-        assertFeeCollectorBalance(2);
     }
 
     function testUpgradeOwnerByGelatoPaidByCommonAndUserFunds() public {
         Address.sendValue(payable(driver), 2);
         driver.depositUserFunds{value: 2}(address(this));
 
-        updateOwnerByGelato(accountIdUnclaimed, user, 1, address(this), 3);
+        updateOwnerByGelato(accountIdUnclaimed, user, address(this), 3);
 
-        assertOwner(accountIdUnclaimed, user);
         assertCommonFunds(1);
         assertUserFunds(address(this), 0);
-        assertFeeCollectorBalance(3);
     }
 
     function testUpgradeOwnerByGelatoRevertsIfNotEnoughFunds() public {
         automate().setFeeDetails(1, GELATO_NATIVE_TOKEN);
         vm.prank(gelatoProxy());
         vm.expectRevert("Not enough funds");
-        driver.updateOwnerByGelato(accountIdUnclaimed, user, 1, address(this));
+        driver.updateOwnerByGelato(accountIdUnclaimed, user, address(this));
     }
 
     function testUpgradeOwnerByGelatoRevertsIfFeeNotInNativeTokens() public {
         automate().setFeeDetails(0, address(1));
         vm.prank(gelatoProxy());
         vm.expectRevert("Payment must be in native tokens");
-        driver.updateOwnerByGelato(accountIdUnclaimed, user, 1, address(this));
+        driver.updateOwnerByGelato(accountIdUnclaimed, user, address(this));
     }
 
     function testUpgradeOwnerByGelatoRevertsIfNotCalledByProxy() public {
         vm.expectRevert("Callable only by Gelato");
-        driver.updateOwnerByGelato(accountIdUnclaimed, user, 1, address(this));
+        driver.updateOwnerByGelato(accountIdUnclaimed, user, address(this));
     }
 
-    function testUpgradeOwnerByGelatoDoesNothingIfBlockLowerThanFromBlock() public {
-        updateOwnerByGelato(accountIdUnclaimed, user, 2, address(this));
-        assertOwner(accountIdUnclaimed, user);
-        updateOwnerByGelato(accountIdUnclaimed, address(this), 1, address(this));
-        assertOwner(accountIdUnclaimed, user);
-    }
-
-    function testUpgradeOwnerByGelatoDoesNothingIfBlockEqualToFromBlock() public {
-        updateOwnerByGelato(accountIdUnclaimed, user, 1, address(this));
-        assertOwner(accountIdUnclaimed, user);
-        updateOwnerByGelato(accountIdUnclaimed, address(this), 1, address(this));
-        assertOwner(accountIdUnclaimed, user);
+    function testUpgradeOwnerByGelatoRevertsWhenOwnerUnchanged() public {
+        updateOwnerByGelato(accountIdUnclaimed, user, address(this));
+        vm.prank(gelatoProxy());
+        vm.expectRevert("New owner is the same");
+        driver.updateOwnerByGelato(accountIdUnclaimed, user, address(this));
     }
 
     function assertOwner(uint256 accountId_, address expectedOwner) internal {
@@ -370,12 +358,6 @@ contract RepoDriverTest is Test, Events {
 
     function assertAddressBalance(address user_, uint256 expectedAmt) internal {
         assertEq(user_.balance, expectedAmt, "Invalid address balance");
-    }
-
-    function assertFeeCollectorBalance(uint256 expectedAmt) internal {
-        assertEq(
-            automate().gelato().feeCollector().balance, expectedAmt, "Invalid fee collector balance"
-        );
     }
 
     function testAccountIdsDoNotCollideBetweenForges() public {
@@ -714,7 +696,7 @@ contract RepoDriverTest is Test, Events {
     }
 
     function testUpdateOwnerByGelatoCanBePaused() public canBePausedTest {
-        driver.updateOwnerByGelato(0, address(0), 0, address(0));
+        driver.updateOwnerByGelato(0, address(0), address(0));
     }
 
     function testDepositUserFundsCanBePaused() public canBePausedTest {
