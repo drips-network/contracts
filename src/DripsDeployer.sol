@@ -7,7 +7,7 @@ import {Drips} from "./Drips.sol";
 import {ImmutableSplitsDriver} from "./ImmutableSplitsDriver.sol";
 import {Managed, ManagedProxy} from "./Managed.sol";
 import {NFTDriver} from "./NFTDriver.sol";
-import {RepoDriver} from "./RepoDriver.sol";
+import {IAutomate, RepoDriver} from "./RepoDriver.sol";
 import {Ownable2Step} from "openzeppelin-contracts/access/Ownable2Step.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
@@ -293,20 +293,34 @@ contract ImmutableSplitsDriverModule is DriverModule(2) {
 }
 
 contract RepoDriverModule is CallerDependentModule, DriverModule(3) {
+    IAutomate public immutable gelatoAutomate;
     string public ipfsCid;
+    uint32 public immutable maxRequestsPerBlock;
+    uint32 public immutable maxRequestsPer31Days;
 
     function args() public view override returns (bytes memory) {
-        return abi.encode(dripsDeployer, proxyAdmin, ipfsCid);
+        return abi.encode(
+            dripsDeployer,
+            proxyAdmin,
+            gelatoAutomate,
+            ipfsCid,
+            maxRequestsPerBlock,
+            maxRequestsPer31Days
+        );
     }
 
     constructor(
         DripsDeployer dripsDeployer_,
         address proxyAdmin_,
+        IAutomate gelatoAutomate_,
         string memory ipfsCid_,
-        uint32 maxRequestsPerBlock,
-        uint32 maxRequestsPer31Days
+        uint32 maxRequestsPerBlock_,
+        uint32 maxRequestsPer31Days_
     ) BaseModule(dripsDeployer_, "RepoDriver") {
+        gelatoAutomate = gelatoAutomate_;
         ipfsCid = ipfsCid_;
+        maxRequestsPerBlock = maxRequestsPerBlock_;
+        maxRequestsPer31Days = maxRequestsPer31Days_;
         bytes memory data = abi.encodeCall(
             RepoDriver.updateGelatoTask, (ipfsCid_, maxRequestsPerBlock, maxRequestsPer31Days)
         );
@@ -315,7 +329,8 @@ contract RepoDriverModule is CallerDependentModule, DriverModule(3) {
     }
 
     function logicArgs() public view override returns (bytes memory) {
-        return abi.encode(_dripsModule().drips(), _callerModule().caller(), driverId);
+        return
+            abi.encode(_dripsModule().drips(), _callerModule().caller(), driverId, gelatoAutomate);
     }
 
     function repoDriver() public view returns (RepoDriver) {
@@ -329,7 +344,7 @@ library Create3Factory {
     /// @notice The CREATE3 factory address.
     /// It's always the same, see `deploy_create3_factory` in the deployment script.
     ICreate3Factory private constant _CREATE3_FACTORY =
-        ICreate3Factory(0x6aA3D87e99286946161dCA02B97C5806fC5eD46F);
+        ICreate3Factory(0xe9BE461efaB6f9079741da3b180249F81e66A461);
 
     /// @notice Deploys a contract using CREATE3.
     /// @param amount The amount to pass into the deployed contract's constructor.

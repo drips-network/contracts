@@ -670,3 +670,47 @@ contract RepoDriver is DriverTransferUtils, Managed {
         }
     }
 }
+
+/// @notice The minimal dummy implementation of Gelato Automate
+/// for testing RepoDriver on networks where Gelato isn't deployed.
+contract DummyGelatoAutomate {
+    function updateOwner(RepoDriver repoDriver, uint256 accountId, address owner) public {
+        repoDriver.updateOwnerByGelato(accountId, owner, address(0));
+    }
+
+    function gelato() public view returns (address) {
+        return address(this);
+    }
+
+    function feeCollector() public pure returns (address) {
+        return address(0);
+    }
+
+    function taskModuleAddresses(Module) public view returns (address) {
+        return address(this);
+    }
+
+    function opsProxyFactory() public view returns (address) {
+        return address(this);
+    }
+
+    function getProxyOf(address) public view returns (address, bool) {
+        return (address(this), true);
+    }
+
+    function getTaskIdsByUser(address) public pure returns (bytes32[] memory) {
+        return new bytes32[](0);
+    }
+
+    function createTask(address, bytes calldata, ModuleData calldata, address)
+        public
+        pure
+        returns (bytes32)
+    {
+        return 0;
+    }
+
+    function getFeeDetails() public pure returns (uint256, address) {
+        return (0, 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
+    }
+}
