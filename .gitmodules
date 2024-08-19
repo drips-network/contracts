@@ -10,3 +10,6 @@
 [submodule "lib/gelato-automate"]
 	path = lib/gelato-automate
 	url = https://github.com/gelatodigital/automate
+[submodule "lib/axelar-gmp-sdk-solidity"]
+	path = lib/axelar-gmp-sdk-solidity
+	url = https://github.com/axelarnetwork/axelar-gmp-sdk-solidity

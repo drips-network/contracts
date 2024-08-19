@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.20;
 
+import {IAxelarGMPExecutable} from "axelar/interfaces/IAxelarGMPExecutable.sol";
+import {IAxelarGMPGateway} from "axelar/interfaces/IAxelarGMPGateway.sol";
+import {StringToAddress} from "axelar/libs/AddressString.sol";
 import {
     ILayerZeroReceiver,
     Origin
@@ -8,6 +11,8 @@ import {
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {UUPSUpgradeable} from "openzeppelin-contracts/proxy/utils/UUPSUpgradeable.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
+import {ShortString, ShortStrings} from "openzeppelin-contracts/utils/ShortStrings.sol";
+import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
 
 /// @notice Description of a call.
 struct Call {
@@ -132,6 +137,62 @@ contract LZBridgedGovernor is Governor, ILayerZeroReceiver {
 
         Message memory message = abi.decode(messageEncoded, (Message));
         require(msg.value >= message.value, "Called with too low value");
+        _executeMessage(message.nonce, message.calls);
+    }
+}
+
+/// @notice The governor running calls received from its owner on another chain using Axelar.
+contract AxelarBridgedGovernor is Governor, IAxelarGMPExecutable {
+    /// @notice The Axelar gateway used by this contract.
+    IAxelarGMPGateway public immutable override gateway;
+    /// @notice The name of the chain from which the owner is allowed to send messages.
+    ShortString internal immutable _ownerChain;
+    /// @notice The owner address which is allowed to send messages.
+    address public immutable owner;
+
+    /// @notice The name of the chain from which the owner is allowed to send messages.
+    /// @return ownerChain_ The name of the chain.
+    function ownerChain() public view returns (string memory ownerChain_) {
+        return ShortStrings.toString(_ownerChain);
+    }
+
+    /// @notice The message passed over the bridge to the governor to execute.
+    struct Message {
+        /// @notice The message nonce, must be equal to `nextMessageNonce` when executed.
+        uint256 nonce;
+        /// @notice The list of calls to run.
+        Call[] calls;
+    }
+
+    /// @param gateway_ The Axelar gateway used by this contract.
+    /// @param ownerChain_ The name of the chain from which the owner is allowed to send messages.
+    /// @param owner_ The owner address which is allowed to send messages.
+    constructor(IAxelarGMPGateway gateway_, string memory ownerChain_, address owner_) {
+        // slither-disable-next-line missing-zero-check
+        gateway = gateway_;
+        _ownerChain = ShortStrings.toShortString(ownerChain_);
+        owner = owner_;
+    }
+
+    /// @notice Execute the specified command sent from another chain.
+    /// @param commandId The identifier of the command to execute.
+    /// @param sourceChain The name of the source chain from where the command originated.
+    /// @param sender The address on the source chain that sent the command.
+    /// @param payload The payload of the command to be executed.
+    /// It must be an abi-encoded `Message`, see its documentation for more details.
+    function execute(
+        bytes32 commandId,
+        string calldata sourceChain,
+        string calldata sender,
+        bytes calldata payload
+    ) public {
+        if (!gateway.validateContractCall(commandId, sourceChain, sender, keccak256(payload))) {
+            revert NotApprovedByGateway();
+        }
+        require(Strings.equal(sourceChain, ownerChain()), "Invalid message source chain");
+        require(StringToAddress.toAddress(sender) == owner, "Invalid message sender");
+
+        Message memory message = abi.decode(payload, (Message));
         _executeMessage(message.nonce, message.calls);
     }
 }
