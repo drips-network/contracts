@@ -3,7 +3,6 @@ pragma solidity ^0.8.20;
 
 import {console, Script} from "forge-std/Script.sol";
 import {ExecutorOptions} from "layer-zero-v2/protocol/contracts/messagelib/libs/ExecutorOptions.sol";
-// import {OptionsBuilder} from "layer-zero-v2/oapp/contracts/oapp/libs/OptionsBuilder.sol";
 import {
     ILayerZeroEndpointV2,
     IMessageLibManager,
@@ -13,7 +12,7 @@ import {
 import {SetConfigParam} from "layer-zero-v2/protocol/contracts/interfaces/IMessageLibManager.sol";
 import {Constant} from "layer-zero-v2/messagelib/test/util/Constant.sol";
 import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
-import {BridgedGovernor, BridgedGovernorProxy, Call} from "src/BridgedGovernor.sol";
+import {LZBridgedGovernor, BridgedGovernorProxy, Call} from "src/BridgedGovernor.sol";
 
 // Taken from layer-zero-v2/messagelib/contracts/uln/UlnBase.sol
 struct UlnConfig {
@@ -65,7 +64,7 @@ function addressToBytes32(address addr) pure returns (bytes32) {
     return bytes32(uint256(uint160(addr)));
 }
 
-// forge script scripts/DeployBridgedGovernor.s.sol:ConfigureOnSepolia $WALLET_ARGS -f "$ETH_RPC_URL"
+// forge script scripts/DeployLZBridgedGovernor.s.sol:ConfigureOnSepolia $WALLET_ARGS -f "$ETH_RPC_URL"
 
 contract ConfigureOnSepolia is Script {
     function run() public {
@@ -100,7 +99,7 @@ contract ConfigureOnSepolia is Script {
     }
 }
 
-// forge script scripts/DeployBridgedGovernor.s.sol:DeployToBscTestnet $WALLET_ARGS -f "$ETH_RPC_URL"
+// forge script scripts/DeployLZBridgedGovernor.s.sol:DeployToBscTestnet $WALLET_ARGS -f "$ETH_RPC_URL"
 
 contract DeployToBscTestnet is Script {
     function run() public {
@@ -152,16 +151,16 @@ contract DeployToBscTestnet is Script {
 
         vm.startBroadcast();
         address governorLogic =
-            address(new BridgedGovernor(BSC_TESTNET_ENDPOINT, SEPOLIA_EID, owner));
+            address(new LZBridgedGovernor(BSC_TESTNET_ENDPOINT, SEPOLIA_EID, owner));
         address governorProxy = address(new BridgedGovernorProxy(governorLogic, calls));
         vm.stopBroadcast();
 
         require(governorProxy == governor, "Invalid deployment address");
-        console.log("Deployed BridgedGovernor:", governor);
+        console.log("Deployed LZBridgedGovernor:", governor);
     }
 }
 
-// forge script scripts/DeployBridgedGovernor.s.sol:SendToBscTestnet $WALLET_ARGS -f "$ETH_RPC_URL"
+// forge script scripts/DeployLZBridgedGovernor.s.sol:SendToBscTestnet $WALLET_ARGS -f "$ETH_RPC_URL"
 
 contract SendToBscTestnet is Script {
     function run() public {
@@ -177,7 +176,7 @@ contract SendToBscTestnet is Script {
         MessagingParams memory params = MessagingParams({
             dstEid: BSC_TESTNET_EID,
             receiver: addressToBytes32(0xc9241Cf4cD7d9569cA044d8202EF1080405Bc6C9),
-            message: abi.encode( /* nonce */ 0, /* value */ 0, calls),
+            message: abi.encode(LZBridgedGovernor.Message({nonce: 0, value: 0, calls: calls})),
             options: messageOptions(50_000, 0),
             payInLzToken: false
         });

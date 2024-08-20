@@ -10,12 +10,12 @@ import {UUPSUpgradeable} from "openzeppelin-contracts/proxy/utils/UUPSUpgradeabl
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
 /// @notice Description of a call.
-/// @param target The called address.
-/// @param data The calldata to be used for the call.
-/// @param value The value of the call.
 struct Call {
+    /// @notice The called address.
     address target;
+    /// @notice The calldata to be used for the call.
     bytes data;
+    /// @notice The value of the call.
     uint256 value;
 }
 
@@ -30,8 +30,32 @@ function runCalls(Call[] memory calls) {
     }
 }
 
+/// @notice The governor executing ordered messages.
+abstract contract Governor is UUPSUpgradeable {
+    /// @notice The required nonce in the next executed message.
+    uint256 public nextMessageNonce;
+
+    /// @notice Emitted when a message is executed.
+    /// @param nonce The nonce of the message.
+    event MessageExecuted(uint256 nonce);
+
+    /// @notice Executes the message.
+    /// @param nonce The message nonce, must be equal to `nextMessageNonce`.
+    /// @param calls The list of calls to run.
+    function _executeMessage(uint256 nonce, Call[] memory calls) internal {
+        require(nonce == nextMessageNonce, "Invalid message nonce");
+        nextMessageNonce++;
+        runCalls(calls);
+        emit MessageExecuted(nonce);
+    }
+
+    function _authorizeUpgrade(address /* newImplementation */ ) internal view override {
+        require(msg.sender == address(this), "Only upgradeable by self");
+    }
+}
+
 /// @notice The governor running calls received from its owner on another chain using LayerZero v2.
-contract BridgedGovernor is UUPSUpgradeable, ILayerZeroReceiver {
+contract LZBridgedGovernor is Governor, ILayerZeroReceiver {
     /// @notice The LayerZero v2 endpoint that is allowed to execute received messages.
     address public immutable endpoint;
     /// @notice The EID of the chain from which the owner is allowed to send messages.
@@ -39,13 +63,16 @@ contract BridgedGovernor is UUPSUpgradeable, ILayerZeroReceiver {
     /// @notice The owner address which is allowed to send messages.
     bytes32 public immutable owner;
 
-    /// @notice The required nonce encoded inside the next received message.
-    /// This is different from the LayerZero v2 `nextNonce`.
-    uint256 public nextMessageNonce;
-
-    /// @notice Emitted when a message is executed.
-    /// @param nonce The nonce of the message.
-    event MessageExecuted(uint256 nonce);
+    /// @notice The message passed over the bridge to the governor to execute.
+    struct Message {
+        /// @notice The message nonce, must be equal to `nextMessageNonce` when executed.
+        /// This is independent from the LayerZero v2 `nextNonce`.
+        uint256 nonce;
+        /// @notice The minimum accepted `msg.value` passed with the message.
+        uint256 value;
+        /// @notice The list of calls to run.
+        Call[] calls;
+    }
 
     /// @param endpoint_ The LayerZero v2 endpoint that is allowed to execute received messages.
     /// @param ownerEid_ The EID of the chain from which the owner is allowed to send messages.
@@ -90,14 +117,12 @@ contract BridgedGovernor is UUPSUpgradeable, ILayerZeroReceiver {
     /// @notice Receive a LayerZero v2 message. Callable only by `endpoint`.
     /// @param origin The message origin.
     /// The only allowed origin is the `owner` on the `ownerEid` chain.
-    /// @param message The received message.
-    /// It must be the abi-encoded message nonce equal to `nextMessageNonce`,
-    /// followed by the message value which defines the minimum accepted `msg.value`,
-    /// followed by the list of `Call`s that will be immediately run.
+    /// @param messageEncoded The received message.
+    /// It must be an abi-encoded `Message`, see its documentation for more details.
     function lzReceive(
         Origin calldata origin,
         bytes32, /* guid */
-        bytes calldata message,
+        bytes calldata messageEncoded,
         address, /* executor */
         bytes calldata /* extraData */
     ) public payable override onlyProxy {
@@ -105,18 +130,9 @@ contract BridgedGovernor is UUPSUpgradeable, ILayerZeroReceiver {
         require(origin.srcEid == ownerEid, "Invalid message source chain");
         require(origin.sender == owner, "Invalid message sender");
 
-        (uint256 nonce, uint256 value, Call[] memory calls) =
-            abi.decode(message, (uint256, uint256, Call[]));
-        require(nonce == nextMessageNonce, "Invalid message nonce");
-        require(msg.value >= value, "Called with too low value");
-
-        nextMessageNonce++;
-        runCalls(calls);
-        emit MessageExecuted(nonce);
-    }
-
-    function _authorizeUpgrade(address /* newImplementation */ ) internal view override {
-        require(msg.sender == address(this), "Only upgradeable by self");
+        Message memory message = abi.decode(messageEncoded, (Message));
+        require(msg.value >= message.value, "Called with too low value");
+        _executeMessage(message.nonce, message.calls);
     }
 }
 
