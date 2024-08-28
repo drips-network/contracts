@@ -4,15 +4,21 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {AddressDriver, Drips, IERC20, StreamReceiver} from "src/AddressDriver.sol";
 import {Address, Giver, GiversRegistry} from "src/Giver.sol";
+import {IWrappedNativeToken} from "src/IWrappedNativeToken.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {
     ERC20,
     ERC20PresetFixedSupply
 } from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
-contract NativeTokenWrapper is ERC20("Native token wrapper", "NTW") {
-    receive() external payable {
+contract WrappedNativeToken is ERC20("", ""), IWrappedNativeToken {
+    function deposit() external payable {
         _mint(msg.sender, msg.value);
+    }
+
+    function withdraw(uint256 amount) external {
+        _burn(msg.sender, amount);
+        Address.sendValue(payable(msg.sender), amount);
     }
 }
 
@@ -56,7 +62,7 @@ contract GiversRegistryTest is Test {
     Drips internal drips;
     AddressDriver internal addressDriver;
     IERC20 internal erc20;
-    IERC20 internal nativeTokenWrapper;
+    IWrappedNativeToken internal wrappedNativeToken;
     GiversRegistry internal giversRegistry;
     address internal admin = address(1);
     uint256 internal accountId;
@@ -71,8 +77,8 @@ contract GiversRegistryTest is Test {
         addressDriver = AddressDriver(address(new ManagedProxy(addressDriverLogic, admin, "")));
         drips.registerDriver(address(addressDriver));
 
-        nativeTokenWrapper = new NativeTokenWrapper();
-        GiversRegistry giversRegistryLogic = new GiversRegistry(addressDriver, nativeTokenWrapper);
+        wrappedNativeToken = new WrappedNativeToken();
+        GiversRegistry giversRegistryLogic = new GiversRegistry(addressDriver, wrappedNativeToken);
         giversRegistry = GiversRegistry(address(new ManagedProxy(giversRegistryLogic, admin, "")));
         accountId = 1234;
         giver = payable(giversRegistry.giver(accountId));
@@ -101,16 +107,16 @@ contract GiversRegistryTest is Test {
 
     function giveNative(uint256 amtNative, uint256 amtWrapped) internal {
         Address.sendValue(giver, amtNative);
-        Address.sendValue(payable(address(nativeTokenWrapper)), amtWrapped);
-        nativeTokenWrapper.transfer(giver, amtWrapped);
+        wrappedNativeToken.deposit{value: amtWrapped}();
+        wrappedNativeToken.transfer(giver, amtWrapped);
 
-        uint256 balanceBefore = giver.balance + nativeTokenWrapper.balanceOf(giver);
-        uint256 amtBefore = drips.splittable(accountId, nativeTokenWrapper);
+        uint256 balanceBefore = giver.balance + wrappedNativeToken.balanceOf(giver);
+        uint256 amtBefore = drips.splittable(accountId, wrappedNativeToken);
 
         giversRegistry.give(accountId, IERC20(address(0)));
 
-        uint256 balanceAfter = nativeTokenWrapper.balanceOf(giver);
-        uint256 amtAfter = drips.splittable(accountId, nativeTokenWrapper);
+        uint256 balanceAfter = wrappedNativeToken.balanceOf(giver);
+        uint256 amtAfter = drips.splittable(accountId, wrappedNativeToken);
         assertEq(giver.balance, 0, "Invalid giver native token balance");
         uint256 expectedGiven = amtNative + amtWrapped;
         assertEq(balanceAfter, balanceBefore - expectedGiven, "Invalid giver balance");

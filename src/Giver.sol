@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {AddressDriver, Drips, IERC20} from "./AddressDriver.sol";
+import {IWrappedNativeToken} from "./IWrappedNativeToken.sol";
 import {Managed} from "./Managed.sol";
 import {Clones} from "openzeppelin-contracts/proxy/Clones.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
@@ -40,7 +41,7 @@ contract Giver {
 /// eventually be `give`n to the account assigned to it.
 contract GiversRegistry is Managed {
     /// @notice The ERC-20 contract used to wrap the native tokens.
-    IERC20 public immutable nativeTokenWrapper;
+    IWrappedNativeToken public immutable wrappedNativeToken;
     /// @notice The driver to use to `give`.
     AddressDriver public immutable addressDriver;
     /// @notice The `Drips` contract used by `addressDriver`.
@@ -51,10 +52,10 @@ contract GiversRegistry is Managed {
     uint128 internal immutable _maxTotalBalance;
 
     /// @param addressDriver_ The driver to use to `give`.
-    /// @param nativeTokenWrapper_ The ERC-20 contract used to wrap the native tokens.
-    constructor(AddressDriver addressDriver_, IERC20 nativeTokenWrapper_) {
+    /// @param wrappedNativeToken_ The ERC-20 contract used to wrap the native tokens.
+    constructor(AddressDriver addressDriver_, IWrappedNativeToken wrappedNativeToken_) {
         addressDriver = addressDriver_;
-        nativeTokenWrapper = nativeTokenWrapper_;
+        wrappedNativeToken = wrappedNativeToken_;
         _drips = addressDriver.drips();
         _maxTotalBalance = _drips.MAX_TOTAL_BALANCE();
     }
@@ -91,7 +92,7 @@ contract GiversRegistry is Managed {
     /// @param accountId The ID of the account to `give` tokens to.
     /// @param erc20 The token to `give` to the account.
     /// If it's the zero address, `Giver` wraps all the native tokens it holds using
-    /// `nativeTokenWrapper`, and then `give`s to the account all the wrapped tokens it holds.
+    /// `wrappedNativeToken`, and then `give`s to the account all the wrapped tokens it holds.
     /// @param amt The amount of tokens that were `give`n.
     function give(uint256 accountId, IERC20 erc20) public whenNotPaused returns (uint256 amt) {
         address giver_ = giver(accountId);
@@ -114,17 +115,14 @@ contract GiversRegistry is Managed {
     /// It must be the account assigned to the `Giver` on its deployment.
     /// @param erc20 The token to `give` to the account.
     /// If it's the zero address, wraps all the native tokens using
-    /// `nativeTokenWrapper`, and then `give`s to the account all the wrapped tokens.
+    /// `wrappedNativeToken`, and then `give`s to the account all the wrapped tokens.
     /// @param amt The amount of tokens that were `give`n.
     function giveImpl(uint256 accountId, IERC20 erc20) public returns (uint256 amt) {
         // `address(this)` in this context should be the `Giver` clone contract.
         require(address(this) == _giver(accountId, msg.sender), "Caller is not GiversRegistry");
         if (address(erc20) == address(0)) {
-            erc20 = nativeTokenWrapper;
-            // slither-disable-next-line unused-return
-            Address.functionCallWithValue(
-                address(erc20), "", address(this).balance, "Failed to wrap native tokens"
-            );
+            erc20 = wrappedNativeToken;
+            wrappedNativeToken.deposit{value: address(this).balance}();
         }
         (uint128 streamsBalance, uint128 splitsBalance) = _drips.balances(erc20);
         uint256 maxAmt = _maxTotalBalance - streamsBalance - splitsBalance;
