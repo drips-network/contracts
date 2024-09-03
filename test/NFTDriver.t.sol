@@ -168,6 +168,18 @@ contract NFTDriverTest is Test {
         driver.safeMintWithSalt(salt, user, noMetadata());
     }
 
+    function testSetTokenURI() public {
+        assertEq(driver.tokenURI(tokenId1), "", "Invalid initial token URI");
+        string memory URI = "some URI";
+        driver.setTokenURI(tokenId1, URI);
+        assertEq(driver.tokenURI(tokenId1), URI, "Invalid final token URI");
+    }
+
+    function testSetTokenURIRevertsWhenNotTokenHolder() public {
+        vm.expectRevert(ERROR_NOT_OWNER);
+        driver.setTokenURI(tokenIdUser, "some URI");
+    }
+
     function testCollect() public {
         uint128 amt = 5;
         driver.give(tokenId1, tokenId2, erc20, amt);
@@ -297,6 +309,16 @@ contract NFTDriverTest is Test {
     function testEmitAccountMetadataRevertsWhenNotTokenHolder() public {
         vm.expectRevert(ERROR_NOT_OWNER);
         driver.emitAccountMetadata(tokenIdUser, someMetadata());
+    }
+
+    function testBurn() public {
+        driver.burn(tokenId1);
+        assertTokenDoesNotExist(tokenId1);
+    }
+
+    function testBurnRevertsWhenNotTokenHolder() public {
+        vm.expectRevert(ERROR_NOT_OWNER);
+        driver.burn(tokenIdUser);
     }
 
     function testForwarderIsTrustedInErc721Calls() public {
