@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {console, Script} from "forge-std/Script.sol";
 import {AxelarBridgedGovernor, GovernorProxy, Call} from "src/BridgedGovernor.sol";
+import {UUPSUpgradeable} from "src/Managed.sol";
 import {IAxelarGasService} from "axelar/interfaces/IAxelarGasService.sol";
 import {IAxelarGMPGateway} from "axelar/interfaces/IAxelarGMPGateway.sol";
 import {AddressToString} from "axelar/libs/AddressString.sol";
@@ -122,5 +123,26 @@ contract ContractCall is Script {
 
         vm.broadcast();
         caller.callContract{value: fee}(abi.encode(AxelarBridgedGovernor.Message(nonce, calls)));
+    }
+}
+
+contract CallUpgrade is Script {
+    function run() public {
+        require(block.chainid == 1, "Must be run on Ethereum");
+        require(msg.sender == 0xEF4B994f97092fD22B8a880c47F053910788471b, "Invalid sender");
+        uint256 nonce = 0;
+        Call[] memory calls = new Call[](1);
+        calls[0] = Call({
+            target: 0x186a0C0e2208df6073285cdCf20d8787fba8e302,
+            data: abi.encodeCall(
+                UUPSUpgradeable.upgradeTo, (0x6bEF578F8B86061f155761f700751Af3013751f6)
+            ),
+            value: 0
+        });
+        bytes memory payload = abi.encode(AxelarBridgedGovernor.Message(nonce, calls));
+        vm.broadcast();
+        IAxelarGMPGateway(0x4F4495243837681061C4743b74B3eEdf548D56A5).callContract(
+            "filecoin", "0x3263D62B54D62F3d051736285DB4889D9E32C02b", payload
+        );
     }
 }
