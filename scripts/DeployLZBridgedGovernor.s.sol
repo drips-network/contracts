@@ -150,8 +150,8 @@ contract DeployToBscTestnet is Script {
         bytes32 owner = addressToBytes32(msg.sender);
 
         vm.startBroadcast();
-        address governorLogic =
-            address(new LZBridgedGovernor(BSC_TESTNET_ENDPOINT, SEPOLIA_EID, owner));
+        LZBridgedGovernor governorLogic =
+            new LZBridgedGovernor(BSC_TESTNET_ENDPOINT, SEPOLIA_EID, owner);
         address governorProxy = address(new GovernorProxy(governorLogic, calls));
         vm.stopBroadcast();
 

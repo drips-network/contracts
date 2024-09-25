@@ -214,7 +214,7 @@ contract GovernorProxy is ERC1967Proxy {
     /// @param logic The initial address of the logic for the proxy.
     /// @param calls The list of `Call`s to execute while running the constructor.
     /// It should at least set up the initial LayerZero v2 configuration.
-    constructor(address logic, Call[] memory calls) payable ERC1967Proxy(logic, "") {
+    constructor(Governor logic, Call[] memory calls) payable ERC1967Proxy(address(logic), "") {
         executeCalls(calls);
     }
 }

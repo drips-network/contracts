@@ -63,7 +63,7 @@ contract DeployGovernor is Script {
 
         vm.startBroadcast();
         AxelarBridgedGovernor logic = new AxelarBridgedGovernor(gateway, sourceChain, owner);
-        GovernorProxy governor = new GovernorProxy(address(logic), new Call[](0));
+        GovernorProxy governor = new GovernorProxy(logic, new Call[](0));
         vm.stopBroadcast();
         console.log("Deployed AxelarBridgedGovernor:", address(governor));
     }

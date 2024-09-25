@@ -80,7 +80,7 @@ contract GovernorTest is Test {
 
     function setUp() public {
         TestGovernor logic = new TestGovernor();
-        governor = TestGovernor(payable(new GovernorProxy(address(logic), new Call[](0))));
+        governor = TestGovernor(payable(new GovernorProxy(logic, new Call[](0))));
     }
 
     function testReceivesTransfer() public {
@@ -113,7 +113,7 @@ contract GovernorTest is Test {
 
     function testProxyConstructorExecutesCalls() public {
         vm.expectCall(target, 3, "abcde", 1);
-        new GovernorProxy{value: 3}(address(new TestGovernor()), buildCalls(target, 3, "abcde"));
+        new GovernorProxy{value: 3}(new TestGovernor(), buildCalls(target, 3, "abcde"));
     }
 
     function testUpgrade() public {
@@ -140,7 +140,7 @@ contract LZBridgedGovernorTest is Test {
 
     function setUp() public {
         LZBridgedGovernor logic = new LZBridgedGovernor(endpoint, ownerEid, owner);
-        governor = LZBridgedGovernor(payable(new GovernorProxy(address(logic), new Call[](0))));
+        governor = LZBridgedGovernor(payable(new GovernorProxy(logic, new Call[](0))));
         vm.deal(endpoint, 100);
     }
 
@@ -252,7 +252,7 @@ contract AxelarBridgedGovernorTest is Test {
         owner = Strings.toHexString(owner_);
         AxelarBridgedGovernor logic =
             new AxelarBridgedGovernor(IAxelarGMPGateway(gateway), ownerChain, owner_);
-        governor = AxelarBridgedGovernor(payable(new GovernorProxy(address(logic), new Call[](0))));
+        governor = AxelarBridgedGovernor(payable(new GovernorProxy(logic, new Call[](0))));
         vm.deal(address(governor), 100);
     }
 
