@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Caller} from "src/Caller.sol";
-import {Forge, RepoDriver} from "src/RepoDriver.sol";
+import {Forge, GelatoTasksOwner, RepoDriver} from "src/RepoDriver.sol";
 import {
     AccountMetadata,
     StreamConfigImpl,
@@ -37,17 +37,12 @@ contract Events {
 
 contract Automate is StdAssertions, Events {
     /// @dev Used by RepoDriver
-    Gelato public immutable gelato;
-    ProxyModule public immutable proxyModule;
+    Gelato public immutable gelato = new Gelato();
+    ProxyModule public immutable proxyModule = new ProxyModule();
     bytes32[] internal taskIds;
     string internal expectedIpfsCid;
     uint256 internal _feeAmount;
     address internal _feeToken;
-
-    constructor(address user) {
-        proxyModule = new ProxyModule(user);
-        gelato = new Gelato();
-    }
 
     /// @dev Used by RepoDriver
     function taskModuleAddresses(Module module) public returns (address moduleAddress) {
@@ -108,7 +103,7 @@ contract Automate is StdAssertions, Events {
         bytes32[][] memory topics = new bytes32[][](1);
         topics[0] = new bytes32[](1);
         topics[0][0] = OwnerUpdateRequested.selector;
-        bytes memory trigger = abi.encode(msg.sender, topics, 1);
+        bytes memory trigger = abi.encode(GelatoTasksOwner(msg.sender).owner(), topics, 1);
         assertEq(moduleData.args[2], abi.encode(TriggerType.EVENT, trigger), "Invalid args 2");
 
         assertEq(feeToken, GELATO_NATIVE_TOKEN, "Fee token not native");
@@ -145,11 +140,7 @@ contract Gelato is StdAssertions {
 
 contract ProxyModule is StdAssertions {
     /// @dev Used by RepoDriver
-    OpsProxyFactory public immutable opsProxyFactory;
-
-    constructor(address user) {
-        opsProxyFactory = new OpsProxyFactory(user);
-    }
+    OpsProxyFactory public immutable opsProxyFactory = new OpsProxyFactory();
 
     fallback() external {
         assertTrue(false, "ProxyModule function not implemented");
@@ -157,20 +148,22 @@ contract ProxyModule is StdAssertions {
 }
 
 contract OpsProxyFactory is StdAssertions {
-    address public immutable user;
+    address public user;
     address public immutable proxy = address(bytes20("gelato proxy"));
     bool public isDeployed;
-
-    constructor(address user_) {
-        user = user_;
-    }
 
     fallback() external {
         assertTrue(false, "OpsProxyFactory function not implemented");
     }
 
     function assertUserSupported(address user_) public {
-        assertEq(user_, user, "Unsupported user");
+        if (user != address(0)) assertEq(user_, user, "Unsupported user");
+    }
+
+    /// @dev Used by RepoDriver
+    function ownerOf(address proxy_) external returns (address) {
+        assertEq(proxy_, proxy, "Invalid proxy address");
+        return user;
     }
 
     /// @dev Used by RepoDriver
@@ -180,8 +173,9 @@ contract OpsProxyFactory is StdAssertions {
     }
 
     /// @dev Used by RepoDriver
-    function deploy() external returns (address) {
-        assertUserSupported(msg.sender);
+    function deployFor(address user_) external returns (address) {
+        assertUserSupported(user_);
+        user = user_;
         assertFalse(isDeployed, "Proxy already deployed");
         isDeployed = true;
         return proxy;
@@ -212,7 +206,7 @@ contract RepoDriverTest is Test, Events {
 
         address driverAddress =
             vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 2);
-        Automate automate_ = new Automate(driverAddress);
+        Automate automate_ = new Automate();
 
         // Make RepoDriver's driver ID non-0 to test if it's respected by RepoDriver
         drips.registerDriver(address(1));
@@ -424,12 +418,14 @@ contract RepoDriverTest is Test, Events {
     }
 
     function testUpdateGelatoTask() public {
+        address taskOwner = address(driver.gelatoTasksOwner());
         automate().pushTaskId(hex"1234");
         string memory ipfsCid = "The new Gelato Function";
         automate().expectIpfsCid(ipfsCid);
         vm.expectCall(address(automate()), bytes.concat(Automate.createTask.selector));
         vm.prank(admin);
         driver.updateGelatoTask(ipfsCid, 0, 0);
+        assertEq(taskOwner, address(driver.gelatoTasksOwner()), "Task owner changed");
     }
 
     function testUpdateGelatoTaskRevertsIfNotCalledByAdmin() public {
@@ -725,5 +721,59 @@ contract RepoDriverTest is Test, Events {
 
     function testEmitAccountMetadataCanBePaused() public canBePausedTest {
         driver.emitAccountMetadata(0, noMetadata());
+    }
+}
+
+contract GelatoTasksOwnerTest is Test {
+    GelatoTasksOwner tasksOwner;
+    address automate;
+
+    function setUp() public {
+        automate = address(bytes20("automate"));
+        tasksOwner = new GelatoTasksOwner(IAutomate(automate));
+    }
+
+    function testOwner() public {
+        assertEq(address(this), tasksOwner.owner(), "Invalid owner");
+    }
+
+    function testCancelTask() public {
+        bytes32 taskId = "taskId";
+        vm.expectCall(automate, abi.encodeCall(IAutomate.cancelTask, (taskId)), 1);
+        vm.mockCall(automate, "", "");
+        tasksOwner.cancelTask(taskId);
+    }
+
+    function testCancelTaskRevertsWhenNotCalledByOwner() public {
+        vm.prank(address(bytes20("not owner")));
+        vm.expectRevert("Callable only by the owner");
+        tasksOwner.cancelTask(0);
+    }
+
+    function testCreateTask() public {
+        address execAddress = address(bytes20("execAddress"));
+        bytes memory execData = "execData";
+        ModuleData memory moduleData = ModuleData(new Module[](1), new bytes[](1));
+        moduleData.modules[0] = Module.PROXY;
+        moduleData.args[0] = "moduleData";
+        address feeToken = address(bytes20("feeToken"));
+        bytes32 taskId = "taskId";
+
+        vm.expectCall(
+            automate,
+            abi.encodeCall(IAutomate.createTask, (execAddress, execData, moduleData, feeToken)),
+            1
+        );
+        vm.mockCall(automate, "", abi.encode(taskId));
+        bytes32 actualTaskId = tasksOwner.createTask(execAddress, execData, moduleData, feeToken);
+        assertEq(actualTaskId, taskId, "Invalid task ID");
+    }
+
+    function testCreateTaskRevertsWhenNotCalledByOwner() public {
+        vm.prank(address(bytes20("not owner")));
+        vm.expectRevert("Callable only by the owner");
+        tasksOwner.createTask(
+            address(0), "", ModuleData(new Module[](0), new bytes[](0)), address(0)
+        );
     }
 }

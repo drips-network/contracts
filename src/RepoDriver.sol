@@ -62,6 +62,7 @@ contract RepoDriver is DriverTransferUtils, Managed {
     event OwnerUpdated(uint256 indexed accountId, address owner);
 
     /// @notice Emitted when Gelato task performing account ownership lookups is updated.
+    /// @param gelatoTasksOwner The owner of the created task.
     /// @param taskId The ID of the created Gelato task.
     /// @param ipfsCid The IPFS CID of the code to be run
     /// by the  Gelato Web3 Function task to lookup the account ownership.
@@ -74,7 +75,11 @@ contract RepoDriver is DriverTransferUtils, Managed {
     /// @param maxRequestsPer31Days The maximum number of Gelato task runs
     /// triggerable in the rolling window of 31 days.
     event GelatoTaskUpdated(
-        bytes32 taskId, string ipfsCid, uint32 maxRequestsPerBlock, uint32 maxRequestsPer31Days
+        GelatoTasksOwner gelatoTasksOwner,
+        bytes32 taskId,
+        string ipfsCid,
+        uint32 maxRequestsPerBlock,
+        uint32 maxRequestsPer31Days
     );
 
     /// @notice Emitted when native tokens are deposited for the user.
@@ -106,6 +111,8 @@ contract RepoDriver is DriverTransferUtils, Managed {
         mapping(address user => uint256 amount) userFunds;
         /// @notice The total amount of native tokens deposited by all users.
         uint256 userFundsTotal;
+        /// @notice The owner of the Gelato tasks created by this contract.
+        GelatoTasksOwner tasksOwner;
         /// @notice The address of the proxy delivering Gelato responses.
         address gelatoProxy;
         /// @notice The current state and configuration of the requests penalty.
@@ -236,10 +243,18 @@ contract RepoDriver is DriverTransferUtils, Managed {
         uint32 maxRequestsPer31Days
     ) public onlyAdminOrConstructor {
         _updateRequestsPenalty(maxRequestsPerBlock, maxRequestsPer31Days);
-        _initGelatoProxy();
-        _cancelAllGelatoTasks();
-        bytes32 taskId = _createGelatoTask(ipfsCid);
-        emit GelatoTaskUpdated(taskId, ipfsCid, maxRequestsPerBlock, maxRequestsPer31Days);
+        GelatoTasksOwner tasksOwner = _initGelato();
+        _cancelAllGelatoTasks(tasksOwner);
+        bytes32 taskId = _createGelatoTask(tasksOwner, ipfsCid);
+        emit GelatoTaskUpdated(
+            tasksOwner, taskId, ipfsCid, maxRequestsPerBlock, maxRequestsPer31Days
+        );
+    }
+
+    /// @notice The owner of the Gelato tasks created by this contract.
+    /// @return tasksOwner The owner of the tasks or the zero address if no tasks have been created.
+    function gelatoTasksOwner() public view returns (GelatoTasksOwner tasksOwner) {
+        return _gelatoStorage().tasksOwner;
     }
 
     /// @notice Updates the requests penalty.
@@ -300,33 +315,46 @@ contract RepoDriver is DriverTransferUtils, Managed {
         });
     }
 
-    /// @notice Deploys and stores the address of the proxy delivering Gelato responses.
-    function _initGelatoProxy() internal {
-        if (_gelatoStorage().gelatoProxy != address(0)) return;
+    /// @notice If not deployed, deploys and stores the Gelato tasks owner
+    /// and stores the address of its proxy delivering Gelato responses.
+    /// @return tasksOwner The owner of the Gelato task.
+    function _initGelato() internal returns (GelatoTasksOwner tasksOwner) {
+        tasksOwner = _gelatoStorage().tasksOwner;
+        if (address(tasksOwner) != address(0)) return tasksOwner;
+        // Each deployment on each chain gets a tasks owner with a unique address
+        // and a separate Gelato subscription with an individual GU balance.
+        tasksOwner = new GelatoTasksOwner{salt: bytes32(block.chainid)}(gelatoAutomate);
+        _gelatoStorage().tasksOwner = tasksOwner;
+
         IProxyModule proxyModule = IProxyModule(gelatoAutomate.taskModuleAddresses(Module.PROXY));
         IOpsProxyFactory proxyFactory = IOpsProxyFactory(proxyModule.opsProxyFactory());
         bool isDeployed;
-        (_gelatoStorage().gelatoProxy, isDeployed) = proxyFactory.getProxyOf(address(this));
-        if (!isDeployed) proxyFactory.deploy();
+        (_gelatoStorage().gelatoProxy, isDeployed) = proxyFactory.getProxyOf(address(tasksOwner));
+        if (!isDeployed) proxyFactory.deployFor(address(tasksOwner));
     }
 
-    /// @notice Cancels all previously created Gelato tasks.
-    function _cancelAllGelatoTasks() internal {
+    /// @notice Cancels all Gelato tasks owned by the task owner.
+    /// @param tasksOwner The owner of the cancelled Gelato tasks.
+    function _cancelAllGelatoTasks(GelatoTasksOwner tasksOwner) internal {
         // `IAutomate` interface doesn't cover `getTaskIdsByUser`.
         IAutomate2 gelatoAutomate2 = IAutomate2(address(gelatoAutomate));
-        bytes32[] memory tasks = gelatoAutomate2.getTaskIdsByUser(address(this));
+        bytes32[] memory tasks = gelatoAutomate2.getTaskIdsByUser(address(tasksOwner));
         for (uint256 i = 0; i < tasks.length; i++) {
-            gelatoAutomate.cancelTask(tasks[i]);
+            tasksOwner.cancelTask(tasks[i]);
         }
     }
 
     /// @notice Creates a Gelato task.
+    /// @param tasksOwner The owner of the created Gelato task.
     /// @param ipfsCid The IPFS CID of the code to be run
     /// by the  Gelato Web3 Function task to lookup the account ownership.
     /// It must accept no arguments, expect `OwnerUpdateRequested` events when executed,
     /// and call `updateOwnerByGelato` with the results.
     /// @return taskId The ID of the created Gelato task.
-    function _createGelatoTask(string calldata ipfsCid) internal returns (bytes32 taskId) {
+    function _createGelatoTask(GelatoTasksOwner tasksOwner, string calldata ipfsCid)
+        internal
+        returns (bytes32 taskId)
+    {
         ModuleData memory moduleData = ModuleData(new Module[](3), new bytes[](3));
 
         // Receive responses via the proxy.
@@ -345,7 +373,7 @@ contract RepoDriver is DriverTransferUtils, Managed {
 
         // The task callback is the zero address called with the zero function selector.
         // These parameters are never used because the web3 function constructs the real callbacks.
-        return gelatoAutomate.createTask(address(0), hex"00000000", moduleData, GELATO_NATIVE_TOKEN);
+        return tasksOwner.createTask(address(0), hex"00000000", moduleData, GELATO_NATIVE_TOKEN);
     }
 
     /// @notice Requests an update of the ownership of the account representing the repository.
@@ -668,6 +696,48 @@ contract RepoDriver is DriverTransferUtils, Managed {
         assembly {
             storageRef.slot := slot
         }
+    }
+}
+
+/// @notice The lightweight contract capable of creating and cancelling Gelato tasks.
+/// Used to run tasks using a Gelato subscription not attached to the owner's address.
+contract GelatoTasksOwner {
+    /// @notice The owner of this contract.
+    address public immutable owner;
+    /// @notice The Gelato Automate contract used for running oracle tasks.
+    IAutomate internal immutable _gelatoAutomate;
+
+    /// @param gelatoAutomate The Gelato Automate contract used for running oracle tasks.
+    constructor(IAutomate gelatoAutomate) {
+        owner = msg.sender;
+        _gelatoAutomate = gelatoAutomate;
+    }
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Callable only by the owner");
+        _;
+    }
+
+    /// @notice Cancel the task owned by this contract. Only callable by the owner.
+    /// @param taskId The ID of the cancelled task.
+    function cancelTask(bytes32 taskId) public onlyOwner {
+        _gelatoAutomate.cancelTask(taskId);
+    }
+
+    /// @notice Create a task owned by this contract. Only callable by the owner.
+    /// @param execAddress The address that should be called by the new task.
+    /// @param execDataOrSelector The calldata the address should be called by the new task.
+    /// @param moduleData The modules defining the task configuration.
+    /// @param feeToken The token used for paying the execution fees.
+    /// Pass the zero address to use 1Balance and 0xEE..EE to use the native token.
+    /// @return taskId The ID of the created task.
+    function createTask(
+        address execAddress,
+        bytes calldata execDataOrSelector,
+        ModuleData calldata moduleData,
+        address feeToken
+    ) public onlyOwner returns (bytes32 taskId) {
+        return _gelatoAutomate.createTask(execAddress, execDataOrSelector, moduleData, feeToken);
     }
 }
 
