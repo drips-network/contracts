@@ -3,8 +3,7 @@ name: Build Docker Image (and push to registry if main or staging)
 on:
   push:
     branches:
-      - main
-      - staging
+      - docker-image
   pull_request:
     branches:
       - main
