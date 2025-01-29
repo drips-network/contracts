@@ -3,24 +3,12 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {AddressDriver, Drips, IERC20, StreamReceiver} from "src/AddressDriver.sol";
-import {Address, Giver, GiversRegistry} from "src/Giver.sol";
-import {IWrappedNativeToken} from "src/IWrappedNativeToken.sol";
+import {Giver, GiversRegistry} from "src/Giver.sol";
+import {DummyWrappedNativeToken, IWrappedNativeToken} from "src/IWrappedNativeToken.sol";
 import {ManagedProxy} from "src/Managed.sol";
-import {
-    ERC20,
-    ERC20PresetFixedSupply
-} from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
-
-contract WrappedNativeToken is ERC20("", ""), IWrappedNativeToken {
-    function deposit() external payable {
-        _mint(msg.sender, msg.value);
-    }
-
-    function withdraw(uint256 amount) external {
-        _burn(msg.sender, amount);
-        Address.sendValue(payable(msg.sender), amount);
-    }
-}
+import {ERC20PresetFixedSupply} from
+    "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
+import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
 contract Logic {
     function fun(uint256 arg) external payable returns (address, uint256, uint256) {
@@ -77,7 +65,7 @@ contract GiversRegistryTest is Test {
         addressDriver = AddressDriver(address(new ManagedProxy(addressDriverLogic, admin, "")));
         drips.registerDriver(address(addressDriver));
 
-        wrappedNativeToken = new WrappedNativeToken();
+        wrappedNativeToken = new DummyWrappedNativeToken();
         GiversRegistry giversRegistryLogic = new GiversRegistry(addressDriver, wrappedNativeToken);
         giversRegistry = GiversRegistry(address(new ManagedProxy(giversRegistryLogic, admin, "")));
         accountId = 1234;

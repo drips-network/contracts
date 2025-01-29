@@ -2,28 +2,16 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {IWrappedNativeToken, NativeTokenUnwrapper} from "src/NativeTokenUnwrapper.sol";
-import {ERC20} from "openzeppelin-contracts/token/ERC20/ERC20.sol";
-import {Address} from "openzeppelin-contracts/utils/Address.sol";
-
-contract WrappedNativeToken is ERC20("", ""), IWrappedNativeToken {
-    function deposit() external payable {
-        _mint(msg.sender, msg.value);
-    }
-
-    function withdraw(uint256 amount) external {
-        _burn(msg.sender, amount);
-        Address.sendValue(payable(msg.sender), amount);
-    }
-}
+import {NativeTokenUnwrapper} from "src/NativeTokenUnwrapper.sol";
+import {DummyWrappedNativeToken, IWrappedNativeToken} from "src/IWrappedNativeToken.sol";
 
 contract NativeTokenUnwrapperTest is Test {
-    WrappedNativeToken internal wrappedNativeToken;
+    IWrappedNativeToken internal wrappedNativeToken;
     NativeTokenUnwrapper internal nativeTokenUnwrapper;
     address payable immutable recipient = payable(address(0x1234));
 
     function setUp() public {
-        wrappedNativeToken = new WrappedNativeToken();
+        wrappedNativeToken = new DummyWrappedNativeToken();
         nativeTokenUnwrapper = new NativeTokenUnwrapper(wrappedNativeToken);
     }
 

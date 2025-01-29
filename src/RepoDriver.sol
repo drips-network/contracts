@@ -743,13 +743,13 @@ contract GelatoTasksOwner {
 
 /// @notice The minimal dummy implementation of Gelato Automate
 /// for testing RepoDriver on networks where Gelato isn't deployed.
-contract DummyGelatoAutomate {
+contract DummyGelatoAutomate is IAutomate {
     function updateOwner(RepoDriver repoDriver, uint256 accountId, address owner) public {
         repoDriver.updateOwnerByGelato(accountId, owner, address(0));
     }
 
-    function gelato() public view returns (address) {
-        return address(this);
+    function gelato() public view returns (address payable) {
+        return payable(address(this));
     }
 
     function feeCollector() public pure returns (address) {
@@ -779,6 +779,8 @@ contract DummyGelatoAutomate {
     {
         return 0;
     }
+
+    function cancelTask(bytes32) public pure {}
 
     function getFeeDetails() public pure returns (uint256, address) {
         return (0, 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
