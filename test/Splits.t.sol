@@ -77,7 +77,7 @@ contract SplitsTest is Test, Splits {
         Splits._assertCurrSplits(usedAccountId, expectedReceivers);
     }
 
-    function assertSplittable(uint256 usedAccountId, uint256 expected) internal {
+    function assertSplittable(uint256 usedAccountId, uint256 expected) internal view {
         uint256 actual = Splits._splittable(usedAccountId, erc20);
         assertEq(actual, expected, "Invalid splittable");
     }
@@ -126,7 +126,7 @@ contract SplitsTest is Test, Splits {
         assertSplittable(usedAccountId, amt);
     }
 
-    function assertCollectable(uint256 usedAccountId, uint128 expected) internal {
+    function assertCollectable(uint256 usedAccountId, uint128 expected) internal view {
         uint128 actual = Splits._collectable(usedAccountId, erc20);
         assertEq(actual, expected, "Invalid collectable amount");
     }

@@ -74,11 +74,11 @@ contract NFTDriverTest is Test {
         driver.ownerOf(nonExistentTokenId);
     }
 
-    function testName() public {
+    function testName() public view {
         assertEq(driver.name(), "Drips identity", "Invalid token name");
     }
 
-    function testSymbol() public {
+    function testSymbol() public view {
         assertEq(driver.symbol(), "DHI", "Invalid token symbol");
     }
 

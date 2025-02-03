@@ -67,6 +67,7 @@ contract DripsTest is Test {
 
     function loadStreams(uint256 forAccount)
         internal
+        view
         returns (StreamReceiver[] memory currReceivers)
     {
         currReceivers = currStreamsReceivers[forAccount][erc20];
@@ -81,7 +82,11 @@ contract DripsTest is Test {
         }
     }
 
-    function loadSplits(uint256 forAccount) internal returns (SplitsReceiver[] memory currSplits) {
+    function loadSplits(uint256 forAccount)
+        internal
+        view
+        returns (SplitsReceiver[] memory currSplits)
+    {
         currSplits = currSplitsReceivers[forAccount];
         assertSplits(forAccount, currSplits);
     }
@@ -149,7 +154,10 @@ contract DripsTest is Test {
         assertBalances(uint256(int256(streamsBalanceBefore) + balanceDelta), splitsBalanceBefore);
     }
 
-    function assertStreams(uint256 forAccount, StreamReceiver[] memory currReceivers) internal {
+    function assertStreams(uint256 forAccount, StreamReceiver[] memory currReceivers)
+        internal
+        view
+    {
         (bytes32 actual,,,,) = drips.streamsState(forAccount, erc20);
         bytes32 expected = drips.hashStreams(currReceivers);
         assertEq(actual, expected, "Invalid streams configuration");
@@ -217,7 +225,10 @@ contract DripsTest is Test {
         assertSplits(forAccount, newReceivers);
     }
 
-    function assertSplits(uint256 forAccount, SplitsReceiver[] memory expectedReceivers) internal {
+    function assertSplits(uint256 forAccount, SplitsReceiver[] memory expectedReceivers)
+        internal
+        view
+    {
         bytes32 actual = drips.splitsHash(forAccount);
         bytes32 expected = drips.hashSplits(expectedReceivers);
         assertEq(actual, expected, "Invalid splits hash");
@@ -270,13 +281,17 @@ contract DripsTest is Test {
         assertReceiveStreamsResult(forAccount, type(uint32).max, expectedAmtAfter);
     }
 
-    function assertReceivableStreamsCycles(uint256 forAccount, uint32 expectedCycles) internal {
+    function assertReceivableStreamsCycles(uint256 forAccount, uint32 expectedCycles)
+        internal
+        view
+    {
         uint32 actualCycles = drips.receivableStreamsCycles(forAccount, erc20);
         assertEq(actualCycles, expectedCycles, "Invalid total receivable streams cycles");
     }
 
     function assertReceiveStreamsResult(uint256 forAccount, uint32 maxCycles, uint128 expectedAmt)
         internal
+        view
     {
         uint128 actualAmt = drips.receiveStreamsResult(forAccount, erc20, maxCycles);
         assertEq(actualAmt, expectedAmt, "Invalid receivable amount");
@@ -302,12 +317,12 @@ contract DripsTest is Test {
         return drips.splittable(forAccount, erc20);
     }
 
-    function assertSplittable(uint256 forAccount, uint256 expected) internal {
+    function assertSplittable(uint256 forAccount, uint256 expected) internal view {
         uint128 actual = splittable(forAccount);
         assertEq(actual, expected, "Invalid splittable");
     }
 
-    function assertSplitResult(uint256 forAccount, uint256 amt, uint256 expected) internal {
+    function assertSplitResult(uint256 forAccount, uint256 amt, uint256 expected) internal view {
         (uint128 collectableAmt, uint128 splitAmt) =
             drips.splitResult(forAccount, loadSplits(forAccount), uint128(amt));
         assertEq(collectableAmt, expected, "Invalid collectable amount");
@@ -335,7 +350,7 @@ contract DripsTest is Test {
         return drips.collectable(forAccount, erc20);
     }
 
-    function assertCollectable(uint256 forAccount, uint256 expected) internal {
+    function assertCollectable(uint256 forAccount, uint256 expected) internal view {
         assertEq(collectable(forAccount), expected, "Invalid collectable");
     }
 
@@ -345,6 +360,7 @@ contract DripsTest is Test {
 
     function assertBalances(uint256 expectedStreamsBalance, uint256 expectedSplitsBalance)
         internal
+        view
     {
         (uint256 streamsBalance, uint256 splitsBalance) = balances();
         assertEq(streamsBalance, expectedStreamsBalance, "Invalid streams balance");
@@ -373,7 +389,7 @@ contract DripsTest is Test {
         return erc20.balanceOf(address(this));
     }
 
-    function assertOwnBalance(uint256 expected) internal {
+    function assertOwnBalance(uint256 expected) internal view {
         assertEq(ownBalance(), expected, "Invalid own balance");
     }
 
@@ -381,7 +397,7 @@ contract DripsTest is Test {
         return erc20.balanceOf(address(drips));
     }
 
-    function assertDripsBalance(uint256 expected) internal {
+    function assertDripsBalance(uint256 expected) internal view {
         assertEq(dripsBalance(), expected, "Invalid Drips balance");
     }
 

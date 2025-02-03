@@ -358,7 +358,7 @@ contract CallerTest is Test {
         sv = (s << 1 >> 1) | (bytes32(uint256(v) - 27) << 255);
     }
 
-    function assertNonce(address user, uint256 expectedNonce) internal {
+    function assertNonce(address user, uint256 expectedNonce) internal view {
         assertEq(caller.nonce(user), expectedNonce, "Invalid nonce");
     }
 }
@@ -380,7 +380,10 @@ contract Target is ERC2771Context, Test {
         return input + 1;
     }
 
-    function verify(address expectedSender, uint256 expectedInput, uint256 expectedValue) public {
+    function verify(address expectedSender, uint256 expectedInput, uint256 expectedValue)
+        public
+        view
+    {
         assertEq(sender, expectedSender, "Invalid sender");
         assertEq(input, expectedInput, "Invalid input");
         assertEq(value, expectedValue, "Invalid value");

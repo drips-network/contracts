@@ -45,17 +45,17 @@ contract Automate is StdAssertions, Events {
     address internal _feeToken;
 
     /// @dev Used by RepoDriver
-    function taskModuleAddresses(Module module) public returns (address moduleAddress) {
+    function taskModuleAddresses(Module module) public view returns (address moduleAddress) {
         assertTrue(module == Module.PROXY, "Only proxy module supported");
         return address(proxyModule);
     }
 
-    function assertUserSupported(address user) internal {
+    function assertUserSupported(address user) internal view {
         assertEq(user, proxyModule.opsProxyFactory().user(), "Unsupported user");
     }
 
     /// @dev Used by RepoDriver
-    function getTaskIdsByUser(address user) public returns (bytes32[] memory taskIds_) {
+    function getTaskIdsByUser(address user) public view returns (bytes32[] memory taskIds_) {
         assertUserSupported(user);
         return taskIds;
     }
@@ -156,18 +156,18 @@ contract OpsProxyFactory is StdAssertions {
         assertTrue(false, "OpsProxyFactory function not implemented");
     }
 
-    function assertUserSupported(address user_) public {
+    function assertUserSupported(address user_) public view {
         if (user != address(0)) assertEq(user_, user, "Unsupported user");
     }
 
     /// @dev Used by RepoDriver
-    function ownerOf(address proxy_) external returns (address) {
+    function ownerOf(address proxy_) external view returns (address) {
         assertEq(proxy_, proxy, "Invalid proxy address");
         return user;
     }
 
     /// @dev Used by RepoDriver
-    function getProxyOf(address user_) external returns (address, bool) {
+    function getProxyOf(address user_) external view returns (address, bool) {
         assertUserSupported(user_);
         return (proxy, isDeployed);
     }
@@ -338,30 +338,30 @@ contract RepoDriverTest is Test, Events {
         driver.updateOwnerByGelato(accountIdUnclaimed, user, address(this));
     }
 
-    function assertOwner(uint256 accountId_, address expectedOwner) internal {
+    function assertOwner(uint256 accountId_, address expectedOwner) internal view {
         assertEq(driver.ownerOf(accountId_), expectedOwner, "Invalid account owner");
     }
 
-    function assertCommonFunds(uint256 expectedAmt) internal {
+    function assertCommonFunds(uint256 expectedAmt) internal view {
         assertEq(driver.commonFunds(), expectedAmt, "Invalid common funds amount");
     }
 
-    function assertUserFunds(address user_, uint256 expectedAmt) internal {
+    function assertUserFunds(address user_, uint256 expectedAmt) internal view {
         assertEq(driver.userFunds(user_), expectedAmt, "Invalid user funds amount");
     }
 
-    function assertAddressBalance(address user_, uint256 expectedAmt) internal {
+    function assertAddressBalance(address user_, uint256 expectedAmt) internal view {
         assertEq(user_.balance, expectedAmt, "Invalid address balance");
     }
 
-    function testAccountIdsDoNotCollideBetweenForges() public {
+    function testAccountIdsDoNotCollideBetweenForges() public view {
         bytes memory name = "me/repo";
         uint256 accountIdGitHub = driver.calcAccountId(Forge.GitHub, name);
         uint256 accountIdGitLab = driver.calcAccountId(Forge.GitLab, name);
         assertFalse(accountIdGitHub == accountIdGitLab, "Account IDs collide");
     }
 
-    function testCalcAccountId() public {
+    function testCalcAccountId() public view {
         bytes memory name3 = "a/b";
         bytes memory name27 = "abcdefghijklm/nopqrstuvwxyz";
         bytes memory name28 = "abcdefghijklm/nopqrstuvwxyz_";
@@ -412,7 +412,10 @@ contract RepoDriverTest is Test, Events {
         );
     }
 
-    function assertAccountId(Forge forge, bytes memory name, uint256 expectedAccountId) internal {
+    function assertAccountId(Forge forge, bytes memory name, uint256 expectedAccountId)
+        internal
+        view
+    {
         uint256 actualAccountId = driver.calcAccountId(forge, name);
         assertEq(bytes32(actualAccountId), bytes32(expectedAccountId), "Invalid account ID");
     }
@@ -733,14 +736,14 @@ contract GelatoTasksOwnerTest is Test {
         tasksOwner = new GelatoTasksOwner(IAutomate(automate));
     }
 
-    function testOwner() public {
+    function testOwner() public view {
         assertEq(address(this), tasksOwner.owner(), "Invalid owner");
     }
 
     function testCancelTask() public {
         bytes32 taskId = "taskId";
         vm.expectCall(automate, abi.encodeCall(IAutomate.cancelTask, (taskId)), 1);
-        vm.mockCall(automate, "", "");
+        vm.mockCall(automate, bytes(""), "");
         tasksOwner.cancelTask(taskId);
     }
 
@@ -764,7 +767,7 @@ contract GelatoTasksOwnerTest is Test {
             abi.encodeCall(IAutomate.createTask, (execAddress, execData, moduleData, feeToken)),
             1
         );
-        vm.mockCall(automate, "", abi.encode(taskId));
+        vm.mockCall(automate, bytes(""), abi.encode(taskId));
         bytes32 actualTaskId = tasksOwner.createTask(execAddress, execData, moduleData, feeToken);
         assertEq(actualTaskId, taskId, "Invalid task ID");
     }

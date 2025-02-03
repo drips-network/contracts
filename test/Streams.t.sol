@@ -77,6 +77,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
 
     function loadCurrReceivers(uint256 accountId)
         internal
+        view
         returns (StreamReceiver[] memory currReceivers)
     {
         currReceivers = currReceiversStore[erc20][accountId];
@@ -237,7 +238,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         history[0].streamsHash = streamsHash;
     }
 
-    function hist(uint256 accountId) internal returns (StreamsHistory[] memory history) {
+    function hist(uint256 accountId) internal view returns (StreamsHistory[] memory history) {
         StreamReceiver[] memory receivers = loadCurrReceivers(accountId);
         (,, uint32 updateTime,, uint32 maxEnd) = Streams._streamsState(accountId, erc20);
         return hist(receivers, updateTime, maxEnd);
@@ -251,6 +252,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
 
     function hist(StreamsHistory[] memory history, uint256 accountId)
         internal
+        view
         returns (StreamsHistory[] memory)
     {
         return hist(history, hist(accountId));
@@ -337,17 +339,23 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         return type(uint32).max - uint32(block.timestamp);
     }
 
-    function assertStreams(uint256 accountId, StreamReceiver[] memory currReceivers) internal {
+    function assertStreams(uint256 accountId, StreamReceiver[] memory currReceivers)
+        internal
+        view
+    {
         (bytes32 actual,,,,) = Streams._streamsState(accountId, erc20);
         bytes32 expected = Streams._hashStreams(currReceivers);
         assertEq(actual, expected, "Invalid streams configuration");
     }
 
-    function assertBalance(uint256 accountId, uint128 expected) internal {
+    function assertBalance(uint256 accountId, uint128 expected) internal view {
         assertBalanceAt(accountId, expected, block.timestamp);
     }
 
-    function assertBalanceAt(uint256 accountId, uint128 expected, uint256 timestamp) internal {
+    function assertBalanceAt(uint256 accountId, uint128 expected, uint256 timestamp)
+        internal
+        view
+    {
         uint128 balance =
             Streams._balanceAt(accountId, erc20, loadCurrReceivers(accountId), uint32(timestamp));
         assertEq(balance, expected, "Invalid streams balance");
@@ -470,12 +478,15 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         }
     }
 
-    function assertReceivableStreamsCycles(uint256 accountId, uint32 expectedCycles) internal {
+    function assertReceivableStreamsCycles(uint256 accountId, uint32 expectedCycles)
+        internal
+        view
+    {
         uint32 actualCycles = Streams._receivableStreamsCycles(accountId, erc20);
         assertEq(actualCycles, expectedCycles, "Invalid total receivable streams cycles");
     }
 
-    function assertReceiveStreamsResult(uint256 accountId, uint128 expectedAmt) internal {
+    function assertReceiveStreamsResult(uint256 accountId, uint128 expectedAmt) internal view {
         (uint128 actualAmt,,,,) = Streams._receiveStreamsResult(accountId, erc20, type(uint32).max);
         assertEq(actualAmt, expectedAmt, "Invalid receivable amount");
     }
@@ -485,7 +496,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         uint32 maxCycles,
         uint128 expectedAmt,
         uint32 expectedCycles
-    ) internal {
+    ) internal view {
         (uint128 actualAmt, uint32 actualCycles,,,) =
             Streams._receiveStreamsResult(accountId, erc20, maxCycles);
         assertEq(actualAmt, expectedAmt, "Invalid receivable amount");
@@ -552,7 +563,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         Streams._squeezeStreamsResult(accountId, erc20, senderId, historyHash, streamsHistory);
     }
 
-    function testStreamsConfigStoresParameters() public {
+    function testStreamsConfigStoresParameters() public pure {
         StreamConfig config = StreamConfigImpl.create(1, 2, 3, 4);
         assertEq(config.streamId(), 1, "Invalid streamId");
         assertEq(config.amtPerSec(), 2, "Invalid amtPerSec");
@@ -560,7 +571,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         assertEq(config.duration(), 4, "Invalid duration");
     }
 
-    function testStreamsConfigChecksOrdering() public {
+    function testStreamsConfigChecksOrdering() public pure {
         StreamConfig config = StreamConfigImpl.create(1, 1, 1, 1);
         assertFalse(config.lt(config), "Configs equal");
 

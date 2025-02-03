@@ -144,18 +144,18 @@ contract LZBridgedGovernorTest is Test {
         vm.deal(endpoint, 100);
     }
 
-    function testAllowInitializePath() public {
+    function testAllowInitializePath() public view {
         assertAllowInitializePath(Origin(ownerEid, owner, 0), true);
         assertAllowInitializePath(Origin(ownerEid + 1, owner, 0), false);
         assertAllowInitializePath(Origin(ownerEid, owner ^ hex"01", 0), false);
         assertAllowInitializePath(Origin(ownerEid, owner, 1), true);
     }
 
-    function assertAllowInitializePath(Origin memory origin, bool expected) internal {
+    function assertAllowInitializePath(Origin memory origin, bool expected) internal view {
         assertEq(governor.allowInitializePath(origin), expected, "Invalid allowInitializePath");
     }
 
-    function testNextNonce() public {
+    function testNextNonce() public view {
         assertEq(governor.nextNonce(ownerEid, owner), 0, "Invalid next nonce for the owner");
     }
 
@@ -256,7 +256,7 @@ contract AxelarBridgedGovernorTest is Test {
         vm.deal(address(governor), 100);
     }
 
-    function testOwnerChain() public {
+    function testOwnerChain() public view {
         assertEq(governor.ownerChain(), ownerChain, "Invalid owner chain");
     }
 
@@ -279,7 +279,7 @@ contract AxelarBridgedGovernorTest is Test {
             (commandId, ownerChain, owner, keccak256(message))
         );
         vm.expectCall(gateway, expectedGatwayCall, 1);
-        vm.mockCall(gateway, "", abi.encode(true));
+        vm.mockCall(gateway, bytes(""), abi.encode(true));
         governor.execute(commandId, ownerChain, owner, message);
         assertEq(governor.nextMessageNonce(), nextNonce, "Invalid next message nonce");
     }
@@ -288,7 +288,7 @@ contract AxelarBridgedGovernorTest is Test {
         bytes32 commandId = "command ID";
         Call[] memory calls = buildCalls(target, 5, "abcde");
         bytes memory message = buildMessage(governor.nextMessageNonce() + 1, calls);
-        vm.mockCall(gateway, "", abi.encode(true));
+        vm.mockCall(gateway, bytes(""), abi.encode(true));
         vm.expectRevert("Invalid message nonce");
         governor.execute(commandId, ownerChain, owner, message);
     }
@@ -320,7 +320,7 @@ contract AxelarBridgedGovernorTest is Test {
         vm.expectCall(target, 5, "abcde", 1);
         Call[] memory calls = buildCalls(target, 5, "abcde");
         bytes memory message = buildMessage(governor.nextMessageNonce(), calls);
-        vm.mockCall(gateway, "", abi.encode(true));
+        vm.mockCall(gateway, bytes(""), abi.encode(true));
         governor.execute(commandId, ownerChain, string(owner_), message);
     }
 
@@ -338,7 +338,7 @@ contract AxelarBridgedGovernorTest is Test {
         bytes32 commandId = "command ID";
         Call[] memory calls = buildCalls(target, 5, "abcde");
         bytes memory message = buildMessage(governor.nextMessageNonce(), calls);
-        vm.mockCall(gateway, "", abi.encode(false));
+        vm.mockCall(gateway, bytes(""), abi.encode(false));
         vm.expectRevert(abi.encodeWithSelector(IAxelarGMPExecutable.NotApprovedByGateway.selector));
         governor.execute(commandId, ownerChain, owner, message);
     }

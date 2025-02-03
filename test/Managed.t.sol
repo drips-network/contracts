@@ -44,7 +44,7 @@ contract ManagedTest is Test {
         proxy.pause();
     }
 
-    function testLogicContractIsPausedForever() public {
+    function testLogicContractIsPausedForever() public view {
         assertTrue(logic.isPaused(), "Not paused");
         assertEq(logic.admin(), address(0), "Admin not zero");
         assertEq(logic.allPausers(), new address[](0), "Pausers not empty");
@@ -261,7 +261,7 @@ contract ManagedTest is Test {
         proxy.unpause();
     }
 
-    function testErc1967Slot() public {
+    function testErc1967Slot() public view {
         // Values taken from [EIP-1967](https://eips.ethereum.org/EIPS/eip-1967)
         string memory name = "eip1967.proxy.implementation";
         bytes32 erc1967Proxy = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;

@@ -29,11 +29,11 @@ contract NativeTokenUnwrapperTest is Test {
         assertRecipientBalance(amount);
     }
 
-    function assertRecipientBalance(uint256 expectedBalance) internal {
+    function assertRecipientBalance(uint256 expectedBalance) internal view {
         assertEq(recipient.balance, expectedBalance, "Invalid recipient balance");
     }
 
-    function assertUnwrapperBalance(uint256 expectedBalance) internal {
+    function assertUnwrapperBalance(uint256 expectedBalance) internal view {
         uint256 actualBalance = wrappedNativeToken.balanceOf(address(nativeTokenUnwrapper));
         assertEq(actualBalance, expectedBalance, "Invalid unwrapper balance");
     }
