@@ -32,7 +32,7 @@ import {
 } from "script/modules/RepoDriver.sol";
 import {isModuleDeployed, ModulesDeployer} from "script/utils/ModulesDeployer.sol";
 
-function writeDeploymentJson(VmSafe vm, ModulesDeployer modulesDeployer, string memory salt) {
+function writeDeploymentJson(VmSafe vm, ModulesDeployer modulesDeployer, bytes32 salt) {
     string memory objectKey = "deployment JSON";
 
     if (isAxelarBridgedGovernorModuleDeployed(modulesDeployer)) {
@@ -108,7 +108,7 @@ function writeDeploymentJson(VmSafe vm, ModulesDeployer modulesDeployer, string 
     }
 
     vm.serializeAddress(objectKey, "ModulesDeployer", address(modulesDeployer));
-    vm.serializeString(objectKey, "Salt", salt);
+    vm.serializeString(objectKey, "Salt", vm.split(string(bytes.concat(salt)), "\x00")[0]);
     vm.serializeAddress(objectKey, "Deployer", msg.sender);
     string memory json = vm.serializeUint(objectKey, "Chain ID", block.chainid);
 

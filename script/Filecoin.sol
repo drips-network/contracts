@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.20;
 
-import {console, Script} from "forge-std/Script.sol";
+import {Script} from "forge-std/Script.sol";
 
 import {addressDriverModuleData} from "script/modules/AddressDriver.sol";
 import {
@@ -16,25 +16,22 @@ import {immutableSplitsDriverModuleData} from "script/modules/ImmutableSplitsDri
 import {nativeTokenUnwrapperModuleData} from "script/modules/NativeTokenUnwrapper.sol";
 import {nftDriverModuleData} from "script/modules/NFTDriver.sol";
 import {IAutomate, repoDriverModuleData} from "script/modules/RepoDriver.sol";
+import {DeployCLI} from "script/utils/CLI.sol";
 import {deployCreate3Factory, ICreate3Factory} from "script/utils/Create3Factory.sol";
 import {writeDeploymentJson} from "script/utils/DeploymentJson.sol";
 import {
     deployModulesDeployer, ModulesDeployer, ModuleData
 } from "script/utils/ModulesDeployer.sol";
-import {RADWORKS} from "script/utils/Radworks.sol";
 
 /// @dev As of 09.10.2024 Foundry doesn't work well with the Filecoin RPCs.
 /// To avoid errors, pass `--gas-estimate-multiplier 80000 --slow` to `forge script`.
 contract Deploy is Script {
     function run() public {
-        require(block.chainid == 314, "Must be run on Filecoin");
-        string memory salt = vm.envString("SALT");
-        address radworks = vm.envOr("RADWORKS", RADWORKS);
+        (bytes32 salt, address radworks) = DeployCLI.checkConfig(314);
 
         vm.startBroadcast();
         ICreate3Factory create3Factory = deployCreate3Factory();
-        ModulesDeployer modulesDeployer =
-            deployModulesDeployer(create3Factory, bytes32(bytes(salt)), msg.sender);
+        ModulesDeployer modulesDeployer = deployModulesDeployer(create3Factory, salt, msg.sender);
 
         ModuleData[] memory modules = new ModuleData[](1);
         modules[0] = axelarBridgedGovernorModuleData({

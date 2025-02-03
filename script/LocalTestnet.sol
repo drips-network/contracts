@@ -25,13 +25,12 @@ import {DummyGelatoAutomate} from "src/RepoDriver.sol";
 contract Deploy is Script {
     function run() public {
         require(block.chainid == 31337, "Must be run on Anvil local testnet");
-        string memory salt = "test";
+        bytes32 salt = bytes32("test");
 
         vm.startBroadcast();
         etchSingletonFactory();
         ICreate3Factory create3Factory = deployCreate3Factory();
-        ModulesDeployer modulesDeployer =
-            deployModulesDeployer(create3Factory, bytes32(bytes(salt)), msg.sender);
+        ModulesDeployer modulesDeployer = deployModulesDeployer(create3Factory, salt, msg.sender);
 
         address governor = msg.sender;
         ModuleData[] memory modules = new ModuleData[](5);
