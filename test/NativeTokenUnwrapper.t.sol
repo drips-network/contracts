@@ -8,7 +8,7 @@ import {DummyWrappedNativeToken, IWrappedNativeToken} from "src/IWrappedNativeTo
 contract NativeTokenUnwrapperTest is Test {
     IWrappedNativeToken internal wrappedNativeToken;
     NativeTokenUnwrapper internal nativeTokenUnwrapper;
-    address payable immutable recipient = payable(address(0x1234));
+    address payable immutable recipient = payable(address(bytes20("recipient")));
 
     function setUp() public {
         wrappedNativeToken = new DummyWrappedNativeToken();

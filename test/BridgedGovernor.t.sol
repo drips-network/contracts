@@ -32,7 +32,7 @@ function buildCalls(address target, uint256 value, bytes memory data)
 
 contract ExecuteCallsTest is Test {
     address internal immutable target = address(new CallTarget());
-    address internal immutable eoa = address(0x1234);
+    address internal eoa = address(bytes20("eoa"));
 
     function executeCallsExternal(Call[] memory calls) external {
         executeCalls(calls);
@@ -132,7 +132,7 @@ contract GovernorTest is Test {
 }
 
 contract LZBridgedGovernorTest is Test {
-    address internal immutable endpoint = address(0x1234);
+    address internal immutable endpoint = address(bytes20("endpoint"));
     uint32 internal immutable ownerEid = 1234;
     bytes32 internal immutable owner = "owner";
     address internal immutable target = address(new CallTarget());
@@ -240,9 +240,8 @@ contract LZBridgedGovernorTest is Test {
 }
 
 contract AxelarBridgedGovernorTest is Test {
-    address internal immutable gateway = address(0x1234);
+    address internal immutable gateway = address(bytes20("gateway"));
     string internal ownerChain = "owner chain";
-    // string internal immutable OWNER = "0x0123456789abcDEF0123456789abCDef01234567";
     string internal owner;
     address internal immutable target = address(new CallTarget());
     AxelarBridgedGovernor internal governor;

@@ -34,7 +34,7 @@ contract GiverTest is Test {
     }
 
     function testDelegateRevertsForNonOwner() public {
-        vm.prank(address(1234));
+        vm.prank(address(bytes20("Non owner")));
         vm.expectRevert("Caller is not the owner");
         giver.delegate(logic, "");
     }
@@ -52,7 +52,7 @@ contract GiversRegistryTest is Test {
     IERC20 internal erc20;
     IWrappedNativeToken internal wrappedNativeToken;
     GiversRegistry internal giversRegistry;
-    address internal admin = address(1);
+    address internal immutable admin = address(bytes20("admin"));
     uint256 internal accountId;
     address payable internal giver;
 

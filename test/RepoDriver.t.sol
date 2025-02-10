@@ -188,8 +188,8 @@ contract RepoDriverTest is Test, Events {
     RepoDriver internal driver;
     IERC20 internal erc20;
 
-    address internal admin = address(1);
-    address internal user = address(2);
+    address internal admin = address(bytes20("admin"));
+    address internal user = address(bytes20("user"));
     uint256 internal accountId;
     uint256 internal accountId1;
     uint256 internal accountId2;
@@ -320,7 +320,7 @@ contract RepoDriverTest is Test, Events {
     }
 
     function testUpgradeOwnerByGelatoRevertsIfFeeNotInNativeTokens() public {
-        automate().setFeeDetails(0, address(1));
+        automate().setFeeDetails(0, address(bytes20("otherToken")));
         vm.prank(gelatoProxy());
         vm.expectRevert("Payment must be in native tokens");
         driver.updateOwnerByGelato(accountIdUnclaimed, user, address(this));
@@ -573,7 +573,7 @@ contract RepoDriverTest is Test, Events {
         uint128 amt = 5;
         driver.give(accountId1, accountId2, erc20, amt);
         drips.split(accountId2, erc20, new SplitsReceiver[](0));
-        address transferTo = address(1234);
+        address transferTo = address(bytes20("recipient"));
         uint128 collected = driver.collect(accountId2, erc20, transferTo);
         assertEq(collected, amt, "Invalid collected");
         assertEq(erc20.balanceOf(transferTo), amt, "Invalid balance");
@@ -632,7 +632,7 @@ contract RepoDriverTest is Test, Events {
         uint128 amt = 5;
         StreamReceiver[] memory receivers = new StreamReceiver[](0);
         driver.setStreams(accountId, erc20, receivers, int128(amt), receivers, 0, 0, address(this));
-        address transferTo = address(1234);
+        address transferTo = address(bytes20("recipient"));
         int128 realBalanceDelta = driver.setStreams(
             accountId, erc20, receivers, -int128(amt), receivers, 0, 0, transferTo
         );

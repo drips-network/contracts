@@ -26,8 +26,8 @@ contract DripsTest is Test {
     mapping(uint256 accountId => mapping(IERC20 => StreamReceiver[])) internal currStreamsReceivers;
     mapping(uint256 accountId => SplitsReceiver[]) internal currSplitsReceivers;
 
-    address internal driver = address(1);
-    address internal admin = address(2);
+    address internal immutable driver = address(bytes20("driver"));
+    address internal immutable admin = address(bytes20("admin"));
 
     uint32 internal driverId;
 
@@ -555,7 +555,7 @@ contract DripsTest is Test {
     }
 
     function testRegisterDriver() public {
-        address driverAddr = address(0x1234);
+        address driverAddr = address(bytes20("otherDriver"));
         uint32 nextDriverId = drips.nextDriverId();
         assertEq(address(0), drips.driverAddress(nextDriverId), "Invalid unused driver address");
         assertEq(nextDriverId, drips.registerDriver(driverAddr), "Invalid assigned driver ID");
@@ -570,7 +570,7 @@ contract DripsTest is Test {
 
     function testUpdateDriverAddress() public {
         assertEq(driver, drips.driverAddress(driverId), "Invalid driver address before");
-        address newDriverAddr = address(0x1234);
+        address newDriverAddr = address(bytes20("otherDriver"));
         vm.prank(driver);
         drips.updateDriverAddress(driverId, newDriverAddr);
         assertEq(newDriverAddr, drips.driverAddress(driverId), "Invalid driver address after");
@@ -578,7 +578,7 @@ contract DripsTest is Test {
 
     function testUpdateDriverAddressRevertsWhenNotCalledByTheDriver() public {
         vm.expectRevert(ERROR_NOT_DRIVER);
-        drips.updateDriverAddress(driverId, address(1234));
+        drips.updateDriverAddress(driverId, address(bytes20("otherDriver")));
     }
 
     function testCollectRevertsWhenNotCalledByTheDriver() public {
@@ -761,10 +761,10 @@ contract DripsTest is Test {
     }
 
     function testRegisterDriverCanBePaused() public canBePausedTest {
-        drips.registerDriver(address(0x1234));
+        drips.registerDriver(address(bytes20("otherDriver")));
     }
 
     function testUpdateDriverAddressCanBePaused() public canBePausedTest {
-        drips.updateDriverAddress(driverId, address(0x1234));
+        drips.updateDriverAddress(driverId, address(bytes20("otherDriver")));
     }
 }

@@ -46,8 +46,8 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
 
     mapping(IERC20 erc20 => mapping(uint256 accountId => StreamReceiver[])) internal
         currReceiversStore;
-    IERC20 internal defaultErc20 = IERC20(address(1));
-    IERC20 internal otherErc20 = IERC20(address(2));
+    IERC20 internal defaultErc20 = IERC20(address(bytes20("defaultErc20")));
+    IERC20 internal otherErc20 = IERC20(address(bytes20("otherErc20")));
     // The ERC-20 token used in all helper functions
     IERC20 internal erc20 = defaultErc20;
     uint256 internal sender = 1;
