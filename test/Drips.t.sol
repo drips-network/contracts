@@ -62,7 +62,7 @@ contract DripsTest is Test {
     }
 
     function skipToCycleEnd() internal {
-        skip(drips.cycleSecs() - (block.timestamp % drips.cycleSecs()));
+        skip(drips.cycleSecs() - (vm.getBlockTimestamp() % drips.cycleSecs()));
     }
 
     function loadStreams(uint256 forAccount)
@@ -147,7 +147,7 @@ contract DripsTest is Test {
         storeStreams(forAccount, newReceivers);
         assertEq(realBalanceDelta, balanceDelta, "Invalid real balance delta");
         (,, uint32 updateTime, uint128 actualBalance,) = drips.streamsState(forAccount, erc20);
-        assertEq(updateTime, block.timestamp, "Invalid new last update time");
+        assertEq(updateTime, vm.getBlockTimestamp(), "Invalid new last update time");
         assertEq(balanceTo, actualBalance, "Invalid streams balance");
         assertOwnBalance(uint256(int256(ownBalanceBefore) - balanceDelta));
         assertDripsBalance(uint256(int256(dripsBalanceBefore) + balanceDelta));
@@ -482,7 +482,7 @@ contract DripsTest is Test {
         setStreams(accountId, 0, 2, receivers);
 
         // Create history
-        uint32 lastUpdate = uint32(block.timestamp);
+        uint32 lastUpdate = uint32(vm.getBlockTimestamp());
         uint32 maxEnd = lastUpdate + 2;
         StreamsHistory[] memory history = new StreamsHistory[](1);
         history[0] = StreamsHistory(0, receivers, lastUpdate, maxEnd);
@@ -550,7 +550,7 @@ contract DripsTest is Test {
         StreamReceiver[] memory receivers = streamsReceivers(receiver, 1);
         setStreams(accountId, 0, 2, receivers);
         uint256 balanceAt =
-            drips.balanceAt(accountId, erc20, receivers, uint32(block.timestamp + 1));
+            drips.balanceAt(accountId, erc20, receivers, uint32(vm.getBlockTimestamp() + 1));
         assertEq(balanceAt, 1, "Invalid balance");
     }
 
