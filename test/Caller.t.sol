@@ -27,7 +27,7 @@ contract CallerTest is Test {
     uint256 internal senderKey;
     address internal sender;
 
-    constructor() {
+    function setUp() public {
         caller = new Caller();
         bytes32 nameHash = keccak256("Caller");
         bytes32 versionHash = keccak256("1");
@@ -390,8 +390,8 @@ contract Target is ERC2771Context, StdAssertions {
         public
         view
     {
-        assertEq(sender, expectedSender, "Invalid sender");
-        assertEq(input, expectedInput, "Invalid input");
-        assertEq(value, expectedValue, "Invalid value");
+        require(sender == expectedSender, "Invalid sender");
+        require(input == expectedInput, "Invalid input");
+        require(value == expectedValue, "Invalid value");
     }
 }

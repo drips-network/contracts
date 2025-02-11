@@ -31,8 +31,12 @@ function buildCalls(address target, uint256 value, bytes memory data)
 }
 
 contract ExecuteCallsTest is Test {
-    address internal immutable target = address(new CallTarget());
+    address internal target;
     address internal eoa = address(bytes20("eoa"));
+
+    function setUp() public {
+        target = address(new CallTarget());
+    }
 
     function executeCallsExternal(Call[] memory calls) external {
         executeCalls(calls);
@@ -75,10 +79,11 @@ contract TestGovernor is Governor {
 }
 
 contract GovernorTest is Test {
-    address internal immutable target = address(new CallTarget());
+    address internal target;
     TestGovernor internal governor;
 
     function setUp() public {
+        target = address(new CallTarget());
         TestGovernor logic = new TestGovernor();
         governor = TestGovernor(payable(new GovernorProxy(logic, new Call[](0))));
     }
@@ -135,10 +140,11 @@ contract LZBridgedGovernorTest is Test {
     address internal immutable endpoint = address(bytes20("endpoint"));
     uint32 internal immutable ownerEid = 1234;
     bytes32 internal immutable owner = "owner";
-    address internal immutable target = address(new CallTarget());
+    address internal target;
     LZBridgedGovernor internal governor;
 
     function setUp() public {
+        target = address(new CallTarget());
         LZBridgedGovernor logic = new LZBridgedGovernor(endpoint, ownerEid, owner);
         governor = LZBridgedGovernor(payable(new GovernorProxy(logic, new Call[](0))));
         vm.deal(endpoint, 100);
@@ -243,12 +249,13 @@ contract AxelarBridgedGovernorTest is Test {
     address internal immutable gateway = address(bytes20("gateway"));
     string internal ownerChain = "owner chain";
     string internal owner;
-    address internal immutable target = address(new CallTarget());
+    address internal target;
     AxelarBridgedGovernor internal governor;
 
     function setUp() public {
         address owner_ = 0x0123456789abcDEF0123456789abCDef01234567;
         owner = Strings.toHexString(owner_);
+        target = address(new CallTarget());
         AxelarBridgedGovernor logic =
             new AxelarBridgedGovernor(IAxelarGMPGateway(gateway), ownerChain, owner_);
         governor = AxelarBridgedGovernor(payable(new GovernorProxy(logic, new Call[](0))));

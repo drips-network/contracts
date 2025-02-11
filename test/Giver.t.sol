@@ -17,8 +17,13 @@ contract Logic {
 }
 
 contract GiverTest is Test {
-    Giver internal giver = new Giver();
-    address internal logic = address(new Logic());
+    Giver internal giver;
+    address internal logic;
+
+    function setUp() public {
+        giver = new Giver();
+        logic = address(new Logic());
+    }
 
     function testDelegate() public {
         uint256 arg = 1234;
