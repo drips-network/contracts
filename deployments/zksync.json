@@ -1,0 +1,16 @@
+{
+  "AddressDriver": "0xCE2314f56989E6c63C7EE37f670fAfD199F64aaa",
+  "Caller": "0x7848991Afc4aF2aE6b958d90B92e11e461aEaaA6",
+  "Chain ID": 324,
+  "Deployer": "0xEF4B994f97092fD22B8a880c47F053910788471b",
+  "Drips": "0x8b774A8fe7CE6c368Aa629FeEc45A865ee5B7C2d",
+  "Drips cycle seconds": 86400,
+  "GiversRegistry": "0x85193DDC0E4D59c2593f177C5c8b983a99a993c7",
+  "ImmutableSplitsDriver": "0x9361B96C865936CCDdaecffed03BB40CebA6b9e7",
+  "LZBridgedGovernor": "0xb4C2BE2e586fEee3878eF5b9b80D619f091E3b5c",
+  "NFTDriver": "0xE37B350658E994d8e5E34Bd03960a30cE90281D4",
+  "NativeTokenUnwrapper": "0x550Cab880E1e976ADe4d28c8fC05550E8aE73C71",
+  "RepoDriver": "0xf6f8C8C28b3F72FCc0CA5dE4B804076C3487dFbc",
+  "RepoDriver tasks owner": "0xf2300b89c11FB1b50DbB815D9d24aeAe3dF8Ce3c",
+  "ZKsyncDeployer": "0x56C3468B08890b383afDF2cf300f423e04b012f1"
+}

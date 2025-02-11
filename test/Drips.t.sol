@@ -16,7 +16,7 @@ import {
     ERC20PresetFixedSupply
 } from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
-contract DripsTest is Test {
+contract DripsTestBase is Test {
     Drips internal drips;
     // The ERC-20 token used in all helper functions
     IERC20 internal erc20;
@@ -400,7 +400,9 @@ contract DripsTest is Test {
     function assertDripsBalance(uint256 expected) internal view {
         assertEq(dripsBalance(), expected, "Invalid Drips balance");
     }
+}
 
+contract DripsTest1 is DripsTestBase {
     function testDoesNotRequireReceiverToBeInitialized() public {
         receiveStreams(receiver, 0, 0);
         split(receiver, 0, 0);
@@ -585,7 +587,9 @@ contract DripsTest is Test {
         vm.expectRevert(ERROR_NOT_DRIVER);
         drips.collect(accountId, erc20);
     }
+}
 
+contract DripsTest2 is DripsTestBase {
     function testStreamsInDifferentTokensAreIndependent() public {
         uint32 cycleLength = drips.cycleSecs();
         // Covers 1.5 cycles of streaming

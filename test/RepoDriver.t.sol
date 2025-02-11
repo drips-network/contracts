@@ -12,7 +12,7 @@ import {
     SplitsReceiver
 } from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
-import {StdAssertions, Test} from "forge-std/Test.sol";
+import {console, StdAssertions, Test} from "forge-std/Test.sol";
 import {
     IAutomate,
     IGelato,
@@ -35,7 +35,7 @@ contract Events {
     event OwnerUpdateRequested(uint256 indexed accountId, Forge forge, bytes name, address payer);
 }
 
-contract Automate is StdAssertions, Events {
+contract Automate is Events {
     /// @dev Used by RepoDriver
     Gelato public immutable gelato = new Gelato();
     ProxyModule internal immutable _proxyModule = new ProxyModule();
@@ -45,12 +45,12 @@ contract Automate is StdAssertions, Events {
     address internal _feeToken;
 
     fallback() external {
-        assertTrue(false, "Automate function not implemented");
+        revert("Automate function not implemented");
     }
 
     /// @dev Used by RepoDriver
     function taskModuleAddresses(Module module) public view returns (ProxyModule moduleAddress) {
-        assertTrue(module == Module.PROXY, "Only proxy module supported");
+        require(module == Module.PROXY, "Only proxy module supported");
         return _proxyModule;
     }
 
@@ -69,8 +69,8 @@ contract Automate is StdAssertions, Events {
     /// @dev Used by RepoDriver
     function cancelTask(bytes32 taskId) public {
         assertUserSupported(msg.sender);
-        assertNotEq(_taskId, 0, "No task created");
-        assertEq(_taskId, taskId, "Task not created");
+        require(_taskId != 0, "No task created");
+        require(_taskId == taskId, "Task not created");
         _taskId = 0;
     }
 
@@ -85,29 +85,35 @@ contract Automate is StdAssertions, Events {
         ModuleData calldata moduleData,
         address feeToken
     ) public returns (bytes32 taskId) {
-        assertGe(execDataOrSelector.length, 4, "Exec data too short");
+        require(execDataOrSelector.length >= 4, "Exec data too short");
 
-        assertEq(moduleData.modules.length, 3, "Invalid modules length");
-        assertEq(moduleData.args.length, 3, "Invalid args length");
+        require(moduleData.modules.length == 3, "Invalid modules length");
+        require(moduleData.args.length == 3, "Invalid args length");
 
-        assertTrue(moduleData.modules[0] == Module.PROXY, "Invalid module 0");
-        assertEq(moduleData.args[0], "", "Invalid args 0");
+        require(moduleData.modules[0] == Module.PROXY, "Invalid module 0");
+        require(moduleData.args[0].length == 0, "Invalid args 0");
 
-        assertTrue(moduleData.modules[1] == Module.WEB3_FUNCTION, "Invalid module 1");
-        assertNotEq(_expectedIpfsCid, "", "Expected IPFS CID not set");
-        assertEq(moduleData.args[1], abi.encode(_expectedIpfsCid, ""), "Invalid args 1");
+        require(moduleData.modules[1] == Module.WEB3_FUNCTION, "Invalid module 1");
+        require(bytes(_expectedIpfsCid).length != 0, "Expected IPFS CID not set");
+        require(
+            keccak256(moduleData.args[1]) == keccak256(abi.encode(_expectedIpfsCid, "")),
+            "Invalid args 1"
+        );
         _expectedIpfsCid = "";
 
-        assertTrue(moduleData.modules[2] == Module.TRIGGER, "Invalid module 2");
+        require(moduleData.modules[2] == Module.TRIGGER, "Invalid module 2");
         bytes32[][] memory topics = new bytes32[][](1);
         topics[0] = new bytes32[](1);
         topics[0][0] = OwnerUpdateRequested.selector;
         bytes memory trigger = abi.encode(GelatoTasksOwner(msg.sender).owner(), topics, 1);
-        assertEq(moduleData.args[2], abi.encode(TriggerType.EVENT, trigger), "Invalid args 2");
+        require(
+            keccak256(moduleData.args[2]) == keccak256(abi.encode(TriggerType.EVENT, trigger)),
+            "Invalid args 2"
+        );
 
-        assertEq(feeToken, GELATO_NATIVE_TOKEN, "Fee token not native");
+        require(feeToken == GELATO_NATIVE_TOKEN, "Fee token not native");
 
-        assertEq(_taskId, 0, "Task already created");
+        require(_taskId == 0, "Task already created");
         taskId = keccak256(abi.encode(execAddress, execDataOrSelector, moduleData, feeToken));
         _taskId = taskId;
     }
@@ -123,42 +129,42 @@ contract Automate is StdAssertions, Events {
     }
 }
 
-contract Gelato is StdAssertions {
+contract Gelato {
     /// @dev Used by RepoDriver
     address public immutable feeCollector = address(bytes20("fee collector"));
 
     fallback() external {
-        assertTrue(false, "Gelato function not implemented");
+        revert("Gelato function not implemented");
     }
 }
 
-contract ProxyModule is StdAssertions {
+contract ProxyModule {
     /// @dev Used by RepoDriver
     OpsProxyFactory public immutable opsProxyFactory = new OpsProxyFactory();
 
     fallback() external {
-        assertTrue(false, "ProxyModule function not implemented");
+        revert("ProxyModule function not implemented");
     }
 }
 
-contract OpsProxyFactory is StdAssertions {
+contract OpsProxyFactory {
     address internal _user;
     address internal immutable _proxy = address(bytes20("gelato proxy"));
     bool internal _isProxyDeployed;
 
     fallback() external {
-        assertTrue(false, "OpsProxyFactory function not implemented");
+        revert("OpsProxyFactory function not implemented");
     }
 
     function assertUserSupported(address user) public view {
         string memory message = "Unsupported user";
-        assertTrue(_isProxyDeployed, message);
-        assertEq(user, _user, message);
+        require(_isProxyDeployed, message);
+        require(user == _user, message);
     }
 
     /// @dev Used by RepoDriver
     function ownerOf(address proxy) external view returns (address) {
-        assertEq(proxy, _proxy, "Invalid proxy address");
+        require(proxy == _proxy, "Invalid proxy address");
         return _user;
     }
 
@@ -170,10 +176,21 @@ contract OpsProxyFactory is StdAssertions {
 
     /// @dev Used by RepoDriver
     function deployFor(address user) external returns (address) {
-        assertFalse(_isProxyDeployed, "Proxy already deployed");
+        require(!_isProxyDeployed, "Proxy already deployed");
         _isProxyDeployed = true;
         _user = user;
         return _proxy;
+    }
+}
+
+contract GasMeter {
+    function requestUpdateOwner(RepoDriver driver, Forge forge, bytes memory name)
+        public
+        returns (uint256 gasUsed)
+    {
+        gasUsed = gasleft();
+        driver.requestUpdateOwner(forge, name);
+        gasUsed -= gasleft();
     }
 }
 
@@ -456,10 +473,12 @@ contract RepoDriverTest is Test, Events {
         string memory ipfsCid = "The new Gelato Function";
         automate().expectIpfsCid(ipfsCid);
         vm.prank(admin);
+        // This is a ZKsync-specific equivalent of `block.gaslimit` and considered a constant.
+        uint256 maxGasPerTransaction = 80_000_000;
         // The penalty increase of 1/6 of the block gas results in maximum 3 requests per block.
         // Decrease of the penalty by 1 increase per day results in 31 requests per 31 days
         // on top of the 6 requests maxing out the penalty.
-        uint256 penaltyIncrease = block.gaslimit / 6;
+        uint256 penaltyIncrease = maxGasPerTransaction / 6;
         driver.updateGelatoTask(ipfsCid, 3, 31 + 6);
 
         // Move away from timestamp 0 by the time it takes to decrease the penalty by 1 increase.
@@ -474,10 +493,8 @@ contract RepoDriverTest is Test, Events {
 
     function requestWithGasPenalty(uint256 gasPenalty) internal {
         assertApproxEqAbs(gasPenalty, driver.requestUpdateOwnerGasPenalty(), 1, "Invalid penalty");
-        uint256 gasUsed = gasleft();
-        driver.requestUpdateOwner(Forge.GitHub, "this/repo");
-        gasUsed -= gasleft();
-        uint256 gasBase = 8_000;
+        uint256 gasUsed = new GasMeter().requestUpdateOwner(driver, Forge.GitHub, "this/repo");
+        uint256 gasBase = 40_000;
         uint256 gasDelta = 4_000;
         assertApproxEqAbs(gasUsed, gasBase + gasPenalty, gasDelta, "Invalid applied penalty");
     }

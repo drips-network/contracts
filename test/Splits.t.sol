@@ -74,9 +74,9 @@ contract SplitsWrapper is Splits {
 contract SplitsTest is Test {
     bytes internal constant ERROR_NOT_SORTED = "Splits receivers not sorted";
 
-    SplitsWrapper internal immutable splits;
+    SplitsWrapper internal splits;
     uint256 internal constant MAX_SPLITS_RECEIVERS = 200;
-    uint32 internal immutable totalSplitsWeight;
+    uint32 internal totalSplitsWeight;
 
     mapping(uint256 accountId => SplitsReceiver[]) internal currSplitsReceivers;
 
@@ -89,7 +89,7 @@ contract SplitsTest is Test {
     uint256 internal immutable receiver1 = 5;
     uint256 internal immutable receiver2 = 6;
 
-    constructor() {
+    function setUp() public {
         splits = new SplitsWrapper(bytes32(uint256(1000)));
         assertEq(
             MAX_SPLITS_RECEIVERS, splits.MAX_SPLITS_RECEIVERS(), "Invalid MAX_SPLITS_RECEIVERS"

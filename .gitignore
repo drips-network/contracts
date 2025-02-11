@@ -1,3 +1,6 @@
 /out
+/zkout
 /cache
 /broadcast
+/.cache
+anvil-zksync.log

@@ -159,18 +159,18 @@ contract StreamsWrapper is Streams {
     }
 }
 
-contract StreamsTest is Test, PseudoRandomUtils {
+contract StreamsTestBase is Test, PseudoRandomUtils {
     bytes internal constant ERROR_NOT_SORTED = "Streams receivers not sorted";
     bytes internal constant ERROR_INVALID_STREAMS_LIST = "Invalid streams receivers list";
     bytes internal constant ERROR_TIMESTAMP_EARLY = "Timestamp before the last update";
     bytes internal constant ERROR_HISTORY_INVALID = "Invalid streams history";
     bytes internal constant ERROR_HISTORY_UNCLEAR = "Entry with hash and receivers";
 
-    StreamsWrapper internal immutable streams;
+    StreamsWrapper internal streams;
     uint256 internal constant MAX_STREAMS_RECEIVERS = 100;
-    uint32 internal immutable cycleSecs;
-    uint160 internal immutable minAmtPerSec;
-    uint160 internal immutable amtPerSecMultiplier;
+    uint32 internal cycleSecs;
+    uint160 internal minAmtPerSec;
+    uint160 internal amtPerSecMultiplier;
 
     mapping(IERC20 erc20 => mapping(uint256 accountId => StreamReceiver[])) internal
         currReceiversStore;
@@ -187,7 +187,7 @@ contract StreamsTest is Test, PseudoRandomUtils {
     uint256 internal immutable receiver3 = 7;
     uint256 internal immutable receiver4 = 8;
 
-    constructor() {
+    function setUp() public {
         streams = new StreamsWrapper(10, bytes32(uint256(1000)));
         assertEq(
             MAX_STREAMS_RECEIVERS, streams.MAX_STREAMS_RECEIVERS(), "Invalid MAX_STREAMS_RECEIVERS"
@@ -195,9 +195,6 @@ contract StreamsTest is Test, PseudoRandomUtils {
         cycleSecs = streams.cycleSecs();
         minAmtPerSec = streams.minAmtPerSec();
         amtPerSecMultiplier = streams.AMT_PER_SEC_MULTIPLIER();
-    }
-
-    function setUp() public {
         skipToCycleEnd();
     }
 
@@ -653,7 +650,9 @@ contract StreamsTest is Test, PseudoRandomUtils {
         vm.expectRevert(expectedReason);
         streams.squeezeStreamsResult(accountId, erc20, senderId, historyHash, streamsHistory);
     }
+}
 
+contract StreamsTest1 is StreamsTestBase {
     function testStreamsConfigStoresParameters() public pure {
         StreamConfig config = StreamConfigImpl.create(1, 2, 3, 4);
         assertEq(config.streamId(), 1, "Invalid streamId");
@@ -900,7 +899,9 @@ contract StreamsTest is Test, PseudoRandomUtils {
         // Has been receiving 1 per second for 3 seconds
         receiveStreams(receiver2, 3);
     }
+}
 
+contract StreamsTest2 is StreamsTestBase {
     function testDoesNotRequireReceiverToBeInitialized() public {
         receiveStreams(receiver, 0);
     }
@@ -1178,7 +1179,9 @@ contract StreamsTest is Test, PseudoRandomUtils {
         skipToCycleEnd();
         receiveStreams(receiver, 0);
     }
+}
 
+contract StreamsTest3 is StreamsTestBase {
     function testFractionsAreAppliedOnCycleSecondsWhenTheyAddUpToWholeUnits() public {
         assertEq(cycleSecs, 10, "Unexpected cycle length");
         // Rate of 0.25 per second
@@ -1587,7 +1590,9 @@ contract StreamsTest is Test, PseudoRandomUtils {
         vm.expectRevert(ERROR_INVALID_STREAMS_LIST);
         streams.balanceAt(sender, erc20, receivers, uint32(vm.getBlockTimestamp()));
     }
+}
 
+contract StreamsTest4 is StreamsTestBase {
     function testFuzzStreamReceivers(bytes32 seed) public {
         initSeed(seed);
         uint8 amountReceivers = 10;
@@ -1930,7 +1935,9 @@ contract StreamsTest is Test, PseudoRandomUtils {
         skipToCycleEnd();
         receiveStreams(receiver, 4);
     }
+}
 
+contract StreamsTest5 is StreamsTestBase {
     function testFundsFromFinishedCyclesAreNotSqueezed() public {
         uint128 amt = cycleSecs * 2;
         setStreams(sender, 0, amt, recv(receiver, 1), cycleSecs * 2);
