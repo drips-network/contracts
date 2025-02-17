@@ -70,7 +70,6 @@ contract GiversRegistryTest is Test {
         giversRegistry = GiversRegistry(address(new ManagedProxy(giversRegistryLogic, admin, "")));
         accountId = 1234;
         giver = payable(giversRegistry.giver(accountId));
-        emit log_named_address("GIVER", giver);
 
         erc20 = new ERC20PresetFixedSupply("test", "test", type(uint136).max, address(this));
         erc20.approve(address(addressDriver), type(uint256).max);

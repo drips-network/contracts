@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
+import {console, Test} from "forge-std/Test.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {
     Streams,
@@ -556,7 +556,7 @@ contract StreamsTest is Test, PseudoRandomUtils {
     function receiveStreams(StreamReceiver[] memory receivers, uint32 maxEnd, uint32 updateTime)
         internal
     {
-        emit log_named_uint("maxEnd:", maxEnd);
+        console.log("maxEnd:", maxEnd);
         for (uint256 i = 0; i < receivers.length; i++) {
             StreamReceiver memory r = receivers[i];
             uint32 duration = r.config.duration();
@@ -578,10 +578,10 @@ contract StreamsTest is Test, PseudoRandomUtils {
             uint128 actualAmt = streams.receiveStreams(r.accountId, erc20, type(uint32).max);
             // only log if actualAmt doesn't match expectedAmt
             if (expectedAmt != actualAmt) {
-                emit log_named_uint("accountId:", r.accountId);
-                emit log_named_uint("start:", r.config.start());
-                emit log_named_uint("duration:", r.config.duration());
-                emit log_named_uint("amtPerSec:", r.config.amtPerSec());
+                console.log("accountId:", r.accountId);
+                console.log("start:", r.config.start());
+                console.log("duration:", r.config.duration());
+                console.log("amtPerSec:", r.config.amtPerSec());
             }
             assertEq(actualAmt, expectedAmt);
         }
@@ -1302,21 +1302,21 @@ contract StreamsTest is Test, PseudoRandomUtils {
         benchSetStreams("worst 100 1 minute hint  ", 100, worstEnd, worstHint, worstHint1Minute);
         benchSetStreams("worst 100 1 hour hint    ", 100, worstEnd, worstHint, worstHint1Hour);
         benchSetStreams("worst 100 wrong hint     ", 100, worstEnd, wrongHint1, wrongHint2);
-        emit log_string("-----------------------------------------------");
+        console.log("-----------------------------------------------");
 
         benchSetStreams("worst 10 no hint         ", 10, worstEnd, 0, 0);
         benchSetStreams("worst 10 perfect hint    ", 10, worstEnd, worstHint, worstHintPerfect);
         benchSetStreams("worst 10 1 minute hint   ", 10, worstEnd, worstHint, worstHint1Minute);
         benchSetStreams("worst 10 1 hour hint     ", 10, worstEnd, worstHint, worstHint1Hour);
         benchSetStreams("worst 10 wrong hint      ", 10, worstEnd, wrongHint1, wrongHint2);
-        emit log_string("-----------------------------------------------");
+        console.log("-----------------------------------------------");
 
         benchSetStreams("worst 1 no hint          ", 1, worstEnd, 0, 0);
         benchSetStreams("worst 1 perfect hint     ", 1, worstEnd, worstHint, worstHintPerfect);
         benchSetStreams("worst 1 1 minute hint    ", 1, worstEnd, worstHint, worstHint1Minute);
         benchSetStreams("worst 1 1 hour hint      ", 1, worstEnd, worstHint, worstHint1Hour);
         benchSetStreams("worst 1 wrong hint       ", 1, worstEnd, wrongHint1, wrongHint2);
-        emit log_string("-----------------------------------------------");
+        console.log("-----------------------------------------------");
 
         uint32 monthEnd = uint32(vm.getBlockTimestamp()) + 30 days;
         uint32 monthHint = monthEnd + 1;
@@ -1329,14 +1329,14 @@ contract StreamsTest is Test, PseudoRandomUtils {
         benchSetStreams("1 month 100 1 minute hint", 100, monthEnd, monthHint, monthHint1Minute);
         benchSetStreams("1 month 100 1 hour hint  ", 100, monthEnd, monthHint, monthHint1Hour);
         benchSetStreams("1 month 100 wrong hint   ", 100, monthEnd, wrongHint1, wrongHint2);
-        emit log_string("-----------------------------------------------");
+        console.log("-----------------------------------------------");
 
         benchSetStreams("1 month 10 no hint       ", 10, monthEnd, 0, 0);
         benchSetStreams("1 month 10 perfect hint  ", 10, monthEnd, monthHint, monthHintPerfect);
         benchSetStreams("1 month 10 1 minute hint ", 10, monthEnd, monthHint, monthHint1Minute);
         benchSetStreams("1 month 10 1 hour hint   ", 10, monthEnd, monthHint, monthHint1Hour);
         benchSetStreams("1 month 10 wrong hint    ", 10, monthEnd, wrongHint1, wrongHint2);
-        emit log_string("-----------------------------------------------");
+        console.log("-----------------------------------------------");
 
         benchSetStreams("1 month 1 no hint        ", 1, monthEnd, 0, 0);
         benchSetStreams("1 month 1 perfect hint   ", 1, monthEnd, monthHint, monthHintPerfect);
@@ -1361,7 +1361,7 @@ contract StreamsTest is Test, PseudoRandomUtils {
         uint256 gas = gasleft();
         streams.setStreams(senderId, erc20, recv(), amt, receivers, maxEndHint1, maxEndHint2);
         gas -= gasleft();
-        emit log_named_uint(string.concat("Gas used for ", testName), gas);
+        console.log("Gas used for", testName, gas);
     }
 
     function testMinAmtPerSec() public {
@@ -1597,12 +1597,12 @@ contract StreamsTest is Test, PseudoRandomUtils {
 
         uint128 maxCosts =
             amountReceivers * uint128(maxAmtPerSec / amtPerSecMultiplier) * maxDuration;
-        emit log_named_uint("topUp", maxCosts);
+        console.log("topUp", maxCosts);
         uint128 maxAllStreamsFinished = maxStart + maxDuration;
 
         StreamReceiver[] memory receivers =
             genRandomRecv(amountReceivers, maxAmtPerSec, maxStart, maxDuration);
-        emit log_named_uint("setStreams.updateTime", vm.getBlockTimestamp());
+        console.log("setStreams.updateTime", vm.getBlockTimestamp());
         streams.setStreams(sender, erc20, recv(), int128(maxCosts), receivers, 0, 0);
 
         (,, uint32 updateTime,, uint32 maxEnd) = streams.streamsState(sender, erc20);
@@ -1613,7 +1613,7 @@ contract StreamsTest is Test, PseudoRandomUtils {
 
         skip(maxAllStreamsFinished);
         skipToCycleEnd();
-        emit log_named_uint("receiveStreams.time", vm.getBlockTimestamp());
+        console.log("receiveStreams.time", vm.getBlockTimestamp());
         receiveStreams(receivers, maxEnd, updateTime);
     }
 
@@ -1871,8 +1871,8 @@ contract StreamsTest is Test, PseudoRandomUtils {
         uint32 maxEndHint2,
         uint256 expectedMaxEndFromNow
     ) internal {
-        emit log_named_uint("Setting streams with hint 1", maxEndHint1);
-        emit log_named_uint("                 and hint 2", maxEndHint2);
+        console.log("Setting streams with hint 1", maxEndHint1);
+        console.log("                 and hint 2", maxEndHint2);
         uint256 snapshot = vm.snapshotState();
         setStreams(sender, 0, amt, receivers, maxEndHint1, maxEndHint2, expectedMaxEndFromNow);
         vm.revertToState(snapshot);
