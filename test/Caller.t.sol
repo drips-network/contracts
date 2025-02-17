@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
+import {StdAssertions, Test} from "forge-std/Test.sol";
 import {ERC2771Context} from "openzeppelin-contracts/metatx/ERC2771Context.sol";
 import {ECDSA} from "openzeppelin-contracts/utils/cryptography/ECDSA.sol";
 import {Call, Caller} from "src/Caller.sol";
@@ -369,7 +369,7 @@ contract CallerTest is Test {
     }
 }
 
-contract Target is ERC2771Context, Test {
+contract Target is ERC2771Context, StdAssertions {
     address public sender;
     uint256 public input;
     uint256 public value;

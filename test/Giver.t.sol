@@ -41,7 +41,7 @@ contract GiverTest is Test {
 
     function testTransferToGiver() public {
         uint256 amt = 123;
-        payable(address(giver)).transfer(amt);
+        Address.sendValue(payable(address(giver)), amt);
         assertEq(address(giver).balance, amt, "Invalid balance");
     }
 }

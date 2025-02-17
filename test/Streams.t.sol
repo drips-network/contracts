@@ -1288,7 +1288,6 @@ contract StreamsTest is Test, PseudoRandomUtils {
     }
 
     function testBenchSetStreams() public {
-        initSeed(0);
         uint32 wrongHint1 = uint32(vm.getBlockTimestamp()) + 1;
         uint32 wrongHint2 = wrongHint1 + 1;
 
@@ -1353,7 +1352,7 @@ contract StreamsTest is Test, PseudoRandomUtils {
         uint32 maxEndHint1,
         uint32 maxEndHint2
     ) public {
-        uint256 senderId = random(type(uint256).max);
+        uint256 senderId = gasleft();
         StreamReceiver[] memory receivers = new StreamReceiver[](count);
         for (uint256 i = 0; i < count; i++) {
             receivers[i] = recv(senderId + 1 + i, 1, 0, 0)[0];

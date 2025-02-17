@@ -204,23 +204,20 @@ contract RepoDriverTest is Test, Events {
 
         caller = new Caller();
 
-        address driverAddress =
-            vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 2);
-        Automate automate_ = new Automate();
-
         // Make RepoDriver's driver ID non-0 to test if it's respected by RepoDriver
         drips.registerDriver(address(1));
         drips.registerDriver(address(1));
-        uint32 driverId = drips.registerDriver(driverAddress);
 
+        Automate automate_ = new Automate();
         string memory ipfsCid = "Gelato Function";
         automate_.expectIpfsCid(ipfsCid);
         bytes memory data = abi.encodeCall(RepoDriver.updateGelatoTask, (ipfsCid, 0, 0));
 
-        RepoDriver driverLogic =
-            new RepoDriver(drips, address(caller), driverId, IAutomate(address(automate_)));
+        RepoDriver driverLogic = new RepoDriver(
+            drips, address(caller), drips.nextDriverId(), IAutomate(address(automate_))
+        );
         driver = RepoDriver(payable(new ManagedProxy(driverLogic, admin, data)));
-        require(address(driver) == driverAddress, "Invalid driver address");
+        drips.registerDriver(address(driver));
 
         accountId = initialUpdateOwner("this/repo1", address(this));
         accountId1 = initialUpdateOwner("this/repo2", address(this));
