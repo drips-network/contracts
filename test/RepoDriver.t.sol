@@ -38,47 +38,44 @@ contract Events {
 contract Automate is StdAssertions, Events {
     /// @dev Used by RepoDriver
     Gelato public immutable gelato = new Gelato();
-    ProxyModule public immutable proxyModule = new ProxyModule();
-    bytes32[] internal taskIds;
-    string internal expectedIpfsCid;
+    ProxyModule internal immutable _proxyModule = new ProxyModule();
+    bytes32 internal _taskId;
+    string internal _expectedIpfsCid;
     uint256 internal _feeAmount;
     address internal _feeToken;
 
+    fallback() external {
+        assertTrue(false, "Automate function not implemented");
+    }
+
     /// @dev Used by RepoDriver
-    function taskModuleAddresses(Module module) public view returns (address moduleAddress) {
+    function taskModuleAddresses(Module module) public view returns (ProxyModule moduleAddress) {
         assertTrue(module == Module.PROXY, "Only proxy module supported");
-        return address(proxyModule);
+        return _proxyModule;
     }
 
     function assertUserSupported(address user) internal view {
-        assertEq(user, proxyModule.opsProxyFactory().user(), "Unsupported user");
+        _proxyModule.opsProxyFactory().assertUserSupported(user);
     }
 
     /// @dev Used by RepoDriver
-    function getTaskIdsByUser(address user) public view returns (bytes32[] memory taskIds_) {
+    function getTaskIdsByUser(address user) public view returns (bytes32[] memory taskIds) {
         assertUserSupported(user);
-        return taskIds;
-    }
-
-    function pushTaskId(bytes32 taskId) public {
-        taskIds.push(taskId);
+        if (_taskId == 0) return new bytes32[](0);
+        taskIds = new bytes32[](1);
+        taskIds[0] = _taskId;
     }
 
     /// @dev Used by RepoDriver
     function cancelTask(bytes32 taskId) public {
         assertUserSupported(msg.sender);
-        for (uint256 i = 0; i < taskIds.length; i++) {
-            if (taskIds[i] == taskId) {
-                taskIds[i] = taskIds[taskIds.length - 1];
-                taskIds.pop();
-                return;
-            }
-        }
-        assertTrue(false, "Task ID not found");
+        assertNotEq(_taskId, 0, "No task created");
+        assertEq(_taskId, taskId, "Task not created");
+        _taskId = 0;
     }
 
     function expectIpfsCid(string calldata ipfsCid) public {
-        expectedIpfsCid = ipfsCid;
+        _expectedIpfsCid = ipfsCid;
     }
 
     /// @dev Used by RepoDriver
@@ -97,7 +94,9 @@ contract Automate is StdAssertions, Events {
         assertEq(moduleData.args[0], "", "Invalid args 0");
 
         assertTrue(moduleData.modules[1] == Module.WEB3_FUNCTION, "Invalid module 1");
-        assertEq(moduleData.args[1], abi.encode(expectedIpfsCid, ""), "Invalid args 1");
+        assertNotEq(_expectedIpfsCid, "", "Expected IPFS CID not set");
+        assertEq(moduleData.args[1], abi.encode(_expectedIpfsCid, ""), "Invalid args 1");
+        _expectedIpfsCid = "";
 
         assertTrue(moduleData.modules[2] == Module.TRIGGER, "Invalid module 2");
         bytes32[][] memory topics = new bytes32[][](1);
@@ -108,10 +107,9 @@ contract Automate is StdAssertions, Events {
 
         assertEq(feeToken, GELATO_NATIVE_TOKEN, "Fee token not native");
 
-        assertEq(taskIds.length, 0, "Uncancelled tasks");
-
+        assertEq(_taskId, 0, "Task already created");
         taskId = keccak256(abi.encode(execAddress, execDataOrSelector, moduleData, feeToken));
-        taskIds.push(taskId);
+        _taskId = taskId;
     }
 
     function setFeeDetails(uint256 feeAmount, address feeToken) public {
@@ -122,10 +120,6 @@ contract Automate is StdAssertions, Events {
     /// @dev Used by RepoDriver
     function getFeeDetails() public view returns (uint256 feeAmount, address feeToken) {
         return (_feeAmount, _feeToken);
-    }
-
-    fallback() external {
-        assertTrue(false, "Automate function not implemented");
     }
 }
 
@@ -148,37 +142,38 @@ contract ProxyModule is StdAssertions {
 }
 
 contract OpsProxyFactory is StdAssertions {
-    address public user;
-    address public immutable proxy = address(bytes20("gelato proxy"));
-    bool public isDeployed;
+    address internal _user;
+    address internal immutable _proxy = address(bytes20("gelato proxy"));
+    bool internal _isProxyDeployed;
 
     fallback() external {
         assertTrue(false, "OpsProxyFactory function not implemented");
     }
 
-    function assertUserSupported(address user_) public view {
-        if (user != address(0)) assertEq(user_, user, "Unsupported user");
+    function assertUserSupported(address user) public view {
+        string memory message = "Unsupported user";
+        assertTrue(_isProxyDeployed, message);
+        assertEq(user, _user, message);
     }
 
     /// @dev Used by RepoDriver
-    function ownerOf(address proxy_) external view returns (address) {
-        assertEq(proxy_, proxy, "Invalid proxy address");
-        return user;
+    function ownerOf(address proxy) external view returns (address) {
+        assertEq(proxy, _proxy, "Invalid proxy address");
+        return _user;
     }
 
     /// @dev Used by RepoDriver
-    function getProxyOf(address user_) external view returns (address, bool) {
-        assertUserSupported(user_);
-        return (proxy, isDeployed);
+    function getProxyOf(address user) external view returns (address, bool) {
+        if (_isProxyDeployed) assertUserSupported(user);
+        return (_proxy, _isProxyDeployed);
     }
 
     /// @dev Used by RepoDriver
-    function deployFor(address user_) external returns (address) {
-        assertUserSupported(user_);
-        user = user_;
-        assertFalse(isDeployed, "Proxy already deployed");
-        isDeployed = true;
-        return proxy;
+    function deployFor(address user) external returns (address) {
+        assertFalse(_isProxyDeployed, "Proxy already deployed");
+        _isProxyDeployed = true;
+        _user = user;
+        return _proxy;
     }
 }
 
@@ -237,7 +232,9 @@ contract RepoDriverTest is Test, Events {
     }
 
     function gelatoProxy() internal view returns (address proxy) {
-        return automate().proxyModule().opsProxyFactory().proxy();
+        (proxy,) = automate().taskModuleAddresses(Module.PROXY).opsProxyFactory().getProxyOf(
+            address(driver.gelatoTasksOwner())
+        );
     }
 
     function noMetadata() internal pure returns (AccountMetadata[] memory accountMetadata) {
@@ -419,7 +416,6 @@ contract RepoDriverTest is Test, Events {
 
     function testUpdateGelatoTask() public {
         address taskOwner = address(driver.gelatoTasksOwner());
-        automate().pushTaskId(hex"1234");
         string memory ipfsCid = "The new Gelato Function";
         automate().expectIpfsCid(ipfsCid);
         vm.expectCall(address(automate()), bytes.concat(Automate.createTask.selector));
