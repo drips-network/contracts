@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
+import {console, Test} from "forge-std/Test.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {Splits, SplitsReceiver} from "src/Splits.sol";
 
@@ -219,6 +219,21 @@ contract SplitsTest is Test {
         setSplits(accountId, receiversGood);
         vm.expectRevert("Too many splits receivers");
         splits.setSplits(accountId, receiversBad);
+    }
+
+    function testBenchSplitMaxReceivers() public {
+        SplitsReceiver[] memory receivers = new SplitsReceiver[](MAX_SPLITS_RECEIVERS);
+        for (uint256 i = 0; i < receivers.length; i++) {
+            receivers[i] = SplitsReceiver(i, 1);
+        }
+        setSplits(accountId, receivers);
+        addSplittable(accountId, totalSplitsWeight);
+        uint256 gas = gasleft();
+
+        splits.split(accountId, erc20, receivers);
+
+        gas -= gasleft();
+        console.log("Gas used ", gas);
     }
 
     function testRejectsTooHighTotalWeightSplitsReceivers() public {
