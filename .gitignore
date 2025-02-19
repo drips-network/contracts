@@ -1,3 +1,6 @@
 /out
 /cache
 /broadcast
+deployment.json
+.DS_Store
+anvil-state.json
