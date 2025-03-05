@@ -96,7 +96,7 @@ contract DeployRepoSubAccountDriver is Script {
     function run() public {
         ModulesDeployer modulesDeployer = DeployCLI.checkConfigToAddModule(CHAIN_ID);
         vm.startBroadcast();
-        
+
         ModuleData[] memory modules = new ModuleData[](1);
         address governor = repoDriverModule(modulesDeployer).repoDriver().admin();
         modules[0] = repoSubAccountDriverModuleData(modulesDeployer, governor);
