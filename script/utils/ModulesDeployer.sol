@@ -11,13 +11,19 @@ struct ModuleData {
     uint256 value;
 }
 
+function modulesDeployer(ICreate3Factory create3Factory, address deployerWallet, bytes32 salt)
+    view
+    returns (ModulesDeployer deployer)
+{
+    return ModulesDeployer(payable(create3Factory.getDeployed(deployerWallet, salt)));
+}
+
 function deployModulesDeployer(ICreate3Factory create3Factory, bytes32 salt, address owner)
-    returns (ModulesDeployer deployment)
+    returns (ModulesDeployer deployer)
 {
     bytes memory args = abi.encode(create3Factory, owner);
     bytes memory creationCode = abi.encodePacked(type(ModulesDeployer).creationCode, args);
-    address modulesDeployer = create3Factory.deploy(salt, creationCode);
-    return ModulesDeployer(payable(modulesDeployer));
+    return ModulesDeployer(payable(create3Factory.deploy(salt, creationCode)));
 }
 
 contract ModulesDeployer is Ownable2Step {
@@ -43,22 +49,22 @@ contract ModulesDeployer is Ownable2Step {
     }
 }
 
-function isModuleDeployed(ModulesDeployer modulesDeployer, bytes32 salt) view returns (bool yes) {
-    address module = modulesDeployer.module(salt);
+function isModuleDeployed(ModulesDeployer modulesDeployer_, bytes32 salt) view returns (bool yes) {
+    address module = modulesDeployer_.module(salt);
     return Address.isContract(module);
 }
 
-function getModule(ModulesDeployer modulesDeployer, bytes32 salt) view returns (address module) {
-    module = modulesDeployer.module(salt);
+function getModule(ModulesDeployer modulesDeployer_, bytes32 salt) view returns (address module) {
+    module = modulesDeployer_.module(salt);
     require(Address.isContract(module), string.concat(string(bytes.concat(salt)), " not deployed"));
 }
 
 abstract contract Module {
     ModulesDeployer internal immutable _modulesDeployer;
 
-    constructor(ModulesDeployer modulesDeployer, bytes32 moduleSalt) {
-        _modulesDeployer = modulesDeployer;
-        require(address(this) == modulesDeployer.module(moduleSalt), "Invalid module salt");
+    constructor(ModulesDeployer modulesDeployer_, bytes32 moduleSalt) {
+        _modulesDeployer = modulesDeployer_;
+        require(address(this) == modulesDeployer_.module(moduleSalt), "Invalid module salt");
     }
 
     modifier onlyModule(bytes32 senderSalt) {

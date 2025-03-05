@@ -8,11 +8,14 @@ import {Address} from "openzeppelin-contracts/utils/Address.sol";
 /// Deployed by Safe, addresses taken from https://github.com/safe-global/safe-singleton-factory.
 address constant SINGLETON_FACTORY = 0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7;
 
-function deployCreate3Factory() returns (ICreate3Factory deployment) {
-    deployment = ICreate3Factory(0xe9BE461efaB6f9079741da3b180249F81e66A461);
-    if (Address.isContract(address(deployment))) {
+/// @dev The CREATE3 factory for deterministic CREATE3 deployments.
+ICreate3Factory constant CREATE3_FACTORY =
+    ICreate3Factory(0xe9BE461efaB6f9079741da3b180249F81e66A461);
+
+function deployCreate3Factory() returns (ICreate3Factory create3Factory) {
+    if (Address.isContract(address(CREATE3_FACTORY))) {
         console.log("Create3Factory already deployed");
-        return deployment;
+        return CREATE3_FACTORY;
     }
 
     /// @notice The creation code of Create3Factory.
@@ -66,7 +69,8 @@ function deployCreate3Factory() returns (ICreate3Factory deployment) {
     bytes memory addr = Address.functionCall(
         SINGLETON_FACTORY, bytes.concat(salt, creationCode), "Create3Factory deployment failed"
     );
-    require(address(bytes20(addr)) == address(deployment), "Invalid Create3Factory address");
+    require(address(bytes20(addr)) == address(CREATE3_FACTORY), "Invalid Create3Factory address");
+    return CREATE3_FACTORY;
 }
 
 /// @title Factory for deploying contracts to deterministic addresses via CREATE3.
