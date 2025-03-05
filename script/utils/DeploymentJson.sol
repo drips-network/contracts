@@ -30,6 +30,10 @@ import {isNFTDriverModuleDeployed, nftDriverModule} from "script/modules/NFTDriv
 import {
     isRepoDriverModuleDeployed, RepoDriver, repoDriverModule
 } from "script/modules/RepoDriver.sol";
+import {
+    isRepoSubAccountDriverModuleDeployed,
+    repoSubAccountDriverModule
+} from "script/modules/RepoSubAccountDriver.sol";
 import {isModuleDeployed, ModulesDeployer} from "script/utils/ModulesDeployer.sol";
 
 function writeDeploymentJson(VmSafe vm, ModulesDeployer modulesDeployer, bytes32 salt) {
@@ -88,6 +92,14 @@ function writeDeploymentJson(VmSafe vm, ModulesDeployer modulesDeployer, bytes32
         vm.serializeAddress(objectKey, "RepoDriver", address(repoDriver));
         vm.serializeAddress(
             objectKey, "RepoDriver tasks owner", address(repoDriver.gelatoTasksOwner())
+        );
+    }
+
+    if (isRepoSubAccountDriverModuleDeployed(modulesDeployer)) {
+        vm.serializeAddress(
+            objectKey,
+            "RepoSubAccountDriver",
+            address(repoSubAccountDriverModule(modulesDeployer).repoSubAccountDriver())
         );
     }
 
