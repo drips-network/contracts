@@ -92,10 +92,8 @@ function writeDeploymentJson(VmSafe vm, ModulesDeployer modulesDeployer, bytes32
     }
 
     if (isRepoDriverModuleDeployed(modulesDeployer)) {
-        RepoDriver repoDriver = repoDriverModule(modulesDeployer).repoDriver();
-        vm.serializeAddress(objectKey, "RepoDriver", address(repoDriver));
         vm.serializeAddress(
-            objectKey, "RepoDriver tasks owner", address(repoDriver.gelatoTasksOwner())
+            objectKey, "RepoDriver", address(repoDriverModule(modulesDeployer).repoDriver())
         );
     }
 
