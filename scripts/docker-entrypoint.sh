@@ -21,4 +21,4 @@ else
   printf "Anvil state already exists. Using existing state in /anvil-data/\n"
 fi
 
-exec anvil --load-state ./anvil-data/anvil-state.json --dump-state ./anvil-data/anvil-state.json --host 0.0.0.0 --block-time 1
+exec anvil --load-state ./anvil-data/anvil-state.json --dump-state ./anvil-data/anvil-state.json --host :: --block-time 1
