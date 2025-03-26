@@ -31,6 +31,10 @@ import {
     isRepoDriverModuleDeployed, RepoDriver, repoDriverModule
 } from "script/modules/RepoDriver.sol";
 import {
+    isRepoDeadlineDriverModuleDeployed,
+    repoDeadlineDriverModule
+} from "script/modules/RepoDeadlineDriver.sol";
+import {
     isRepoSubAccountDriverModuleDeployed,
     repoSubAccountDriverModule
 } from "script/modules/RepoSubAccountDriver.sol";
@@ -100,6 +104,14 @@ function writeDeploymentJson(VmSafe vm, ModulesDeployer modulesDeployer, bytes32
             objectKey,
             "RepoSubAccountDriver",
             address(repoSubAccountDriverModule(modulesDeployer).repoSubAccountDriver())
+        );
+    }
+
+    if (isRepoDeadlineDriverModuleDeployed(modulesDeployer)) {
+        vm.serializeAddress(
+            objectKey,
+            "RepoDeadlineDriver",
+            address(repoDeadlineDriverModule(modulesDeployer).repoDeadlineDriver())
         );
     }
 
