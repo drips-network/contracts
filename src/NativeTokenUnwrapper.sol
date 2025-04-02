@@ -26,6 +26,7 @@ contract NativeTokenUnwrapper {
         wrappedNativeToken = wrappedNativeToken_;
     }
 
+    /// @notice Do not send native tokens to this contract, they won't be recoverable.
     receive() external payable {}
 
     /// @notice Unwraps all wrapped native tokens held by this contract
