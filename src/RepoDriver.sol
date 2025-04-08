@@ -38,6 +38,8 @@ contract RepoDriver is DriverTransferUtils, Managed {
     address payable internal immutable gelatoFeeCollector;
     /// @notice The placeholder address meaning that the Gelato fee is paid in native tokens.
     address internal constant GELATO_NATIVE_TOKEN = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+    /// @notice The maximum gas that can be used in a single transaction.
+    uint256 internal immutable txGasLimit;
     /// @notice The maximum possible request penalty which is the entire block gas limit.
     uint256 internal constant MAX_PENALTY = type(uint72).max;
 
@@ -148,6 +150,11 @@ contract RepoDriver is DriverTransferUtils, Managed {
         gelatoAutomate = gelatoAutomate_;
         IGelato gelato = IGelato(gelatoAutomate.gelato());
         gelatoFeeCollector = payable(gelato.feeCollector());
+
+        uint256 txGasLimit_ = block.gaslimit;
+        // zkSync and zkSync Sepolia don't report the transaction gas limit as the block gas limit.
+        if (block.chainid == 324 || block.chainid == 300) txGasLimit_ = 80_000_000;
+        txGasLimit = txGasLimit_;
     }
 
     receive() external payable {}
@@ -434,7 +441,7 @@ contract RepoDriver is DriverTransferUtils, Managed {
     /// @notice Calculates the gas cost penalty from the unitless penalty.
     /// @return gasPenalty The gas cost penalty.
     function _penaltyToGas(uint72 penalty) internal view returns (uint256 gasPenalty) {
-        return block.gaslimit * penalty / MAX_PENALTY;
+        return txGasLimit * penalty / MAX_PENALTY;
     }
 
     /// @notice Updates the account owner.
