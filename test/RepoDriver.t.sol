@@ -355,7 +355,7 @@ contract RepoDriverTest is Test, Events {
         assertFalse(accountIdGitHub == accountIdGitLab, "Account IDs collide");
     }
 
-    function testCalcAccountId() public view {
+    function testCalcAccountId() public {
         bytes memory name3 = "a/b";
         bytes memory name27 = "abcdefghijklm/nopqrstuvwxyz";
         bytes memory name28 = "abcdefghijklm/nopqrstuvwxyz_";
@@ -404,6 +404,16 @@ contract RepoDriverTest is Test, Events {
             name28,
             0x00000002_03_9b20b0f16f6d0e523b42684b6f3881fa3c23115048bc6643c2f866
         );
+        assertAccountId(
+            Forge.ORCID, name3, 0x00000002_04_612f62000000000000000000000000000000000000000000000000
+        );
+        assertAccountId(
+            Forge.ORCID,
+            name27,
+            0x00000002_04_6162636465666768696a6b6c6d2f6e6f707172737475767778797a
+        );
+        vm.expectRevert("ORCID identifier too long");
+        driver.calcAccountId(Forge.ORCID, name28);
     }
 
     function assertAccountId(Forge forge, bytes memory name, uint256 expectedAccountId)
