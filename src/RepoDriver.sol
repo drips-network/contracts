@@ -17,12 +17,14 @@ import {IOpsProxyFactory} from "gelato-automate/interfaces/IOpsProxyFactory.sol"
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
 /// @notice The supported forges where repositories are stored.
+/// For legacy reasons ORCID is handled like a forge despite not being one.
 enum Forge {
     GitHub,
-    GitLab
+    GitLab,
+    ORCID
 }
 
-/// @notice A Drips driver implementing repository-based account identification.
+/// @notice A Drips driver implementing repository-based or ORCID-based account identification.
 /// Each repository stored in one of the supported forges has a deterministic account ID assigned.
 /// By default the repositories have no owner and their accounts can't be controlled by anybody,
 /// use `requestUpdateOwner` to update the owner.
@@ -170,18 +172,21 @@ contract RepoDriver is DriverTransferUtils, Managed {
     /// Every account ID is a 256-bit integer constructed by concatenating:
     /// `driverId (32 bits) | forgeId (8 bits) | nameEncoded (216 bits)`.
     /// When `forge` is GitHub and `name` is at most 27 bytes long,
-    /// `forgeId` is 0 and `nameEncoded` is `name` right-padded with zeros
+    /// `forgeId` is 0 and `nameEncoded` is `name` right-padded with zeros.
     /// When `forge` is GitHub and `name` is longer than 27 bytes,
     /// `forgeId` is 1 and `nameEncoded` is the lower 27 bytes of the hash of `name`.
     /// When `forge` is GitLab and `name` is at most 27 bytes long,
-    /// `forgeId` is 2 and `nameEncoded` is `name` right-padded with zeros
+    /// `forgeId` is 2 and `nameEncoded` is `name` right-padded with zeros.
     /// When `forge` is GitLab and `name` is longer than 27 bytes,
     /// `forgeId` is 3 and `nameEncoded` is the lower 27 bytes of the hash of `name`.
+    /// When `forge` is ORCID, `name` must be at most 27 bytes long,
+    /// `forgeId` is 4 and `nameEncoded` is `name` right-padded with zeros.
     /// @param forge The forge where the repository is stored.
     /// @param name The name of the repository.
     /// For GitHub and GitLab it must follow the `user_name/repository_name` structure
     /// and it must be formatted identically as in the repository's URL,
     /// including the case of each letter and special characters being removed.
+    /// For ORCID it must be the ORCID identifier.
     /// @return accountId The account ID.
     function calcAccountId(Forge forge, bytes calldata name)
         public
@@ -199,7 +204,7 @@ contract RepoDriver is DriverTransferUtils, Managed {
                 // `nameEncoded` is the lower 27 bytes of the hash
                 nameEncoded = uint216(uint256(keccak256(name)));
             }
-        } else {
+        } else if (forge == Forge.GitLab) {
             if (name.length <= 27) {
                 forgeId = 2;
                 nameEncoded = uint216(bytes27(name));
@@ -208,6 +213,10 @@ contract RepoDriver is DriverTransferUtils, Managed {
                 // `nameEncoded` is the lower 27 bytes of the hash
                 nameEncoded = uint216(uint256(keccak256(name)));
             }
+        } else {
+            require(name.length <= 27, "ORCID identifier too long");
+            forgeId = 4;
+            nameEncoded = uint216(bytes27(name));
         }
         // By assignment we get `accountId` value:
         // `zeros (224 bits) | driverId (32 bits)`
