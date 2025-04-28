@@ -101,6 +101,7 @@ contract RepoDeadlineDriver is Managed {
     /// Tokens which rebase the holders' balances, collect taxes on transfers,
     /// or impose any restrictions on holding or transferring tokens are not supported.
     /// If you use such tokens in the protocol, they can get stuck or lost.
+    /// @return amt The collected and given amount.
     function collectAndGive(
         uint256 repoAccountId,
         uint256 recipientAccountId,
