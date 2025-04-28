@@ -38,22 +38,25 @@ contract Deploy is Script {
         ModulesDeployer modulesDeployer = deployModulesDeployer(create3Factory, salt, msg.sender);
 
         address governor = msg.sender;
-        ModuleData[] memory modules = new ModuleData[](5);
+        ModuleData[] memory modules = new ModuleData[](3);
         modules[0] = callerModuleData(modulesDeployer);
         modules[1] = dripsModuleData(modulesDeployer, governor, 1 days);
         modules[2] = addressDriverModuleData(modulesDeployer, governor);
-        modules[3] = nftDriverModuleData(modulesDeployer, governor);
-        modules[4] = immutableSplitsDriverModuleData(modulesDeployer, governor);
         modulesDeployer.deployModules(modules);
 
-        modules = new ModuleData[](5);
-        modules[0] =
+        modules = new ModuleData[](3);
+        modules[0] = nftDriverModuleData(modulesDeployer, governor);
+        modules[1] = immutableSplitsDriverModuleData(modulesDeployer, governor);
+        modules[2] =
             repoDriverModuleData(modulesDeployer, governor, new DummyGelatoAutomate(), "", 0, 0);
-        modules[1] = repoSubAccountDriverModuleData(modulesDeployer, governor);
-        modules[2] = repoDeadlineDriverModuleData(modulesDeployer, governor);
+        modulesDeployer.deployModules(modules);
+
+        modules = new ModuleData[](4);
+        modules[0] = repoSubAccountDriverModuleData(modulesDeployer, governor);
+        modules[1] = repoDeadlineDriverModuleData(modulesDeployer, governor);
         IWrappedNativeToken wrappedNativeToken = new DummyWrappedNativeToken();
-        modules[3] = giversRegistryModuleData(modulesDeployer, governor, wrappedNativeToken);
-        modules[4] = nativeTokenUnwrapperModuleData(modulesDeployer, wrappedNativeToken);
+        modules[2] = giversRegistryModuleData(modulesDeployer, governor, wrappedNativeToken);
+        modules[3] = nativeTokenUnwrapperModuleData(modulesDeployer, wrappedNativeToken);
         modulesDeployer.deployModules(modules);
 
         writeDeploymentJson(vm, modulesDeployer, salt);
