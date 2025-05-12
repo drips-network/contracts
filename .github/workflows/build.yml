@@ -1,8 +1,5 @@
 name: Tests
-on:
-  pull_request:
-  push:
-    branches: [ main ]
+on: [push, pull_request]
 jobs:
   tests:
     runs-on: ubuntu-latest
@@ -10,17 +7,15 @@ jobs:
       - name: checkout
         uses: actions/checkout@v3
       - name: install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: nightly
+        uses: foundry-rs/foundry-toolchain@v1.4.0
+        with: {version: v1.1.0}
       - name: check formatting
         run: forge fmt --check
-      - name: make fuzz tests on main branch extensive
+      - name: make fuzz tests on pushes extensive
         if: ${{ github.event_name == 'push' }}
         run: echo FOUNDRY_FUZZ_RUNS=50000 >> $GITHUB_ENV
       - name: run tests
         run: forge test --deny-warnings
       - name: run Slither
-        uses: crytic/slither-action@v0.3.0
-        with:
-          slither-version: '0.9.5'
+        uses: crytic/slither-action@v0.4.1
+        with: {slither-version: '0.11.3'}

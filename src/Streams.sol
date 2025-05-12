@@ -161,10 +161,8 @@ abstract contract Streams {
     /// @notice On every timestamp `T`, which is a multiple of `cycleSecs`, the receivers
     /// gain access to streams received during `T - cycleSecs` to `T - 1`.
     /// Always higher than 1.
-    // slither-disable-next-line naming-convention
     uint32 internal immutable _cycleSecs;
     /// @notice The minimum amtPerSec of a stream. It's 1 token per cycle.
-    // slither-disable-next-line naming-convention
     uint160 internal immutable _minAmtPerSec;
     /// @notice The storage slot holding a single `StreamsStorage` structure.
     bytes32 private immutable _streamsStorageSlot;
@@ -292,6 +290,7 @@ abstract contract Streams {
         int128 finalAmtPerCycle;
         (receivedAmt, receivableCycles, fromCycle, toCycle, finalAmtPerCycle) =
             _receiveStreamsResult(accountId, erc20, maxCycles);
+        // slither-disable-next-line timestamp
         if (fromCycle != toCycle) {
             StreamsState storage state = _streamsStorage().states[erc20][accountId];
             state.nextReceivableCycle = toCycle;
@@ -334,12 +333,14 @@ abstract contract Streams {
     {
         unchecked {
             (fromCycle, toCycle) = _receivableStreamsCyclesRange(accountId, erc20);
+            // slither-disable-next-line timestamp
             if (toCycle - fromCycle > maxCycles) {
                 receivableCycles = toCycle - fromCycle - maxCycles;
                 toCycle -= receivableCycles;
             }
             mapping(uint32 cycle => AmtDelta) storage amtDeltas =
                 _streamsStorage().states[erc20][accountId].amtDeltas;
+            // slither-disable-next-line timestamp
             for (uint32 cycle = fromCycle; cycle < toCycle; cycle++) {
                 AmtDelta memory amtDelta = amtDeltas[cycle];
                 amtPerCycle += amtDelta.thisCycle;
@@ -417,6 +418,7 @@ abstract contract Streams {
             bytes32[] memory squeezedHistoryHashes = new bytes32[](squeezedNum);
             StreamsState storage state = _streamsStorage().states[erc20][accountId];
             uint32[2 ** 32] storage nextSqueezed = state.nextSqueezed[senderId];
+            // slither-disable-next-line timestamp
             for (uint256 i = 0; i < squeezedNum; i++) {
                 // `squeezedRevIdxs` are sorted from the newest configuration to the oldest,
                 // but we need to consume them from the oldest to the newest.
@@ -698,7 +700,6 @@ abstract contract Streams {
         StreamReceiver[] memory currReceivers,
         int128 balanceDelta,
         StreamReceiver[] memory newReceivers,
-        // slither-disable-next-line similar-names
         uint32 maxEndHint1,
         uint32 maxEndHint2
     ) internal returns (int128 realBalanceDelta) {
@@ -1060,16 +1061,13 @@ abstract contract Streams {
                 }
             } else if (pickCurr) {
                 // Remove an existing stream
-                // slither-disable-next-line similar-names
                 StreamsState storage state = states[currRecv.accountId];
                 (uint32 start, uint32 end) = _streamRangeInFuture(currRecv, lastUpdate, currMaxEnd);
-                // slither-disable-next-line similar-names
                 int256 amtPerSec = int256(uint256(currRecv.config.amtPerSec()));
                 _addDeltaRange(state, start, end, -amtPerSec);
             } else if (pickNew) {
                 // Create a new stream
                 StreamsState storage state = states[newRecv.accountId];
-                // slither-disable-next-line uninitialized-local
                 (uint32 start, uint32 end) =
                     _streamRangeInFuture(newRecv, _currTimestamp(), newMaxEnd);
                 int256 amtPerSec = int256(uint256(newRecv.config.amtPerSec()));

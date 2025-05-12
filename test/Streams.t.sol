@@ -132,7 +132,6 @@ contract StreamsWrapper is Streams {
         StreamReceiver[] memory currReceivers,
         int128 balanceDelta,
         StreamReceiver[] memory newReceivers,
-        // slither-disable-next-line similar-names
         uint32 maxEndHint1,
         uint32 maxEndHint2
     ) public returns (int128 realBalanceDelta) {

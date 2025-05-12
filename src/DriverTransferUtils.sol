@@ -99,7 +99,6 @@ abstract contract DriverTransferUtils is ERC2771Context {
         StreamReceiver[] calldata currReceivers,
         int128 balanceDelta,
         StreamReceiver[] calldata newReceivers,
-        // slither-disable-next-line similar-names
         uint32 maxEndHint1,
         uint32 maxEndHint2,
         address transferTo
@@ -115,6 +114,7 @@ abstract contract DriverTransferUtils is ERC2771Context {
     /// @param erc20 The used ERC-20 token.
     /// @param amt The transferred amount
     function _transferFromCaller(IERC20 erc20, uint128 amt) internal {
+        // slither-disable-next-line arbitrary-send-erc20
         SafeERC20.safeTransferFrom(erc20, _msgSender(), address(_drips()), amt);
     }
 }

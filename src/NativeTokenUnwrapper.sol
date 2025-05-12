@@ -40,6 +40,7 @@ contract NativeTokenUnwrapper {
             wrappedNativeToken.withdraw(amount);
             Address.sendValue(recipient, amount);
         }
+        // slither-disable-next-line reentrancy-events
         emit Unwrapped(recipient, amount);
     }
 }

@@ -373,6 +373,7 @@ contract Drips is Managed, Streams, Splits {
         returns (uint128 receivedAmt)
     {
         receivedAmt = Streams._receiveStreams(accountId, erc20, maxCycles);
+        // slither-disable-next-line timestamp
         if (receivedAmt != 0) {
             _moveBalanceFromStreamsToSplits(erc20, receivedAmt);
             Splits._addSplittable(accountId, erc20, receivedAmt);
@@ -407,6 +408,7 @@ contract Drips is Managed, Streams, Splits {
         StreamsHistory[] memory streamsHistory
     ) public whenNotPaused returns (uint128 amt) {
         amt = Streams._squeezeStreams(accountId, erc20, senderId, historyHash, streamsHistory);
+        // slither-disable-next-line timestamp
         if (amt != 0) {
             _moveBalanceFromStreamsToSplits(erc20, amt);
             Splits._addSplittable(accountId, erc20, amt);
@@ -653,7 +655,6 @@ contract Drips is Managed, Streams, Splits {
         StreamReceiver[] memory currReceivers,
         int128 balanceDelta,
         StreamReceiver[] memory newReceivers,
-        // slither-disable-next-line similar-names
         uint32 maxEndHint1,
         uint32 maxEndHint2
     ) public whenNotPaused onlyDriver(accountId) returns (int128 realBalanceDelta) {
@@ -661,6 +662,7 @@ contract Drips is Managed, Streams, Splits {
         realBalanceDelta = Streams._setStreams(
             accountId, erc20, currReceivers, balanceDelta, newReceivers, maxEndHint1, maxEndHint2
         );
+        // slither-disable-next-line timestamp
         if (realBalanceDelta < 0) _decreaseStreamsBalance(erc20, uint128(-realBalanceDelta));
     }
 

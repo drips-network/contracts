@@ -114,6 +114,7 @@ contract RepoDeadlineDriver is Managed {
         uint256 giveTo;
         if (repoDriver.ownerOf(repoAccountId) != address(0)) {
             giveTo = recipientAccountId;
+            // slither-disable-next-line timestamp
         } else if (block.timestamp >= deadline) {
             giveTo = refundAccountId;
         } else {

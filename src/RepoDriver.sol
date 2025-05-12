@@ -35,10 +35,12 @@ contract RepoDriver is DriverTransferUtils, Managed {
     IAutomate public immutable gelatoAutomate;
 
     /// @notice The address collecting Gelato fees.
+    // slither-disable-next-line uninitialized-state
     address payable internal immutable gelatoFeeCollector;
     /// @notice The placeholder address meaning that the Gelato fee is paid in native tokens.
     address internal constant GELATO_NATIVE_TOKEN = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
     /// @notice The maximum gas that can be used in a single transaction.
+    // slither-disable-next-line uninitialized-state
     uint256 internal immutable txGasLimit;
     /// @notice The maximum possible request penalty which is the entire block gas limit.
     uint256 internal constant MAX_PENALTY = type(uint72).max;
@@ -253,6 +255,7 @@ contract RepoDriver is DriverTransferUtils, Managed {
         GelatoTasksOwner tasksOwner = _initGelato();
         _cancelAllGelatoTasks(tasksOwner);
         bytes32 taskId = _createGelatoTask(tasksOwner, ipfsCid);
+        // slither-disable-next-line reentrancy-events
         emit GelatoTaskUpdated(
             tasksOwner, taskId, ipfsCid, maxRequestsPerBlock, maxRequestsPer31Days
         );
@@ -347,6 +350,7 @@ contract RepoDriver is DriverTransferUtils, Managed {
         IAutomate2 gelatoAutomate2 = IAutomate2(address(gelatoAutomate));
         bytes32[] memory tasks = gelatoAutomate2.getTaskIdsByUser(address(tasksOwner));
         for (uint256 i = 0; i < tasks.length; i++) {
+            // slither-disable-next-line calls-loop
             tasksOwner.cancelTask(tasks[i]);
         }
     }
@@ -483,6 +487,7 @@ contract RepoDriver is DriverTransferUtils, Managed {
             _gelatoStorage().userFundsTotal -= userFundsUsed;
         }
         Address.sendValue(gelatoFeeCollector, amount);
+        // slither-disable-next-line reentrancy-events
         emit GelatoFeePaid(payer, userFundsUsed, amount - userFundsUsed);
     }
 
@@ -531,6 +536,7 @@ contract RepoDriver is DriverTransferUtils, Managed {
         _gelatoStorage().userFunds[user] -= amount;
         _gelatoStorage().userFundsTotal -= amount;
         Address.sendValue(receiver, amount);
+        // slither-disable-next-line reentrancy-events
         emit UserFundsWithdrawn(user, amount, receiver);
         return amount;
     }
@@ -626,7 +632,6 @@ contract RepoDriver is DriverTransferUtils, Managed {
         StreamReceiver[] calldata currReceivers,
         int128 balanceDelta,
         StreamReceiver[] calldata newReceivers,
-        // slither-disable-next-line similar-names
         uint32 maxEndHint1,
         uint32 maxEndHint2,
         address transferTo

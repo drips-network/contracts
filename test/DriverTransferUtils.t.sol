@@ -47,7 +47,6 @@ contract DummyDriver is DriverTransferUtils {
         StreamReceiver[] calldata currReceivers,
         int128 balanceDelta,
         StreamReceiver[] calldata newReceivers,
-        // slither-disable-next-line similar-names
         uint32 maxEndHint1,
         uint32 maxEndHint2,
         address transferTo

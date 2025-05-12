@@ -183,6 +183,7 @@ contract AxelarBridgedGovernor is Governor, IAxelarGMPExecutable {
         // slither-disable-next-line missing-zero-check
         gateway = gateway_;
         _ownerChain = ShortStrings.toShortString(ownerChain_);
+        // slither-disable-next-line missing-zero-check
         owner = owner_;
     }
 
