@@ -17,16 +17,18 @@ import {IOpsProxyFactory} from "gelato-automate/interfaces/IOpsProxyFactory.sol"
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
 /// @notice The supported forges where repositories are stored.
-/// For legacy reasons ORCID is handled like a forge despite not being one.
+/// For legacy reasons ORCID and websites are handled like forges despite not being ones.
 enum Forge {
     GitHub,
     GitLab,
-    ORCID
+    ORCID,
+    Website
 }
 
-/// @notice A Drips driver implementing repository-based or ORCID-based account identification.
-/// Each repository stored in one of the supported forges has a deterministic account ID assigned.
-/// By default the repositories have no owner and their accounts can't be controlled by anybody,
+/// @notice A Drips driver implementing account identification based
+/// on the ownership of a repository, an ORCID account or a website.
+/// Each of these entities has a single account ID deterministically assigned.
+/// By default the accounts have no owners and they can't be controlled by anybody,
 /// use `requestUpdateOwner` to update the owner.
 contract RepoDriver is DriverTransferUtils, Managed {
     /// @notice The Drips address used by this driver.
@@ -181,12 +183,18 @@ contract RepoDriver is DriverTransferUtils, Managed {
     /// `forgeId` is 3 and `nameEncoded` is the lower 27 bytes of the hash of `name`.
     /// When `forge` is ORCID, `name` must be at most 27 bytes long,
     /// `forgeId` is 4 and `nameEncoded` is `name` right-padded with zeros.
+    /// When `forge` is a website and `name` is at most 27 bytes long,
+    /// `forgeId` is 6 and `nameEncoded` is `name` right-padded with zeros.
+    /// When `forge` is a website and `name` is longer than 27 bytes,
+    /// `forgeId` is 7 and `nameEncoded` is the lower 27 bytes of the hash of `name`.
     /// @param forge The forge where the repository is stored.
     /// @param name The name of the repository.
     /// For GitHub and GitLab it must follow the `user_name/repository_name` structure
     /// and it must be formatted identically as in the repository's URL,
     /// including the case of each letter and special characters being removed.
     /// For ORCID it must be the ORCID identifier.
+    /// For a website the name must be the URL where FUNDING.json can be found
+    /// by making a request to `https://<name>/FUNDING.json`.
     /// @return accountId The account ID.
     function calcAccountId(Forge forge, bytes calldata name)
         public
@@ -213,10 +221,19 @@ contract RepoDriver is DriverTransferUtils, Managed {
                 // `nameEncoded` is the lower 27 bytes of the hash
                 nameEncoded = uint216(uint256(keccak256(name)));
             }
-        } else {
+        } else if (forge == Forge.ORCID) {
             require(name.length <= 27, "ORCID identifier too long");
             forgeId = 4;
             nameEncoded = uint216(bytes27(name));
+        } else {
+            if (name.length <= 27) {
+                forgeId = 6;
+                nameEncoded = uint216(bytes27(name));
+            } else {
+                forgeId = 7;
+                // `nameEncoded` is the lower 27 bytes of the hash
+                nameEncoded = uint216(uint256(keccak256(name)));
+            }
         }
         // By assignment we get `accountId` value:
         // `zeros (224 bits) | driverId (32 bits)`

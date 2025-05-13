@@ -414,6 +414,21 @@ contract RepoDriverTest is Test, Events {
         );
         vm.expectRevert("ORCID identifier too long");
         driver.calcAccountId(Forge.ORCID, name28);
+        assertAccountId(
+            Forge.Website,
+            name3,
+            0x00000002_06_612f62000000000000000000000000000000000000000000000000
+        );
+        assertAccountId(
+            Forge.Website,
+            name27,
+            0x00000002_06_6162636465666768696a6b6c6d2f6e6f707172737475767778797a
+        );
+        assertAccountId(
+            Forge.Website,
+            name28,
+            0x00000002_07_9b20b0f16f6d0e523b42684b6f3881fa3c23115048bc6643c2f866
+        );
     }
 
     function assertAccountId(Forge forge, bytes memory name, uint256 expectedAccountId)
