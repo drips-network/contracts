@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Caller} from "src/Caller.sol";
-import {Forge, GelatoTasksOwner, RepoDriver} from "src/RepoDriver.sol";
+import {RepoDriver} from "src/RepoDriver.sol";
 import {
     AccountMetadata,
     StreamConfigImpl,
@@ -12,190 +12,39 @@ import {
     SplitsReceiver
 } from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
-import {StdAssertions, Test} from "forge-std/Test.sol";
-import {
-    IAutomate,
-    IGelato,
-    IProxyModule,
-    Module,
-    ModuleData,
-    TriggerType
-} from "gelato-automate/integrations/Types.sol";
-import {IAutomate as IAutomate2} from "gelato-automate/interfaces/IAutomate.sol";
+import {console, StdAssertions, Test, Vm} from "forge-std/Test.sol";
 import {
     ERC20,
     IERC20,
     ERC20PresetFixedSupply
 } from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
+import {ECDSA} from "openzeppelin-contracts/utils/cryptography/ECDSA.sol";
 
-address constant GELATO_NATIVE_TOKEN = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
-
-contract Events {
-    event OwnerUpdateRequested(uint256 indexed accountId, Forge forge, bytes name, address payer);
-}
-
-contract Automate is StdAssertions, Events {
-    /// @dev Used by RepoDriver
-    Gelato public immutable gelato = new Gelato();
-    ProxyModule internal immutable _proxyModule = new ProxyModule();
-    bytes32 internal _taskId;
-    string internal _expectedIpfsCid;
-    uint256 internal _feeAmount;
-    address internal _feeToken;
-
-    fallback() external {
-        assertTrue(false, "Automate function not implemented");
-    }
-
-    /// @dev Used by RepoDriver
-    function taskModuleAddresses(Module module) public view returns (ProxyModule moduleAddress) {
-        assertTrue(module == Module.PROXY, "Only proxy module supported");
-        return _proxyModule;
-    }
-
-    function assertUserSupported(address user) internal view {
-        _proxyModule.opsProxyFactory().assertUserSupported(user);
-    }
-
-    /// @dev Used by RepoDriver
-    function getTaskIdsByUser(address user) public view returns (bytes32[] memory taskIds) {
-        assertUserSupported(user);
-        if (_taskId == 0) return new bytes32[](0);
-        taskIds = new bytes32[](1);
-        taskIds[0] = _taskId;
-    }
-
-    /// @dev Used by RepoDriver
-    function cancelTask(bytes32 taskId) public {
-        assertUserSupported(msg.sender);
-        assertNotEq(_taskId, 0, "No task created");
-        assertEq(_taskId, taskId, "Task not created");
-        _taskId = 0;
-    }
-
-    function expectIpfsCid(string calldata ipfsCid) public {
-        _expectedIpfsCid = ipfsCid;
-    }
-
-    /// @dev Used by RepoDriver
-    function createTask(
-        address execAddress,
-        bytes calldata execDataOrSelector,
-        ModuleData calldata moduleData,
-        address feeToken
-    ) public returns (bytes32 taskId) {
-        assertGe(execDataOrSelector.length, 4, "Exec data too short");
-
-        assertEq(moduleData.modules.length, 3, "Invalid modules length");
-        assertEq(moduleData.args.length, 3, "Invalid args length");
-
-        assertTrue(moduleData.modules[0] == Module.PROXY, "Invalid module 0");
-        assertEq(moduleData.args[0], "", "Invalid args 0");
-
-        assertTrue(moduleData.modules[1] == Module.WEB3_FUNCTION, "Invalid module 1");
-        assertNotEq(_expectedIpfsCid, "", "Expected IPFS CID not set");
-        assertEq(moduleData.args[1], abi.encode(_expectedIpfsCid, ""), "Invalid args 1");
-        _expectedIpfsCid = "";
-
-        assertTrue(moduleData.modules[2] == Module.TRIGGER, "Invalid module 2");
-        bytes32[][] memory topics = new bytes32[][](1);
-        topics[0] = new bytes32[](1);
-        topics[0][0] = OwnerUpdateRequested.selector;
-        bytes memory trigger = abi.encode(GelatoTasksOwner(msg.sender).owner(), topics, 1);
-        assertEq(moduleData.args[2], abi.encode(TriggerType.EVENT, trigger), "Invalid args 2");
-
-        assertEq(feeToken, GELATO_NATIVE_TOKEN, "Fee token not native");
-
-        assertEq(_taskId, 0, "Task already created");
-        taskId = keccak256(abi.encode(execAddress, execDataOrSelector, moduleData, feeToken));
-        _taskId = taskId;
-    }
-
-    function setFeeDetails(uint256 feeAmount, address feeToken) public {
-        _feeAmount = feeAmount;
-        _feeToken = feeToken;
-    }
-
-    /// @dev Used by RepoDriver
-    function getFeeDetails() public view returns (uint256 feeAmount, address feeToken) {
-        return (_feeAmount, _feeToken);
-    }
-}
-
-contract Gelato is StdAssertions {
-    /// @dev Used by RepoDriver
-    address public immutable feeCollector = address(bytes20("fee collector"));
-
-    fallback() external {
-        assertTrue(false, "Gelato function not implemented");
-    }
-}
-
-contract ProxyModule is StdAssertions {
-    /// @dev Used by RepoDriver
-    OpsProxyFactory public immutable opsProxyFactory = new OpsProxyFactory();
-
-    fallback() external {
-        assertTrue(false, "ProxyModule function not implemented");
-    }
-}
-
-contract OpsProxyFactory is StdAssertions {
-    address internal _user;
-    address internal immutable _proxy = address(bytes20("gelato proxy"));
-    bool internal _isProxyDeployed;
-
-    fallback() external {
-        assertTrue(false, "OpsProxyFactory function not implemented");
-    }
-
-    function assertUserSupported(address user) public view {
-        string memory message = "Unsupported user";
-        assertTrue(_isProxyDeployed, message);
-        assertEq(user, _user, message);
-    }
-
-    /// @dev Used by RepoDriver
-    function ownerOf(address proxy) external view returns (address) {
-        assertEq(proxy, _proxy, "Invalid proxy address");
-        return _user;
-    }
-
-    /// @dev Used by RepoDriver
-    function getProxyOf(address user) external view returns (address, bool) {
-        if (_isProxyDeployed) assertUserSupported(user);
-        return (_proxy, _isProxyDeployed);
-    }
-
-    /// @dev Used by RepoDriver
-    function deployFor(address user) external returns (address) {
-        assertFalse(_isProxyDeployed, "Proxy already deployed");
-        _isProxyDeployed = true;
-        _user = user;
-        return _proxy;
-    }
-}
-
-contract RepoDriverTest is Test, Events {
+contract RepoDriverTest is Test {
     Drips internal drips;
     Caller internal caller;
     RepoDriver internal driver;
     IERC20 internal erc20;
 
+    bytes32 internal chain = "chain";
+    bytes32 internal otherChain = "other chain";
+    Vm.Wallet internal oracle = vm.createWallet("oracle");
+    Vm.Wallet internal otherOracle = vm.createWallet("other oracle");
     address internal admin = address(bytes20("admin"));
+    address internal otherAdmin = address(bytes20("other admin"));
     address internal user = address(bytes20("user"));
+    address internal otherUser = address(bytes20("other user"));
     uint256 internal accountId;
     uint256 internal accountId1;
     uint256 internal accountId2;
     uint256 internal accountIdUser;
-    uint256 internal accountIdUnclaimed;
 
     bytes internal constant ERROR_NOT_OWNER = "Caller is not the account owner";
 
     function setUp() public {
         Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, address(this), "")));
+        drips = Drips(address(new ManagedProxy(dripsLogic, admin, "")));
 
         caller = new Caller();
 
@@ -203,38 +52,21 @@ contract RepoDriverTest is Test, Events {
         drips.registerDriver(address(1));
         drips.registerDriver(address(1));
 
-        Automate automate_ = new Automate();
-        string memory ipfsCid = "Gelato Function";
-        automate_.expectIpfsCid(ipfsCid);
-        bytes memory data = abi.encodeCall(RepoDriver.updateGelatoTask, (ipfsCid, 0, 0));
-
-        RepoDriver driverLogic = new RepoDriver(
-            drips, address(caller), drips.nextDriverId(), IAutomate(address(automate_))
-        );
-        driver = RepoDriver(payable(new ManagedProxy(driverLogic, admin, data)));
+        RepoDriver driverLogic = new RepoDriver(drips, address(caller), drips.nextDriverId(), chain);
+        bytes memory initCalldata = abi.encodeCall(RepoDriver.updateLitOracle, (oracle.addr));
+        driver = RepoDriver(payable(new ManagedProxy(driverLogic, admin, initCalldata)));
         drips.registerDriver(address(driver));
 
-        accountId = initialUpdateOwner("this/repo1", address(this));
-        accountId1 = initialUpdateOwner("this/repo2", address(this));
-        accountId2 = initialUpdateOwner("this/repo3", address(this));
-        accountIdUser = initialUpdateOwner("user/repo", user);
-        accountIdUnclaimed = driver.calcAccountId(Forge.GitHub, "this/repo");
+        accountId = updateOwnerByLit(0, "this/name1", address(this), 1);
+        accountId1 = updateOwnerByLit(0, "this/name2", address(this), 1);
+        accountId2 = updateOwnerByLit(0, "this/name3", address(this), 1);
+        accountIdUser = updateOwnerByLit(0, "user/name", user, 1);
 
         erc20 = new ERC20PresetFixedSupply("test", "test", type(uint136).max, address(this));
         erc20.approve(address(driver), type(uint256).max);
         erc20.transfer(user, erc20.totalSupply() / 100);
         vm.prank(user);
         erc20.approve(address(driver), type(uint256).max);
-    }
-
-    function automate() internal view returns (Automate automate_) {
-        return Automate(address(driver.gelatoAutomate()));
-    }
-
-    function gelatoProxy() internal view returns (address proxy) {
-        (proxy,) = automate().taskModuleAddresses(Module.PROXY).opsProxyFactory().getProxyOf(
-            address(driver.gelatoTasksOwner())
-        );
     }
 
     function noMetadata() internal pure returns (AccountMetadata[] memory accountMetadata) {
@@ -246,116 +78,67 @@ contract RepoDriverTest is Test, Events {
         accountMetadata[0] = AccountMetadata("key", "value");
     }
 
-    function initialUpdateOwner(bytes memory name, address owner)
+    function signPayload(
+        Vm.Wallet memory wallet,
+        bytes32 chain_,
+        uint8 sourceId,
+        bytes memory name,
+        address owner,
+        uint32 timestamp
+    ) internal pure returns (bytes32 r, bytes32 vs) {
+        bytes32 domainSeparator = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version)"),
+                keccak256("DripsOwnership"),
+                keccak256("1")
+            )
+        );
+        bytes32 structHash = keccak256(
+            abi.encode(
+                keccak256(
+                    "DripsOwnership(bytes32 chain,uint8 sourceId,"
+                    "bytes name,address owner,uint32 timestamp)"
+                ),
+                chain_,
+                sourceId,
+                keccak256(name),
+                owner,
+                timestamp
+            )
+        );
+        return vm.signCompact(wallet.privateKey, ECDSA.toTypedDataHash(domainSeparator, structHash));
+    }
+
+    function updateOwnerByLit(uint8 sourceId, bytes memory name, address owner, uint32 timestamp)
         internal
         returns (uint256 accountId_)
     {
-        accountId_ = driver.calcAccountId(Forge.GitHub, name);
-        updateOwnerByGelato(accountId_, owner, address(0));
+        (bytes32 r, bytes32 vs) = signPayload(oracle, chain, sourceId, name, owner, timestamp);
+        return updateOwnerByLit(sourceId, name, owner, timestamp, r, vs);
     }
 
-    function updateOwnerByGelato(uint256 accountId_, address owner, address payer) internal {
-        updateOwnerByGelato(accountId_, owner, payer, 0);
-    }
-
-    function updateOwnerByGelato(
-        uint256 accountId_,
+    function updateOwnerByLit(
+        uint8 sourceId,
+        bytes memory name,
         address owner,
-        address payer,
-        uint256 feeAmount
-    ) internal {
-        address feeCollector = automate().gelato().feeCollector();
-        automate().setFeeDetails(feeAmount, GELATO_NATIVE_TOKEN);
-        uint256 balanceBefore = feeCollector.balance;
-        vm.expectCall(address(automate()), bytes.concat(IAutomate.getFeeDetails.selector));
-        vm.prank(gelatoProxy());
-
-        driver.updateOwnerByGelato(accountId_, owner, payer);
-
-        assertEq(feeCollector.balance, balanceBefore + feeAmount, "Invalid fee collector balance");
-        assertOwner(accountId_, owner);
+        uint32 timestamp,
+        bytes32 r,
+        bytes32 vs
+    ) internal returns (uint256 accountId_) {
+        accountId_ = driver.updateOwnerByLit(sourceId, name, owner, timestamp, r, vs);
+        assertEq(driver.ownerOf(accountId_), owner, "Invalid account owner");
+        assertAccountId(sourceId, name, accountId_);
     }
 
-    function testUpgradeOwnerByGelato() public {
-        updateOwnerByGelato(accountIdUnclaimed, user, address(this));
+    function assertAccountId(uint8 sourceId, bytes memory name, uint256 expectedAccountId)
+        internal
+        view
+    {
+        uint256 actualAccountId = driver.calcAccountId(sourceId, name);
+        assertEq(bytes32(actualAccountId), bytes32(expectedAccountId), "Invalid account ID");
     }
 
-    function testUpgradeOwnerByGelatoPaidByCommonFunds() public {
-        Address.sendValue(payable(driver), 3);
-
-        updateOwnerByGelato(accountIdUnclaimed, user, address(this), 2);
-
-        assertCommonFunds(1);
-    }
-
-    function testUpgradeOwnerByGelatoPaidByUserFunds() public {
-        driver.depositUserFunds{value: 3}(address(this));
-
-        updateOwnerByGelato(accountIdUnclaimed, user, address(this), 2);
-
-        assertUserFunds(address(this), 1);
-    }
-
-    function testUpgradeOwnerByGelatoPaidByCommonAndUserFunds() public {
-        Address.sendValue(payable(driver), 2);
-        driver.depositUserFunds{value: 2}(address(this));
-
-        updateOwnerByGelato(accountIdUnclaimed, user, address(this), 3);
-
-        assertCommonFunds(1);
-        assertUserFunds(address(this), 0);
-    }
-
-    function testUpgradeOwnerByGelatoRevertsIfNotEnoughFunds() public {
-        automate().setFeeDetails(1, GELATO_NATIVE_TOKEN);
-        vm.prank(gelatoProxy());
-        vm.expectRevert("Not enough funds");
-        driver.updateOwnerByGelato(accountIdUnclaimed, user, address(this));
-    }
-
-    function testUpgradeOwnerByGelatoRevertsIfFeeNotInNativeTokens() public {
-        automate().setFeeDetails(0, address(bytes20("otherToken")));
-        vm.prank(gelatoProxy());
-        vm.expectRevert("Payment must be in native tokens");
-        driver.updateOwnerByGelato(accountIdUnclaimed, user, address(this));
-    }
-
-    function testUpgradeOwnerByGelatoRevertsIfNotCalledByProxy() public {
-        vm.expectRevert("Callable only by Gelato");
-        driver.updateOwnerByGelato(accountIdUnclaimed, user, address(this));
-    }
-
-    function testUpgradeOwnerByGelatoRevertsWhenOwnerUnchanged() public {
-        updateOwnerByGelato(accountIdUnclaimed, user, address(this));
-        vm.prank(gelatoProxy());
-        vm.expectRevert("New owner is the same");
-        driver.updateOwnerByGelato(accountIdUnclaimed, user, address(this));
-    }
-
-    function assertOwner(uint256 accountId_, address expectedOwner) internal view {
-        assertEq(driver.ownerOf(accountId_), expectedOwner, "Invalid account owner");
-    }
-
-    function assertCommonFunds(uint256 expectedAmt) internal view {
-        assertEq(driver.commonFunds(), expectedAmt, "Invalid common funds amount");
-    }
-
-    function assertUserFunds(address user_, uint256 expectedAmt) internal view {
-        assertEq(driver.userFunds(user_), expectedAmt, "Invalid user funds amount");
-    }
-
-    function assertAddressBalance(address user_, uint256 expectedAmt) internal view {
-        assertEq(user_.balance, expectedAmt, "Invalid address balance");
-    }
-
-    function testAccountIdsDoNotCollideBetweenForges() public view {
-        bytes memory name = "me/repo";
-        uint256 accountIdGitHub = driver.calcAccountId(Forge.GitHub, name);
-        uint256 accountIdGitLab = driver.calcAccountId(Forge.GitLab, name);
-        assertFalse(accountIdGitHub == accountIdGitLab, "Account IDs collide");
-    }
-
-    function testCalcAccountId() public {
+    function testCalcAccountId() public view {
         bytes memory name3 = "a/b";
         bytes memory name27 = "abcdefghijklm/nopqrstuvwxyz";
         bytes memory name28 = "abcdefghijklm/nopqrstuvwxyz_";
@@ -370,210 +153,163 @@ contract RepoDriverTest is Test, Events {
         );
         assertEq(
             keccak256(name28),
-            0x14ef39e0dc9b20b0f16f6d0e523b42684b6f3881fa3c23115048bc6643c2f866,
+            0x14ef39e0dc_9b20b0f16f6d0e523b42684b6f3881fa3c23115048bc6643c2f866,
             "Invalid 28 byte name hash"
         );
 
         assertAccountId(
-            Forge.GitHub,
-            name3,
-            0x00000002_00_612f62000000000000000000000000000000000000000000000000
+            0, name3, 0x00000002_00_612f62000000000000000000000000000000000000000000000000
         );
         assertAccountId(
-            Forge.GitHub,
-            name27,
-            0x00000002_00_6162636465666768696a6b6c6d2f6e6f707172737475767778797a
+            0, name27, 0x00000002_00_6162636465666768696a6b6c6d2f6e6f707172737475767778797a
         );
         assertAccountId(
-            Forge.GitHub,
-            name28,
-            0x00000002_01_9b20b0f16f6d0e523b42684b6f3881fa3c23115048bc6643c2f866
+            0, name28, 0x00000002_01_9b20b0f16f6d0e523b42684b6f3881fa3c23115048bc6643c2f866
         );
         assertAccountId(
-            Forge.GitLab,
-            name3,
-            0x00000002_02_612f62000000000000000000000000000000000000000000000000
+            1, name3, 0x00000002_02_612f62000000000000000000000000000000000000000000000000
         );
         assertAccountId(
-            Forge.GitLab,
-            name27,
-            0x00000002_02_6162636465666768696a6b6c6d2f6e6f707172737475767778797a
+            1, name27, 0x00000002_02_6162636465666768696a6b6c6d2f6e6f707172737475767778797a
         );
         assertAccountId(
-            Forge.GitLab,
-            name28,
-            0x00000002_03_9b20b0f16f6d0e523b42684b6f3881fa3c23115048bc6643c2f866
+            1, name28, 0x00000002_03_9b20b0f16f6d0e523b42684b6f3881fa3c23115048bc6643c2f866
         );
         assertAccountId(
-            Forge.ORCID, name3, 0x00000002_04_612f62000000000000000000000000000000000000000000000000
+            2, name3, 0x00000002_04_612f62000000000000000000000000000000000000000000000000
         );
         assertAccountId(
-            Forge.ORCID,
-            name27,
-            0x00000002_04_6162636465666768696a6b6c6d2f6e6f707172737475767778797a
-        );
-        vm.expectRevert("ORCID identifier too long");
-        driver.calcAccountId(Forge.ORCID, name28);
-        assertAccountId(
-            Forge.Website,
-            name3,
-            0x00000002_06_612f62000000000000000000000000000000000000000000000000
+            2, name27, 0x00000002_04_6162636465666768696a6b6c6d2f6e6f707172737475767778797a
         );
         assertAccountId(
-            Forge.Website,
-            name27,
-            0x00000002_06_6162636465666768696a6b6c6d2f6e6f707172737475767778797a
+            2, name28, 0x00000002_05_9b20b0f16f6d0e523b42684b6f3881fa3c23115048bc6643c2f866
         );
         assertAccountId(
-            Forge.Website,
-            name28,
-            0x00000002_07_9b20b0f16f6d0e523b42684b6f3881fa3c23115048bc6643c2f866
+            127, name3, 0x00000002_fe_612f62000000000000000000000000000000000000000000000000
+        );
+        assertAccountId(
+            127, name27, 0x00000002_fe_6162636465666768696a6b6c6d2f6e6f707172737475767778797a
+        );
+        assertAccountId(
+            127, name28, 0x00000002_ff_9b20b0f16f6d0e523b42684b6f3881fa3c23115048bc6643c2f866
         );
     }
 
-    function assertAccountId(Forge forge, bytes memory name, uint256 expectedAccountId)
-        internal
-        view
-    {
-        uint256 actualAccountId = driver.calcAccountId(forge, name);
-        assertEq(bytes32(actualAccountId), bytes32(expectedAccountId), "Invalid account ID");
+    function testCalcAccountIdRevertsWhenSourceIdTooHigh() public {
+        vm.expectRevert("Source ID too high");
+        driver.calcAccountId(128, "name");
     }
 
-    function testUpdateGelatoTask() public {
-        address taskOwner = address(driver.gelatoTasksOwner());
-        string memory ipfsCid = "The new Gelato Function";
-        automate().expectIpfsCid(ipfsCid);
-        vm.expectCall(address(automate()), bytes.concat(Automate.createTask.selector));
+    function testEmitAccountId() public {
+        uint8 sourceId = 1;
+        bytes memory name = "name";
+
+        uint256 accountId_ = driver.emitAccountId(sourceId, name);
+
+        assertAccountId(sourceId, name, accountId_);
+    }
+
+    function testUpdateLitOracle() public {
+        assertEq(driver.litOracle(), oracle.addr, "Invalid oracle before the update");
         vm.prank(admin);
-        driver.updateGelatoTask(ipfsCid, 0, 0);
-        assertEq(taskOwner, address(driver.gelatoTasksOwner()), "Task owner changed");
+        driver.updateLitOracle(otherOracle.addr);
+        assertEq(driver.litOracle(), otherOracle.addr, "Invalid oracle after the update");
     }
 
-    function testUpdateGelatoTaskRevertsIfNotCalledByAdmin() public {
-        string memory ipfsCid = "The new Gelato Function";
-        automate().expectIpfsCid(ipfsCid);
+    function testUpdateLitOracleRevertsWhenNotCalledByTheAdmin() public {
         vm.expectRevert("Caller not the admin");
-        driver.updateGelatoTask(ipfsCid, 0, 0);
+        driver.updateLitOracle(otherAdmin);
     }
 
-    function testRequestUpdateOwner() public {
-        Forge forge = Forge.GitHub;
-        bytes memory name = "this/repo";
-
-        vm.expectEmit(address(driver));
-        emit OwnerUpdateRequested(driver.calcAccountId(forge, name), forge, name, address(this));
-        driver.requestUpdateOwner(forge, name);
+    function testUpdateOwnerByLit() public {
+        uint8 sourceId = 1;
+        bytes memory name = "name";
+        uint32 timestamp = 1;
+        (bytes32 r, bytes32 vs) = signPayload(oracle, chain, sourceId, name, user, timestamp);
+        updateOwnerByLit(sourceId, name, user, timestamp, r, vs);
     }
 
-    function testRequestUpdateOwnerViaForwarder() public {
-        Forge forge = Forge.GitHub;
-        bytes memory name = "this/repo";
-        vm.prank(user);
-        caller.authorize(address(this));
-        bytes memory data = abi.encodeCall(driver.requestUpdateOwner, (forge, name));
+    function testUpdateOwnerByLitRevertsWhenSignatureInvalid() public {
+        uint8 sourceId = 1;
+        bytes memory name = "name";
+        uint32 timestamp = 1;
+        (bytes32 r, bytes32 vs) = signPayload(oracle, chain, sourceId, name, user, timestamp);
 
-        vm.expectEmit(address(driver));
-        emit OwnerUpdateRequested(driver.calcAccountId(forge, name), forge, name, user);
-        caller.callAs(user, address(driver), data);
+        // Invalid source ID
+        expectSignatureInvalid(sourceId + 1, name, user, timestamp, r, vs);
+        // Invalid name
+        expectSignatureInvalid(sourceId, bytes.concat(name, "!"), user, timestamp, r, vs);
+        // Invalid new owner
+        expectSignatureInvalid(sourceId, name, otherUser, timestamp, r, vs);
+        // Invalid timestamp
+        expectSignatureInvalid(sourceId, name, user, timestamp + 1, r, vs);
+        // // Invalid R
+        expectSignatureInvalid(sourceId, name, user, timestamp, r ^ bytes32(uint256(0x01)), vs);
+        // // Invalid VS
+        expectSignatureInvalid(sourceId, name, user, timestamp, r, vs ^ bytes32(uint256(0x0100)));
+        // Invalid oracle
+        (r, vs) = signPayload(otherOracle, chain, sourceId, name, user, timestamp);
+        expectSignatureInvalid(sourceId, name, user, timestamp, r, vs);
+        // Invalid chain
+        (r, vs) = signPayload(oracle, otherChain, sourceId, name, user, timestamp);
+        expectSignatureInvalid(sourceId, name, user, timestamp, r, vs);
     }
 
-    function testRequestUpdateOwnerAppliesGasPenalty() public {
-        string memory ipfsCid = "The new Gelato Function";
-        automate().expectIpfsCid(ipfsCid);
+    function expectSignatureInvalid(
+        uint8 sourceId,
+        bytes memory name,
+        address owner,
+        uint32 timestamp,
+        bytes32 r,
+        bytes32 vs
+    ) internal {
+        vm.expectRevert("Invalid Lit oracle signature");
+        driver.updateOwnerByLit(sourceId, name, owner, timestamp, r, vs);
+    }
+
+    function testUpdateOwnerByLitWhenSignatureNewerThanCurrentlyUsed() public {
+        uint8 sourceId = 1;
+        bytes memory name = "name";
+        uint32 timestamp = 2;
+        updateOwnerByLit(sourceId, name, user, timestamp);
+
+        updateOwnerByLit(sourceId, name, otherUser, timestamp + 1);
+    }
+
+    function testUpdateOwnerByLitRevertsWhenSignatureAsOldAsCurrentlyUsed() public {
+        uint8 sourceId = 1;
+        bytes memory name = "name";
+        uint32 timestamp = 2;
+        updateOwnerByLit(sourceId, name, user, timestamp);
+
+        (bytes32 r, bytes32 vs) = signPayload(oracle, chain, sourceId, name, otherUser, timestamp);
+        vm.expectRevert("Payload obsolete");
+        driver.updateOwnerByLit(sourceId, name, otherUser, timestamp, r, vs);
+    }
+
+    function testUpdateOwnerByLitRevertsWhenSignatureOlderThanCurrentlyUsed() public {
+        uint8 sourceId = 1;
+        bytes memory name = "name";
+        uint32 timestamp = 2;
+        updateOwnerByLit(sourceId, name, user, timestamp);
+
+        timestamp--;
+        (bytes32 r, bytes32 vs) = signPayload(oracle, chain, sourceId, name, otherUser, timestamp);
+        vm.expectRevert("Payload obsolete");
+        driver.updateOwnerByLit(sourceId, name, otherUser, timestamp, r, vs);
+    }
+
+    function testUpdateOwnerByLitUsingRealOracleResponse() public {
         vm.prank(admin);
-        // The penalty increase of 1/6 of the block gas results in maximum 3 requests per block.
-        // Decrease of the penalty by 1 increase per day results in 31 requests per 31 days
-        // on top of the 6 requests maxing out the penalty.
-        uint256 penaltyIncrease = block.gaslimit / 6;
-        driver.updateGelatoTask(ipfsCid, 3, 31 + 6);
-
-        // Move away from timestamp 0 by the time it takes to decrease the penalty by 1 increase.
-        vm.warp(1 days);
-        requestWithGasPenalty(0 * penaltyIncrease);
-        requestWithGasPenalty(1 * penaltyIncrease);
-        requestWithGasPenalty(2 * penaltyIncrease);
-        // Decrease the penalty by 2 increases.
-        vm.warp(vm.getBlockTimestamp() + 2 days);
-        requestWithGasPenalty(1 * penaltyIncrease);
-    }
-
-    function requestWithGasPenalty(uint256 gasPenalty) internal {
-        assertApproxEqAbs(gasPenalty, driver.requestUpdateOwnerGasPenalty(), 1, "Invalid penalty");
-        uint256 gasUsed = gasleft();
-        driver.requestUpdateOwner(Forge.GitHub, "this/repo");
-        gasUsed -= gasleft();
-        uint256 gasBase = 8_000;
-        uint256 gasDelta = 4_000;
-        assertApproxEqAbs(gasUsed, gasBase + gasPenalty, gasDelta, "Invalid applied penalty");
-    }
-
-    function testReceivedNativeTokensAreAddedToCommonFunds() public {
-        assertCommonFunds(0);
-        Address.sendValue(payable(driver), 1);
-        assertCommonFunds(1);
-        Address.sendValue(payable(driver), 2);
-        assertCommonFunds(3);
-    }
-
-    function testDepositUserFunds() public {
-        assertUserFunds(user, 0);
-
-        driver.depositUserFunds{value: 1}(user);
-        assertUserFunds(user, 1);
-
-        driver.depositUserFunds{value: 2}(user);
-        assertUserFunds(user, 3);
-    }
-
-    function testWithdrawFunds() public {
-        driver.depositUserFunds{value: 3}(address(this));
-        assertUserFunds(address(this), 3);
-        assertAddressBalance(admin, 0);
-
-        driver.withdrawUserFunds(2, payable(admin));
-        assertUserFunds(address(this), 1);
-        assertAddressBalance(admin, 2);
-    }
-
-    function testWithdrawFundsViaForwarder() public {
-        driver.depositUserFunds{value: 3}(user);
-        assertUserFunds(user, 3);
-        assertAddressBalance(user, 0);
-
-        vm.prank(user);
-        caller.authorize(address(this));
-        bytes memory data = abi.encodeCall(driver.withdrawUserFunds, (2, payable(admin)));
-
-        caller.callAs(user, address(driver), data);
-        assertUserFunds(user, 1);
-        assertAddressBalance(admin, 2);
-    }
-
-    function testWithdrawFundsAll() public {
-        driver.depositUserFunds{value: 3}(address(this));
-        assertUserFunds(address(this), 3);
-        assertAddressBalance(admin, 0);
-
-        driver.withdrawUserFunds(0, payable(admin));
-        assertUserFunds(address(this), 0);
-        assertAddressBalance(admin, 3);
-    }
-
-    function testWithdrawFundsAllWhenBalanceIsZero() public {
-        assertUserFunds(address(this), 0);
-        assertAddressBalance(admin, 0);
-
-        driver.withdrawUserFunds(0, payable(admin));
-        assertUserFunds(address(this), 0);
-        assertAddressBalance(admin, 0);
-    }
-
-    function testWithdrawFundsRevertsWhenAmountTooHigh() public {
-        driver.depositUserFunds{value: 3}(address(this));
-        assertUserFunds(address(this), 3);
-
-        vm.expectRevert("Not enough user funds");
-        driver.withdrawUserFunds(4, payable(admin));
+        driver.updateLitOracle(0xB032D1391AD387D2CDDAA855B32dB957E178503C);
+        updateOwnerByLit(
+            0,
+            "CodeSandwich/Not-dogdy-AT-ALL",
+            0x0123456789abcDEF0123456789abCDef01234567,
+            1754398879,
+            0x28decba6e911311664cbc601c72e6d8701c7ec5ecff82732bc7e7dd4d2e0eed4,
+            0x5dd612af3d39922a105320458d7f7452ae00ab2d828ff4969f64abe63c8bd6b9
+        );
     }
 
     function testCollect() public {
@@ -708,22 +444,6 @@ contract RepoDriverTest is Test, Events {
         _;
     }
 
-    function testRequestUpdateOwnerCanBePaused() public canBePausedTest {
-        driver.requestUpdateOwner(Forge.GitHub, "");
-    }
-
-    function testUpdateOwnerByGelatoCanBePaused() public canBePausedTest {
-        driver.updateOwnerByGelato(0, address(0), address(0));
-    }
-
-    function testDepositUserFundsCanBePaused() public canBePausedTest {
-        driver.depositUserFunds(address(0));
-    }
-
-    function testWithdrawUserFundsCanBePaused() public canBePausedTest {
-        driver.withdrawUserFunds(0, payable(0));
-    }
-
     function testCollectCanBePaused() public canBePausedTest {
         driver.collect(0, erc20, user);
     }
@@ -742,59 +462,5 @@ contract RepoDriverTest is Test, Events {
 
     function testEmitAccountMetadataCanBePaused() public canBePausedTest {
         driver.emitAccountMetadata(0, noMetadata());
-    }
-}
-
-contract GelatoTasksOwnerTest is Test {
-    GelatoTasksOwner tasksOwner;
-    address automate;
-
-    function setUp() public {
-        automate = address(bytes20("automate"));
-        tasksOwner = new GelatoTasksOwner(IAutomate(automate));
-    }
-
-    function testOwner() public view {
-        assertEq(address(this), tasksOwner.owner(), "Invalid owner");
-    }
-
-    function testCancelTask() public {
-        bytes32 taskId = "taskId";
-        vm.expectCall(automate, abi.encodeCall(IAutomate.cancelTask, (taskId)), 1);
-        vm.mockCall(automate, bytes(""), "");
-        tasksOwner.cancelTask(taskId);
-    }
-
-    function testCancelTaskRevertsWhenNotCalledByOwner() public {
-        vm.prank(address(bytes20("not owner")));
-        vm.expectRevert("Callable only by the owner");
-        tasksOwner.cancelTask(0);
-    }
-
-    function testCreateTask() public {
-        address execAddress = address(bytes20("execAddress"));
-        bytes memory execData = "execData";
-        ModuleData memory moduleData = ModuleData(new Module[](1), new bytes[](1));
-        moduleData.modules[0] = Module.PROXY;
-        moduleData.args[0] = "moduleData";
-        address feeToken = address(bytes20("feeToken"));
-        bytes32 taskId = "taskId";
-
-        vm.expectCall(
-            automate,
-            abi.encodeCall(IAutomate.createTask, (execAddress, execData, moduleData, feeToken)),
-            1
-        );
-        vm.mockCall(automate, bytes(""), abi.encode(taskId));
-        bytes32 actualTaskId = tasksOwner.createTask(execAddress, execData, moduleData, feeToken);
-        assertEq(actualTaskId, taskId, "Invalid task ID");
-    }
-
-    function testCreateTaskRevertsWhenNotCalledByOwner() public {
-        vm.prank(address(bytes20("not owner")));
-        vm.expectRevert("Callable only by the owner");
-        tasksOwner.createTask(
-            address(0), "", ModuleData(new Module[](0), new bytes[](0)), address(0)
-        );
     }
 }

@@ -1,0 +1,31 @@
+{
+  "name": "oracle",
+  "version": "1.0.0",
+  "description": "The Drips Lit oracle",
+  "main": "index.js",
+  "scripts": {
+    "query": "node -e 'require(`./oracle.ts`).query()'",
+    "mintPkp": "node -e 'require(`./oracle.ts`).mintPkp()'"
+  },
+  "author": "",
+  "license": "GPL-3.0-only",
+  "dependencies": {
+    "@lit-protocol/auth-helpers": "^7.2.0",
+    "@lit-protocol/constants": "^7.2.0",
+    "@lit-protocol/contracts-sdk": "^7.2.0",
+    "@lit-protocol/lit-node-client": "^7.2.0",
+    "ethers": "^5.7.1"
+  },
+  "devDependencies": {
+    "@types/chai": "^4.3.19",
+    "@types/chai-json-schema": "^1.4.10",
+    "@types/mocha": "^10.0.8",
+    "@types/node": "^22.5.5",
+    "chai": "4.5.0",
+    "chai-json-schema": "^1.5.1",
+    "mocha": "^10.7.3",
+    "tsc": "^2.0.4",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2"
+  }
+}

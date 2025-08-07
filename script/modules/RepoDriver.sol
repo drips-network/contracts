@@ -11,7 +11,7 @@ import {
     Module,
     ModuleData
 } from "script/utils/ModulesDeployer.sol";
-import {IAutomate, RepoDriver} from "src/RepoDriver.sol";
+import {RepoDriver} from "src/RepoDriver.sol";
 
 bytes32 constant REPO_DRIVER_MODULE_SALT = "RepoDriverModule";
 
@@ -26,14 +26,10 @@ function repoDriverModule(ModulesDeployer modulesDeployer) view returns (RepoDri
 function repoDriverModuleData(
     ModulesDeployer modulesDeployer,
     address admin,
-    IAutomate gelatoAutomate,
-    string memory ipfsCid,
-    uint32 maxRequestsPerBlock,
-    uint32 maxRequestsPer31Days
+    bytes32 chain,
+    address litOracle
 ) pure returns (ModuleData memory) {
-    bytes memory args = abi.encode(
-        modulesDeployer, admin, gelatoAutomate, ipfsCid, maxRequestsPerBlock, maxRequestsPer31Days
-    );
+    bytes memory args = abi.encode(modulesDeployer, admin, chain, litOracle);
     return ModuleData({
         salt: REPO_DRIVER_MODULE_SALT,
         initCode: abi.encodePacked(type(RepoDriverModule).creationCode, args),
@@ -44,22 +40,15 @@ function repoDriverModuleData(
 contract RepoDriverModule is Module {
     RepoDriver public immutable repoDriver;
 
-    constructor(
-        ModulesDeployer modulesDeployer,
-        address admin,
-        IAutomate gelatoAutomate,
-        string memory ipfsCid,
-        uint32 maxRequestsPerBlock,
-        uint32 maxRequestsPer31Days
-    ) Module(modulesDeployer, REPO_DRIVER_MODULE_SALT) {
+    constructor(ModulesDeployer modulesDeployer, address admin, bytes32 chain, address litOracle)
+        Module(modulesDeployer, REPO_DRIVER_MODULE_SALT)
+    {
         DripsModule dripsModule_ = dripsModule(modulesDeployer);
         Drips drips = dripsModule_.drips();
         address forwarder = address(callerModule(modulesDeployer).caller());
         uint32 driverId = 3;
-        RepoDriver logic = new RepoDriver(drips, forwarder, driverId, gelatoAutomate);
-        bytes memory data = abi.encodeCall(
-            RepoDriver.updateGelatoTask, (ipfsCid, maxRequestsPerBlock, maxRequestsPer31Days)
-        );
+        RepoDriver logic = new RepoDriver(drips, forwarder, driverId, chain);
+        bytes memory data = abi.encodeCall(RepoDriver.updateLitOracle, (litOracle));
         address proxy = create3ManagedProxy(modulesDeployer, "RepoDriver", logic, admin, data);
         repoDriver = RepoDriver(payable(proxy));
         dripsModule_.claimDriverId(REPO_DRIVER_MODULE_SALT, driverId, proxy);

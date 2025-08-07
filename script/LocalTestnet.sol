@@ -25,7 +25,6 @@ import {
     deployModulesDeployer, ModulesDeployer, ModuleData
 } from "script/utils/ModulesDeployer.sol";
 import {DummyWrappedNativeToken, IWrappedNativeToken} from "src/IWrappedNativeToken.sol";
-import {DummyGelatoAutomate} from "src/RepoDriver.sol";
 
 contract Deploy is Script {
     function run() public {
@@ -47,9 +46,12 @@ contract Deploy is Script {
         modules = new ModuleData[](3);
         modules[0] = nftDriverModuleData(modulesDeployer, governor);
         modules[1] = immutableSplitsDriverModuleData(modulesDeployer, governor);
-        modules[2] =
-            repoDriverModuleData(modulesDeployer, governor, new DummyGelatoAutomate(), "", 0, 0);
-        modulesDeployer.deployModules(modules);
+        modules[2] = repoDriverModuleData(
+            modulesDeployer,
+            governor,
+            bytes32("localTestnet"),
+            0xB032D1391AD387D2CDDAA855B32dB957E178503C
+        );
 
         modules = new ModuleData[](4);
         modules[0] = repoSubAccountDriverModuleData(modulesDeployer, governor);
