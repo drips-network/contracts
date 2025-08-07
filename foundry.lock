@@ -8,9 +8,6 @@
   "lib/forge-std": {
     "rev": "3b20d60d14b343ee4f908cb8079495c07f5e8981"
   },
-  "lib/gelato-automate": {
-    "rev": "ae1caca8c4341532213dbb088555e13a5e1e443e"
-  },
   "lib/openzeppelin-contracts": {
     "rev": "e50c24f5839db17f46991478384bfda14acfb830"
   }

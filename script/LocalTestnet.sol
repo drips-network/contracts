@@ -24,7 +24,6 @@ import {create3} from "script/utils/Create3Helpers.sol";
 import {writeDeploymentJson} from "script/utils/DeploymentJson.sol";
 import {deployModulesDeployer, ModulesDeployer, ModuleData} from "script/utils/ModulesDeployer.sol";
 import {DummyWrappedNativeToken, IWrappedNativeToken} from "src/IWrappedNativeToken.sol";
-import {DummyGelatoAutomate} from "src/RepoDriver.sol";
 
 contract Deploy is Script {
     function run() public {
@@ -32,30 +31,34 @@ contract Deploy is Script {
         bytes32 salt = bytes32("test");
 
         vm.startBroadcast();
+        IWrappedNativeToken wrappedNativeToken = new DummyWrappedNativeToken();
         etchSingletonFactory();
         ICreate3Factory create3Factory = deployCreate3Factory();
         ModulesDeployer modulesDeployer = deployModulesDeployer(create3Factory, salt, msg.sender);
 
         address governor = msg.sender;
-        ModuleData[] memory modules = new ModuleData[](3);
+        ModuleData[] memory modules = new ModuleData[](2);
         modules[0] = callerModuleData(modulesDeployer);
         modules[1] = dripsModuleData(modulesDeployer, governor, 1 days);
-        modules[2] = addressDriverModuleData(modulesDeployer, governor);
-        modulesDeployer.deployModules(modules);
-
-        modules = new ModuleData[](3);
-        modules[0] = nftDriverModuleData(modulesDeployer, governor);
-        modules[1] = immutableSplitsDriverModuleData(modulesDeployer, governor);
-        modules[2] =
-            repoDriverModuleData(modulesDeployer, governor, new DummyGelatoAutomate(), "", 0, 0);
         modulesDeployer.deployModules(modules);
 
         modules = new ModuleData[](4);
-        modules[0] = repoSubAccountDriverModuleData(modulesDeployer, governor);
-        modules[1] = repoDeadlineDriverModuleData(modulesDeployer, governor);
-        IWrappedNativeToken wrappedNativeToken = new DummyWrappedNativeToken();
-        modules[2] = giversRegistryModuleData(modulesDeployer, governor, wrappedNativeToken);
+        modules[0] = addressDriverModuleData(modulesDeployer, governor);
+        modules[1] = nftDriverModuleData(modulesDeployer, governor);
+        modules[2] = immutableSplitsDriverModuleData(modulesDeployer, governor);
         modules[3] = nativeTokenUnwrapperModuleData(modulesDeployer, wrappedNativeToken);
+        modulesDeployer.deployModules(modules);
+
+        modules = new ModuleData[](4);
+        modules[0] = repoDriverModuleData(
+            modulesDeployer,
+            governor,
+            bytes32("localtestnet"),
+            0xb49311f1cEEFea73D9A3577Fb4c5C55201b1005E
+        );
+        modules[1] = repoSubAccountDriverModuleData(modulesDeployer, governor);
+        modules[2] = repoDeadlineDriverModuleData(modulesDeployer, governor);
+        modules[3] = giversRegistryModuleData(modulesDeployer, governor, wrappedNativeToken);
         modulesDeployer.deployModules(modules);
 
         writeDeploymentJson(vm, modulesDeployer, salt);

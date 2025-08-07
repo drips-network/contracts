@@ -1,0 +1,37 @@
+{
+  "name": "oracle",
+  "version": "0.0.1",
+  "license": "GPL-3.0-only",
+  "description": "The Drips Lit oracle",
+  "type": "module",
+  "scripts": {
+    "format": "prettier --write .",
+    "deposit": "node index.js deposit",
+    "getDeployment": "node index.js getDeployment",
+    "queryGitHub": "node index.js queryByName gitHub",
+    "queryGitHubUser": "node index.js queryByName gitHubUser",
+    "queryGitLab": "node index.js queryByName gitLab",
+    "queryGitLabUser": "node index.js queryByToken gitLabUser",
+    "queryGitLabGroup": "node index.js queryByName gitLabGroup",
+    "queryCodeberg": "node index.js queryByName codeberg",
+    "queryCodebergUser": "node index.js queryByToken codebergUser",
+    "queryRadicle": "node index.js queryByName radicle",
+    "queryHuggingFace": "node index.js queryByName huggingFace",
+    "queryHuggingFaceDataset": "node index.js queryByName huggingFaceDataset",
+    "queryHuggingFaceUser": "node index.js queryByToken huggingFaceUser",
+    "queryOrcid": "node index.js queryByName orcid",
+    "queryOrcidSandbox": "node index.js queryByName orcidSandbox",
+    "queryWebsite": "node index.js queryByName website"
+  },
+  "dependencies": {
+    "@lit-protocol/auth": "^8.2.3",
+    "@lit-protocol/lit-client": "^8.3.1",
+    "js-yaml": "=4.1.1"
+  },
+  "devDependencies": {
+    "prettier": "^3.8.1"
+  },
+  "prettier": {
+    "printWidth": 100
+  }
+}
