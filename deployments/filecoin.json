@@ -11,7 +11,9 @@
     "ModulesDeployer": "0xB1d6865994c16c12288e7DE36a3457e8a04be8E2",
     "NFTDriver": "0x2F23217A87cAf04ae586eed7a3d689f6C48498dB",
     "NativeTokenUnwrapper": "0x64e0d60C70e9778C2E649FfBc90259C86a6Bf396",
+    "RepoDeadlineDriver": "0x0386b66e2b0106ff27ef26e84102ca78a5c0edef",
     "RepoDriver": "0xe75f56B26857cAe06b455Bfc9481593Ae0FB4257",
     "RepoDriver tasks owner": "0x6691F8fAaB86B023f09801D24E808344BEC1D314",
+    "RepoSubAccountDriver": "0x925a69f6d07ee4c753df139bcc2a946e1d1ee92a",
     "Salt": "DripsV2Final"
 }

@@ -30,5 +30,17 @@
     "RepoDriver AnyApi job ID":      "9af746c7cfbc415c9737b239df9a30ab",
     "RepoDriver AnyApi default fee": "150000000000000000",
     "RepoDriver logic":              "0x7A9a2a29B8d98922Ea2E70c73B123e36C95d1515",
-    "RepoDriver admin":              "0x341a08926dCa7fa7D135F96E4d76b696e5f6d38d"
+    "RepoDriver admin":              "0x341a08926dCa7fa7D135F96E4d76b696e5f6d38d",
+    "RepoSubAccountDriver":          "0x317400fd9dfdad78d53a34455d89beb8f03f90ee",
+    "RepoSubAccountDriver ID":       "4",
+    "RepoSubAccountDriver logic":    "0x81e8abd77d3b9bee5177969a0a86f1b73ba17dad",
+    "RepoSubAccountDriver admin":    "0x341a08926dCa7fa7D135F96E4d76b696e5f6d38d",
+    "RepoDeadlineDriver":            "0x4e576318213e3c9b436d0758a021a485c5d8b929",
+    "RepoDeadlineDriver ID":         "5",
+    "RepoDeadlineDriver logic":      "0xefdfd78ea41b94aecfbad924f8c23fef5f560c8a",
+    "RepoDeadlineDriver admin":      "0x341a08926dCa7fa7D135F96E4d76b696e5f6d38d",
+    "GiversRegistry":                "0xb12fb92dcdcb2b8c6785c56829dc83a414035fd2",
+    "GiversRegistry logic":          "0x875d535be4e2c08635813adf94d296774cd88e9b",
+    "GiversRegistry admin":          "0x341a08926dCa7fa7D135F96E4d76b696e5f6d38d",
+    "NativeTokenUnwrapper":          "0xf470601db8f7eebac6612a16bf15daed0f414f6a"
 }
