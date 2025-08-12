@@ -16,7 +16,15 @@ import {
 } from "script/modules/LZBridgedGovernor.sol";
 import {nativeTokenUnwrapperModuleData} from "script/modules/NativeTokenUnwrapper.sol";
 import {nftDriverModuleData} from "script/modules/NFTDriver.sol";
-import {IAutomate, repoDriverModuleData} from "script/modules/RepoDriver.sol";
+import {
+    repoDeadlineDriverModule,
+    repoDeadlineDriverModuleData
+} from "script/modules/RepoDeadlineDriver.sol";
+import {IAutomate, repoDriverModule, repoDriverModuleData} from "script/modules/RepoDriver.sol";
+import {
+    repoSubAccountDriverModule,
+    repoSubAccountDriverModuleData
+} from "script/modules/RepoSubAccountDriver.sol";
 import {DeployCLI} from "script/utils/CLI.sol";
 import {deployCreate3Factory, ICreate3Factory} from "script/utils/Create3Factory.sol";
 import {writeDeploymentJson} from "script/utils/DeploymentJson.sol";
@@ -42,6 +50,8 @@ import {
     requireRunOnEthereum,
     WETH
 } from "script/utils/Radworks.sol";
+
+uint256 constant CHAIN_ID = 10;
 
 // Take from https://docs.optimism.io/stack/smart-contracts
 IWrappedNativeToken constant WRAPPED_NATIVE_TOKEN =
@@ -76,7 +86,7 @@ function radworksSetConfigParams() pure returns (SetConfigParam[] memory params)
 
 contract Deploy is Script {
     function run() public {
-        (bytes32 salt, address radworks) = DeployCLI.checkConfig(10);
+        (bytes32 salt, address radworks) = DeployCLI.checkConfig(CHAIN_ID);
 
         vm.startBroadcast();
         ICreate3Factory create3Factory = deployCreate3Factory();
@@ -122,6 +132,28 @@ contract Deploy is Script {
         modulesDeployer.deployModules(modules);
 
         writeDeploymentJson(vm, modulesDeployer, salt);
+    }
+}
+
+contract DeployExtras is Script {
+    function run() public {
+        ModulesDeployer modulesDeployer = DeployCLI.checkConfigToAddModule(CHAIN_ID);
+        vm.startBroadcast();
+
+        ModuleData[] memory modules = new ModuleData[](2);
+        address governor = repoDriverModule(modulesDeployer).repoDriver().admin();
+        modules[0] = repoSubAccountDriverModuleData(modulesDeployer, governor);
+        modules[1] = repoDeadlineDriverModuleData(modulesDeployer, governor);
+        modulesDeployer.deployModules(modules);
+
+        console.log(
+            "Deployed RepoSubAccountDriver to",
+            address(repoSubAccountDriverModule(modulesDeployer).repoSubAccountDriver())
+        );
+        console.log(
+            "Deployed RepoDeadlineDriver to",
+            address(repoDeadlineDriverModule(modulesDeployer).repoDeadlineDriver())
+        );
     }
 }
 

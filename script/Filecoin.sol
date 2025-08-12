@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.20;
 
-import {Script} from "forge-std/Script.sol";
+import {console, Script} from "forge-std/Script.sol";
 
 import {addressDriverModuleData} from "script/modules/AddressDriver.sol";
 import {
@@ -15,7 +15,15 @@ import {giversRegistryModuleData, IWrappedNativeToken} from "script/modules/Give
 import {immutableSplitsDriverModuleData} from "script/modules/ImmutableSplitsDriver.sol";
 import {nativeTokenUnwrapperModuleData} from "script/modules/NativeTokenUnwrapper.sol";
 import {nftDriverModuleData} from "script/modules/NFTDriver.sol";
-import {IAutomate, repoDriverModuleData} from "script/modules/RepoDriver.sol";
+import {
+    repoDeadlineDriverModule,
+    repoDeadlineDriverModuleData
+} from "script/modules/RepoDeadlineDriver.sol";
+import {IAutomate, repoDriverModule, repoDriverModuleData} from "script/modules/RepoDriver.sol";
+import {
+    repoSubAccountDriverModule,
+    repoSubAccountDriverModuleData
+} from "script/modules/RepoSubAccountDriver.sol";
 import {DeployCLI} from "script/utils/CLI.sol";
 import {deployCreate3Factory, ICreate3Factory} from "script/utils/Create3Factory.sol";
 import {writeDeploymentJson} from "script/utils/DeploymentJson.sol";
@@ -23,11 +31,13 @@ import {
     deployModulesDeployer, ModulesDeployer, ModuleData
 } from "script/utils/ModulesDeployer.sol";
 
+uint256 constant CHAIN_ID = 314;
+
 /// @dev As of 09.10.2024 Foundry doesn't work well with the Filecoin RPCs.
 /// To avoid errors, pass `--gas-estimate-multiplier 80000 --slow` to `forge script`.
 contract Deploy is Script {
     function run() public {
-        (bytes32 salt, address radworks) = DeployCLI.checkConfig(314);
+        (bytes32 salt, address radworks) = DeployCLI.checkConfig(CHAIN_ID);
 
         vm.startBroadcast();
         ICreate3Factory create3Factory = deployCreate3Factory();
@@ -83,5 +93,27 @@ contract Deploy is Script {
         vm.stopBroadcast();
 
         writeDeploymentJson(vm, modulesDeployer, salt);
+    }
+}
+
+contract DeployExtras is Script {
+    function run() public {
+        ModulesDeployer modulesDeployer = DeployCLI.checkConfigToAddModule(CHAIN_ID);
+        vm.startBroadcast();
+
+        ModuleData[] memory modules = new ModuleData[](2);
+        address governor = repoDriverModule(modulesDeployer).repoDriver().admin();
+        modules[0] = repoSubAccountDriverModuleData(modulesDeployer, governor);
+        modules[1] = repoDeadlineDriverModuleData(modulesDeployer, governor);
+        modulesDeployer.deployModules(modules);
+
+        console.log(
+            "Deployed RepoSubAccountDriver to",
+            address(repoSubAccountDriverModule(modulesDeployer).repoSubAccountDriver())
+        );
+        console.log(
+            "Deployed RepoDeadlineDriver to",
+            address(repoDeadlineDriverModule(modulesDeployer).repoDeadlineDriver())
+        );
     }
 }
