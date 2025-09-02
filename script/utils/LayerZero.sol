@@ -9,7 +9,7 @@ import {
 } from "layer-zero-v2/protocol/contracts/interfaces/ILayerZeroEndpointV2.sol";
 import {SetConfigParam} from "layer-zero-v2/protocol/contracts/interfaces/IMessageLibManager.sol";
 import {Constant} from "layer-zero-v2/messagelib/test/util/Constant.sol";
-import {addToProposal, RadworksProposal} from "script/utils/Radworks.sol";
+import {GovernorProposal} from "script/utils/Governor.sol";
 import {LZBridgedGovernor, Call} from "src/BridgedGovernor.sol";
 import {UUPSUpgradeable} from "src/Managed.sol";
 
@@ -32,10 +32,17 @@ function createSetConfigParams(uint32 otherChainEid, address[] memory dvns, uint
     pure
     returns (SetConfigParam[] memory params)
 {
+    params = new SetConfigParam[](1);
+    params[0] = createSetConfigParam(otherChainEid, dvns, threshold);
+}
+
+function createSetConfigParam(uint32 otherChainEid, address[] memory dvns, uint8 threshold)
+    pure
+    returns (SetConfigParam memory param)
+{
     require(dvns.length > 0, "Empty list of DVNs");
     sortDVNs(dvns);
-    params = new SetConfigParam[](1);
-    params[0] = SetConfigParam({
+    return SetConfigParam({
         eid: otherChainEid,
         configType: Constant.CONFIG_TYPE_ULN,
         config: abi.encode(
@@ -91,48 +98,65 @@ function upgradeToCall(address proxy, address newImplementation) pure returns (C
     return Call({target: proxy, data: data, value: 0});
 }
 
-function addToProposalConfigInit(RadworksProposal memory proposal, SetConfigParam[] memory params)
-    pure
-{
-    bytes memory data = abi.encodeCall(
-        IMessageLibManager.setSendLibrary, (proposal.radworks, params[0].eid, ETHEREUM_SEND_ULN)
-    );
-    addToProposal(proposal, ETHEREUM_ENDPOINT, 0, data);
-    addToProposalConfigUpdate(proposal, params);
-}
+using GovernorProposalLZ for GovernorProposal;
 
-function addToProposalConfigUpdate(RadworksProposal memory proposal, SetConfigParam[] memory params)
-    pure
-{
-    bytes memory data =
-        abi.encodeCall(IMessageLibManager.setConfig, (proposal.radworks, ETHEREUM_SEND_ULN, params));
-    addToProposal(proposal, ETHEREUM_ENDPOINT, 0, data);
-}
+library GovernorProposalLZ {
+    function pushCallLZConfigInit(GovernorProposal memory proposal, SetConfigParam[] memory params)
+        internal
+        view
+        returns (GovernorProposal memory)
+    {
+        return proposal.pushCall(
+            ETHEREUM_ENDPOINT,
+            abi.encodeCall(
+                IMessageLibManager.setSendLibrary,
+                (proposal.governor.timelock(), params[0].eid, ETHEREUM_SEND_ULN)
+            )
+        ).pushCallLZConfigUpdate(params);
+    }
 
-function addToProposalGovernorMessage(
-    RadworksProposal memory proposal,
-    uint256 fee,
-    uint32 governorEid,
-    address governor,
-    uint128 gas,
-    LZBridgedGovernor.Message memory message
-) pure {
-    bytes memory receiveOption = ExecutorOptions.encodeLzReceiveOption(gas, uint128(message.value));
-    // Taken from lib/LayerZero-v2/oapp/contracts/oapp/libs/OptionsBuilder.sol
-    bytes memory messageOptions = abi.encodePacked(
-        uint16(3), // options type
-        ExecutorOptions.WORKER_ID,
-        uint16(1 + receiveOption.length),
-        ExecutorOptions.OPTION_TYPE_LZRECEIVE,
-        receiveOption
-    );
-    MessagingParams memory params = MessagingParams({
-        dstEid: governorEid,
-        receiver: bytes32(uint256(uint160(governor))),
-        message: abi.encode(message),
-        options: messageOptions,
-        payInLzToken: false
-    });
-    bytes memory data = abi.encodeCall(ILayerZeroEndpointV2.send, (params, proposal.radworks));
-    addToProposal(proposal, ETHEREUM_ENDPOINT, fee, data);
+    function pushCallLZConfigUpdate(
+        GovernorProposal memory proposal,
+        SetConfigParam[] memory params
+    ) internal view returns (GovernorProposal memory) {
+        return proposal.pushCall(
+            ETHEREUM_ENDPOINT,
+            abi.encodeCall(
+                IMessageLibManager.setConfig,
+                (proposal.governor.timelock(), ETHEREUM_SEND_ULN, params)
+            )
+        );
+    }
+
+    function pushCallSendLZGovernorMessage(
+        GovernorProposal memory proposal,
+        uint256 fee,
+        uint32 governorEid,
+        LZBridgedGovernor governor,
+        uint128 gas,
+        LZBridgedGovernor.Message memory message
+    ) internal view returns (GovernorProposal memory) {
+        bytes memory receiveOption =
+            ExecutorOptions.encodeLzReceiveOption(gas, uint128(message.value));
+        // Taken from lib/LayerZero-v2/oapp/contracts/oapp/libs/OptionsBuilder.sol
+        bytes memory messageOptions = abi.encodePacked(
+            uint16(3), // options type
+            ExecutorOptions.WORKER_ID,
+            uint16(1 + receiveOption.length),
+            ExecutorOptions.OPTION_TYPE_LZRECEIVE,
+            receiveOption
+        );
+        MessagingParams memory params = MessagingParams({
+            dstEid: governorEid,
+            receiver: bytes32(uint256(uint160(address(governor)))),
+            message: abi.encode(message),
+            options: messageOptions,
+            payInLzToken: false
+        });
+        return proposal.pushCall(
+            ETHEREUM_ENDPOINT,
+            fee,
+            abi.encodeCall(ILayerZeroEndpointV2.send, (params, proposal.governor.timelock()))
+        );
+    }
 }

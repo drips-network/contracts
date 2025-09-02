@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {Vm} from "forge-std/Vm.sol";
 import {CREATE3_FACTORY} from "script/utils/Create3Factory.sol";
 import {modulesDeployer, ModulesDeployer} from "script/utils/ModulesDeployer.sol";
-import {RADWORKS} from "script/utils/Radworks.sol";
+import {RADWORKS_TIMELOCK} from "script/utils/Governor.sol";
 
 library DeployCLI {
     Vm private constant VM = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
@@ -37,18 +37,18 @@ library DeployCLI {
         return bytes32(bytes(saltString));
     }
 
-    function radworks() internal view returns (address) {
-        return finalRun() ? RADWORKS : VM.envOr("RADWORKS", msg.sender);
+    function radworksTimelock() internal view returns (address) {
+        return finalRun() ? RADWORKS_TIMELOCK : VM.envOr("RADWORKS_TIMELOCK", msg.sender);
     }
 
     function checkConfig(uint256 chainId)
         internal
         view
-        returns (bytes32 salt_, address radworks_)
+        returns (bytes32 salt_, address radworksTimelock_)
     {
         requireChainId(chainId);
         requireWallet();
-        return (salt(), radworks());
+        return (salt(), radworksTimelock());
     }
 
     function requireModulesDeployerOwner() internal view returns (ModulesDeployer deployer) {

@@ -9,3 +9,5 @@ fs_permissions = [{ access = "read-write", path = "./"}]
 line_length = 100
 [fuzz]
 runs = 4
+[lint]
+lint_on_build = false
