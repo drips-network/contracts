@@ -402,7 +402,7 @@ contract TestProposalOnFilecoin is Script, StdAssertions {
 }
 
 function createProposal() view returns (GovernorProposal memory proposal) {
-    proposal = GovernorProposalImpl.create(RADWORKS_GOVERNOR, "TODO");
+    proposal = GovernorProposalImpl.create(RADWORKS_GOVERNOR, "[RGP - 27] - Drips protocol upgrade");
 
     // Upgrade the Ethereum contracts
     proposal.pushCall(
