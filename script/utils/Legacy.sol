@@ -13,7 +13,7 @@ import {Managed, ManagedProxy} from "src/Managed.sol";
 import {NativeTokenUnwrapper} from "src/NativeTokenUnwrapper.sol";
 import {NFTDriver} from "src/NFTDriver.sol";
 import {RepoDeadlineDriver} from "src/RepoDeadlineDriver.sol";
-import {IAutomate, RepoDriver} from "src/RepoDriver.sol";
+import {RepoDriver} from "src/RepoDriver.sol";
 import {RepoSubAccountDriver} from "src/RepoSubAccountDriver.sol";
 import {Ownable2Step} from "openzeppelin-contracts/access/Ownable2Step.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
@@ -176,44 +176,6 @@ interface IDripsModule {
     function claimDriverId(bytes32 moduleSalt_, uint32 driverId, address driverAddr) external;
 }
 
-contract DripsModule is IDripsModule, DripsDependentModule, ProxyDeployerModule {
-    uint32 public immutable dripsCycleSecs;
-    uint32 public immutable claimableDriverIds = 100;
-
-    function args() public view override returns (bytes memory) {
-        return abi.encode(dripsDeployer, dripsCycleSecs, proxyAdmin);
-    }
-
-    constructor(DripsDeployer dripsDeployer_, uint32 dripsCycleSecs_, address proxyAdmin_)
-        BaseModule(dripsDeployer_, _dripsModuleSalt)
-    {
-        dripsCycleSecs = dripsCycleSecs_;
-        // slither-disable-next-line too-many-digits
-        _deployProxy(proxyAdmin_, type(Drips).creationCode);
-        Drips drips_ = drips();
-        for (uint256 i = 0; i < claimableDriverIds; i++) {
-            // slither-disable-next-line calls-loop,unused-return
-            drips_.registerDriver(address(this));
-        }
-    }
-
-    function logicArgs() public view override returns (bytes memory) {
-        return abi.encode(dripsCycleSecs);
-    }
-
-    function drips() public view override returns (Drips) {
-        return Drips(proxy());
-    }
-
-    function claimDriverId(bytes32 moduleSalt_, uint32 driverId, address driverAddr)
-        public
-        override
-        onlyModule(moduleSalt_)
-    {
-        drips().updateDriverAddress(driverId, driverAddr);
-    }
-}
-
 abstract contract CallerDependentModule is BaseModule {
     bytes32 internal immutable _callerModuleSalt = "Caller";
 
@@ -226,25 +188,6 @@ abstract contract CallerDependentModule is BaseModule {
 
 interface ICallerModule {
     function caller() external view returns (Caller);
-}
-
-contract CallerModule is ICallerModule, ContractDeployerModule, CallerDependentModule {
-    function args() public view override returns (bytes memory) {
-        return abi.encode(dripsDeployer);
-    }
-
-    constructor(DripsDeployer dripsDeployer_) BaseModule(dripsDeployer_, _callerModuleSalt) {
-        // slither-disable-next-line too-many-digits
-        _deployContract(type(Caller).creationCode);
-    }
-
-    function deploymentArgs() public pure override returns (bytes memory) {
-        return abi.encode();
-    }
-
-    function caller() public view override returns (Caller) {
-        return Caller(deployment());
-    }
 }
 
 abstract contract DriverModule is DripsDependentModule, ProxyDeployerModule {
@@ -271,32 +214,6 @@ interface IAddressDriverModule {
     function addressDriver() external view returns (AddressDriver);
 }
 
-contract AddressDriverModule is
-    IAddressDriverModule,
-    AddressDriverDependentModule,
-    CallerDependentModule,
-    DriverModule(0)
-{
-    function args() public view override returns (bytes memory) {
-        return abi.encode(dripsDeployer, proxyAdmin);
-    }
-
-    constructor(DripsDeployer dripsDeployer_, address proxyAdmin_)
-        BaseModule(dripsDeployer_, _addressDriverModuleSalt)
-    {
-        // slither-disable-next-line too-many-digits
-        _deployProxy(proxyAdmin_, type(AddressDriver).creationCode);
-    }
-
-    function logicArgs() public view override returns (bytes memory) {
-        return abi.encode(_dripsModule().drips(), _callerModule().caller(), driverId);
-    }
-
-    function addressDriver() public view override returns (AddressDriver) {
-        return AddressDriver(proxy());
-    }
-}
-
 abstract contract NFTDriverDependentModule is BaseModule {
     bytes32 internal immutable _nftDriverModuleSalt = "NFTDriver";
 
@@ -310,32 +227,6 @@ abstract contract NFTDriverDependentModule is BaseModule {
 
 interface INFTDriverModule {
     function nftDriver() external view returns (NFTDriver);
-}
-
-contract NFTDriverModule is
-    INFTDriverModule,
-    NFTDriverDependentModule,
-    CallerDependentModule,
-    DriverModule(1)
-{
-    function args() public view override returns (bytes memory) {
-        return abi.encode(dripsDeployer, proxyAdmin);
-    }
-
-    constructor(DripsDeployer dripsDeployer_, address proxyAdmin_)
-        BaseModule(dripsDeployer_, _nftDriverModuleSalt)
-    {
-        // slither-disable-next-line too-many-digits
-        _deployProxy(proxyAdmin_, type(NFTDriver).creationCode);
-    }
-
-    function logicArgs() public view override returns (bytes memory) {
-        return abi.encode(_dripsModule().drips(), _callerModule().caller(), driverId);
-    }
-
-    function nftDriver() public view override returns (NFTDriver) {
-        return NFTDriver(proxy());
-    }
 }
 
 abstract contract ImmutableSplitsDriverDependentModule is BaseModule {
@@ -353,31 +244,6 @@ interface IImmutableSplitsDriverModule {
     function immutableSplitsDriver() external view returns (ImmutableSplitsDriver);
 }
 
-contract ImmutableSplitsDriverModule is
-    IImmutableSplitsDriverModule,
-    ImmutableSplitsDriverDependentModule,
-    DriverModule(2)
-{
-    function args() public view override returns (bytes memory) {
-        return abi.encode(dripsDeployer, proxyAdmin);
-    }
-
-    constructor(DripsDeployer dripsDeployer_, address proxyAdmin_)
-        BaseModule(dripsDeployer_, _immutableSplitsDriverModuleSalt)
-    {
-        // slither-disable-next-line too-many-digits
-        _deployProxy(proxyAdmin_, type(ImmutableSplitsDriver).creationCode);
-    }
-
-    function logicArgs() public view override returns (bytes memory) {
-        return abi.encode(_dripsModule().drips(), driverId);
-    }
-
-    function immutableSplitsDriver() public view override returns (ImmutableSplitsDriver) {
-        return ImmutableSplitsDriver(proxy());
-    }
-}
-
 abstract contract RepoDriverDependentModule is BaseModule {
     bytes32 internal immutable _repoDriverModuleSalt = "RepoDriver";
 
@@ -393,70 +259,7 @@ interface IRepoDriverModule {
     function repoDriver() external view returns (RepoDriver);
 }
 
-contract RepoDriverModule is
-    IRepoDriverModule,
-    RepoDriverDependentModule,
-    CallerDependentModule,
-    DriverModule(3)
-{
-    IAutomate public immutable gelatoAutomate;
-    string public ipfsCid;
-    uint32 public immutable maxRequestsPerBlock;
-    uint32 public immutable maxRequestsPer31Days;
-
-    function args() public view override returns (bytes memory) {
-        return abi.encode(
-            dripsDeployer,
-            proxyAdmin,
-            gelatoAutomate,
-            ipfsCid,
-            maxRequestsPerBlock,
-            maxRequestsPer31Days
-        );
-    }
-
-    constructor(
-        DripsDeployer dripsDeployer_,
-        address proxyAdmin_,
-        IAutomate gelatoAutomate_,
-        string memory ipfsCid_,
-        uint32 maxRequestsPerBlock_,
-        uint32 maxRequestsPer31Days_
-    ) BaseModule(dripsDeployer_, _repoDriverModuleSalt) {
-        gelatoAutomate = gelatoAutomate_;
-        ipfsCid = ipfsCid_;
-        maxRequestsPerBlock = maxRequestsPerBlock_;
-        maxRequestsPer31Days = maxRequestsPer31Days_;
-        bytes memory data = abi.encodeCall(
-            RepoDriver.updateGelatoTask, (ipfsCid_, maxRequestsPerBlock, maxRequestsPer31Days)
-        );
-        // slither-disable-next-line too-many-digits
-        _deployProxy(proxyAdmin_, type(RepoDriver).creationCode, data);
-    }
-
-    function logicArgs() public view override returns (bytes memory) {
-        return
-            abi.encode(_dripsModule().drips(), _callerModule().caller(), driverId, gelatoAutomate);
-    }
-
-    function repoDriver() public view override returns (RepoDriver) {
-        return RepoDriver(payable(proxy()));
-    }
-}
-
 bytes32 constant REPO_SUB_ACCOUNT_DRIVER_MODULE_SALT = "RepoSubAccountDriver";
-
-function repoSubAccountDriverModule(DripsDeployer dripsDeployer, address proxyAdmin)
-    pure
-    returns (Module memory)
-{
-    bytes memory args = abi.encode(dripsDeployer, proxyAdmin);
-    return Module({
-        salt: REPO_SUB_ACCOUNT_DRIVER_MODULE_SALT,
-        amount: 0,
-        initCode: abi.encodePacked(type(RepoSubAccountDriverModule).creationCode, args)
-    });
-}
 
 abstract contract RepoSubAccountDriverDependentModule is BaseModule {
     // slither-disable-next-line dead-code
@@ -471,46 +274,7 @@ interface IRepoSubAccountDriverModule {
     function repoSubAccountDriver() external view returns (RepoSubAccountDriver);
 }
 
-contract RepoSubAccountDriverModule is
-    IRepoSubAccountDriverModule,
-    RepoSubAccountDriverDependentModule,
-    CallerDependentModule,
-    RepoDriverDependentModule,
-    DriverModule(4)
-{
-    function args() public view override returns (bytes memory) {
-        return abi.encode(dripsDeployer, proxyAdmin);
-    }
-
-    constructor(DripsDeployer dripsDeployer_, address proxyAdmin_)
-        BaseModule(dripsDeployer_, REPO_SUB_ACCOUNT_DRIVER_MODULE_SALT)
-    {
-        // slither-disable-next-line too-many-digits
-        _deployProxy(proxyAdmin_, type(RepoSubAccountDriver).creationCode);
-    }
-
-    function logicArgs() public view override returns (bytes memory) {
-        return abi.encode(_repoDriverModule().repoDriver(), _callerModule().caller(), driverId);
-    }
-
-    function repoSubAccountDriver() public view override returns (RepoSubAccountDriver) {
-        return RepoSubAccountDriver(proxy());
-    }
-}
-
 bytes32 constant REPO_DEADLINE_DRIVER_MODULE_SALT = "RepoDeadlineDriver";
-
-function repoDeadlineDriverModule(DripsDeployer dripsDeployer, address proxyAdmin)
-    pure
-    returns (Module memory)
-{
-    bytes memory args = abi.encode(dripsDeployer, proxyAdmin);
-    return Module({
-        salt: REPO_DEADLINE_DRIVER_MODULE_SALT,
-        amount: 0,
-        initCode: abi.encodePacked(type(RepoDeadlineDriverModule).creationCode, args)
-    });
-}
 
 abstract contract RepoDeadlineDriverDependentModule is BaseModule {
     // slither-disable-next-line dead-code
@@ -525,46 +289,7 @@ interface IRepoDeadlineDriverModule {
     function repoDeadlineDriver() external view returns (RepoDeadlineDriver);
 }
 
-contract RepoDeadlineDriverModule is
-    IRepoDeadlineDriverModule,
-    RepoDeadlineDriverDependentModule,
-    RepoDriverDependentModule,
-    DriverModule(5)
-{
-    function args() public view override returns (bytes memory) {
-        return abi.encode(dripsDeployer, proxyAdmin);
-    }
-
-    constructor(DripsDeployer dripsDeployer_, address proxyAdmin_)
-        BaseModule(dripsDeployer_, REPO_DEADLINE_DRIVER_MODULE_SALT)
-    {
-        // slither-disable-next-line too-many-digits
-        _deployProxy(proxyAdmin_, type(RepoDeadlineDriver).creationCode);
-    }
-
-    function logicArgs() public view override returns (bytes memory) {
-        return abi.encode(_repoDriverModule().repoDriver(), driverId);
-    }
-
-    function repoDeadlineDriver() public view override returns (RepoDeadlineDriver) {
-        return RepoDeadlineDriver(proxy());
-    }
-}
-
 bytes32 constant GIVERS_REGISTRY_MODULE_SALT = "GiversRegistry";
-
-function giversRegistryModule(
-    DripsDeployer dripsDeployer,
-    address proxyAdmin,
-    IWrappedNativeToken wrappedNativeToken
-) pure returns (Module memory) {
-    bytes memory args = abi.encode(dripsDeployer, proxyAdmin, wrappedNativeToken);
-    return Module({
-        salt: GIVERS_REGISTRY_MODULE_SALT,
-        amount: 0,
-        initCode: abi.encodePacked(type(GiversRegistryModule).creationCode, args)
-    });
-}
 
 abstract contract GiversRegistryDependentModule is BaseModule {
     // slither-disable-next-line dead-code
@@ -579,50 +304,7 @@ interface IGiversRegistryModule {
     function giversRegistry() external view returns (GiversRegistry);
 }
 
-contract GiversRegistryModule is
-    IGiversRegistryModule,
-    GiversRegistryDependentModule,
-    AddressDriverDependentModule,
-    ProxyDeployerModule
-{
-    IWrappedNativeToken public immutable wrappedNativeToken;
-
-    function args() public view override returns (bytes memory) {
-        return abi.encode(dripsDeployer, proxyAdmin, wrappedNativeToken);
-    }
-
-    constructor(
-        DripsDeployer dripsDeployer_,
-        address proxyAdmin_,
-        IWrappedNativeToken wrappedNativeToken_
-    ) BaseModule(dripsDeployer_, GIVERS_REGISTRY_MODULE_SALT) {
-        wrappedNativeToken = wrappedNativeToken_;
-        // slither-disable-next-line too-many-digits
-        _deployProxy(proxyAdmin_, type(GiversRegistry).creationCode);
-    }
-
-    function logicArgs() public view override returns (bytes memory) {
-        return abi.encode(_addressDriverModule().addressDriver(), wrappedNativeToken);
-    }
-
-    function giversRegistry() public view override returns (GiversRegistry) {
-        return GiversRegistry(proxy());
-    }
-}
-
 bytes32 constant NATIVE_TOKEN_UNWRAPPER_MODULE_SALT = "NativeTokenUnwrapper";
-
-function nativeTokenUnwrapperModule(
-    DripsDeployer dripsDeployer,
-    IWrappedNativeToken wrappedNativeToken
-) pure returns (Module memory) {
-    bytes memory args = abi.encode(dripsDeployer, wrappedNativeToken);
-    return Module({
-        salt: NATIVE_TOKEN_UNWRAPPER_MODULE_SALT,
-        amount: 0,
-        initCode: abi.encodePacked(type(NativeTokenUnwrapperModule).creationCode, args)
-    });
-}
 
 abstract contract NativeTokenUnwrapperDependentModule is BaseModule {
     function _nativeTokenUnwrapperModule() internal view returns (INativeTokenUnwrapperModule) {
@@ -634,34 +316,6 @@ abstract contract NativeTokenUnwrapperDependentModule is BaseModule {
 
 interface INativeTokenUnwrapperModule {
     function nativeTokenUnrapper() external view returns (NativeTokenUnwrapper);
-}
-
-contract NativeTokenUnwrapperModule is
-    INativeTokenUnwrapperModule,
-    ContractDeployerModule,
-    NativeTokenUnwrapperDependentModule
-{
-    IWrappedNativeToken public immutable wrappedNativeToken;
-
-    function args() public view override returns (bytes memory) {
-        return abi.encode(dripsDeployer, wrappedNativeToken);
-    }
-
-    constructor(DripsDeployer dripsDeployer_, IWrappedNativeToken wrappedNativeToken_)
-        BaseModule(dripsDeployer_, NATIVE_TOKEN_UNWRAPPER_MODULE_SALT)
-    {
-        wrappedNativeToken = wrappedNativeToken_;
-        // slither-disable-next-line too-many-digits
-        _deployContract(type(NativeTokenUnwrapper).creationCode);
-    }
-
-    function deploymentArgs() public view override returns (bytes memory) {
-        return abi.encode(wrappedNativeToken);
-    }
-
-    function nativeTokenUnrapper() public view override returns (NativeTokenUnwrapper) {
-        return NativeTokenUnwrapper(payable(deployment()));
-    }
 }
 
 /// @notice Deploys contracts using CREATE3.
