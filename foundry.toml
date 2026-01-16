@@ -2,12 +2,10 @@
 solc_version = '0.8.20'
 evm_version = 'shanghai'
 optimizer_runs = 7_700
-verbosity = 1
-fuzz_runs = 5
 fs_permissions = [{ access = "read-write", path = "./"}]
 [fmt]
 line_length = 100
 [fuzz]
-runs = 4
+runs = 5
 [lint]
 lint_on_build = false
