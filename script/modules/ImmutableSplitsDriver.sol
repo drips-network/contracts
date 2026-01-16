@@ -25,8 +25,9 @@ function immutableSplitsDriverModule(ModulesDeployer modulesDeployer)
     view
     returns (ImmutableSplitsDriverModule)
 {
-    return
-        ImmutableSplitsDriverModule(getModule(modulesDeployer, IMMUTABLE_SPLITS_DRIVER_MODULE_SALT));
+    return ImmutableSplitsDriverModule(
+        getModule(modulesDeployer, IMMUTABLE_SPLITS_DRIVER_MODULE_SALT)
+    );
 }
 
 function immutableSplitsDriverModuleData(ModulesDeployer modulesDeployer, address admin)

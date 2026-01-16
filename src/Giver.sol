@@ -24,11 +24,7 @@ contract Giver {
     /// @param target The address to delegate to.
     /// @param data The calldata to use when delegating.
     /// @return ret The data returned from the delegation.
-    function delegate(address target, bytes memory data)
-        public
-        payable
-        returns (bytes memory ret)
-    {
+    function delegate(address target, bytes memory data) public payable returns (bytes memory ret) {
         require(msg.sender == owner, "Caller is not the owner");
         return Address.functionDelegateCall(target, data, "Giver failed");
     }

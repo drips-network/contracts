@@ -211,9 +211,7 @@ contract CallerTest is Test {
         uint256 value2 = 8642;
         Call[] memory calls = new Call[](2);
         calls[0] = Call({
-            target: address(target),
-            data: abi.encodeCall(target.run, (input1)),
-            value: value1
+            target: address(target), data: abi.encodeCall(target.run, (input1)), value: value1
         });
         calls[1] = Call({
             target: address(targetOtherForwarder),
@@ -232,15 +230,11 @@ contract CallerTest is Test {
     function testCallBatchedBubblesErrors() public {
         Call[] memory calls = new Call[](2);
         calls[0] = Call({
-            target: address(target),
-            data: abi.encodeCall(target.run, (1234567890)),
-            value: 0
+            target: address(target), data: abi.encodeCall(target.run, (1234567890)), value: 0
         });
         // Zero input triggers a revert in Target
         calls[1] = Call({
-            target: address(targetOtherForwarder),
-            data: abi.encodeCall(target.run, (0)),
-            value: 0
+            target: address(targetOtherForwarder), data: abi.encodeCall(target.run, (0)), value: 0
         });
 
         vm.expectRevert(ERROR_ZERO_INPUT);
@@ -268,9 +262,7 @@ contract CallerTest is Test {
     function testCallerCanCallOnItselfAuthorize() public {
         Call[] memory calls = new Call[](1);
         calls[0] = Call({
-            target: address(caller),
-            data: abi.encodeCall(caller.authorize, (sender)),
-            value: 0
+            target: address(caller), data: abi.encodeCall(caller.authorize, (sender)), value: 0
         });
 
         caller.callBatched(calls);
@@ -281,9 +273,7 @@ contract CallerTest is Test {
     function testCallerCanCallOnItselfUnuthorize() public {
         Call[] memory calls = new Call[](1);
         calls[0] = Call({
-            target: address(caller),
-            data: abi.encodeCall(caller.unauthorize, (sender)),
-            value: 0
+            target: address(caller), data: abi.encodeCall(caller.unauthorize, (sender)), value: 0
         });
         caller.authorize(sender);
 
@@ -295,9 +285,7 @@ contract CallerTest is Test {
     function testCallerCanCallOnItselfUnuthorizeAll() public {
         Call[] memory calls = new Call[](1);
         calls[0] = Call({
-            target: address(caller),
-            data: abi.encodeCall(caller.unauthorizeAll, ()),
-            value: 0
+            target: address(caller), data: abi.encodeCall(caller.unauthorizeAll, ()), value: 0
         });
         caller.authorize(sender);
 

@@ -66,7 +66,13 @@ abstract contract Governor is UUPSUpgradeable {
         emit MessageExecuted(nonce);
     }
 
-    function _authorizeUpgrade(address /* newImplementation */ ) internal view override {
+    function _authorizeUpgrade(
+        address /* newImplementation */
+    )
+        internal
+        view
+        override
+    {
         require(msg.sender == address(this), "Only upgradeable by self");
     }
 }
@@ -121,7 +127,11 @@ contract LZBridgedGovernor is Governor, ILayerZeroReceiver {
     /// This function is required by LayerZero v2 for contracts able to receive messages.
     /// @return nonce The next LayerZero v2 nonce.
     /// It's always `0` indicating that messages can be delivered in any order.
-    function nextNonce(uint32, /* srcEid */ bytes32 /* sender */ )
+    function nextNonce(
+        uint32,
+        /* srcEid */
+        bytes32 /* sender */
+    )
         public
         view
         override
@@ -210,12 +220,12 @@ contract AxelarBridgedGovernor is Governor, IAxelarGMPExecutable {
     }
 }
 
-/// @notice The specialized proxy for `BridgedGovernor`.
-contract GovernorProxy is ERC1967Proxy {
-    /// @param logic The initial address of the logic for the proxy.
-    /// @param calls The list of `Call`s to execute while running the constructor.
-    /// It should at least set up the initial LayerZero v2 configuration.
-    constructor(Governor logic, Call[] memory calls) payable ERC1967Proxy(address(logic), "") {
-        executeCalls(calls);
+    /// @notice The specialized proxy for `BridgedGovernor`.
+    contract GovernorProxy is ERC1967Proxy {
+        /// @param logic The initial address of the logic for the proxy.
+        /// @param calls The list of `Call`s to execute while running the constructor.
+        /// It should at least set up the initial LayerZero v2 configuration.
+        constructor(Governor logic, Call[] memory calls) payable ERC1967Proxy(address(logic), "") {
+            executeCalls(calls);
+        }
     }
-}

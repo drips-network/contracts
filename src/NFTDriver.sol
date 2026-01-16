@@ -2,7 +2,12 @@
 pragma solidity ^0.8.20;
 
 import {
-    AccountMetadata, Drips, StreamReceiver, IERC20, SafeERC20, SplitsReceiver
+    AccountMetadata,
+    Drips,
+    StreamReceiver,
+    IERC20,
+    SafeERC20,
+    SplitsReceiver
 } from "./Drips.sol";
 import {DriverTransferUtils, ERC2771Context} from "./DriverTransferUtils.sol";
 import {Managed} from "./Managed.sol";

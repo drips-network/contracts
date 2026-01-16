@@ -414,8 +414,9 @@ contract SplitsTest is Test {
         uint256 receiversLengthRaw,
         uint256 totalWeightRaw
     ) public {
-        SplitsReceiver[] memory receivers =
-            sanitizeReceivers(receiversRaw, receiversLengthRaw, totalWeightRaw);
+        SplitsReceiver[] memory receivers = sanitizeReceivers(
+            receiversRaw, receiversLengthRaw, totalWeightRaw
+        );
         splits.addSplittable(usedAccountId, usedErc20, amt);
         splits.setSplits(usedAccountId, receivers);
         (uint128 collectableAmt, uint128 splitAmt) =

@@ -5,8 +5,9 @@ import {Drips, IERC20, SplitsReceiver} from "src/Drips.sol";
 import {RepoDeadlineDriver, RepoDriver} from "src/RepoDeadlineDriver.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
-import {ERC20PresetFixedSupply} from
-    "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
+import {
+    ERC20PresetFixedSupply
+} from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
 contract FakeRepoDriver {
     Drips public immutable drips;

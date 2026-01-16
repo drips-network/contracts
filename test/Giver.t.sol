@@ -6,8 +6,9 @@ import {AddressDriver, Drips, IERC20, StreamReceiver} from "src/AddressDriver.so
 import {Giver, GiversRegistry} from "src/Giver.sol";
 import {DummyWrappedNativeToken, IWrappedNativeToken} from "src/IWrappedNativeToken.sol";
 import {ManagedProxy} from "src/Managed.sol";
-import {ERC20PresetFixedSupply} from
-    "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
+import {
+    ERC20PresetFixedSupply
+} from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
 contract Logic {

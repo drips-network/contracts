@@ -2,7 +2,11 @@
 pragma solidity ^0.8.20;
 
 import {
-    Streams, StreamConfig, StreamsHistory, StreamConfigImpl, StreamReceiver
+    Streams,
+    StreamConfig,
+    StreamsHistory,
+    StreamConfigImpl,
+    StreamReceiver
 } from "./Streams.sol";
 import {Managed} from "./Managed.sol";
 import {Splits, SplitsReceiver} from "./Splits.sol";
@@ -435,8 +439,9 @@ contract Drips is Managed, Streams, Splits {
         bytes32 historyHash,
         StreamsHistory[] memory streamsHistory
     ) public view returns (uint128 amt) {
-        (amt,,,,) =
-            Streams._squeezeStreamsResult(accountId, erc20, senderId, historyHash, streamsHistory);
+        (amt,,,,) = Streams._squeezeStreamsResult(
+            accountId, erc20, senderId, historyHash, streamsHistory
+        );
     }
 
     /// @notice Returns account's received but not split yet funds.

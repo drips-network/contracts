@@ -52,7 +52,8 @@ contract RepoDriver is DriverTransferUtils, Managed {
     /// @notice The ERC-1967 storage slot holding a single `RepoDriverStorage` structure.
     bytes32 private immutable _repoDriverStorageSlot = _erc1967Slot("eip1967.repoDriver.storage");
     /// @notice The ERC-1967 storage slot holding a single `GelatoStorage` structure.
-    bytes32 private immutable _gelatoStorageSlot = _erc1967Slot("eip1967.repoDriver.gelato.storage");
+    bytes32 private immutable _gelatoStorageSlot =
+        _erc1967Slot("eip1967.repoDriver.gelato.storage");
 
     /// @notice Emitted when the account ownership update is requested.
     /// @param accountId The ID of the account.

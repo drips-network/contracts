@@ -474,10 +474,7 @@ contract StreamsTest is Test, PseudoRandomUtils {
         return type(uint32).max - uint32(vm.getBlockTimestamp());
     }
 
-    function assertStreams(uint256 accountId, StreamReceiver[] memory currReceivers)
-        internal
-        view
-    {
+    function assertStreams(uint256 accountId, StreamReceiver[] memory currReceivers) internal view {
         (bytes32 actual,,,,) = streams.streamsState(accountId, erc20);
         bytes32 expected = streams.hashStreams(currReceivers);
         assertEq(actual, expected, "Invalid streams configuration");
@@ -487,10 +484,7 @@ contract StreamsTest is Test, PseudoRandomUtils {
         assertBalanceAt(accountId, expected, vm.getBlockTimestamp());
     }
 
-    function assertBalanceAt(uint256 accountId, uint128 expected, uint256 timestamp)
-        internal
-        view
-    {
+    function assertBalanceAt(uint256 accountId, uint128 expected, uint256 timestamp) internal view {
         uint128 balance =
             streams.balanceAt(accountId, erc20, loadCurrReceivers(accountId), uint32(timestamp));
         assertEq(balance, expected, "Invalid streams balance");
@@ -586,10 +580,7 @@ contract StreamsTest is Test, PseudoRandomUtils {
         }
     }
 
-    function assertReceivableStreamsCycles(uint256 accountId, uint32 expectedCycles)
-        internal
-        view
-    {
+    function assertReceivableStreamsCycles(uint256 accountId, uint32 expectedCycles) internal view {
         uint32 actualCycles = streams.receivableStreamsCycles(accountId, erc20);
         assertEq(actualCycles, expectedCycles, "Invalid total receivable streams cycles");
     }
@@ -627,8 +618,9 @@ contract StreamsTest is Test, PseudoRandomUtils {
         StreamsHistory[] memory streamsHistory,
         uint256 expectedAmt
     ) internal {
-        (uint128 amtBefore,,,,) =
-            streams.squeezeStreamsResult(accountId, erc20, senderId, historyHash, streamsHistory);
+        (uint128 amtBefore,,,,) = streams.squeezeStreamsResult(
+            accountId, erc20, senderId, historyHash, streamsHistory
+        );
         assertEq(amtBefore, expectedAmt, "Invalid squeezable amount before squeezing");
 
         uint128 amt =
@@ -1724,8 +1716,9 @@ contract StreamsTest is Test, PseudoRandomUtils {
         skipToCycleEnd();
         uint256 balanceAfter = uint128(-realBalanceDelta);
         for (uint256 i = 0; i < receivers.length; i++) {
-            balanceAfter +=
-                streams.receiveStreams(receivers[i].accountId, usedErc20, type(uint32).max);
+            balanceAfter += streams.receiveStreams(
+                receivers[i].accountId, usedErc20, type(uint32).max
+            );
         }
         assertEq(balanceAfter, balanceBefore, "Streamed funds don't add up");
     }
@@ -1758,12 +1751,14 @@ contract StreamsTest is Test, PseudoRandomUtils {
         skipToCycleEnd();
         uint256 balanceAfter = uint128(-realBalanceDelta);
         for (uint256 i = 0; i < receivers1.length; i++) {
-            balanceAfter +=
-                streams.receiveStreams(receivers1[i].accountId, usedErc20, type(uint32).max);
+            balanceAfter += streams.receiveStreams(
+                receivers1[i].accountId, usedErc20, type(uint32).max
+            );
         }
         for (uint256 i = 0; i < receivers2.length; i++) {
-            balanceAfter +=
-                streams.receiveStreams(receivers2[i].accountId, usedErc20, type(uint32).max);
+            balanceAfter += streams.receiveStreams(
+                receivers2[i].accountId, usedErc20, type(uint32).max
+            );
         }
         assertEq(balanceAfter, balanceBefore, "Streamed funds don't add up");
     }

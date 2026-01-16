@@ -5,8 +5,9 @@ import {IERC20, ImmutableSplitsDriver} from "src/ImmutableSplitsDriver.sol";
 import {AccountMetadata, Drips, SplitsReceiver} from "src/Drips.sol";
 import {ManagedProxy} from "src/Managed.sol";
 import {Test} from "forge-std/Test.sol";
-import {ERC20PresetFixedSupply} from
-    "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
+import {
+    ERC20PresetFixedSupply
+} from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
 contract ImmutableSplitsDriverTest is Test {
     Drips internal drips;

@@ -204,7 +204,14 @@ abstract contract Managed is UUPSUpgradeable {
     }
 
     /// @notice Authorizes the contract upgrade. See `UUPSUpgradeable` docs for more details.
-    function _authorizeUpgrade(address /* newImplementation */ ) internal view override onlyAdmin {
+    function _authorizeUpgrade(
+        address /* newImplementation */
+    )
+        internal
+        view
+        override
+        onlyAdmin
+    {
         return;
     }
 }

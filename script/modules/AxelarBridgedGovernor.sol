@@ -24,8 +24,9 @@ function axelarBridgedGovernorModule(ModulesDeployer modulesDeployer)
     view
     returns (AxelarBridgedGovernorModule)
 {
-    return
-        AxelarBridgedGovernorModule(getModule(modulesDeployer, AXELAR_BRIDGED_GOVERNOR_MODULE_SALT));
+    return AxelarBridgedGovernorModule(
+        getModule(modulesDeployer, AXELAR_BRIDGED_GOVERNOR_MODULE_SALT)
+    );
 }
 
 function axelarBridgedGovernorModuleData(

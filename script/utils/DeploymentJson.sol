@@ -2,9 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {VmSafe} from "forge-std/Script.sol";
-import {
-    addressDriverModule, isAddressDriverModuleDeployed
-} from "script/modules/AddressDriver.sol";
+import {addressDriverModule, isAddressDriverModuleDeployed} from "script/modules/AddressDriver.sol";
 import {
     axelarBridgedGovernorModule,
     isAxelarBridgedGovernorModuleDeployed
@@ -12,7 +10,8 @@ import {
 import {callerModule, isCallerModuleDeployed} from "script/modules/Caller.sol";
 import {Drips, dripsModule, isDripsModuleDeployed} from "script/modules/Drips.sol";
 import {
-    giversRegistryModule, isGiversRegistryModuleDeployed
+    giversRegistryModule,
+    isGiversRegistryModuleDeployed
 } from "script/modules/GiversRegistry.sol";
 import {
     immutableSplitsDriverModule,
@@ -28,7 +27,9 @@ import {
 } from "script/modules/NativeTokenUnwrapper.sol";
 import {isNFTDriverModuleDeployed, nftDriverModule} from "script/modules/NFTDriver.sol";
 import {
-    isRepoDriverModuleDeployed, RepoDriver, repoDriverModule
+    isRepoDriverModuleDeployed,
+    RepoDriver,
+    repoDriverModule
 } from "script/modules/RepoDriver.sol";
 import {
     isRepoDeadlineDriverModuleDeployed,

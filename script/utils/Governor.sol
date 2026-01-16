@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.20;
 
-import {GovernorVotesComp} from "openzeppelin-contracts/governance/extensions/GovernorVotesComp.sol";
-import {IGovernorTimelock} from "openzeppelin-contracts/governance/extensions/IGovernorTimelock.sol";
+import {
+    GovernorVotesComp
+} from "openzeppelin-contracts/governance/extensions/GovernorVotesComp.sol";
+import {
+    IGovernorTimelock
+} from "openzeppelin-contracts/governance/extensions/IGovernorTimelock.sol";
 import {ICompoundTimelock} from "openzeppelin-contracts/vendor/compound/ICompoundTimelock.sol";
 import {Call} from "src/BridgedGovernor.sol";
 import {Vm} from "forge-std/Vm.sol";
@@ -101,37 +105,39 @@ library GovernorProposalImpl {
     }
 
     function propose(GovernorProposal memory proposal) internal returns (uint256 proposalId) {
-        return proposal.governor.propose(
-            proposal.targets, proposal.values, proposal.calldatas, proposal.description
-        );
+        return proposal.governor
+            .propose(proposal.targets, proposal.values, proposal.calldatas, proposal.description);
     }
 
     function castVoteFor(GovernorProposal memory proposal) internal returns (uint256 proposalId) {
-        proposalId = proposal.governor.hashProposal(
-            proposal.targets,
-            proposal.values,
-            proposal.calldatas,
-            keccak256(bytes(proposal.description))
-        );
+        proposalId = proposal.governor
+            .hashProposal(
+                proposal.targets,
+                proposal.values,
+                proposal.calldatas,
+                keccak256(bytes(proposal.description))
+            );
         return proposal.governor.castVote(proposalId, 1);
     }
 
     function queue(GovernorProposal memory proposal) internal returns (uint256 proposalId) {
-        return proposal.governor.queue(
-            proposal.targets,
-            proposal.values,
-            proposal.calldatas,
-            keccak256(bytes(proposal.description))
-        );
+        return proposal.governor
+            .queue(
+                proposal.targets,
+                proposal.values,
+                proposal.calldatas,
+                keccak256(bytes(proposal.description))
+            );
     }
 
     function execute(GovernorProposal memory proposal) internal returns (uint256 proposalId) {
-        return proposal.governor.execute(
-            proposal.targets,
-            proposal.values,
-            proposal.calldatas,
-            keccak256(bytes(proposal.description))
-        );
+        return proposal.governor
+            .execute(
+                proposal.targets,
+                proposal.values,
+                proposal.calldatas,
+                keccak256(bytes(proposal.description))
+            );
     }
 
     function testExecute(GovernorProposal memory proposal) internal {

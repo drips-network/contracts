@@ -150,8 +150,9 @@ contract RepoSubAccountDriverTest is Test {
         uint128 amt = 5;
         // Top-up
         StreamReceiver[] memory receivers = new StreamReceiver[](1);
-        receivers[0] =
-            StreamReceiver(unownedAccountId, StreamConfigImpl.create(0, drips.minAmtPerSec(), 0, 0));
+        receivers[0] = StreamReceiver(
+            unownedAccountId, StreamConfigImpl.create(0, drips.minAmtPerSec(), 0, 0)
+        );
         uint256 balance = erc20.balanceOf(address(this));
         int128 realBalanceDelta = driver.setStreams(
             accountId, erc20, new StreamReceiver[](0), int128(amt), receivers, 0, 0, address(this)

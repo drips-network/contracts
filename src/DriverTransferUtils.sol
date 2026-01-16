@@ -104,9 +104,16 @@ abstract contract DriverTransferUtils is ERC2771Context {
         address transferTo
     ) internal returns (int128 realBalanceDelta) {
         if (balanceDelta > 0) _transferFromCaller(erc20, uint128(balanceDelta));
-        realBalanceDelta = _drips().setStreams(
-            accountId, erc20, currReceivers, balanceDelta, newReceivers, maxEndHint1, maxEndHint2
-        );
+        realBalanceDelta = _drips()
+            .setStreams(
+                accountId,
+                erc20,
+                currReceivers,
+                balanceDelta,
+                newReceivers,
+                maxEndHint1,
+                maxEndHint2
+            );
         if (realBalanceDelta < 0) _drips().withdraw(erc20, transferTo, uint128(-realBalanceDelta));
     }
 

@@ -241,11 +241,7 @@ contract Caller is EIP712("Caller", "1"), ERC2771Context(address(this)) {
     /// anybody will be able to use it in future calls to `callBatched`.
     /// @param calls The calls to perform.
     /// @return returnData The data returned by each of the calls.
-    function callBatched(Call[] calldata calls)
-        public
-        payable
-        returns (bytes[] memory returnData)
-    {
+    function callBatched(Call[] calldata calls) public payable returns (bytes[] memory returnData) {
         returnData = new bytes[](calls.length);
         address sender = _msgSender();
         for (uint256 i = 0; i < calls.length; i++) {

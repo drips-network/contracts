@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.20;
 
-import {ExecutorOptions} from "layer-zero-v2/protocol/contracts/messagelib/libs/ExecutorOptions.sol";
+import {
+    ExecutorOptions
+} from "layer-zero-v2/protocol/contracts/messagelib/libs/ExecutorOptions.sol";
 import {
     ILayerZeroEndpointV2,
     IMessageLibManager,
@@ -107,12 +109,12 @@ library GovernorProposalLZ {
         returns (GovernorProposal memory)
     {
         return proposal.pushCall(
-            ETHEREUM_ENDPOINT,
-            abi.encodeCall(
-                IMessageLibManager.setSendLibrary,
-                (proposal.governor.timelock(), params[0].eid, ETHEREUM_SEND_ULN)
-            )
-        ).pushCallLZConfigUpdate(params);
+                ETHEREUM_ENDPOINT,
+                abi.encodeCall(
+                    IMessageLibManager.setSendLibrary,
+                    (proposal.governor.timelock(), params[0].eid, ETHEREUM_SEND_ULN)
+                )
+            ).pushCallLZConfigUpdate(params);
     }
 
     function pushCallLZConfigUpdate(

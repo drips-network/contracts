@@ -56,8 +56,7 @@ contract RepoSubAccountDriverModule is Module {
         address proxy =
             create3ManagedProxy(modulesDeployer, "RepoSubAccountDriver", logic, admin, "");
         repoSubAccountDriver = RepoSubAccountDriver(payable(proxy));
-        dripsModule(modulesDeployer).claimDriverId(
-            REPO_SUB_ACCOUNT_DRIVER_MODULE_SALT, driverId, proxy
-        );
+        dripsModule(modulesDeployer)
+            .claimDriverId(REPO_SUB_ACCOUNT_DRIVER_MODULE_SALT, driverId, proxy);
     }
 }

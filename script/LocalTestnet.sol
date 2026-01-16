@@ -2,8 +2,9 @@
 pragma solidity ^0.8.20;
 
 import {console, Script} from "forge-std/Script.sol";
-import {ERC20PresetFixedSupply} from
-    "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
+import {
+    ERC20PresetFixedSupply
+} from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 import {addressDriverModuleData} from "script/modules/AddressDriver.sol";
 import {callerModuleData} from "script/modules/Caller.sol";
 import {dripsModuleData} from "script/modules/Drips.sol";
@@ -21,9 +22,7 @@ import {
 } from "script/utils/Create3Factory.sol";
 import {create3} from "script/utils/Create3Helpers.sol";
 import {writeDeploymentJson} from "script/utils/DeploymentJson.sol";
-import {
-    deployModulesDeployer, ModulesDeployer, ModuleData
-} from "script/utils/ModulesDeployer.sol";
+import {deployModulesDeployer, ModulesDeployer, ModuleData} from "script/utils/ModulesDeployer.sol";
 import {DummyWrappedNativeToken, IWrappedNativeToken} from "src/IWrappedNativeToken.sol";
 import {DummyGelatoAutomate} from "src/RepoDriver.sol";
 
@@ -65,8 +64,7 @@ contract Deploy is Script {
     }
 
     function etchSingletonFactory() internal {
-        string memory code =
-            "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe036"
+        string memory code = "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe036"
             "01600081602082378035828234f58015156039578182fd5b8082525050506014600cf3";
         string memory args = string.concat('["', vm.toString(SINGLETON_FACTORY), '","', code, '"]');
         vm.rpc("anvil_setCode", args);

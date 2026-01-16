@@ -259,11 +259,7 @@ contract AxelarBridgedGovernorTest is Test {
         assertEq(governor.ownerChain(), ownerChain, "Invalid owner chain");
     }
 
-    function buildMessage(uint256 nonce, Call[] memory calls)
-        internal
-        pure
-        returns (bytes memory)
-    {
+    function buildMessage(uint256 nonce, Call[] memory calls) internal pure returns (bytes memory) {
         return abi.encode(AxelarBridgedGovernor.Message(nonce, calls));
     }
 

@@ -232,9 +232,8 @@ contract RepoDriverTest is Test, Events {
     }
 
     function gelatoProxy() internal view returns (address proxy) {
-        (proxy,) = automate().taskModuleAddresses(Module.PROXY).opsProxyFactory().getProxyOf(
-            address(driver.gelatoTasksOwner())
-        );
+        (proxy,) = automate().taskModuleAddresses(Module.PROXY).opsProxyFactory()
+            .getProxyOf(address(driver.gelatoTasksOwner()));
     }
 
     function noMetadata() internal pure returns (AccountMetadata[] memory accountMetadata) {

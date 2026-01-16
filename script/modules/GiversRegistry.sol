@@ -19,10 +19,7 @@ function isGiversRegistryModuleDeployed(ModulesDeployer modulesDeployer) view re
     return isModuleDeployed(modulesDeployer, GIVERS_REGISTRY_MODULE_SALT);
 }
 
-function giversRegistryModule(ModulesDeployer modulesDeployer)
-    view
-    returns (GiversRegistryModule)
-{
+function giversRegistryModule(ModulesDeployer modulesDeployer) view returns (GiversRegistryModule) {
     return GiversRegistryModule(getModule(modulesDeployer, GIVERS_REGISTRY_MODULE_SALT));
 }
 

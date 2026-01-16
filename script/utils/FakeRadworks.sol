@@ -2,8 +2,9 @@
 pragma solidity ^0.8.20;
 
 import {Governor} from "openzeppelin-contracts/governance/Governor.sol";
-import {GovernorCountingSimple} from
-    "openzeppelin-contracts/governance/extensions/GovernorCountingSimple.sol";
+import {
+    GovernorCountingSimple
+} from "openzeppelin-contracts/governance/extensions/GovernorCountingSimple.sol";
 
 contract FakeRadworks is Governor("Test governor"), GovernorCountingSimple {
     address public immutable owner = msg.sender;

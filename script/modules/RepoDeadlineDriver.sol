@@ -53,8 +53,7 @@ contract RepoDeadlineDriverModule is Module {
         RepoDeadlineDriver logic = new RepoDeadlineDriver(repoDriver, driverId);
         address proxy = create3ManagedProxy(modulesDeployer, "RepoDeadlineDriver", logic, admin, "");
         repoDeadlineDriver = RepoDeadlineDriver(proxy);
-        dripsModule(modulesDeployer).claimDriverId(
-            REPO_DEADLINE_DRIVER_MODULE_SALT, driverId, proxy
-        );
+        dripsModule(modulesDeployer)
+            .claimDriverId(REPO_DEADLINE_DRIVER_MODULE_SALT, driverId, proxy);
     }
 }
