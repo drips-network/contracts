@@ -9,5 +9,6 @@ COPY script script
 COPY lib lib
 COPY foundry.toml remappings.txt .
 RUN /bin/bash ./script/deploy-docker.sh
+RUN mkdir -p /contracts/anvil-data
 
 ENTRYPOINT ["./script/docker-entrypoint.sh"]
