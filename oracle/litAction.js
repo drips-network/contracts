@@ -58,6 +58,7 @@ async function getClaims(jsParams) {
   }
 
   const name = result?.name ? ethers.utils.hexlify(ethers.utils.toUtf8Bytes(result.name)) : null;
+  if (name?.endsWith("00")) throw Error("The account name ends with the zero byte");
   const timestamp = result?.timestamp || null;
   const claims = name && timestamp && result?.claims ? result.claims : [];
   const revokeUnclaimed = Boolean(result?.revokeUnclaimed);
@@ -86,6 +87,9 @@ function getChains(jsParams) {
   for (chain of chains) {
     if (!chain || typeof chain !== "string") {
       throw Error("Argument 'chains' must only contain non-empty strings");
+    }
+    if (chain.endsWith("\0")) {
+      throw Error("Argument 'chains' contain a value ending with the zero byte");
     }
     if (chains.indexOf(chain) !== chains.lastIndexOf(chain)) {
       throw Error(`Argument 'chains' contains duplicate value '${chain}'`);
@@ -382,19 +386,27 @@ async function tryFetchJson(url, options = {}) {
 
 async function tryFetchText(url, options = {}) {
   const result = {};
-  options.signal = AbortSignal.timeout(5000);
+  options.signal = AbortSignal.timeout(30_000);
   const fullUrl = "https://" + url;
   console.log("Fetching from", fullUrl);
-  try {
-    const response = await fetch(fullUrl, options);
-    // Ensure that the entire body has been transferred and no network failure can occur.
-    await response.clone().arrayBuffer();
-    // The response correctly describes a resource, even if it's nonpublic or nonexistent.
-    result.isMeaningful = response.ok || [401, 403, 404].includes(response.status);
-    if (!response.ok) throw Error("HTTP status " + response.status);
-    result.text = await response.text();
-  } catch (error) {
-    result.error = error;
+  for (let retries = 2; retries >= 0; retries--) {
+    try {
+      const response = await fetch(fullUrl, options);
+      // Ensure that the entire body has been transferred and no network failure can occur.
+      await response.clone().arrayBuffer();
+      // The response correctly describes a resource, even if it's nonpublic or nonexistent.
+      result.isMeaningful = response.ok || [401, 403, 404].includes(response.status);
+      if (result.isMeaningful) retries = 0;
+      if (!response.ok) throw Error("HTTP status " + response.status);
+      result.text = await response.text();
+    } catch (error) {
+      if (retries > 0) {
+        console.log(error);
+        console.log("Retrying");
+      } else {
+        result.error = error;
+      }
+    }
   }
   return result;
 }

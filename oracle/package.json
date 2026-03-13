@@ -4,6 +4,9 @@
   "license": "GPL-3.0-only",
   "description": "The Drips Lit oracle",
   "type": "module",
+  "engines": {
+    "node": ">=24.4"
+  },
   "scripts": {
     "format": "prettier --write .",
     "deposit": "node index.js deposit",

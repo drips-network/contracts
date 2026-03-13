@@ -29,6 +29,7 @@ contract RepoDriverTest is Test {
 
     bytes32 internal chain = "chain";
     bytes32 internal otherChain = "other chain";
+    uint32 internal oracleSetUpTimestamp = 10;
     Vm.Wallet internal oracle = vm.createWallet("oracle");
     Vm.Wallet internal otherOracle = vm.createWallet("other oracle");
     address internal admin = address(bytes20("admin"));
@@ -43,7 +44,6 @@ contract RepoDriverTest is Test {
     bytes internal constant ERROR_NOT_OWNER = "Caller is not the account owner";
 
     function setUp() public {
-        vm.warp(10);
         Drips dripsLogic = new Drips(10);
         drips = Drips(address(new ManagedProxy(dripsLogic, admin, "")));
 
@@ -53,15 +53,17 @@ contract RepoDriverTest is Test {
         drips.registerDriver(address(1));
         drips.registerDriver(address(1));
 
+        vm.warp(oracleSetUpTimestamp);
         RepoDriver driverLogic = new RepoDriver(drips, address(caller), drips.nextDriverId(), chain);
         bytes memory initCalldata = abi.encodeCall(RepoDriver.updateLitOracle, (oracle.addr));
         driver = RepoDriver(payable(new ManagedProxy(driverLogic, admin, initCalldata)));
         drips.registerDriver(address(driver));
 
-        accountId = updateOwnerByLit(0, "this/name1", address(this), 1);
-        accountId1 = updateOwnerByLit(0, "this/name2", address(this), 1);
-        accountId2 = updateOwnerByLit(0, "this/name3", address(this), 1);
-        accountIdUser = updateOwnerByLit(0, "user/name", user, 1);
+        vm.warp(oracleSetUpTimestamp + 10);
+        accountId = updateOwnerByLit(0, "this/name1", address(this), oracleSetUpTimestamp);
+        accountId1 = updateOwnerByLit(0, "this/name2", address(this), oracleSetUpTimestamp);
+        accountId2 = updateOwnerByLit(0, "this/name3", address(this), oracleSetUpTimestamp);
+        accountIdUser = updateOwnerByLit(0, "user/name", user, oracleSetUpTimestamp);
 
         erc20 = new ERC20PresetFixedSupply("test", "test", type(uint136).max, address(this));
         erc20.approve(address(driver), type(uint256).max);
@@ -225,7 +227,7 @@ contract RepoDriverTest is Test {
     function testUpdateOwnerByLit() public {
         uint8 sourceId = 1;
         bytes memory name = "name";
-        uint32 timestamp = 1;
+        uint32 timestamp = oracleSetUpTimestamp;
         (bytes32 r, bytes32 vs) = signPayload(oracle, chain, sourceId, name, user, timestamp);
         updateOwnerByLit(sourceId, name, user, timestamp, r, vs);
     }
@@ -233,7 +235,7 @@ contract RepoDriverTest is Test {
     function testUpdateOwnerByLitRevertsWhenSignatureInvalid() public {
         uint8 sourceId = 1;
         bytes memory name = "name";
-        uint32 timestamp = 1;
+        uint32 timestamp = oracleSetUpTimestamp;
         (bytes32 r, bytes32 vs) = signPayload(oracle, chain, sourceId, name, user, timestamp);
 
         // Invalid source ID
@@ -271,7 +273,7 @@ contract RepoDriverTest is Test {
     function testUpdateOwnerByLitWhenSignatureNewerThanCurrentlyUsed() public {
         uint8 sourceId = 1;
         bytes memory name = "name";
-        uint32 timestamp = 2;
+        uint32 timestamp = oracleSetUpTimestamp;
         updateOwnerByLit(sourceId, name, user, timestamp);
 
         updateOwnerByLit(sourceId, name, otherUser, timestamp + 1);
@@ -280,7 +282,7 @@ contract RepoDriverTest is Test {
     function testUpdateOwnerByLitRevertsWhenSignatureAsOldAsCurrentlyUsed() public {
         uint8 sourceId = 1;
         bytes memory name = "name";
-        uint32 timestamp = 2;
+        uint32 timestamp = oracleSetUpTimestamp;
         updateOwnerByLit(sourceId, name, user, timestamp);
 
         (bytes32 r, bytes32 vs) = signPayload(oracle, chain, sourceId, name, otherUser, timestamp);
@@ -291,10 +293,9 @@ contract RepoDriverTest is Test {
     function testUpdateOwnerByLitRevertsWhenSignatureOlderThanCurrentlyUsed() public {
         uint8 sourceId = 1;
         bytes memory name = "name";
-        uint32 timestamp = 2;
-        updateOwnerByLit(sourceId, name, user, timestamp);
+        uint32 timestamp = oracleSetUpTimestamp;
+        updateOwnerByLit(sourceId, name, user, timestamp + 1);
 
-        timestamp--;
         (bytes32 r, bytes32 vs) = signPayload(oracle, chain, sourceId, name, otherUser, timestamp);
         vm.expectRevert("Payload obsolete");
         driver.updateOwnerByLit(sourceId, name, otherUser, timestamp, r, vs);
@@ -310,6 +311,33 @@ contract RepoDriverTest is Test {
         uint32 timestamp = uint32(block.timestamp) + 1;
         (bytes32 r, bytes32 vs) = signPayload(oracle, chain, sourceId, name, user, timestamp);
         vm.expectRevert("Payload timestamp in the future");
+        driver.updateOwnerByLit(sourceId, name, user, timestamp, r, vs);
+    }
+
+    function testUpdateOwnerByLitRevertsWhenSignatureFromOracleSetupTime() public {
+        updateOwnerByLit(1, "name", user, oracleSetUpTimestamp);
+    }
+
+    function testUpdateOwnerByLitRevertsWhenSignatureOlderThanOracleSetupTime() public {
+        uint8 sourceId = 1;
+        bytes memory name = "name";
+        uint32 timestamp = oracleSetUpTimestamp - 1;
+        (bytes32 r, bytes32 vs) = signPayload(oracle, chain, sourceId, name, user, timestamp);
+        vm.expectRevert("Payload predates the oracle");
+        driver.updateOwnerByLit(sourceId, name, user, timestamp, r, vs);
+    }
+
+    function testUpdateLitOracleUpdatesOracleSetupTime() public {
+        uint8 sourceId = 1;
+        bytes memory name = "name";
+        uint32 newOracleSetUpTimestamp = oracleSetUpTimestamp + 100;
+        vm.warp(newOracleSetUpTimestamp);
+        vm.prank(admin);
+        driver.updateLitOracle(oracle.addr);
+
+        uint32 timestamp = newOracleSetUpTimestamp - 1;
+        (bytes32 r, bytes32 vs) = signPayload(oracle, chain, sourceId, name, user, timestamp);
+        vm.expectRevert("Payload predates the oracle");
         driver.updateOwnerByLit(sourceId, name, user, timestamp, r, vs);
     }
 

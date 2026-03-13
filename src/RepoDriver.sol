@@ -4,7 +4,6 @@ pragma solidity ^0.8.20;
 import {AccountMetadata, Drips, StreamReceiver, IERC20, SplitsReceiver} from "./Drips.sol";
 import {DriverTransferUtils} from "./DriverTransferUtils.sol";
 import {Managed} from "./Managed.sol";
-import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 import {ECDSA} from "openzeppelin-contracts/utils/cryptography/ECDSA.sol";
 
 /// @notice A Drips driver implementing account identification controlled by the oracle.
@@ -43,20 +42,20 @@ contract RepoDriver is DriverTransferUtils, Managed {
     /// for the `_accountOwner` function so it doesn't need to be calculated during runtime.
     bytes32 private immutable _repoDriverStorageSlot = _erc1967Slot("eip1967.repoDriver.storage");
 
-    /// @notice Returns the Lit oracle address storage slot.
-    /// @return litOracleAddressSlot The storage.
-    function _litOracle()
-        internal
-        view
-        returns (StorageSlot.AddressSlot storage litOracleAddressSlot)
-    {
-        return StorageSlot.getAddressSlot(_litOracleAddressSlot);
+    /// @notice Returns the Lit oracle storage.
+    /// @return litOracleStorage The Lit oracle storage.
+    function _litOracleStorage() internal view returns (LitOracleStorage storage litOracleStorage) {
+        bytes32 slot = _litOracleStorageSlot;
+        // slither-disable-next-line assembly
+        assembly {
+            litOracleStorage.slot := slot
+        }
     }
 
-    /// @notice The ERC-1967 storage slot holding the Lit oracle address.
+    /// @notice The ERC-1967 storage slot holding a single `LitOracleStorage` structure.
     /// This value is an immutable so it can be pre-calculated and cached in the constructor
-    /// for the `_litOracle` function so it doesn't need to be calculated during runtime.
-    bytes32 private immutable _litOracleAddressSlot = _erc1967Slot("eip1967.repoDriver.lit.oracle");
+    /// for the `_litOracleStorage` function so it doesn't need to be calculated during runtime.
+    bytes32 private immutable _litOracleStorageSlot = _erc1967Slot("eip1967.repoDriver.lit.oracle");
 
     /// @notice Emitted when the account ownership is updated.
     /// @param accountId The ID of the account.
@@ -72,6 +71,13 @@ contract RepoDriver is DriverTransferUtils, Managed {
     struct RepoDriverStorage {
         /// @notice The owners of the accounts.
         mapping(uint256 accountId => AccountOwner) accountOwners;
+    }
+
+    struct LitOracleStorage {
+        /// @notice The Lit oracle address.
+        address litOracle;
+        /// @notice The timestamp when the Lit oracle was set up for the last time.
+        uint32 timestamp;
     }
 
     struct AccountOwner {
@@ -163,13 +169,15 @@ contract RepoDriver is DriverTransferUtils, Managed {
     /// @notice Updates the Lit oracle address. Can only be called by the current admin.
     /// @param litOracle_ The new Lit oracle address.
     function updateLitOracle(address litOracle_) public onlyAdminOrConstructor {
-        _litOracle().value = litOracle_;
+        LitOracleStorage storage litOracleStorage = _litOracleStorage();
+        litOracleStorage.litOracle = litOracle_;
+        litOracleStorage.timestamp = uint32(block.timestamp);
     }
 
     /// @notice Returns the Lit oracle address.
     /// @return litOracle_ The Lit oracle address.
     function litOracle() public view returns (address litOracle_) {
-        return _litOracle().value;
+        return _litOracleStorage().litOracle;
     }
 
     /// @notice Updates the account owner.
@@ -180,7 +188,8 @@ contract RepoDriver is DriverTransferUtils, Managed {
     /// @param name The source-specific name identifying the account.
     /// @param owner The new owner of the account.
     /// @param timestamp The timestamp when the oracle looked up the account ownership.
-    /// It must be newer than the timestamp used in the last ownership update of this account.
+    /// It must be newer than the timestamp used in the last ownership update of this account
+    /// and newer than the timestamp when the Lit oracle was set for the last time.
     /// @param r The `r` part of the payload compact signature as per EIP-2098.
     /// @param vs The `vs` part of the payload compact signature as per EIP-2098.
     /// @return accountId The account ID for which the owner was updated.
@@ -194,6 +203,8 @@ contract RepoDriver is DriverTransferUtils, Managed {
     ) public whenNotPaused returns (uint256 accountId) {
         // slither-disable-next-line timestamp
         require(timestamp <= block.timestamp, "Payload timestamp in the future");
+        require(timestamp >= _litOracleStorage().timestamp, "Payload predates the oracle");
+
         accountId = calcAccountId(sourceId, name);
         AccountOwner storage accountOwner = _accountOwner(accountId);
 
@@ -206,7 +217,7 @@ contract RepoDriver is DriverTransferUtils, Managed {
         bytes32 structHash =
             keccak256(abi.encode(sigHash, chain, sourceId, keccak256(name), owner, timestamp));
         address signer = ECDSA.recover(ECDSA.toTypedDataHash(_domainSeparator, structHash), r, vs);
-        require(signer == litOracle(), "Invalid Lit oracle signature");
+        require(signer == _litOracleStorage().litOracle, "Invalid Lit oracle signature");
 
         accountOwner.owner = owner;
         accountOwner.timestamp = timestamp;

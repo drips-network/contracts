@@ -30,7 +30,7 @@ The signature is verified to be made by a specific implementation of the oracle 
 
 ## Chain name
 
-A chain name is a UTF-8 string, by convention formatted as `camelCase` and different for each `RepoDriver` deployment on each chain. The desired chain name can be looked up in the `RepoDriver` contract by calling function `chain()` which returns a `bytes32` containing a UTF-8 string right-padded with zero bytes. This name is used to identify claims applicable in the corresponding `RepoDriver`. 
+A chain name is a UTF-8 string, by convention formatted as `camelCase` and different for each `RepoDriver` deployment on each chain. The desired chain name can be looked up in the `RepoDriver` contract by calling function `chain()` which returns a `bytes32` containing a UTF-8 string right-padded with zero bytes. This name is used to identify claims applicable in the corresponding `RepoDriver`.
 
 ## Account IDs
 
@@ -41,7 +41,7 @@ driverId (32 bits) | sourceId (7 bits) | isHash (1 bit) | nameEncoded (216 bits)
 ```
 
 - `driverId` is the driver ID used by `RepoDriver` in Drips protocol. It can be looked up in the `RepoDriver` contract by calling `driverId()`.
-- `sourceId` is the ID of the source as returned by the oracle. 
+- `sourceId` is the ID of the source as returned by the oracle.
 - `isHash` is a boolean indicating that the name is longer than 27 bytes and is hashed instead of being used verbatim.
 - `nameEncoded` is the source-specific name as returned by the oracle. It's right-padded with zeros for names up to 27 bytes and for longer ones it's the right-most 27 bytes of the keccak256 hash.
 
@@ -69,23 +69,24 @@ Here are documented some common mechanisms used by the oracle across various sou
 
 The repository must be public, it must contain [FUNDING.json](#fundingjson) file in its root directory accessible when checking out the tip commit of the default branch. Anybody can request the oracle to generate claims for any repository. If `FUNDING.json` is nonexistent, removed, malformed or the repository is non-public or nonexistent, ownerships for all chains are considered to be the zero address.
 
-The `source` argument must have an extra `name` string with the canonical repository name in format `<owner>/<repository>`, e.g. `drips-network/contracts`. The returned `name` is the copy of the `name` passed as the argument and `timestamp` is the timestamp of when the lookup was made.
+The `source` argument must have an extra `name` string with the canonical repository name in format `<owner>/<repository>`, e.g. `drips-network/contracts`. Using a non-canonical name may lead to usage of multiple account IDs assigned to a single repository. It's important to avoid renaming the repository or its owner's name after its account ID starts being used. After a rename the old name may be reused by a newly created repository and used to take over the account ID with all the current and future funds controlled by it. The returned `name` is the copy of the `name` passed as the argument and `timestamp` is the timestamp of when the lookup was made.
 
 ## `FUNDING.json`
 
 For some sources the oracle looks up the `FUNDING.json` file. It parses this document content as a JSON and looks up the string under `drips` -> chain name -> `ownedBy` and then parses it as an EIP-55 checksummed address. If the ownership claim can't be found under the requested chain's `ownedBy` field or if it's malformed (e.g. invalidly checksummed), the claimed address is considered to be the zero address. `FUNDING.json` can contain any data, the oracle will ignore all the unexpected fields. When `FUNDING.json` is modified, lookups will start yielding the new ownerships.
 
 A minimal example of `FUNDING.json`:
+
 ```json
 {
-    "drips": {
-        "ethereum": {
-            "ownedBy": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
-        },
-        "optimism": {
-            "ownedBy": "0x220866B1A2219f40e72f5c628B65D54268cA3A9D"
-        }
+  "drips": {
+    "ethereum": {
+      "ownedBy": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
+    },
+    "optimism": {
+      "ownedBy": "0x220866B1A2219f40e72f5c628B65D54268cA3A9D"
     }
+  }
 }
 ```
 
@@ -94,6 +95,7 @@ A minimal example of `FUNDING.json`:
 For some sources the oracle parses ownership URLs. A valid ownership URL must be exactly `http://0.0.0.0/DRIPS_OWNERSHIP_CLAIM` and may be followed by search params. The search params define the ownership addresses where the key is the chain name and the value must be the EIP-55 checksummed address. If the ownership claim can't be found under the requested chain name or if it's malformed (e.g. invalidly checksummed), no claim is generated and signed, so the on-chain ownership won't be updated. An invalid ownership URL is considered holding no ownership claims. If there is more than 1 claim for a given chain, valid or malformed, in a single or across multiple URLs parsed by the oracle, no claims are generated for that chain.
 
 A minimal example of an ownership URL:
+
 ```
 http://0.0.0.0/DRIPS_OWNERSHIP_CLAIM?ethereum=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045&optimism=0x220866B1A2219f40e72f5c628B65D54268cA3A9D
 ```
@@ -106,7 +108,7 @@ See [Claiming a repository](#claiming-a-repository). The `source` argument must 
 
 ## Claiming a user or an organization
 
-The `source` argument must have `kind` field set to `gitHubUser` and an extra `name` string with the user organization name, e.g. `CodeSandwich` or `drips-network`. Anybody can request the oracle to generate claims for any profile. The oracle checks all profile social account links and parses them as [ownership URLs](#ownership-urls). Social account links are set up in the profile's general settings. The ownership URLs may be removed after the oracle signs ownership claims, it won't affect the ownership. The returned `sourceId` is `7`, `name` is the copy of the `name` passed as the argument and `timestamp` is the timestamp of when the lookup was made.
+The `source` argument must have `kind` field set to `gitHubUser` and an extra `name` string with the user organization name, e.g. `CodeSandwich` or `drips-network`. Anybody can request the oracle to generate claims for any profile. The oracle checks all profile social account links and parses them as [ownership URLs](#ownership-urls). Social account links are set up in the profile's general settings. The ownership URLs may be removed after the oracle signs ownership claims, it won't affect the ownership. It's important to avoid renaming the user name after its account ID starts being used. After a rename the old name may be reused by a newly created profile and used to take over the account ID with all the current and future funds controlled by it. The returned `sourceId` is `7`, `name` is the copy of the `name` passed as the argument and `timestamp` is the timestamp of when the lookup was made.
 
 # GitLab
 
@@ -116,19 +118,20 @@ See [Claiming a repository](#claiming-a-repository). The `source` argument must 
 
 ## Claiming a user
 
-The `source` argument must have `kind` field set to `gitLabUser` and an extra `token` string with a personal access token. The token is created on the access settings page of the user. The oracle parses the token name as a single [ownership URL](#ownership-urls). The token must include the `read_user` scope and must be valid during the oracle lookup, but its description doesn't matter, it's ignored. The user may remove the access token after the oracle signs ownership claims, it won't affect the ownership. The returned `sourceId` is `8`, same as for GitLab groups, `name` is the canonical name of the user and `timestamp` is the timestamp of when the personal access token was created.
+The `source` argument must have `kind` field set to `gitLabUser` and an extra `token` string with a personal access token. The token is created on the access settings page of the user. The user must not have DPoP enabled. The oracle parses the token name as a single [ownership URL](#ownership-urls). The token must include the `read_user` scope and must be valid during the oracle lookup, but its description doesn't matter, it's ignored. The user may remove the access token after the oracle signs ownership claims, it won't affect the ownership. It's important to avoid renaming the user name after its account ID starts being used. After a rename the old name may be reused by a newly created profile or an organization and used to take over the account ID with all the current and future funds controlled by it. The returned `sourceId` is `8`, same as for GitLab groups, `name` is the canonical name of the user and `timestamp` is the timestamp of when the personal access token was created.
 
 ## Claiming a group
 
-The `source` argument must have `kind` field set to `gitLabGroup` and an extra `name` string with the group name, e.g. `drips` or `drips/protocol_sub_group/'evm_people`. Anybody can request the oracle to generate claims for any group. The oracle checks all group badges and parses them as [ownership URLs](#ownership-urls). Badges are set up in the group's general settings, they are publicly available but not displayed in the default GitLab UI. Badge names and image URLs don't matter, they are ignored. The user may remove the ownership URLs after the oracle signs ownership claims, it won't affect the ownership. The returned `sourceId` is `8`, same as for GitLab users, `name` is the copy of the `name` passed as the argument and `timestamp` is the timestamp of when the lookup was made.
+The `source` argument must have `kind` field set to `gitLabGroup` and an extra `name` string with the group name, e.g. `drips` or `drips/protocol_sub_group/'evm_people`. Anybody can request the oracle to generate claims for any group. The oracle checks all group badges and parses them as [ownership URLs](#ownership-urls). Badges are set up in the group's general settings, they are publicly available but not displayed in the default GitLab UI. Badge names and image URLs don't matter, they are ignored. The user may remove the ownership URLs after the oracle signs ownership claims, it won't affect the ownership. It's important to avoid renaming the group name after its account ID starts being used. After a rename the old name may be reused by a newly created user or group and used to take over the account ID with all the current and future funds controlled by it. The returned `sourceId` is `8`, same as for GitLab users, `name` is the copy of the `name` passed as the argument and `timestamp` is the timestamp of when the lookup was made.
 
 # HuggingFace
 
 ## Claiming a model
 
-The repository must be public, it must contain `README.md` file in its root directory with the ownership information accessible when checking out the tip commit of the default branch. Anybody can request the oracle to generate claims for any repository. If `README.md` is nonexistent, removed, has YAML header malformed or the repository is non-public or nonexistent, ownerships for all chains are considered to be the zero address. The oracle looks up the `README.md` file, parses its metadata YAML header and looks up the string under `funding` -> `drips` -> chain name -> `ownedBy` and then parses it as an EIP-55 checksummed address. If the ownership claim can't be found under the requested chain's `ownedBy` field or if it's malformed (e.g. invalidly checksummed), the claimed address is considered to be the zero address. The YAML header can contain any data, the oracle will ignore all the unexpected fields. When `README.md` is modified, lookups will start yielding the new ownerships.
+The repository must be public, it must contain `README.md` file in its root directory with the ownership information accessible when checking out the tip commit of the default branch. Anybody can request the oracle to generate claims for any repository. If `README.md` is nonexistent, removed, has YAML header malformed or the repository is non-public or nonexistent, ownerships for all chains are considered to be the zero address. The oracle looks up the `README.md` file, parses its metadata YAML header and looks up the string under `funding` -> `drips` -> chain name -> `ownedBy` and then parses it as an EIP-55 checksummed address. The string must be a quoted YAML string so it's not considered a number because the oracle can't parse numbers as addresses. If the ownership claim can't be found under the requested chain's `ownedBy` field or if it's malformed (e.g. invalidly checksummed), the claimed address is considered to be the zero address. The YAML header can contain any data, the oracle will ignore all the unexpected fields. When `README.md` is modified, lookups will start yielding the new ownerships.
 
 A minimal example of `README.md`:
+
 ```yaml
 ---
 funding:
@@ -149,7 +152,7 @@ See [Claiming a model](#claiming-a-model). The `source` argument must have `kind
 
 # Claiming a user
 
-The `source` argument must have `kind` field set to `huggingFaceUser` and an extra `token` string with an access token. The token is created on the access tokens settings page of the user. The oracle parses the token name as a single [ownership URL](#ownership-urls). The token may have any permissions, a fine-grained token with no permissions is sufficient. The token must be valid during the oracle lookup. The user may remove the access token after the oracle signs ownership claims, it won't affect the ownership. The returned `sourceId` is `11`, `name` is the canonical name of the user and `timestamp` is the timestamp of when the access token was created.
+The `source` argument must have `kind` field set to `huggingFaceUser` and an extra `token` string with an access token. The token is created on the access tokens settings page of the user. The oracle parses the token name as a single [ownership URL](#ownership-urls). The token may have any permissions, a fine-grained token with no permissions is sufficient. The token must be valid during the oracle lookup. The user may remove the access token after the oracle signs ownership claims, it won't affect the ownership. It's important to avoid renaming the user name after its account ID starts being used. After a rename the old name may be reused by a newly created profile and used to take over the account ID with all the current and future funds controlled by it. The returned `sourceId` is `11`, `name` is the canonical name of the user and `timestamp` is the timestamp of when the access token was created.
 
 # Codeberg
 
@@ -159,7 +162,7 @@ See [Claiming a repository](#claiming-a-repository). The `source` argument must 
 
 ## Claiming a user
 
-The `source` argument must have `kind` field set to `codebergUser` and an extra `token` string with an access token. The token is created on the applications settings page of the user. The oracle parses the token name as a single [ownership URL](#ownership-urls). The token must include at least the `user` reading scope. The token must be valid during the oracle lookup. The user may remove the access token after the oracle signs ownership claims, it won't affect the ownership. The returned `sourceId` is `10`, `name` is the canonical name of the user and `timestamp` is the timestamp of when the lookup was made.
+The `source` argument must have `kind` field set to `codebergUser` and an extra `token` string with an access token. The token is created on the applications settings page of the user. The oracle parses the token name as a single [ownership URL](#ownership-urls). The token must include at least the `user` reading scope. The token must be valid during the oracle lookup. The user may remove the access token after the oracle signs ownership claims, it won't affect the ownership. It's important to avoid renaming the user name after its account ID starts being used. After a rename the old name may be reused by a newly created profile and used to take over the account ID with all the current and future funds controlled by it. The returned `sourceId` is `10`, `name` is the canonical name of the user and `timestamp` is the timestamp of when the lookup was made.
 
 # Radicle
 
@@ -181,4 +184,4 @@ See [Claiming a user](#claiming-a-user-3). This is a purely test source for the 
 
 ## Claiming a website
 
-The `source` argument must have `kind` field set to `website` and an extra `name` string with the website URL. The URL should only consist of the host and an optional path e.g. `example.com` or `example.com/me/my_page`. It should not contain the scheme, the protocol, the port, query parameters or the fragment. Anybody can request the oracle to generate claims for any website. The oracle will query the URL `https://<name>/FUNDING.json` and parse the received [FUNDING.json](#fundingjson) file if the HTTP status code is a success code 2XX. If the status code is 401, 403 or 404, or `FUNDING.json` is malformed, it's considered missing and ownerships for all chains are considered to be the zero address. Any other status code is considered a temporary server malfunction and results in no ownership claims signed. The returned `sourceId` is `3`, `name` is the copy of the `name` passed as the argument and `timestamp` is the timestamp of when the lookup was made.
+The `source` argument must have `kind` field set to `website` and an extra `name` string with the website URL. The URL should only consist of the host and an optional path e.g. `example.com` or `example.com/me/my_page`. It should not contain the scheme, the protocol, query parameters or the fragment. Anybody can request the oracle to generate claims for any website. The oracle will query the URL `https://<name>/FUNDING.json` and parse the received [FUNDING.json](#fundingjson) file if the HTTP status code is a success code 2XX. If the status code is 401, 403 or 404, or `FUNDING.json` is malformed, it's considered missing and ownerships for all chains are considered to be the zero address. Any other status code is considered a temporary server malfunction and results in no ownership claims signed. It's important to keep ownership over the website's domain after its account ID starts being used. After the domain expiry or sale it may be reused by a newly created website and used to take over the account ID with all the current and future funds controlled by it. The returned `sourceId` is `3`, `name` is the copy of the `name` passed as the argument and `timestamp` is the timestamp of when the lookup was made.
