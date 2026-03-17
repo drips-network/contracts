@@ -87,7 +87,7 @@ contract DeployLogic is Script, StdAssertions {
     }
 }
 
-address constant LIT_ORACLE = 0x76c708474588A4A94c599bf2Ee2923f2205a1dD7;
+address constant LIT_ORACLE = 0x77a97dcA6A47e206E112f6F42Ef18c6f16B5e060;
 bytes constant UPDATE_LIT_ORACLE_CALLDATA =
     abi.encodeCall(RepoDriver.updateLitOracle, (LIT_ORACLE));
 
@@ -100,7 +100,7 @@ function createMetisUpgradeMessage() pure returns (LZBridgedGovernor.Message mem
                 address(REPO_DRIVER),
                 abi.encodeCall(
                     UUPSUpgradeable.upgradeToAndCall,
-                    (0xd02fa26582E3FAd0eC9629eFFEbd94a5fC87EBCC, UPDATE_LIT_ORACLE_CALLDATA) // TODO
+                    (0xd02fa26582E3FAd0eC9629eFFEbd94a5fC87EBCC, UPDATE_LIT_ORACLE_CALLDATA)
                 )
             )
     });
@@ -127,7 +127,7 @@ contract TestProposalOnMetis is Script, StdAssertions {
             ""
         );
 
-        assertEq(REPO_DRIVER.implementation(), 0xd02fa26582E3FAd0eC9629eFFEbd94a5fC87EBCC); // TODO
+        assertEq(REPO_DRIVER.implementation(), 0xd02fa26582E3FAd0eC9629eFFEbd94a5fC87EBCC);
         assertEq(address(REPO_DRIVER.drips()), repoDriverDrips);
         assertTrue(REPO_DRIVER.isTrustedForwarder(CALLER));
         assertEq(REPO_DRIVER.driverId(), repoDriverDriverId);
@@ -146,7 +146,7 @@ function createOptimismUpgradeMessage() pure returns (LZBridgedGovernor.Message 
                 address(REPO_DRIVER),
                 abi.encodeCall(
                     UUPSUpgradeable.upgradeToAndCall,
-                    (0x2347492c38871210f7dCD2594208356bAfcC674d, UPDATE_LIT_ORACLE_CALLDATA) // TODO
+                    (0x2347492c38871210f7dCD2594208356bAfcC674d, UPDATE_LIT_ORACLE_CALLDATA)
                 )
             )
     });
@@ -173,7 +173,7 @@ contract TestProposalOnOptimism is Script, StdAssertions {
             ""
         );
 
-        assertEq(REPO_DRIVER.implementation(), 0x2347492c38871210f7dCD2594208356bAfcC674d); // TODO
+        assertEq(REPO_DRIVER.implementation(), 0x2347492c38871210f7dCD2594208356bAfcC674d);
         assertEq(address(REPO_DRIVER.drips()), repoDriverDrips);
         assertTrue(REPO_DRIVER.isTrustedForwarder(CALLER));
         assertEq(REPO_DRIVER.driverId(), repoDriverDriverId);
@@ -191,7 +191,7 @@ function createFilecoinUpgradeMessage() pure returns (AxelarBridgedGovernor.Mess
                 address(REPO_DRIVER),
                 abi.encodeCall(
                     UUPSUpgradeable.upgradeToAndCall,
-                    (0x75A8fb92D1b437B4EEa25347304Fe52A9985aCe4, UPDATE_LIT_ORACLE_CALLDATA) // TODO
+                    (0x75A8fb92D1b437B4EEa25347304Fe52A9985aCe4, UPDATE_LIT_ORACLE_CALLDATA)
                 )
             )
     });
@@ -219,7 +219,7 @@ contract TestProposalOnFilecoin is Script, StdAssertions {
             abi.encode(createFilecoinUpgradeMessage())
         );
 
-        assertEq(REPO_DRIVER.implementation(), 0x75A8fb92D1b437B4EEa25347304Fe52A9985aCe4); // TODO
+        assertEq(REPO_DRIVER.implementation(), 0x75A8fb92D1b437B4EEa25347304Fe52A9985aCe4);
         assertEq(address(REPO_DRIVER.drips()), repoDriverDrips);
         assertTrue(REPO_DRIVER.isTrustedForwarder(CALLER));
         assertEq(REPO_DRIVER.driverId(), repoDriverDriverId);
@@ -239,7 +239,7 @@ function createProposal() view returns (GovernorProposal memory proposal) {
         address(ETHEREUM_REPO_DRIVER),
         abi.encodeCall(
             UUPSUpgradeable.upgradeToAndCall,
-            (0x56F2A96d9f4aa82D76C48ec4C2483F260A965f06, UPDATE_LIT_ORACLE_CALLDATA) // TODO
+            (0x56F2A96d9f4aa82D76C48ec4C2483F260A965f06, UPDATE_LIT_ORACLE_CALLDATA)
         )
     );
 
