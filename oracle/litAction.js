@@ -229,7 +229,7 @@ async function tryGetGitLabGroupClaims(name) {
     const result = await tryFetchJson(`gitlab.com/api/v4/groups/${nameUri}/badges`);
     if (result.error) throw result.error;
     if (!Array.isArray(result.json)) throw Error("Response not an array");
-    claims = result.json.flatMap((badge) => tryUrlToClaims(badge?.link_url));
+    const claims = result.json.flatMap((badge) => tryUrlToClaims(badge?.link_url));
     return { name, timestamp, claims };
   } catch (error) {
     console.log(error);
@@ -288,7 +288,7 @@ async function tryGetHuggingFaceUserClaims(token) {
 }
 
 async function tryGetHuggingFaceClaims(subPath, name) {
-  timestamp = await getNowTimestamp();
+  const timestamp = await getNowTimestamp();
   let claims;
   const result = await tryFetchText(`huggingface.co/${subPath}${name}/resolve/HEAD/README.md`);
   try {
