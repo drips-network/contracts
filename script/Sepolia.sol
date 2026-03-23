@@ -24,7 +24,7 @@ import {IWrappedNativeToken} from "src/IWrappedNativeToken.sol";
 contract Deploy is Script {
     function run() public {
         require(block.chainid == 11155111, "Must be run on Sepolia");
-        bytes32 salt = bytes32("DripsDeployerTest5");
+        bytes32 salt = bytes32("DripsDeployerTest6");
         IWrappedNativeToken wrappedNativeToken =
             IWrappedNativeToken(0xE67ABDA0D43f7AC8f37876bBF00D1DFadbB93aaa);
 
@@ -51,7 +51,7 @@ contract Deploy is Script {
             modulesDeployer,
             governor,
             bytes32("sepolia"),
-            0x39e82F65D0C6DEfd08c07481b0c271dbe2ee092D
+            0x77a97dcA6A47e206E112f6F42Ef18c6f16B5e060
         );
         modules[2] = repoSubAccountDriverModuleData(modulesDeployer, governor);
         modules[3] = repoDeadlineDriverModuleData(modulesDeployer, governor);
