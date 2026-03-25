@@ -1,58 +1,81 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-async function main() {
-  const chains = getChains(jsParams);
-  const { sourceId, name, timestamp, claims, revokeUnclaimed } = await getClaims(jsParams);
+async function main({ chains, source }) {
+  verifyChains(chains);
+  const { sourceId, name, timestamp, claims, revokeUnclaimed } = await getClaims(source);
   const owners = claimsToOwners(claims, revokeUnclaimed, chains);
-  await signOwners(owners, sourceId, name, timestamp);
-  Lit.Actions.setResponse({ response: JSON.stringify({ owners, sourceId, name, timestamp }) });
+  const wallet = new ethers.Wallet(await LitActions.getLitActionPrivateKey());
+  const signedOwners = await signOwners(wallet, owners, sourceId, name, timestamp);
+  return { sourceId, name, timestamp, chains: signedOwners, oracleAddress: wallet.address };
 }
 
-async function getClaims(jsParams) {
-  const kind = getSourceValue(jsParams, "kind");
+function verifyChains(chains) {
+  if (!Array.isArray(chains)) {
+    throw Error("Argument 'chains' must be an array");
+  }
+  for (chain of chains) {
+    if (!chain || typeof chain !== "string") {
+      throw Error("Argument 'chains' must only contain non-empty strings");
+    }
+    if (chain.endsWith("\0")) {
+      throw Error(`Argument 'chains' contain value ending with the zero byte '${chain}'`);
+    }
+    if (chains.indexOf(chain) !== chains.lastIndexOf(chain)) {
+      throw Error(`Argument 'chains' contains duplicate value '${chain}'`);
+    }
+    try {
+      ethers.utils.formatBytes32String(chain);
+    } catch (error) {
+      throw Error(`Argument 'chains' contains too long value '${chain}'`);
+    }
+  }
+}
+
+async function getClaims(source) {
+  const kind = getSourceValue(source, "kind");
   let sourceId, result;
   if (kind === "gitHub") {
     sourceId = 0;
-    result = await tryGetJsonClaims("raw.githubusercontent.com/{name}/HEAD", getName(jsParams));
+    result = await tryGetJsonClaims("raw.githubusercontent.com/{name}/HEAD", getName(source));
   } else if (kind === "gitLab") {
     sourceId = 1;
-    result = await tryGetJsonClaims("gitlab.com/{name}/-/raw/HEAD", getName(jsParams));
+    result = await tryGetJsonClaims("gitlab.com/{name}/-/raw/HEAD", getName(source));
   } else if (kind === "orcid") {
     sourceId = 2;
-    result = await tryGetOrcidClaims("", getName(jsParams));
+    result = await tryGetOrcidClaims("", getName(source));
   } else if (kind === "website") {
     sourceId = 3;
-    result = await tryGetJsonClaims("{name}", getName(jsParams));
+    result = await tryGetJsonClaims("{name}", getName(source));
   } else if (kind === "orcidSandbox") {
     sourceId = 4;
-    result = await tryGetOrcidClaims("sandbox.", getName(jsParams));
+    result = await tryGetOrcidClaims("sandbox.", getName(source));
   } else if (kind === "huggingFace") {
     sourceId = 5;
-    result = await tryGetHuggingFaceClaims("", getName(jsParams));
+    result = await tryGetHuggingFaceClaims("", getName(source));
   } else if (kind === "huggingFaceDataset") {
     sourceId = 6;
-    result = await tryGetHuggingFaceClaims("datasets/", getName(jsParams));
+    result = await tryGetHuggingFaceClaims("datasets/", getName(source));
   } else if (kind === "gitHubUser") {
     sourceId = 7;
-    result = await tryGetGitHubUserClaims(getName(jsParams));
+    result = await tryGetGitHubUserClaims(getName(source));
   } else if (kind === "gitLabUser") {
     sourceId = 8;
-    result = await tryGetGitLabUserClaims(getToken(jsParams));
+    result = await tryGetGitLabUserClaims(getToken(source));
   } else if (kind === "gitLabGroup") {
     sourceId = 8;
-    result = await tryGetGitLabGroupClaims(getName(jsParams));
+    result = await tryGetGitLabGroupClaims(getName(source));
   } else if (kind === "codeberg") {
     sourceId = 9;
-    result = await tryGetJsonClaims("codeberg.org/{name}/raw", getName(jsParams));
+    result = await tryGetJsonClaims("codeberg.org/{name}/raw", getName(source));
   } else if (kind === "codebergUser") {
     sourceId = 10;
-    result = await tryGetCodebergUserClaims(getToken(jsParams));
+    result = await tryGetCodebergUserClaims(getToken(source));
   } else if (kind === "huggingFaceUser") {
     sourceId = 11;
-    result = await tryGetHuggingFaceUserClaims(getToken(jsParams));
+    result = await tryGetHuggingFaceUserClaims(getToken(source));
   } else if (kind === "radicle") {
     sourceId = 12;
-    result = await tryGetRadicleClaims(getName(jsParams));
+    result = await tryGetRadicleClaims(getName(source));
   } else {
     throw Error(`Argument 'source' has an unknown 'kind' value '${kind}'`);
   }
@@ -65,42 +88,18 @@ async function getClaims(jsParams) {
   return { sourceId, name, timestamp, claims, revokeUnclaimed };
 }
 
-function getName(jsParams) {
-  return getSourceValue(jsParams, "name");
+function getName(source) {
+  return getSourceValue(source, "name");
 }
 
-function getToken(jsParams) {
-  return getSourceValue(jsParams, "token");
+function getToken(source) {
+  return getSourceValue(source, "token");
 }
 
-function getSourceValue(jsParams, key) {
-  const value = jsParams?.source?.[key];
+function getSourceValue(source, key) {
+  const value = source?.[key];
   if (typeof value !== "string") throw Error(`Argument 'source' must contain the '${key}' string`);
   return value;
-}
-
-function getChains(jsParams) {
-  const chains = jsParams?.chains;
-  if (!Array.isArray(chains)) {
-    throw Error("Argument 'chains' must be an array");
-  }
-  for (chain of chains) {
-    if (!chain || typeof chain !== "string") {
-      throw Error("Argument 'chains' must only contain non-empty strings");
-    }
-    if (chain.endsWith("\0")) {
-      throw Error("Argument 'chains' contain a value ending with the zero byte");
-    }
-    if (chains.indexOf(chain) !== chains.lastIndexOf(chain)) {
-      throw Error(`Argument 'chains' contains duplicate value '${chain}'`);
-    }
-    try {
-      ethers.utils.formatBytes32String(chain);
-    } catch (error) {
-      throw Error(`Argument 'chains' contains too long value '${chain}'`);
-    }
-  }
-  return chains;
 }
 
 function claimsToOwners(claims, revokeUnclaimed, chains) {
@@ -128,9 +127,10 @@ function claimsToOwners(claims, revokeUnclaimed, chains) {
   return owners;
 }
 
-async function signOwners(owners, sourceId, name, timestamp) {
+async function signOwners(wallet, owners, sourceId, name, timestamp) {
+  const chains = {};
   for (const [chain, owner] of Object.entries(owners)) {
-    const payload = ethers.utils._TypedDataEncoder.hash(
+    const signature = await wallet._signTypedData(
       { name: "DripsOwnership", version: "1" },
       {
         DripsOwnership: [
@@ -149,9 +149,10 @@ async function signOwners(owners, sourceId, name, timestamp) {
         timestamp,
       },
     );
-    const toSign = ethers.utils.arrayify(payload);
-    await Lit.Actions.signAsAction({ toSign, sigName: chain, signingScheme: "EcdsaK256Sha256" });
+    const { r, yParityAndS: vs } = ethers.utils.splitSignature(signature);
+    chains[chain] = { owner, r, vs };
   }
+  return chains;
 }
 
 async function tryGetJsonClaims(url, name) {
@@ -336,14 +337,7 @@ async function tryGetRadicleClaims(name) {
 }
 
 async function getNowTimestamp() {
-  const timestamps = await Lit.Actions.broadcastAndCollect({
-    name: "timestamp",
-    value: Math.floor(Date.now() / 1000).toString(),
-  });
-  return timestamps
-    .map(Number)
-    .sort()
-    .at(timestamps.length / 2);
+  return Math.floor(Date.now() / 1000);
 }
 
 function fundingDocToClaims(doc) {
@@ -410,5 +404,3 @@ async function tryFetchText(url, options = {}) {
   }
   return result;
 }
-
-main();

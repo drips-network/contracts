@@ -54,7 +54,7 @@ contract Deploy is Script {
             modulesDeployer,
             governor,
             bytes32("localtestnet"),
-            0xb49311f1cEEFea73D9A3577Fb4c5C55201b1005E
+            0xEbaeEfa413B80eCC62723aDF59dE17e06f2DF8CE
         );
         modules[1] = repoSubAccountDriverModuleData(modulesDeployer, governor);
         modules[2] = repoDeadlineDriverModuleData(modulesDeployer, governor);

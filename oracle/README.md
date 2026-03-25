@@ -1,21 +1,23 @@
 # Overview
 
-`RepoDriver` is the Drips protocol driver providing accounts for off-chain entities like git repositories and web2 user accounts. The real world ownership state is not applied on-chain automatically. A signed ownership claim must be explicitly requested from the oracle, then submitted on-chain and only then the on-chain ownership is updated to reflect the real world state. The oracle is executed on Lit network, which provides permissionless trustless MPC and built-in signing keys management.
+`RepoDriver` is the Drips protocol driver providing accounts for off-chain entities like git repositories and web2 user accounts. The real world ownership state is not applied on-chain automatically. A signed ownership claim must be explicitly requested from the oracle, then submitted on-chain and only then the on-chain ownership is updated to reflect the real world state. The oracle is executed on Lit network, which provides permissionless trustless computation and built-in signing keys management.
 
 ## The oracle API
 
-The oracle code is built by simply concatenating the official minified build of `js-yaml` 4.1.1 and `litAction.js`. When executing this code must be provided to Lit network verbatim or as its IPFS hash for nodes to fetch.
+The oracle code is built by simply concatenating the official minified build of `js-yaml` 4.1.1 and `litAction.js`. When executing this code must be provided to Lit network verbatim.
 
-The oracle Lit Action requires passing `jsParams` object with the following fields:
+The oracle Lit Action requires the following arguments:
 
 - `chains` - an array of strings with chain names for which claims should be looked up for.
 - `source` - an object with a string `kind` holding the name of the source to look up. There also may be extra fields required by the specific source kind.
 
-The oracle generates a signature for each chain name for which it managed to create an ownership claim. The name of each signature is the chain name.
+The oracle Lit Action responds with an object with the following fields:
 
-The oracle returns an object with the following fields:
-
-- `owners` - a mapping from the chain name string to a hex string with the address of the owner for that chain. Only chains for which claims were created and signed are present.
+- `oracleAddress` - the address of the oracle, derived from its private key.
+- `chains` - a mapping from the chain name string to an object with the signed ownership claims. Only chains for which claims were created and signed are present. Each object contains the following fields:
+  - `owner` - a hex string with the address of the owner for that chain.
+  - `r` - the hex-encoded `R` component of the ECDSA signature of the claim.
+  - `sv` - the hex-encoded `SV` or `yParityAndS` component of the signature as described in ERC-2098.
 - `sourceId` - the ID of the source that was looked up.
 - `name` - the source-specific name for which the claims were looked up.
 - `timestamp` - the Unix timestamp since when the claims are known to be true.
@@ -24,9 +26,9 @@ The oracle returns an object with the following fields:
 
 `RepoDriver` exposes function `updateOwnerByLit` that anybody can call to submit a claim and update the address owning an account. The function requires arguments `sourceId`, `name`, `owner` and `timestamp` describing a claim as returned by the oracle, with `r` and `vs` of the signature. The `owner` and the signature must be taken from the oracle response for the same chain name as the called instance of `RepoDriver` expects.
 
-The signature is verified to be made by a specific implementation of the oracle executed on a specific Lit network. This is possible because the oracle's private key is derived from its source code hash and the Lit network name, and `RepoDriver` only accept signatures made by a single private key. The address derived from the trusted key can be looked up in `RepoDriver` by calling function `litOracle()`.
+The signature is verified to be made by a specific implementation of the oracle. This is possible because the oracle's private key is derived from its source code hash, and `RepoDriver` only accept signatures made by a single private key. The address derived from the trusted key can be looked up in `RepoDriver` by calling function `litOracle()`.
 
-`RepoDriver` will only accept claims that are strictly newer than the last claim used on the account ID, but not newer than the current timestamp of the blockchain. By default all accounts with no claimed ownerships or claimed before `RepoDriver` was migrated to Lit-based oracle have their timestamp 0. Signatures never expire and have no nonces, monotonic timestamps are the only acceptance condition.
+`RepoDriver` will only accept claims with `timestamp` newer than the last claim used on the account ID, but not newer than the current timestamp of the blockchain. Claims with `timestamp` before the oracle address was set as trusted in `RepoDriver` are rejected. By default all accounts with no claimed ownerships or claimed before `RepoDriver` was migrated to Lit-based oracle have their timestamp 0. Signatures never expire and have no nonces, monotonic timestamps are the only acceptance condition.
 
 ## Chain name
 
@@ -49,17 +51,13 @@ driverId (32 bits) | sourceId (7 bits) | isHash (1 bit) | nameEncoded (216 bits)
 
 This repository provides basic tools for using the oracle manually. You need `npm` on your machine and run `npm install` while in the `oracle` directory. There are several available commands.
 
-## Getting the deployment
+## Prerequisites
 
-To get the deployment details, run `npm run getDeployment`. It will print the oracle IPFS hash of the oracle code and optionally write its content to a file if the output file path is passed as the argument, e.g. `npm run getDeployment ./oracle_code.js`. This command also prints the addresses derived from the oracle's private keys that will be used for signing claims. Each Lit network where the oracle may be executed has a separate address because each of them generates a different private key.
-
-## Depositing tokens for fees
-
-There are currently 3 versions of Lit network with varying levels of being for tests only: naga-dev centralized and with no fees, naga-test decentralized with testLPX token fees and naga-mainnet decentralized with LITKEY token fees. All fees are charged automatically from tokens deposited using the execution requester's wallet. To deposit tokens, run `npm run deposit <amount>` where `<amount>` is the number of whole tokens to deposit, e.g. `1.8`. Use environment variable `ETHEREUM_PRIVATE_KEY` to pass the private key of the wallet holding tokens to be deposited and which will be able to use the deposit to cover Lit protocol fees. The network where the tokens will be deposited is controlled by the environment variable `NETWORK`, set `NETWORK=test` to deposit testLPX on naga-test and `NETWORK=naga` to deposit LITKEY on naga-mainnet. TestLPX tokens can be obtained from the [faucet](https://chronicle-yellowstone-faucet.getlit.dev) and LITKEY can be bought on the market, see the [official tips](https://naga.developer.litprotocol.com/governance/litkey/getting-litkey).
+To get the oracle Lit Action details, run `npm run getDeployment`. It will print the oracle IPFS hash of the oracle code and optionally write its content to a file if the output file path is passed as the argument, e.g. `npm run getDeployment ./oracle_code.js`. To interact with the oracle you need a Lit API key with the privilege to execute Lit Actions with the oracle IPFS. To generate, configure and buy credits for an API key, use [Lit Express Dashboard](https://dashboard.chipotle.litprotocol.com/).
 
 ## Querying the oracle
 
-To query the oracle run `npm run query<source> <args> <chains>` where `<source>` is the source name, `<args>` are the source-specific arguments and `<chains>` is a list of chain names to look up, e.g. `npm run queryGitHub drips-network/contracts ethereum optimism`. In the console there will be printed all the arguments that need to be submitted on-chain to update the account ownership. Use environment variable `ETHEREUM_PRIVATE_KEY` to pass the private key of a wallet with deposited tokens to cover Lit protocol fees. Use environment variable `NETWORK` to control which network to execute the oracle on. Set `NETWORK=dev` for `naga-dev`, which is the default when `NETWORK` is unset and does not require any deposited tokens. Use `NETWORK=test` for naga-test using testLPX and `NETWORK=naga` for naga-mainnet using LITKEY. Remember that the same oracle running on different networks will use different private keys for signing claims, so each instance of `RepoDriver` only accepts signatures made using a specific oracle code executed on a specific network.
+To query the oracle run `npm run query<source> <args> <chains>` where `<source>` is the source name, `<args>` are the source-specific arguments and `<chains>` is a list of chain names to look up, e.g. `npm run queryGitHub drips-network/contracts ethereum optimism`. In the console there will be printed all the arguments that need to be submitted on-chain to update the account ownership. Use environment variable `LIT_API_KEY` to pass the Lit API key.
 
 # Common mechanisms
 
