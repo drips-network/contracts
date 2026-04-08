@@ -15,26 +15,15 @@ import {
     RADWORKS_TIMELOCK
 } from "script/utils/Governor.sol";
 import {
-    createSetConfigParam,
     ETHEREUM_EID,
     ETHEREUM_ENDPOINT,
     GovernorProposalLZ,
-    LZBridgedGovernor,
-    SetConfigParam
+    LZBridgedGovernor
 } from "script/utils/LayerZero.sol";
 import {Origin} from "src/BridgedGovernor.sol";
-import {ImmutableSplitsDriver} from "src/ImmutableSplitsDriver.sol";
-import {IWrappedNativeToken} from "src/IWrappedNativeToken.sol";
 import {RepoDriver} from "src/RepoDriver.sol";
-import {NFTDriver} from "src/NFTDriver.sol";
 import {console, Script} from "forge-std/Script.sol";
 import {StdAssertions} from "forge-std/StdAssertions.sol";
-import {
-    GovernorVotesComp
-} from "openzeppelin-contracts/governance/extensions/GovernorVotesComp.sol";
-import {UUPSUpgradeable} from "openzeppelin-contracts/proxy/utils/UUPSUpgradeable.sol";
-import {ERC20VotesComp} from "openzeppelin-contracts/token/ERC20/extensions/ERC20VotesComp.sol";
-import {ICompoundTimelock} from "openzeppelin-contracts/vendor/compound/ICompoundTimelock.sol";
 
 using Calls for Call[];
 using GovernorProposalAxelar for GovernorProposal;
@@ -61,60 +50,20 @@ bytes32 constant OPTIMISM_CHAIN = "optimism";
 bytes32 constant METIS_CHAIN = "metis";
 bytes32 constant FILECOIN_CHAIN = "filecoin";
 
-contract DeployLogic is Script, StdAssertions {
-    function run() public {
-        if (block.chainid == 1) deploy(ETHEREUM_REPO_DRIVER, ETHEREUM_CALLER, ETHEREUM_CHAIN);
-        else if (block.chainid == 10) deploy(REPO_DRIVER, CALLER, OPTIMISM_CHAIN);
-        else if (block.chainid == 1088) deploy(REPO_DRIVER, CALLER, METIS_CHAIN);
-        else if (block.chainid == 314) deploy(REPO_DRIVER, CALLER, FILECOIN_CHAIN);
-        else assertTrue(false, "Invalid chain");
-    }
-
-    function deploy(RepoDriver repoDriver, address caller, bytes32 chain) internal {
-        vm.startBroadcast();
-        RepoDriver newRepoDriver =
-            new RepoDriver(repoDriver.drips(), caller, repoDriver.driverId(), chain);
-
-        console.log("Chain ID:", block.chainid);
-        console.log("Chain:", string(bytes.concat(chain)));
-        console.log("RepoDriver logic:", address(newRepoDriver));
-        console.log("----------------------------------");
-        console.log("RepoDriver drips:", address(newRepoDriver.drips()));
-        console.log("Current RepoDriver caller trusted:", repoDriver.isTrustedForwarder(caller));
-        console.log("RepoDriver caller trusted:", newRepoDriver.isTrustedForwarder(caller));
-        console.log("RepoDriver driverId:", newRepoDriver.driverId());
-        console.log("RepoDriver chain:", string(bytes.concat(newRepoDriver.chain())));
-    }
-}
-
-address constant LIT_ORACLE = 0x77a97dcA6A47e206E112f6F42Ef18c6f16B5e060;
-bytes constant UPDATE_LIT_ORACLE_CALLDATA =
-    abi.encodeCall(RepoDriver.updateLitOracle, (LIT_ORACLE));
+address constant LIT_ORACLE = 0xEbaeEfa413B80eCC62723aDF59dE17e06f2DF8CE;
 
 function createMetisUpgradeMessage() pure returns (LZBridgedGovernor.Message memory) {
     return LZBridgedGovernor.Message({
-        nonce: 1,
+        nonce: 2,
         value: 0,
         calls: Calls.create()
-            .push(
-                address(REPO_DRIVER),
-                abi.encodeCall(
-                    UUPSUpgradeable.upgradeToAndCall,
-                    (0xd02fa26582E3FAd0eC9629eFFEbd94a5fC87EBCC, UPDATE_LIT_ORACLE_CALLDATA)
-                )
-            )
+            .push(address(REPO_DRIVER), abi.encodeCall(RepoDriver.updateLitOracle, (LIT_ORACLE)))
     });
 }
 
 contract TestProposalOnMetis is Script, StdAssertions {
     function run() public {
-        address repoDriverDrips = address(REPO_DRIVER.drips());
-        assertTrue(REPO_DRIVER.isTrustedForwarder(CALLER));
-        uint32 repoDriverDriverId = REPO_DRIVER.driverId();
-        uint256 accountId =
-            uint256(0x000000030065667374616a61732f64726970732d746573742d7265706f2d3130);
-        address repoDriverAccountOwner = REPO_DRIVER.ownerOf(accountId);
-        assertNotEq(repoDriverAccountOwner, address(0));
+        assertNotEq(REPO_DRIVER.litOracle(), LIT_ORACLE);
 
         vm.prank(ETHEREUM_ENDPOINT); // The endpoint has the same address as on Ethereum
         LZ_BRIDGED_GOVERNOR.lzReceive(
@@ -127,40 +76,22 @@ contract TestProposalOnMetis is Script, StdAssertions {
             ""
         );
 
-        assertEq(REPO_DRIVER.implementation(), 0xd02fa26582E3FAd0eC9629eFFEbd94a5fC87EBCC);
-        assertEq(address(REPO_DRIVER.drips()), repoDriverDrips);
-        assertTrue(REPO_DRIVER.isTrustedForwarder(CALLER));
-        assertEq(REPO_DRIVER.driverId(), repoDriverDriverId);
-        assertEq(REPO_DRIVER.ownerOf(accountId), repoDriverAccountOwner);
         assertEq(REPO_DRIVER.litOracle(), LIT_ORACLE);
-        assertEq(REPO_DRIVER.chain(), METIS_CHAIN);
     }
 }
 
 function createOptimismUpgradeMessage() pure returns (LZBridgedGovernor.Message memory) {
     return LZBridgedGovernor.Message({
-        nonce: 1,
+        nonce: 2,
         value: 0,
         calls: Calls.create()
-            .push(
-                address(REPO_DRIVER),
-                abi.encodeCall(
-                    UUPSUpgradeable.upgradeToAndCall,
-                    (0x2347492c38871210f7dCD2594208356bAfcC674d, UPDATE_LIT_ORACLE_CALLDATA)
-                )
-            )
+            .push(address(REPO_DRIVER), abi.encodeCall(RepoDriver.updateLitOracle, (LIT_ORACLE)))
     });
 }
 
 contract TestProposalOnOptimism is Script, StdAssertions {
     function run() public {
-        address repoDriverDrips = address(REPO_DRIVER.drips());
-        assertTrue(REPO_DRIVER.isTrustedForwarder(CALLER));
-        uint32 repoDriverDriverId = REPO_DRIVER.driverId();
-        uint256 accountId =
-            uint256(0x0000000300736875747465722d6e6574776f726b2f7368757474657200000000);
-        address repoDriverAccountOwner = REPO_DRIVER.ownerOf(accountId);
-        assertNotEq(repoDriverAccountOwner, address(0));
+        assertNotEq(REPO_DRIVER.litOracle(), LIT_ORACLE);
 
         vm.prank(ETHEREUM_ENDPOINT); // The endpoint has the same address as on Ethereum
         LZ_BRIDGED_GOVERNOR.lzReceive(
@@ -173,39 +104,21 @@ contract TestProposalOnOptimism is Script, StdAssertions {
             ""
         );
 
-        assertEq(REPO_DRIVER.implementation(), 0x2347492c38871210f7dCD2594208356bAfcC674d);
-        assertEq(address(REPO_DRIVER.drips()), repoDriverDrips);
-        assertTrue(REPO_DRIVER.isTrustedForwarder(CALLER));
-        assertEq(REPO_DRIVER.driverId(), repoDriverDriverId);
-        assertEq(REPO_DRIVER.ownerOf(accountId), repoDriverAccountOwner);
         assertEq(REPO_DRIVER.litOracle(), LIT_ORACLE);
-        assertEq(REPO_DRIVER.chain(), OPTIMISM_CHAIN);
     }
 }
 
 function createFilecoinUpgradeMessage() pure returns (AxelarBridgedGovernor.Message memory) {
     return AxelarBridgedGovernor.Message({
-        nonce: 1,
+        nonce: 2,
         calls: Calls.create()
-            .push(
-                address(REPO_DRIVER),
-                abi.encodeCall(
-                    UUPSUpgradeable.upgradeToAndCall,
-                    (0x75A8fb92D1b437B4EEa25347304Fe52A9985aCe4, UPDATE_LIT_ORACLE_CALLDATA)
-                )
-            )
+            .push(address(REPO_DRIVER), abi.encodeCall(RepoDriver.updateLitOracle, (LIT_ORACLE)))
     });
 }
 
 contract TestProposalOnFilecoin is Script, StdAssertions {
     function run() public {
-        address repoDriverDrips = address(REPO_DRIVER.drips());
-        assertTrue(REPO_DRIVER.isTrustedForwarder(CALLER));
-        uint32 repoDriverDriverId = REPO_DRIVER.driverId();
-        uint256 accountId =
-            uint256(0x000000030043454c74642f43454c2d526574726f000000000000000000000000);
-        address repoDriverAccountOwner = REPO_DRIVER.ownerOf(accountId);
-        assertNotEq(repoDriverAccountOwner, address(0));
+        assertNotEq(REPO_DRIVER.litOracle(), LIT_ORACLE);
 
         vm.mockCall(
             0xe432150cce91c13a887f7D836923d5597adD8E31,
@@ -219,28 +132,18 @@ contract TestProposalOnFilecoin is Script, StdAssertions {
             abi.encode(createFilecoinUpgradeMessage())
         );
 
-        assertEq(REPO_DRIVER.implementation(), 0x75A8fb92D1b437B4EEa25347304Fe52A9985aCe4);
-        assertEq(address(REPO_DRIVER.drips()), repoDriverDrips);
-        assertTrue(REPO_DRIVER.isTrustedForwarder(CALLER));
-        assertEq(REPO_DRIVER.driverId(), repoDriverDriverId);
-        assertEq(REPO_DRIVER.ownerOf(accountId), repoDriverAccountOwner);
         assertEq(REPO_DRIVER.litOracle(), LIT_ORACLE);
-        assertEq(REPO_DRIVER.chain(), FILECOIN_CHAIN);
     }
 }
 
 function createProposal() view returns (GovernorProposal memory proposal) {
     proposal = GovernorProposalImpl.create(
-        RADWORKS_GOVERNOR, "[RGP - 29] - Migrate Drips oracle to Lit protocol"
+        RADWORKS_GOVERNOR, "[RGP - 30] - Migrate Drips oracle to Lit Chipotle"
     );
 
     // Upgrade the Ethereum contracts
     proposal.pushCall(
-        address(ETHEREUM_REPO_DRIVER),
-        abi.encodeCall(
-            UUPSUpgradeable.upgradeToAndCall,
-            (0x56F2A96d9f4aa82D76C48ec4C2483F260A965f06, UPDATE_LIT_ORACLE_CALLDATA)
-        )
+        address(ETHEREUM_REPO_DRIVER), abi.encodeCall(RepoDriver.updateLitOracle, (LIT_ORACLE))
     );
 
     // Send a message upgrading the Metis contracts
@@ -272,23 +175,11 @@ function createProposal() view returns (GovernorProposal memory proposal) {
 
 contract TestProposalOnEthereum is Script, StdAssertions {
     function run() public {
-        address repoDriverDrips = address(ETHEREUM_REPO_DRIVER.drips());
-        assertTrue(ETHEREUM_REPO_DRIVER.isTrustedForwarder(ETHEREUM_CALLER));
-        uint32 repoDriverDriverId = ETHEREUM_REPO_DRIVER.driverId();
-        uint256 accountId =
-            uint256(0x0000000300656c696d752d61692f63616c63756c61746f720000000000000000);
-        address repoDriverAccountOwner = ETHEREUM_REPO_DRIVER.ownerOf(accountId);
-        assertNotEq(repoDriverAccountOwner, address(0));
+        assertNotEq(ETHEREUM_REPO_DRIVER.litOracle(), LIT_ORACLE);
 
         createProposal().testExecute();
 
-        assertEq(ETHEREUM_REPO_DRIVER.implementation(), 0x56F2A96d9f4aa82D76C48ec4C2483F260A965f06);
-        assertEq(address(ETHEREUM_REPO_DRIVER.drips()), repoDriverDrips);
-        assertTrue(ETHEREUM_REPO_DRIVER.isTrustedForwarder(ETHEREUM_CALLER));
-        assertEq(ETHEREUM_REPO_DRIVER.driverId(), repoDriverDriverId);
-        assertEq(ETHEREUM_REPO_DRIVER.ownerOf(accountId), repoDriverAccountOwner);
         assertEq(ETHEREUM_REPO_DRIVER.litOracle(), LIT_ORACLE);
-        assertEq(ETHEREUM_REPO_DRIVER.chain(), ETHEREUM_CHAIN);
     }
 }
 
