@@ -1,4 +1,4 @@
-FROM ghcr.io/foundry-rs/foundry:latest
+FROM ghcr.io/foundry-rs/foundry:v1.7.0
 
 WORKDIR /contracts
 # This assures that `/contracts` is created with ownership useful for `RUN`

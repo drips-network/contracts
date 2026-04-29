@@ -13,7 +13,7 @@ while ! grep -q "Listening on 0.0.0.0:8545" < anvil_stdout; do
   ps -p $anvil_pid > /dev/null
 done
 
-forge script -f localhost:8545 --broadcast --slow \
+forge script --rpc-url localhost:8545 --broadcast --slow \
   --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
   script/LocalTestnet.sol:Deploy \
   || SCRIPT_STATUS=$?
